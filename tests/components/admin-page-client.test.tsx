@@ -48,7 +48,16 @@ vi.mock("@/components/admin/task-monitor-panel", () => ({
 }));
 
 vi.mock("@/components/admin/ingestion-dashboard", () => ({
-  IngestionDashboard: () => <div>数据监控面板</div>,
+  IngestionDashboard: ({
+    initialOpenSourceAttentionSummary,
+  }: {
+    initialOpenSourceAttentionSummary?: boolean;
+  }) => (
+    <div>
+      数据监控面板
+      {initialOpenSourceAttentionSummary ? <span>打开信息源异常摘要</span> : null}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/admin/action-items-panel", () => ({
@@ -390,6 +399,20 @@ describe("AdminPageClient", () => {
       null,
       "",
       "/admin?tab=monitoring&section=action-items",
+    );
+  });
+
+  it("opens source attention summary from the dashboard route", () => {
+    searchParamsState.value = "tab=monitoring&section=dashboard&sourceSummary=open";
+
+    renderAdminPageClient();
+
+    expect(screen.getByText("数据监控面板")).toBeInTheDocument();
+    expect(screen.getByText("打开信息源异常摘要")).toBeInTheDocument();
+    expect(replaceStateSpy).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/admin?tab=monitoring&section=dashboard&sourceSummary=open",
     );
   });
 

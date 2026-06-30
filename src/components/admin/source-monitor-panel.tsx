@@ -20,6 +20,7 @@ import { cx } from "@/lib/ui/cx";
 type SourceMonitorPanelProps = {
   initialSnapshot?: SourceMonitorSnapshot;
   hideStats?: boolean;
+  initialOpenAttentionSummary?: boolean;
 };
 
 type InactivityFilter = "all" | SourceInactivityBucketKey;
@@ -332,7 +333,11 @@ function SourceTable({
   );
 }
 
-export function SourceMonitorPanel({ initialSnapshot, hideStats = false }: SourceMonitorPanelProps) {
+export function SourceMonitorPanel({
+  initialSnapshot,
+  hideStats = false,
+  initialOpenAttentionSummary = false,
+}: SourceMonitorPanelProps) {
   const { showToast } = useToast();
   const [snapshot, setSnapshot] = useState<SourceMonitorSnapshot | null>(initialSnapshot ?? null);
   const [inactivityFilter, setInactivityFilter] = useState<InactivityFilter>("all");
@@ -342,7 +347,7 @@ export function SourceMonitorPanel({ initialSnapshot, hideStats = false }: Sourc
   const [pageSize, setPageSize] = useState(initialSnapshot?.pagination.pageSize ?? 10);
   const [isRefreshing, setIsRefreshing] = useState(!initialSnapshot);
   const [isLocalPreviewAvailable, setIsLocalPreviewAvailable] = useState(false);
-  const [attentionSummaryOpen, setAttentionSummaryOpen] = useState(false);
+  const [attentionSummaryOpen, setAttentionSummaryOpen] = useState(initialOpenAttentionSummary);
 
   const inactivityFilterOptions = useMemo(
     () => [

@@ -288,6 +288,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
   const contentPageSize = normalizePositiveInteger(searchParams.get("contentPageSize"));
   const shouldOpenClusterReview = searchParams.get("review") === "pending";
   const shouldOpenTagSuggestions = searchParams.get("suggestions") === "open";
+  const shouldOpenSourceAttentionSummary = searchParams.get("sourceSummary") === "open";
   const selectedPromptType = normalizePromptType(searchParams.get("promptType"));
   const [collapsedSections, setCollapsedSections] = useState(() =>
     resolveCollapsedSections(routeState),
@@ -368,6 +369,11 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
         if (focusedTaskId) {
           params.set("task", focusedTaskId);
         }
+      } else if (
+        routeState.monitoringSubSection === "dashboard" &&
+        shouldOpenSourceAttentionSummary
+      ) {
+        params.set("sourceSummary", "open");
       }
     } else {
       params.set("section", routeState.settingsSection);
@@ -387,6 +393,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
     routeState,
     rangeDaysFilter,
     shouldOpenClusterReview,
+    shouldOpenSourceAttentionSummary,
     shouldOpenTagSuggestions,
     taskKindFilter,
     taskPage,
@@ -503,7 +510,11 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
 
     // Monitoring - Dashboard
     if (primaryTab === "monitoring" && monitoringSubSection === "dashboard") {
-      return <IngestionDashboard />;
+      return (
+        <IngestionDashboard
+          initialOpenSourceAttentionSummary={shouldOpenSourceAttentionSummary}
+        />
+      );
     }
 
     // Monitoring - Content Review

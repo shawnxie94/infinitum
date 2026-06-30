@@ -27,6 +27,10 @@ import type {
   IngestionMetrics,
 } from "@/lib/ingestion/metrics-service";
 
+type IngestionDashboardProps = {
+  initialOpenSourceAttentionSummary?: boolean;
+};
+
 const CHART_COLORS = {
   articles: "var(--accent)",
   summaries: "#8884d8",
@@ -255,7 +259,9 @@ function isValidMetrics(value: unknown): value is IngestionMetrics {
   );
 }
 
-export function IngestionDashboard() {
+export function IngestionDashboard({
+  initialOpenSourceAttentionSummary = false,
+}: IngestionDashboardProps = {}) {
   const { showToast } = useToast();
   const [metrics, setMetrics] = useState<IngestionMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -375,7 +381,10 @@ export function IngestionDashboard() {
 
       {/* Source Monitor Panel */}
       <section className="space-y-3 border-t border-[color:var(--line)] pt-6" aria-label="信息源监控">
-        <SourceMonitorPanel hideStats />
+        <SourceMonitorPanel
+          hideStats
+          initialOpenAttentionSummary={initialOpenSourceAttentionSummary}
+        />
       </section>
     </div>
   );

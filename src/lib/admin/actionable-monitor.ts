@@ -122,7 +122,7 @@ export async function getActionableMonitorSnapshot(
       title: "异常信息源",
       description: `${sourceAttentionCount} 个启用信息源当前需要处理，优先看抓取失败、未巡检和长期无新增。`,
       count: sourceAttentionCount,
-      href: "/admin?tab=monitoring&section=dashboard",
+      href: "/admin?tab=monitoring&section=dashboard&sourceSummary=open",
       actionLabel: "查看",
       details: sourceDetails,
     });

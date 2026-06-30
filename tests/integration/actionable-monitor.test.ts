@@ -188,6 +188,9 @@ describe("actionable monitor snapshot", () => {
     expect(snapshot.items.find((item) => item.id === "filtered-content")?.description).toContain("近 1 天");
     expect(snapshot.items.find((item) => item.id === "aggregation-splits")?.description).toContain("失败 1 条");
     expect(snapshot.items.find((item) => item.id === "tags")?.description).toContain("当前有 1 条标签建议");
+    expect(snapshot.items.find((item) => item.id === "sources")?.href).toBe(
+      "/admin?tab=monitoring&section=dashboard&sourceSummary=open",
+    );
 
     const threeDaySnapshot = await getActionableMonitorSnapshot(new Date("2026-06-30T00:00:00.000Z"), {
       rangeDays: 3,

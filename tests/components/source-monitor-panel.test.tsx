@@ -280,4 +280,31 @@ describe("SourceMonitorPanel", () => {
     expect(screen.getByText("Failed Source")).toBeInTheDocument();
     expect(screen.getAllByText("抓取异常：RSS fetch failed with status 500").length).toBeGreaterThan(0);
   });
+
+  it("opens the attention summary modal from the initial route intent", () => {
+    renderWithProviders(
+      <SourceMonitorPanel
+        initialOpenAttentionSummary
+        initialSnapshot={buildSnapshot({
+          health: {
+            healthyCount: 9,
+            failedCount: 2,
+            unknownCount: 1,
+            attentionSources: [
+              buildSource({
+                id: "failed-source",
+                name: "Failed Source",
+                healthStatus: "failed",
+                healthMessage: "RSS fetch failed with status 500",
+                attentionReasons: ["抓取异常：RSS fetch failed with status 500"],
+              }),
+            ],
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "异常摘要" })).toBeInTheDocument();
+    expect(screen.getByText("Failed Source")).toBeInTheDocument();
+  });
 });

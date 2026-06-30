@@ -36,7 +36,7 @@ function buildDefaultActionItems(rangeDays: ActionableMonitorRangeDays): Actiona
       title: "异常信息源",
       description: "当前没有需要处理的信息源异常。",
       count: 0,
-      href: "/admin?tab=monitoring&section=dashboard",
+      href: "/admin?tab=monitoring&section=dashboard&sourceSummary=open",
       actionLabel: "查看",
       details: [],
     },

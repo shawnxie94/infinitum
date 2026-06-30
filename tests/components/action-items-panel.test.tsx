@@ -30,7 +30,7 @@ function buildActionableSnapshot(): ActionableMonitorSnapshot {
         title: "异常信息源",
         description: "2 个启用信息源需要关注。",
         count: 2,
-        href: "/admin?tab=monitoring&section=dashboard",
+        href: "/admin?tab=monitoring&section=dashboard&sourceSummary=open",
         actionLabel: "查看",
         details: ["Broken RSS：抓取异常：HTTP 500"],
       },
@@ -130,7 +130,7 @@ describe("ActionItemsPanel", () => {
     expect(within(sourceCard!).queryByText("信息源")).not.toBeInTheDocument();
     expect(within(sourceCard!).getByRole("link", { name: "查看" })).toHaveAttribute(
       "href",
-      "/admin?tab=monitoring&section=dashboard",
+      "/admin?tab=monitoring&section=dashboard&sourceSummary=open",
     );
 
     expect(screen.getByText("过滤内容复核")).toBeInTheDocument();
