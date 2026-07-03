@@ -21,6 +21,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import {
   importSourcesFromOpmlText,
   deleteHeaderLink,
+  listAdminTags,
   reorderHeaderLinks,
   reorderSourceGroups,
   resolveSourceFromRssUrl,
@@ -28,8 +29,10 @@ import {
   saveDefaultDailyReportSchedule,
   saveDefaultIngestionSchedule,
   saveDefaultItemCleanupSchedule,
+  saveEventBriefingSettings,
   saveHeaderLink,
   submitAdminSettingsAction,
+  type AdminTag,
 } from "@/components/admin/admin-settings-panel.api";
 import { AiSettingsPanel } from "@/components/admin/ai-settings-panel";
 import { TagSettingsPanel } from "@/components/admin/tag-settings-panel";
@@ -47,7 +50,12 @@ import { SelectField } from "@/components/ui/select-field";
 import { TextArea } from "@/components/ui/text-area";
 import { TextInput } from "@/components/ui/text-input";
 import { useToast } from "@/components/ui/toast";
-import type { AdminSettingsSnapshot, PromptConfigType } from "@/lib/settings/types";
+import type {
+  AdminBriefingWeightRule,
+  AdminBriefingWeightRuleType,
+  AdminSettingsSnapshot,
+  PromptConfigType,
+} from "@/lib/settings/types";
 import {
   DEFAULT_SCHEDULE_TIMEZONE,
   MAX_CLEANUP_RETENTION_DAYS,
@@ -84,6 +92,7 @@ type AdminSettingsSection =
   | "ai-prompt"
   | "tags"
   | "blacklist"
+  | "event-briefing"
   | "groups"
   | "header-links"
   | "sources"
@@ -109,6 +118,7 @@ const settingsNavItems: Array<{
   { key: "header-links", label: "导航栏配置" },
   { key: "sources", label: "信息源" },
   { key: "content-extraction", label: "正文解析" },
+  { key: "event-briefing", label: "速览配置" },
   { key: "task-ingestion", label: "采集任务" },
   { key: "task-daily-report", label: "日报任务" },
   { key: "task-cleanup", label: "清理任务" },
@@ -119,6 +129,30 @@ const headerLinkRelOptions = [
   { value: HEADER_LINK_REL_DEFAULT, label: "普通链接" },
   { value: HEADER_LINK_REL_SPONSORED, label: "AFF/赞助链接" },
 ];
+const eventTypeOptions = [
+  { value: "release", label: "版本发布" },
+  { value: "launch", label: "产品上线" },
+  { value: "update", label: "进展更新" },
+  { value: "funding", label: "融资" },
+  { value: "acquisition", label: "收购" },
+  { value: "partnership", label: "合作" },
+  { value: "policy", label: "政策" },
+  { value: "research", label: "研究" },
+  { value: "security", label: "安全" },
+  { value: "other", label: "其他" },
+];
+const eventBriefingRuleTypeOptions: Array<{ value: AdminBriefingWeightRuleType; label: string }> = [
+  { value: "tag", label: "标签" },
+  { value: "keyword", label: "关键词" },
+  { value: "source_group", label: "来源组" },
+  { value: "event_type", label: "事件类型" },
+];
+const eventBriefingRuleTypeLabels: Record<AdminBriefingWeightRuleType, string> = {
+  tag: "标签",
+  keyword: "关键词",
+  source_group: "来源组",
+  event_type: "事件类型",
+};
 
 function normalizeHeaderLinkRelOption(rel: string) {
   return rel.split(/\s+/).includes("sponsored") ? HEADER_LINK_REL_SPONSORED : HEADER_LINK_REL_DEFAULT;
@@ -154,6 +188,32 @@ function areStringArraysEqual(left: string[], right: string[]) {
   }
 
   return left.every((value, index) => value === right[index]);
+}
+
+function areWeightRulesEqual(left: AdminBriefingWeightRule[], right: AdminBriefingWeightRule[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => {
+    const other = right[index];
+    return other && value.type === other.type && value.value === other.value && value.weight === other.weight;
+  });
+}
+
+function buildSelectedBackfillOptions(values: string[]) {
+  return values.map((value) => ({ value, label: value }));
+}
+
+function appendMissingOptions(
+  options: Array<{ value: string; label: string }>,
+  values: string[],
+) {
+  const existing = new Set(options.map((option) => option.value));
+  return [
+    ...options,
+    ...buildSelectedBackfillOptions(values.filter((value) => !existing.has(value))),
+  ];
 }
 
 function refreshPage() {
@@ -377,10 +437,49 @@ export function AdminSettingsPanel({
   const [contentExtractionMaxChars, setContentExtractionMaxChars] = useState(
     String(initialSettings.contentExtraction.maxChars),
   );
+  const [eventBriefingSnapshot, setEventBriefingSnapshot] = useState(initialSettings.eventBriefing);
+  const [eventBriefingMinRankScore, setEventBriefingMinRankScore] = useState(
+    String(initialSettings.eventBriefing.config.minRankScore),
+  );
+  const [eventBriefingWeightedRules, setEventBriefingWeightedRules] = useState(
+    initialSettings.eventBriefing.preference.weightedRules,
+  );
+  const [eventBriefingMaxCuratorBoost, setEventBriefingMaxCuratorBoost] = useState(
+    String(initialSettings.eventBriefing.preference.maxCuratorBoost),
+  );
+  const [eventBriefingMaxCuratorPenalty, setEventBriefingMaxCuratorPenalty] = useState(
+    String(initialSettings.eventBriefing.preference.maxCuratorPenalty),
+  );
+  const [eventBriefingRuleModalOpen, setEventBriefingRuleModalOpen] = useState(false);
+  const [eventBriefingRuleDraft, setEventBriefingRuleDraft] = useState<{
+    type: AdminBriefingWeightRuleType;
+    value: string;
+    weight: string;
+  }>({ type: "tag", value: "", weight: "5" });
+  const [eventBriefingTags, setEventBriefingTags] = useState<AdminTag[]>([]);
+  const [eventBriefingTagsLoaded, setEventBriefingTagsLoaded] = useState(false);
   const normalizedBlacklistKeywords = blacklistText
     .split("\n")
     .map((keyword) => keyword.trim())
     .filter(Boolean);
+  const eventBriefingTagSelectOptions = appendMissingOptions(
+    eventBriefingTags.map((tag) => ({
+      value: tag.name,
+      label: `${tag.name} (${tag.itemCount})`,
+    })),
+    eventBriefingWeightedRules.filter((rule) => rule.type === "tag").map((rule) => rule.value),
+  );
+  const eventBriefingSourceGroupSelectOptions = appendMissingOptions(
+    orderedGroups.map((group) => ({
+      value: group.id,
+      label: group.name,
+    })),
+    eventBriefingWeightedRules.filter((rule) => rule.type === "source_group").map((rule) => rule.value),
+  );
+  const eventBriefingEventTypeSelectOptions = appendMissingOptions(
+    eventTypeOptions,
+    eventBriefingWeightedRules.filter((rule) => rule.type === "event_type").map((rule) => rule.value),
+  );
 
   // Paginated source list fetched from the dedicated sources API.
   const [paginatedSourceList, setPaginatedSourceList] = useState<AdminSource[]>([]);
@@ -417,6 +516,33 @@ export function AdminSettingsPanel({
       .catch(() => { /* ignore */ });
   }, [activeSection, sourcePage, sourcePageSize, sourceNameFilter, sourceGroupFilter, sourceEnabledFilter, sourceGroupOverrides, sourceListRefreshKey]);
 
+  useEffect(() => {
+    if (activeSection !== "event-briefing" || eventBriefingTagsLoaded) {
+      return;
+    }
+
+    let ignore = false;
+
+    listAdminTags({ sort: "usage_desc", page: 1, pageSize: 100 })
+      .then((payload) => {
+        if (ignore) {
+          return;
+        }
+        setEventBriefingTags(payload.tags);
+        setEventBriefingTagsLoaded(true);
+      })
+      .catch(() => {
+        if (ignore) {
+          return;
+        }
+        setEventBriefingTagsLoaded(true);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeSection, eventBriefingTagsLoaded]);
+
   // Lighter-weight search for the group-linking modal — fetches with a larger
   // page size since the modal needs instant client-side filtering.
   const [groupLinkSourceList, setGroupLinkSourceList] = useState<AdminSource[]>([]);
@@ -441,6 +567,54 @@ export function AdminSettingsPanel({
   }, [sourceGroupLinkTarget, sourceGroupLinkSearch]);
 
   const safeSourcePage = Math.min(sourcePage, sourceTotalPages);
+  const getEventBriefingRuleOptions = (type: AdminBriefingWeightRuleType) => {
+    if (type === "tag") {
+      return eventBriefingTagSelectOptions;
+    }
+    if (type === "source_group") {
+      return eventBriefingSourceGroupSelectOptions;
+    }
+    if (type === "event_type") {
+      return eventBriefingEventTypeSelectOptions;
+    }
+    return [];
+  };
+  const getEventBriefingRuleLabel = (rule: AdminBriefingWeightRule) => {
+    if (rule.type === "keyword") {
+      return rule.value;
+    }
+
+    return getEventBriefingRuleOptions(rule.type).find((option) => option.value === rule.value)?.label ?? rule.value;
+  };
+  const openEventBriefingRuleModal = () => {
+    setEventBriefingRuleDraft({ type: "tag", value: "", weight: "5" });
+    setEventBriefingRuleModalOpen(true);
+  };
+  const addEventBriefingWeightRule = () => {
+    const value = eventBriefingRuleDraft.value.trim();
+    const parsedWeight = Number.parseInt(eventBriefingRuleDraft.weight.trim(), 10);
+
+    if (!value) {
+      showToast("请选择或输入规则内容。", "error");
+      return;
+    }
+    if (!Number.isInteger(parsedWeight) || parsedWeight < -50 || parsedWeight > 30 || parsedWeight === 0) {
+      showToast("权重需为 -50 到 30 之间的非 0 整数。", "error");
+      return;
+    }
+
+    const nextRule: AdminBriefingWeightRule = {
+      type: eventBriefingRuleDraft.type,
+      value: eventBriefingRuleDraft.type === "event_type" ? value.toLowerCase() : value,
+      weight: parsedWeight,
+    };
+
+    setEventBriefingWeightedRules((current) => [...current, nextRule]);
+    setEventBriefingRuleModalOpen(false);
+  };
+  const removeEventBriefingWeightRule = (index: number) => {
+    setEventBriefingWeightedRules((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
 
   const updateSourceFilterUrl = (next: {
     name?: string;
@@ -1112,6 +1286,50 @@ export function AdminSettingsPanel({
     });
   };
 
+  const saveEventBriefingSettingsForm = () => {
+    const parsedMinRankScore = Number.parseInt(eventBriefingMinRankScore.trim(), 10);
+    const parsedMaxCuratorBoost = Number.parseInt(eventBriefingMaxCuratorBoost.trim(), 10);
+    const parsedMaxCuratorPenalty = Number.parseInt(eventBriefingMaxCuratorPenalty.trim(), 10);
+    const numericFields: Array<[number, number, number, string]> = [
+      [parsedMinRankScore, 0, 100, "最低入选分"],
+      [parsedMaxCuratorBoost, 0, 30, "主理人加权上限"],
+      [parsedMaxCuratorPenalty, 0, 50, "主理人降权上限"],
+    ];
+
+    for (const [value, min, max, label] of numericFields) {
+      if (!Number.isInteger(value) || value < min || value > max) {
+        showToast(`${label}需为 ${min}-${max} 的整数。`, "error");
+        return;
+      }
+    }
+
+    startTransition(async () => {
+      try {
+        const saved = await saveEventBriefingSettings({
+          config: {
+            ...eventBriefingSnapshot.config,
+            minRankScore: parsedMinRankScore,
+          },
+          preference: {
+            ...eventBriefingSnapshot.preference,
+            weightedRules: eventBriefingWeightedRules,
+            maxCuratorBoost: parsedMaxCuratorBoost,
+            maxCuratorPenalty: parsedMaxCuratorPenalty,
+          },
+        });
+
+        setEventBriefingSnapshot(saved);
+        setEventBriefingMinRankScore(String(saved.config.minRankScore));
+        setEventBriefingWeightedRules(saved.preference.weightedRules);
+        setEventBriefingMaxCuratorBoost(String(saved.preference.maxCuratorBoost));
+        setEventBriefingMaxCuratorPenalty(String(saved.preference.maxCuratorPenalty));
+        showToast("速览配置已保存。", "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "速览配置保存失败。", "error");
+      }
+    });
+  };
+
   const saveDailyReportSchedule = () => {
     const parsedDailyReportCandidateLimit = Number.parseInt(dailyReportCandidateLimit.trim(), 10);
     const parsedDailyReportOffsetDays = Number.parseInt(dailyReportOffsetDays.trim(), 10);
@@ -1231,6 +1449,11 @@ export function AdminSettingsPanel({
     contentExtractionMaxPerRun.trim() !== String(contentExtractionSnapshot.maxPerRun) ||
     contentExtractionMinChars.trim() !== String(contentExtractionSnapshot.minChars) ||
     contentExtractionMaxChars.trim() !== String(contentExtractionSnapshot.maxChars);
+  const eventBriefingIsDirty =
+    eventBriefingMinRankScore.trim() !== String(eventBriefingSnapshot.config.minRankScore) ||
+    !areWeightRulesEqual(eventBriefingWeightedRules, eventBriefingSnapshot.preference.weightedRules) ||
+    eventBriefingMaxCuratorBoost.trim() !== String(eventBriefingSnapshot.preference.maxCuratorBoost) ||
+    eventBriefingMaxCuratorPenalty.trim() !== String(eventBriefingSnapshot.preference.maxCuratorPenalty);
   const dailyReportScheduleIsDirty =
     dailyReportScheduleEnabled !== dailyReportScheduleSnapshot.enabled ||
     dailyReportScheduleCronExpression.trim() !== dailyReportScheduleSnapshot.cronExpression ||
@@ -1329,6 +1552,236 @@ export function AdminSettingsPanel({
                 onChange={(event) => setBlacklistText(event.target.value)}
               />
             </section>
+          </div>
+        ) : null}
+
+        {activeSection === "event-briefing" ? (
+          <div
+            className={cx(
+              "w-full min-w-0",
+              embedMode
+                ? ""
+                : "rounded-sm border border-[color:var(--line)] bg-[var(--surface)] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+            )}
+          >
+            <div className="space-y-5">
+              <div className="flex flex-col gap-3 border-b border-[color:var(--line)] pb-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <h2 className="text-lg font-semibold text-[var(--text-1)]">
+                    速览配置
+                  </h2>
+                  <p className="text-sm text-[var(--text-3)]">
+                    配置速览的展示规则和事件偏好。
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full sm:w-auto"
+                  onClick={saveEventBriefingSettingsForm}
+                  disabled={isPending || !eventBriefingIsDirty}
+                >
+                  保存配置
+                </Button>
+              </div>
+
+              <section className="space-y-4" aria-labelledby="event-briefing-display-settings">
+                <h3 id="event-briefing-display-settings" className="text-sm font-semibold text-[var(--text-1)]">
+                  展示规则
+                </h3>
+                <div className="grid grid-cols-1 items-end gap-4 lg:grid-cols-2">
+                  <FormField label="最低入选分" htmlFor="event-briefing-min-score">
+                    <TextInput
+                      id="event-briefing-min-score"
+                      className="h-10"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={eventBriefingMinRankScore}
+                      onChange={(event) => setEventBriefingMinRankScore(event.target.value)}
+                    />
+                  </FormField>
+                </div>
+              </section>
+
+              <section className="space-y-4 border-t border-[color:var(--line)] pt-5" aria-labelledby="event-briefing-preference-settings">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 id="event-briefing-preference-settings" className="text-sm font-semibold text-[var(--text-1)]">
+                    事件偏好
+                  </h3>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={openEventBriefingRuleModal}
+                  >
+                    新增规则
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <FormField label="加权上限" htmlFor="event-briefing-max-boost">
+                    <TextInput
+                      id="event-briefing-max-boost"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={30}
+                      step={1}
+                      value={eventBriefingMaxCuratorBoost}
+                      onChange={(event) => setEventBriefingMaxCuratorBoost(event.target.value)}
+                    />
+                  </FormField>
+                  <FormField label="降权上限" htmlFor="event-briefing-max-penalty">
+                    <TextInput
+                      id="event-briefing-max-penalty"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={50}
+                      step={1}
+                      value={eventBriefingMaxCuratorPenalty}
+                      onChange={(event) => setEventBriefingMaxCuratorPenalty(event.target.value)}
+                    />
+                  </FormField>
+                </div>
+
+                <div className="overflow-x-auto rounded-sm border border-[color:var(--line)]">
+                  {eventBriefingWeightedRules.length > 0 ? (
+                    <table className="w-full min-w-[42rem] table-fixed text-sm">
+                      <colgroup>
+                        <col className="w-[8rem]" />
+                        <col />
+                        <col className="w-[8rem]" />
+                        <col className="w-[5rem]" />
+                      </colgroup>
+                      <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
+                        <tr>
+                          <th className="px-3 py-2 text-left">类型</th>
+                          <th className="px-3 py-2 text-left">内容</th>
+                          <th className="px-3 py-2 text-right">权重</th>
+                          <th className="px-3 py-2 text-right">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[color:var(--line)]">
+                        {eventBriefingWeightedRules.map((rule, index) => (
+                          <tr key={`${rule.type}:${rule.value}:${rule.weight}:${index}`} className="bg-[var(--surface)]">
+                            <td className="px-3 py-2 text-[var(--text-2)]">
+                              {eventBriefingRuleTypeLabels[rule.type]}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-[var(--text-1)]">
+                              {getEventBriefingRuleLabel(rule)}
+                            </td>
+                            <td className={cx(
+                              "px-3 py-2 text-right font-mono text-sm",
+                              rule.weight > 0 ? "text-[var(--accent)]" : "text-[var(--danger-ink)]",
+                            )}>
+                              {rule.weight > 0 ? `+${rule.weight}` : rule.weight}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <IconButton
+                                variant="secondary"
+                                size="sm"
+                                title="删除规则"
+                                className="text-[var(--danger-ink)] hover:bg-[var(--danger-surface)] hover:text-[var(--danger-ink)]"
+                                onClick={() => removeEventBriefingWeightRule(index)}
+                              >
+                                <IconTrash className="h-4 w-4" />
+                              </IconButton>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--text-3)]">
+                      暂无加权规则。
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <ModalShell
+                isOpen={eventBriefingRuleModalOpen}
+                onClose={() => setEventBriefingRuleModalOpen(false)}
+                title="新增加权规则"
+                widthClassName="max-w-lg"
+                bodyClassName="space-y-4 p-6"
+                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-6"
+                footer={
+                  <div className="flex justify-end gap-2">
+                    <Button variant="secondary" onClick={() => setEventBriefingRuleModalOpen(false)}>
+                      取消
+                    </Button>
+                    <Button variant="primary" onClick={addEventBriefingWeightRule}>
+                      添加
+                    </Button>
+                  </div>
+                }
+              >
+                <FormField label="类型" htmlFor="event-briefing-rule-type">
+                  <SelectField
+                    id="event-briefing-rule-type"
+                    aria-label="类型"
+                    value={eventBriefingRuleDraft.type}
+                    options={eventBriefingRuleTypeOptions}
+                    showSearch={false}
+                    onChange={(value) => setEventBriefingRuleDraft({
+                      type: (value as AdminBriefingWeightRuleType) || "tag",
+                      value: "",
+                      weight: eventBriefingRuleDraft.weight,
+                    })}
+                  />
+                </FormField>
+                {eventBriefingRuleDraft.type === "keyword" ? (
+                  <FormField label="内容" htmlFor="event-briefing-rule-keyword">
+                    <TextInput
+                      id="event-briefing-rule-keyword"
+                      value={eventBriefingRuleDraft.value}
+                      placeholder="OpenAI"
+                      onChange={(event) => setEventBriefingRuleDraft((current) => ({
+                        ...current,
+                        value: event.target.value,
+                      }))}
+                    />
+                  </FormField>
+                ) : (
+                  <FormField label="内容" htmlFor="event-briefing-rule-value">
+                    <SelectField
+                      id="event-briefing-rule-value"
+                      aria-label="内容"
+                      value={eventBriefingRuleDraft.value}
+                      options={getEventBriefingRuleOptions(eventBriefingRuleDraft.type)}
+                      placeholder={
+                        eventBriefingRuleDraft.type === "tag" && !eventBriefingTagsLoaded
+                          ? "加载标签中"
+                          : "选择一项"
+                      }
+                      onChange={(value) => setEventBriefingRuleDraft((current) => ({
+                        ...current,
+                        value: String(value ?? ""),
+                      }))}
+                    />
+                  </FormField>
+                )}
+                <FormField label="权重" htmlFor="event-briefing-rule-weight">
+                  <TextInput
+                    id="event-briefing-rule-weight"
+                    type="number"
+                    inputMode="numeric"
+                    min={-50}
+                    max={30}
+                    step={1}
+                    value={eventBriefingRuleDraft.weight}
+                    onChange={(event) => setEventBriefingRuleDraft((current) => ({
+                      ...current,
+                      weight: event.target.value,
+                    }))}
+                  />
+                </FormField>
+              </ModalShell>
+            </div>
           </div>
         ) : null}
 

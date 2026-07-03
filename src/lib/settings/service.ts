@@ -15,6 +15,16 @@ export type {
   SaveContentExtractionConfigInput,
 } from "@/lib/settings/content-extraction-service";
 export {
+  ensureBriefingPreferenceConfig,
+  ensureEventBriefingConfig,
+  updateBriefingPreferenceConfig,
+  updateEventBriefingConfig,
+} from "@/lib/settings/event-briefing-service";
+export type {
+  SaveBriefingPreferenceConfigInput,
+  SaveEventBriefingConfigInput,
+} from "@/lib/settings/event-briefing-service";
+export {
   createModelApiConfig,
   deleteModelApiConfig,
   fetchModelApiModels,

@@ -87,4 +87,10 @@ export async function withFeedCache<T>(
 export function invalidateFeedCache() {
   getFeedCacheStore().clear();
   getFeedInFlightStore().clear();
+  const sharedGlobal = globalThis as typeof globalThis & {
+    __infinitumEventBriefingCache__?: Map<string, unknown>;
+    __infinitumEventBriefingCacheInFlight__?: Map<string, Promise<unknown>>;
+  };
+  sharedGlobal.__infinitumEventBriefingCache__?.clear();
+  sharedGlobal.__infinitumEventBriefingCacheInFlight__?.clear();
 }

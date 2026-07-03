@@ -65,10 +65,16 @@ export function SelectField({
     : "";
   const resolvedClassName = `select-modern-antd ${sizeClass} ${multiLayoutClass} ${className}`.trim();
   const resolvedPopupClassName = `select-modern-dropdown ${popupClassName}`.trim();
+  const rawSingleOptions = options as Array<Record<string, unknown>> | undefined;
+  const hasEmptyOption = rawSingleOptions?.some((option) => option.value === "") ?? false;
   const resolvedOptions = isMultiMode
     ? options
-    : normalizeSingleSelectOptions(options as Array<Record<string, unknown>> | undefined);
-  const resolvedValue = isMultiMode ? value : normalizeSingleSelectValue(value);
+    : normalizeSingleSelectOptions(rawSingleOptions);
+  const resolvedValue = isMultiMode
+    ? value
+    : value === "" && !hasEmptyOption
+      ? undefined
+      : normalizeSingleSelectValue(value);
   const resolvedStyle: CSSProperties = {
     width: "100%",
     ...(multiline && isMultiMode ? { minHeight: height } : { height }),
@@ -108,7 +114,7 @@ export function SelectField({
 
   if (isTestEnvironment && !isMultiMode) {
     const nativeOptions = (resolvedOptions as Array<{ label?: unknown; value?: unknown }> | undefined) ?? [];
-    const nativeValue = resolvedValue == null ? "" : String(resolvedValue);
+    const nativeValue = resolvedValue == null && placeholder ? EMPTY_SELECT_VALUE_SENTINEL : String(resolvedValue ?? "");
 
     return (
       <select

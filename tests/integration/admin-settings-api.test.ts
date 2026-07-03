@@ -9,6 +9,8 @@ const createPromptConfig = vi.fn();
 const getModelApiConfig = vi.fn();
 const updatePromptConfig = vi.fn();
 const createHeaderLink = vi.fn();
+const updateEventBriefingConfig = vi.fn();
+const updateBriefingPreferenceConfig = vi.fn();
 
 vi.mock("@/lib/admin/session", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/admin/session")>();
@@ -28,6 +30,8 @@ vi.mock("@/lib/settings/service", async (importOriginal) => {
     createModelApiConfig,
     createPromptConfig,
     createHeaderLink,
+    updateEventBriefingConfig,
+    updateBriefingPreferenceConfig,
     getModelApiConfig,
     updatePromptConfig,
   };
@@ -212,6 +216,65 @@ describe("/api/admin/settings", () => {
       sortOrder: 0,
       openInNewTab: true,
       rel: "sponsored noopener noreferrer",
+    });
+  });
+
+  it("updates event briefing settings for admins", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+    updateEventBriefingConfig.mockResolvedValue({
+      id: "event-briefing-config",
+      minRankScore: 10,
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    });
+    updateBriefingPreferenceConfig.mockResolvedValue({
+      id: "briefing-preference-config",
+      weightedRules: [
+        { type: "tag", value: "AI Coding", weight: 6 },
+        { type: "event_type", value: "security", weight: -2 },
+      ],
+      maxCuratorBoost: 15,
+      maxCuratorPenalty: 20,
+      createdAt: "2026-06-30T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    });
+
+    const { PATCH } = await import("@/app/api/admin/settings/event-briefing/route");
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/settings/event-briefing", {
+        method: "PATCH",
+        body: JSON.stringify({
+          config: {
+            minRankScore: 10,
+          },
+          preference: {
+            weightedRules: [
+              { type: "tag", value: "AI Coding", weight: 6 },
+              { type: "event_type", value: "security", weight: -2 },
+            ],
+            maxCuratorBoost: 15,
+            maxCuratorPenalty: 20,
+          },
+        }),
+        headers: {
+          "content-type": "application/json",
+        },
+      }),
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.eventBriefing.config.minRankScore).toBe(10);
+    expect(updateEventBriefingConfig).toHaveBeenCalledWith({
+      minRankScore: 10,
+    });
+    expect(updateBriefingPreferenceConfig).toHaveBeenCalledWith({
+      weightedRules: [
+        { type: "tag", value: "AI Coding", weight: 6 },
+        { type: "event_type", value: "security", weight: -2 },
+      ],
+      maxCuratorBoost: 15,
+      maxCuratorPenalty: 20,
     });
   });
 

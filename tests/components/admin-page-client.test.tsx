@@ -76,6 +76,22 @@ function buildInitialSettings(): AdminSettingsSnapshot {
   return {
     modelApiConfigs: [],
     promptConfigs: [],
+    eventBriefing: {
+      config: {
+        id: "event-briefing-config",
+        minRankScore: 0,
+        createdAt: "2026-04-20T10:00:00.000Z",
+        updatedAt: "2026-04-20T10:00:00.000Z",
+      },
+      preference: {
+        id: "briefing-preference-config",
+        weightedRules: [],
+        maxCuratorBoost: 15,
+        maxCuratorPenalty: 20,
+        createdAt: "2026-04-20T10:00:00.000Z",
+        updatedAt: "2026-04-20T10:00:00.000Z",
+      },
+    },
     contentExtraction: {
       id: "content-extraction-1",
       jinaEnabled: false,

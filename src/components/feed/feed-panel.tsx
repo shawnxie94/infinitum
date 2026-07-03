@@ -61,6 +61,7 @@ import {
 } from "@/components/feed/feed-panel.utils";
 import { PageShell } from "@/components/ui/page-shell";
 import { BackToTopButton } from "@/components/ui/back-to-top-button";
+import { ChevronIcon } from "@/components/ui/chevron-icon";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { FilterInput } from "@/components/ui/filter-input";
@@ -142,25 +143,6 @@ function openTaskDetailInNewWindow(taskRunId: string) {
 
 function scrollToPageTop(behavior: ScrollBehavior = "smooth") {
   window.scrollTo({ top: 0, behavior });
-}
-
-function ChevronIcon({ expanded, className }: { expanded: boolean; className?: string }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={cx("h-4 w-4 transition", expanded ? "rotate-180" : "", className)}
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
 }
 
 function isInteractiveClickTarget(target: EventTarget | null) {

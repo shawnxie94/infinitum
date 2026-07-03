@@ -6,7 +6,7 @@ import { PageViewTracker } from "@/components/ui/page-view-tracker";
 import { cx } from "@/lib/ui/cx";
 import type { AdminHeaderLink } from "@/lib/settings/types";
 
-type PageShellNav = "home" | "daily" | "admin" | null;
+type PageShellNav = "home" | "events" | "daily" | "admin" | null;
 
 type PageShellHeader = {
   activeNav: PageShellNav;

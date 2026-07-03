@@ -10,7 +10,7 @@ import { useClientAdminSession } from "@/components/ui/use-client-admin-session"
 import type { AdminHeaderLink } from "@/lib/settings/types";
 
 type GlobalHeaderProps = {
-  activeNav: "home" | "daily" | "admin" | null;
+  activeNav: "home" | "events" | "daily" | "admin" | null;
   isAdmin: boolean;
   resolveAdminClient?: boolean;
   showShadow?: boolean;
@@ -21,6 +21,7 @@ type GlobalHeaderProps = {
 
 const navItems = [
   { href: "/", key: "home", label: "主页" },
+  { href: "/events", key: "events", label: "速览" },
   { href: "/daily", key: "daily", label: "日报" },
 ] as const;
 

@@ -104,8 +104,8 @@ describe("ingestion metrics service", () => {
     const countByRange = new Map(metrics.qualityScoreDistribution.map((bucket) => [bucket.range, bucket.count]));
 
     expect(countByRange.get("70-79")).toBe(1);
-    expect(countByRange.get("80-89")).toBe(2);
-    expect(countByRange.get("90-100")).toBe(0);
+    expect(countByRange.get("80-89")).toBe(0);
+    expect(countByRange.get("90-100")).toBe(2);
   });
 });
 

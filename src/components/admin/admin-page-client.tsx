@@ -36,7 +36,7 @@ type MonitorSubSection = "action-items" | "dashboard" | "content" | "tasks";
 type ContentSubSection = "filtered" | "clusters" | "splits" | "tags";
 type SettingsSection = "groups" | "sources" | "navigation" | "ai" | "content" | "tasks";
 type AISubSection = "model-api" | "prompt";
-type ContentSettingsSubSection = "blacklist" | "content-extraction";
+type ContentSettingsSubSection = "blacklist" | "event-briefing" | "content-extraction";
 type TaskSettingsSubSection = "ingestion" | "daily-report" | "cleanup";
 
 type AdminRouteState = {
@@ -95,6 +95,10 @@ function normalizeSettingsSection(value: string | null): SettingsSection {
 function normalizeContentSettingsSubSection(value: string | null): ContentSettingsSubSection {
   if (value === "blacklist") {
     return "blacklist";
+  }
+
+  if (value === "event-briefing") {
+    return "event-briefing";
   }
 
   if (value === "content-extraction") {
@@ -614,6 +618,14 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
       return <AdminSettingsPanel initialSettings={settings!} activeSection="blacklist" embedMode />;
     }
 
+    if (
+      primaryTab === "settings" &&
+      settingsSection === "content" &&
+      contentSettingsSubSection === "event-briefing"
+    ) {
+      return <AdminSettingsPanel initialSettings={settings!} activeSection="event-briefing" embedMode />;
+    }
+
     // Settings - Groups
     if (primaryTab === "settings" && settingsSection === "groups") {
       return <AdminSettingsPanel initialSettings={settings!} activeSection="groups" embedMode />;
@@ -1070,6 +1082,31 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
                             <span className="inline-flex items-center gap-2">
                               <IconLink className="h-4 w-4" />
                               <span>正文解析</span>
+                            </span>
+                          </SelectableButton>
+                          <SelectableButton
+                            onClick={() => {
+                              setCollapsedSections((prev) => ({
+                                ...prev,
+                                ai: true,
+                                content: false,
+                                tasks: true,
+                              }));
+                              navigateAdmin({
+                                primaryTab: "settings",
+                                settingsSection: "content",
+                                contentSettingsSubSection: "event-briefing",
+                              });
+                            }}
+                            active={
+                              settingsSection === "content" &&
+                              contentSettingsSubSection === "event-briefing"
+                            }
+                            variant="submenu"
+                          >
+                            <span className="inline-flex items-center gap-2">
+                              <IconList className="h-4 w-4" />
+                              <span>速览配置</span>
                             </span>
                           </SelectableButton>
                         </>

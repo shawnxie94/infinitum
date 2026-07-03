@@ -39,6 +39,11 @@ type ContentExtractionPayload = {
   config?: AdminSettingsSnapshot["contentExtraction"];
 };
 
+type EventBriefingPayload = {
+  error?: string;
+  eventBriefing?: AdminSettingsSnapshot["eventBriefing"];
+};
+
 type GroupReorderPayload = {
   error?: string;
   groups?: AdminSettingsSnapshot["groups"];
@@ -281,6 +286,30 @@ export async function saveContentExtractionConfig(input: {
   }
 
   return payload.config;
+}
+
+export async function saveEventBriefingSettings(input: AdminSettingsSnapshot["eventBriefing"]) {
+  const payload = await requestAdminSettingsJson<EventBriefingPayload>(
+    "/api/admin/settings/event-briefing",
+    "PATCH",
+    {
+      config: {
+        minRankScore: input.config.minRankScore,
+      },
+      preference: {
+        weightedRules: input.preference.weightedRules,
+        maxCuratorBoost: input.preference.maxCuratorBoost,
+        maxCuratorPenalty: input.preference.maxCuratorPenalty,
+      },
+    },
+    "速览配置保存失败。",
+  );
+
+  if (!payload.eventBriefing) {
+    throw new Error("速览配置保存失败。");
+  }
+
+  return payload.eventBriefing;
 }
 
 export async function reorderSourceGroups(groupIds: string[]) {

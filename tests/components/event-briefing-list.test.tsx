@@ -1,0 +1,295 @@
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { EventBriefingList } from "@/components/events/event-briefing-list";
+import type { EventBriefingDTO } from "@/lib/events/types";
+
+const routerPushMock = vi.hoisted(() => vi.fn());
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: routerPushMock,
+  }),
+}));
+
+function buildBriefing(overrides: Partial<EventBriefingDTO> = {}): EventBriefingDTO {
+  return {
+    date: "2026-06-30",
+    view: "important",
+    timezone: "Asia/Shanghai",
+    generatedAt: "2026-06-30T10:00:00.000Z",
+    summary: {
+      eventCount: 96,
+      multiSourceCount: 18,
+      updatedEventCount: 11,
+    },
+    pagination: {
+      page: 1,
+      pageSize: 30,
+      total: 96,
+      totalPages: 4,
+    },
+    entries: [
+      {
+        id: "cluster-openai",
+        type: "cluster",
+        title: "OpenAI 发布新的 Agent 工具链能力",
+        summary: "OpenAI 更新了面向开发者的 Agent 工具链。",
+        rankScore: 91,
+        baseRankScore: 82,
+        curatorBoost: 9,
+        curatorPenalty: 0,
+        isFollowUp: true,
+        sourceCount: 5,
+        itemCount: 12,
+        newItemCountOnDate: 3,
+        newSourceCountOnDate: 2,
+        latestCreatedAt: "2026-06-30T13:50:00.000Z",
+        latestPublishedAt: "2026-06-30T13:10:00.000Z",
+        detailHref: "/?entryKeys=cluster%3Acluster-openai",
+        items: [
+          {
+            id: "item-openai-1",
+            title: "OpenAI Agent 工具链正式发布",
+            summary: "OpenAI 发布了面向开发者的 **Agent SDK**，包含工具调用和工作流能力。",
+            sourceName: "OpenAI Blog",
+            originalUrl: "https://openai.com/agent",
+            publishedAt: "2026-06-30T13:10:00.000Z",
+            createdAt: "2026-06-30T13:50:00.000Z",
+            qualityScore: 91,
+          },
+          {
+            id: "item-openai-2",
+            title: "开发者工具链新增自动化能力",
+            summary: "第二条完整摘要。",
+            sourceName: "Tech Media",
+            originalUrl: "https://example.com/agent-2",
+            publishedAt: "2026-06-30T12:10:00.000Z",
+            createdAt: "2026-06-30T12:50:00.000Z",
+            qualityScore: 88,
+          },
+          {
+            id: "item-openai-3",
+            title: "Agent 工具链生态观察",
+            summary: "第三条完整摘要。",
+            sourceName: "AI Weekly",
+            originalUrl: "https://example.com/agent-3",
+            publishedAt: "2026-06-30T11:10:00.000Z",
+            createdAt: "2026-06-30T11:50:00.000Z",
+            qualityScore: 86,
+          },
+          {
+            id: "item-openai-4",
+            title: "更多 Agent 工具链细节",
+            summary: "第四条完整摘要。",
+            sourceName: "Dev News",
+            originalUrl: "https://example.com/agent-4",
+            publishedAt: "2026-06-30T10:10:00.000Z",
+            createdAt: "2026-06-30T10:50:00.000Z",
+            qualityScore: 82,
+          },
+        ],
+      },
+    ],
+    ...overrides,
+  };
+}
+
+describe("EventBriefingList", () => {
+  beforeEach(() => {
+    routerPushMock.mockClear();
+  });
+
+  it("renders a compact date toolbar and dense ranked event list", () => {
+    render(<EventBriefingList briefing={buildBriefing()} />);
+
+    expect(screen.getByRole("heading", { name: "事件速览" })).toBeInTheDocument();
+    expect(screen.queryByText(/当日采集 300 条资讯/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "上一天" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "下一天" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "今天" })).not.toBeInTheDocument();
+    expect(screen.queryByText("共 96 个重点事件，85 个新增，11 个有新动态。")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("选择日期")).toHaveAttribute("name", "date");
+    expect(screen.getByRole("button", { name: "查看" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "最新进展 11" })).toHaveAttribute(
+      "href",
+      "/events?date=2026-06-30&view=updates",
+    );
+    expect(screen.getByRole("link", { name: "多源确认 18" })).toHaveAttribute(
+      "href",
+      "/events?date=2026-06-30&view=multi-source",
+    );
+
+    const card = screen.getByRole("article");
+    expect(within(card).getByText("#01")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "OpenAI 发布新的 Agent 工具链能力" })).toBeInTheDocument();
+    expect(within(card).getByText("5 来源")).toBeInTheDocument();
+    expect(within(card).getByText("12 条")).toBeInTheDocument();
+    expect(within(card).getByText("新进展")).toBeInTheDocument();
+    expect(within(card).queryByText("OpenAI 更新了面向开发者的 Agent 工具链。")).not.toBeInTheDocument();
+    expect(within(card).queryByText("有新动态")).not.toBeInTheDocument();
+    expect(within(card).queryByText(/排序/)).not.toBeInTheDocument();
+    expect(within(card).queryByText(/入选/)).not.toBeInTheDocument();
+    expect(within(card).queryByText(/OpenAI Blog/)).not.toBeInTheDocument();
+  });
+
+  it("marks non-follow-up entries as new events", () => {
+    render(<EventBriefingList briefing={buildBriefing({
+      entries: [
+        {
+          ...buildBriefing().entries[0]!,
+          isFollowUp: false,
+        },
+      ],
+    })} />);
+
+    const card = screen.getByRole("article");
+
+    expect(within(card).getByText("新事件")).toBeInTheDocument();
+    expect(within(card).queryByText("新进展")).not.toBeInTheDocument();
+  });
+
+  it("opens a detail modal with full summaries and expandable cluster items", () => {
+    render(<EventBriefingList briefing={buildBriefing({
+      entries: [
+        {
+          ...buildBriefing().entries[0]!,
+          summary: "**Agent SDK** 发布，参考 [文档](/docs) 和 `npm` 包。",
+        },
+      ],
+    })} />);
+
+    const card = screen.getByRole("article");
+
+    expect(within(card).queryByText("发生了什么：")).not.toBeInTheDocument();
+    expect(within(card).queryByText("为什么重要：")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Agent SDK")).not.toBeInTheDocument();
+
+    fireEvent.click(within(card).getByRole("button", { name: "OpenAI 发布新的 Agent 工具链能力" }));
+
+    const dialog = screen.getByRole("dialog", { name: "事件详情" });
+    expect(within(dialog).getAllByText("Agent SDK")[0]).toHaveClass("font-semibold");
+    expect(within(dialog).getByRole("link", { name: "文档" })).toHaveAttribute("href", "/docs");
+    expect(within(dialog).getByText("npm").tagName.toLowerCase()).toBe("code");
+    expect(within(dialog).getByRole("button", { name: "4 条" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(dialog).getByRole("button", { name: "展开聚合条目" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(dialog).queryByRole("link", { name: "OpenAI Agent 工具链正式发布" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("更多 Agent 工具链细节")).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "展开聚合条目" }));
+    expect(within(dialog).getByRole("button", { name: "4 条" })).toHaveAttribute("aria-expanded", "true");
+    expect(within(dialog).getByRole("link", { name: "OpenAI Agent 工具链正式发布" })).toHaveAttribute(
+      "href",
+      "https://openai.com/agent",
+    );
+    expect(within(dialog).getByText("更多 Agent 工具链细节")).toBeInTheDocument();
+
+    fireEvent.keyDown(within(dialog).getByRole("button", { name: "收起聚合条目" }), { key: "Enter" });
+    expect(within(dialog).getByRole("button", { name: "4 条" })).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "4 条" }));
+    expect(within(dialog).getByRole("button", { name: "4 条" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("does not render original item list for single event details", () => {
+    render(<EventBriefingList briefing={buildBriefing({
+      entries: [
+        {
+          ...buildBriefing().entries[0]!,
+          id: "item-single",
+          type: "single",
+          title: "单篇重点事件",
+          sourceCount: 1,
+          itemCount: 1,
+          items: [
+            {
+              id: "item-single",
+              title: "单篇原文标题",
+              summary: "单篇原文摘要。",
+              sourceName: "Tech Media",
+              originalUrl: "https://example.com/single",
+              publishedAt: "2026-06-30T12:10:00.000Z",
+              createdAt: "2026-06-30T12:50:00.000Z",
+              qualityScore: 88,
+            },
+          ],
+        },
+      ],
+    })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "单篇重点事件" }));
+
+    const dialog = screen.getByRole("dialog", { name: "事件详情" });
+    expect(within(dialog).getByText("单篇")).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: "单篇重点事件" })).toHaveAttribute(
+      "href",
+      "https://example.com/single",
+    );
+    expect(within(dialog).queryByRole("button", { name: /条/ })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("link", { name: "单篇原文标题" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("单篇原文摘要。")).not.toBeInTheDocument();
+  });
+
+  it("renders an empty state when no events are available", () => {
+    render(<EventBriefingList briefing={buildBriefing({
+      entries: [],
+      summary: {
+        eventCount: 0,
+        multiSourceCount: 0,
+        updatedEventCount: 0,
+      },
+      pagination: {
+        page: 1,
+        pageSize: 30,
+        total: 0,
+        totalPages: 1,
+      },
+    })} />);
+
+    expect(screen.getByText("当天暂无可展示的重点事件。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "查看主页" })).toHaveAttribute("href", "/");
+  });
+
+  it("uses the shared pagination style and preserves non-default page size", () => {
+    const { container } = render(<EventBriefingList briefing={buildBriefing({
+      pagination: {
+        page: 2,
+        pageSize: 50,
+        total: 96,
+        totalPages: 2,
+      },
+    })} />);
+
+    expect(container.querySelector('input[name="size"]')).toHaveAttribute("value", "50");
+    expect(screen.getByRole("combobox", { name: "每页显示" })).toHaveValue("50");
+    expect(screen.getByRole("spinbutton", { name: "跳转页码" })).toHaveValue(2);
+    fireEvent.click(screen.getByRole("button", { name: "上一页" }));
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&size=50");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "跳转页码" }), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "跳转" }));
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&size=50");
+  });
+
+  it("preserves active quick filter in date search and pagination", () => {
+    const { container } = render(<EventBriefingList briefing={buildBriefing({
+      view: "updates",
+      pagination: {
+        page: 1,
+        pageSize: 50,
+        total: 11,
+        totalPages: 2,
+      },
+    })} />);
+
+    expect(screen.getByRole("link", { name: "最新进展 11" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute(
+      "href",
+      "/events?date=2026-06-30&size=50",
+    );
+    expect(container.querySelector('input[name="view"]')).toHaveAttribute("value", "updates");
+
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&page=2&size=50&view=updates");
+  });
+});

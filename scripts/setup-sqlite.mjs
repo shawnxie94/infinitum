@@ -68,7 +68,7 @@ function makeSqliteSchemaIdempotent(sql) {
   return sql
     .replace(/^CREATE INDEX "content_clusters_status_latestCreatedAt_idx".*;\n?/gm, "")
     .replace(/^CREATE INDEX "content_clusters_status_earliestCreatedAt_idx".*;\n?/gm, "")
-    .replace(/^CREATE INDEX "content_clusters_status_displayRecommendScore_idx".*;\n?/gm, "")
+    .replace(/^CREATE INDEX "content_clusters_status_displayQualityScore_idx".*;\n?/gm, "")
     .replace(/^CREATE INDEX "content_clusters_dominantGroupId_status_latestCreatedAt_idx".*;\n?/gm, "")
     .replace(/^CREATE INDEX "content_clusters_eventFingerprint_eventBucket_idx".*;\n?/gm, "")
     .replace(/^CREATE TABLE /gm, "CREATE TABLE IF NOT EXISTS ")
@@ -208,6 +208,58 @@ function dropColumnIfPresent(tableName, columnName, options = {}) {
   return true;
 }
 
+function renameColumnIfPresent(tableName, oldColumnName, newColumnName, options = {}) {
+  if (!ftsTableExists(tableName) || !tableColumnExists(tableName, oldColumnName)) {
+    return false;
+  }
+
+  const dropIndexes = (options.dropIndexes ?? [])
+    .map((indexName) => `DROP INDEX IF EXISTS "${indexName}";`)
+    .join("\n");
+
+  if (tableColumnExists(tableName, newColumnName)) {
+    runSqlite([dbPath], {
+      input: `
+        ${dropIndexes}
+        ALTER TABLE "${tableName}" DROP COLUMN "${oldColumnName}";
+      `,
+    });
+    return true;
+  }
+
+  runSqlite([dbPath], {
+    input: `
+      ${dropIndexes}
+      ALTER TABLE "${tableName}" RENAME COLUMN "${oldColumnName}" TO "${newColumnName}";
+    `,
+  });
+  return true;
+}
+
+function applyScoreFieldRenames() {
+  renameColumnIfPresent("content_clusters", "displayRecommendScore", "displayQualityScore", {
+    dropIndexes: ["content_clusters_status_displayRecommendScore_idx"],
+  });
+  renameColumnIfPresent("event_briefing_configs", "minAttentionScore", "minRankScore");
+
+  if (
+    ftsTableExists("content_clusters") &&
+    tableColumnExists("content_clusters", "displayQualityScore") &&
+    tableColumnExists("content_clusters", "displayAverageScore")
+  ) {
+    runSqlite([dbPath], {
+      input: `
+        UPDATE "content_clusters"
+        SET "displayQualityScore" = CASE
+          WHEN "displayAverageScore" > 100 THEN 100
+          WHEN "displayAverageScore" < 0 THEN 0
+          ELSE "displayAverageScore"
+        END;
+      `,
+    });
+  }
+}
+
 function querySqliteNumber(sql) {
   const result = execFileSync("sqlite3", [dbPath, sql], {
     encoding: "utf8",
@@ -339,34 +391,9 @@ function applyClusterFeedStatsBackfill() {
           WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "displayAverageScore" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0)
           ELSE "displayAverageScore"
         END,
-        "displayRecommendScore" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN (
-          WITH stats AS (
-            SELECT
-              COALESCE((SELECT "displayAverageScore" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0) AS aiScore,
-              COALESCE((SELECT "displaySourceCount" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0) AS sourceCount,
-              COALESCE((SELECT "displayItemCount" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0) AS itemCount
-          ),
-          score_parts AS (
-            SELECT
-              CAST(ROUND(
-                (50 + ((aiScore - 50) * 0.82)) +
-                CASE
-                  WHEN (
-                    CASE WHEN ((sourceCount - 1) * 3) > 8 THEN 8 WHEN ((sourceCount - 1) * 3) < 0 THEN 0 ELSE ((sourceCount - 1) * 3) END +
-                    CASE WHEN itemCount >= 16 THEN 4 WHEN itemCount >= 8 THEN 3 WHEN itemCount >= 4 THEN 2 WHEN itemCount >= 2 THEN 1 ELSE 0 END
-                  ) > 10 THEN 10
-                  ELSE (
-                    CASE WHEN ((sourceCount - 1) * 3) > 8 THEN 8 WHEN ((sourceCount - 1) * 3) < 0 THEN 0 ELSE ((sourceCount - 1) * 3) END +
-                    CASE WHEN itemCount >= 16 THEN 4 WHEN itemCount >= 8 THEN 3 WHEN itemCount >= 4 THEN 2 WHEN itemCount >= 2 THEN 1 ELSE 0 END
-                  )
-                END
-              ) AS INTEGER) AS score
-            FROM stats
-          )
-          SELECT CASE WHEN score > 100 THEN 100 WHEN score < 0 THEN 0 ELSE score END FROM score_parts
-          )
-          ELSE "displayRecommendScore"
+        "displayQualityScore" = CASE
+          WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "displayAverageScore" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0)
+          ELSE "displayQualityScore"
         END,
         "earliestCreatedAt" = (SELECT "earliestCreatedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id),
         "latestCreatedAt" = CASE
@@ -492,13 +519,43 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
+  if (!ftsTableExists("event_briefing_configs")) {
+    runSqlite([dbPath], {
+      input: `
+        CREATE TABLE IF NOT EXISTS "event_briefing_configs" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "minRankScore" INTEGER NOT NULL DEFAULT 0,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL
+        );
+      `,
+    });
+  }
+  dropColumnIfPresent("event_briefing_configs", "includeSingleItems");
+
+  if (!ftsTableExists("briefing_preference_configs")) {
+    runSqlite([dbPath], {
+      input: `
+        CREATE TABLE IF NOT EXISTS "briefing_preference_configs" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "weightedRulesJson" TEXT NOT NULL DEFAULT '[]',
+          "maxCuratorBoost" INTEGER NOT NULL DEFAULT 15,
+          "maxCuratorPenalty" INTEGER NOT NULL DEFAULT 20,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL
+        );
+      `,
+    });
+  }
+  addColumnIfMissing("briefing_preference_configs", "weightedRulesJson", "TEXT NOT NULL DEFAULT '[]'");
+
   const clusterFeedStatsColumnsAdded = [
     addColumnIfMissing("content_clusters", "eventFingerprint", "TEXT"),
     addColumnIfMissing("content_clusters", "eventBucket", "TEXT"),
     addColumnIfMissing("content_clusters", "displayItemCount", "INTEGER NOT NULL DEFAULT 0"),
     addColumnIfMissing("content_clusters", "displaySourceCount", "INTEGER NOT NULL DEFAULT 0"),
     addColumnIfMissing("content_clusters", "displayAverageScore", "INTEGER NOT NULL DEFAULT 0"),
-    addColumnIfMissing("content_clusters", "displayRecommendScore", "INTEGER NOT NULL DEFAULT 0"),
+    addColumnIfMissing("content_clusters", "displayQualityScore", "INTEGER NOT NULL DEFAULT 0"),
     addColumnIfMissing("content_clusters", "latestCreatedAt", "DATETIME"),
     addColumnIfMissing("content_clusters", "dominantGroupId", "TEXT"),
     addColumnIfMissing("content_clusters", "feedSearchText", "TEXT"),
@@ -506,12 +563,13 @@ function applyAdditiveSchemaUpgrades() {
     addColumnIfMissing("content_clusters", "feedStatsUpdatedAt", "DATETIME"),
   ].some(Boolean);
   addColumnIfMissing("content_clusters", "earliestCreatedAt", "DATETIME");
+  applyScoreFieldRenames();
 
   runSqlite([dbPath], {
     input: `
       CREATE INDEX IF NOT EXISTS "content_clusters_status_latestCreatedAt_idx" ON "content_clusters"("status", "latestCreatedAt");
       CREATE INDEX IF NOT EXISTS "content_clusters_status_earliestCreatedAt_idx" ON "content_clusters"("status", "earliestCreatedAt");
-      CREATE INDEX IF NOT EXISTS "content_clusters_status_displayRecommendScore_idx" ON "content_clusters"("status", "displayRecommendScore");
+      CREATE INDEX IF NOT EXISTS "content_clusters_status_displayQualityScore_idx" ON "content_clusters"("status", "displayQualityScore");
       CREATE INDEX IF NOT EXISTS "content_clusters_dominantGroupId_status_latestCreatedAt_idx" ON "content_clusters"("dominantGroupId", "status", "latestCreatedAt");
       CREATE INDEX IF NOT EXISTS "content_clusters_eventFingerprint_eventBucket_idx" ON "content_clusters"("eventFingerprint", "eventBucket");
       CREATE INDEX IF NOT EXISTS "items_sourceId_status_moderationStatus_isAggregation_createdAt_idx" ON "items"("sourceId", "status", "moderationStatus", "isAggregation", "createdAt");

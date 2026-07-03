@@ -10,7 +10,7 @@ import {
 
 import { prisma } from "@/lib/db";
 import { getDisplaySummary, getDisplayTitle, normalizeDisplaySummary, shouldTranslateTitle } from "@/lib/feed/presentation";
-import { buildRecommendScoreSql, calculateRecommendScore } from "@/lib/feed/recommend-score";
+import { buildFeedQualityScoreSql, normalizeFeedQualityScore } from "@/lib/feed/quality-score";
 import { toGroupBadge, type GroupBadge } from "@/lib/groups/badge";
 import { getDatabaseSearchTerms } from "@/lib/utils/search";
 import type {
@@ -73,7 +73,7 @@ type FeedEntryRow = {
   sourceCount: number | bigint;
   itemCount: number | bigint;
   totalItemCount?: number | bigint;
-  recommendScore?: number | bigint;
+  qualityScore?: number | bigint;
 };
 
 type FeedClusterMetadataRow = {
@@ -130,7 +130,7 @@ type ClusterScoreStats = {
   aiScore: number;
   itemCount: number;
   sourceCount: number;
-  recommendScore: number;
+  qualityScore: number;
 };
 
 type ClusterScoreStatsRow = {
@@ -138,7 +138,7 @@ type ClusterScoreStatsRow = {
   aiScore: number | bigint;
   itemCount: number | bigint;
   sourceCount: number | bigint;
-  recommendScore: number | bigint;
+  qualityScore: number | bigint;
 };
 
 export async function syncSources(sourceConfigs: SourceConfig[]) {
@@ -853,14 +853,14 @@ function mapClusterToAdminDto(
     (cluster.items.length > 0
       ? Math.round(cluster.items.reduce((sum, item) => sum + item.qualityScore, 0) / cluster.items.length)
       : cluster.score);
-  const recommendScore =
-    scoreStats?.recommendScore ?? calculateRecommendScore(aiScore, sourceCount, itemCount);
+  const qualityScore =
+    scoreStats?.qualityScore ?? normalizeFeedQualityScore(aiScore);
 
   return {
     id: cluster.id,
     title: cluster.title,
     summary: normalizeDisplaySummary(cluster.summary),
-    score: recommendScore,
+    score: qualityScore,
     itemCount: scoreStats?.itemCount ?? cluster.itemCount,
     latestPublishedAt: cluster.latestPublishedAt.toISOString(),
     latestItemUpdatedAt: (latestItemUpdatedAt ?? cluster.updatedAt).toISOString(),
@@ -879,7 +879,7 @@ function getPrecomputedClusterScoreStats(cluster: ClusterWithPreviewItems): Clus
     aiScore: cluster.displayAverageScore,
     itemCount: cluster.displayItemCount,
     sourceCount: cluster.displaySourceCount,
-    recommendScore: cluster.displayRecommendScore,
+    qualityScore: cluster.displayQualityScore,
   };
 }
 
@@ -897,11 +897,7 @@ async function getClusterScoreStatsByCluster(clusterIds: string[]) {
       ${clusterAiScore} AS "aiScore",
       ${clusterItemCount} AS "itemCount",
       ${clusterSourceCount} AS "sourceCount",
-      ${buildRecommendScoreSql({
-        aiScore: clusterAiScore,
-        sourceCount: clusterSourceCount,
-        itemCount: clusterItemCount,
-      })} AS "recommendScore"
+      ${buildFeedQualityScoreSql(clusterAiScore)} AS "qualityScore"
     FROM "items" i
     INNER JOIN "content_clusters" cc ON cc.id = i."clusterId"
     WHERE i."clusterId" IN (${Prisma.join(clusterIds)})
@@ -917,7 +913,7 @@ async function getClusterScoreStatsByCluster(clusterIds: string[]) {
         aiScore: toNumber(row.aiScore),
         itemCount: toNumber(row.itemCount),
         sourceCount: toNumber(row.sourceCount),
-        recommendScore: toNumber(row.recommendScore),
+        qualityScore: toNumber(row.qualityScore),
       },
     ]),
   );
@@ -962,6 +958,10 @@ function buildFeedEntryCandidatesCte(
 ) {
   const includeClusterScoreStats = options.includeClusterScoreStats ?? true;
   const includeDisplayFields = options.includeDisplayFields ?? true;
+  const explicitClusterEntryIds = getExplicitClusterEntryIds(filters.entryKeys);
+  const explicitClusterEntryClause = explicitClusterEntryIds.length > 0
+    ? Prisma.sql` OR cg.id IN (${Prisma.join(explicitClusterEntryIds)})`
+    : Prisma.empty;
   const nonTimeWhereClauses: Prisma.Sql[] = [
     Prisma.sql`i.status = ${"processed"}`,
     Prisma.sql`i."moderationStatus" IN (${Prisma.join([...DISPLAYABLE_MODERATION_STATUSES])})`,
@@ -1073,12 +1073,8 @@ function buildFeedEntryCandidatesCte(
         ${clusterAiScore} AS score,
         ${clusterItemCount} AS "totalItemCount",
         ${clusterSourceCount} AS "sourceCount",
-        -- 综合推荐评分 = AI锚点分 + 来源/条目聚合加权
-        ${buildRecommendScoreSql({
-          aiScore: clusterAiScore,
-          sourceCount: clusterSourceCount,
-          itemCount: clusterItemCount,
-        })} AS "recommendScore"
+        -- 公开信息流评分 = 内容质量分
+        ${buildFeedQualityScoreSql(clusterAiScore)} AS "qualityScore"
       FROM cluster_score_items csi
       INNER JOIN "content_clusters" cc ON cc.id = csi."clusterId"
       GROUP BY csi."clusterId"
@@ -1090,7 +1086,7 @@ function buildFeedEntryCandidatesCte(
         CAST(0 AS INTEGER) AS score,
         CAST(0 AS INTEGER) AS "totalItemCount",
         CAST(0 AS INTEGER) AS "sourceCount",
-        CAST(0 AS INTEGER) AS "recommendScore"
+        CAST(0 AS INTEGER) AS "qualityScore"
       WHERE 0
     )`;
 
@@ -1188,7 +1184,7 @@ function buildFeedEntryCandidatesCte(
         MAX(COALESCE(csg."sourceCount", 0)) AS "sourceCount",
         MAX(COALESCE(csg."totalItemCount", 0)) AS "totalItemCount",
         MIN(cdg."groupId") AS "entryGroupId",
-        MAX(COALESCE(csg."recommendScore", 0)) AS "recommendScore"
+        MAX(COALESCE(csg."qualityScore", 0)) AS "qualityScore"
       FROM filtered_items fi
       INNER JOIN "content_clusters" cc ON cc.id = fi."clusterId"
       LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId"
@@ -1213,12 +1209,8 @@ function buildFeedEntryCandidatesCte(
         1 AS "sourceCount",
         1 AS "itemCount",
         fi."sourceGroupId" AS "entryGroupId",
-        -- 综合推荐评分 = AI锚点分 + 来源/条目聚合加权，单条来源/条目加权为 0
-        ${buildRecommendScoreSql({
-          aiScore: Prisma.sql`fi."qualityScore"`,
-          sourceCount: Prisma.sql`1`,
-          itemCount: Prisma.sql`1`,
-        })} AS "recommendScore"
+        -- 公开信息流评分 = 内容质量分
+        ${buildFeedQualityScoreSql(Prisma.sql`fi."qualityScore"`)} AS "qualityScore"
       FROM filtered_items fi
       LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId"
       LEFT JOIN cluster_score_groups csg ON csg.id = fi."clusterId"
@@ -1241,15 +1233,15 @@ function buildFeedEntryCandidatesCte(
         cg."itemCount" AS "itemCount",
         cg."totalItemCount" AS "totalItemCount",
         cg."entryGroupId" AS "entryGroupId",
-        cg."recommendScore" AS "recommendScore"
+        cg."qualityScore" AS "qualityScore"
       FROM cluster_groups cg
-      WHERE cg."matchedItemCount" > 1
+      WHERE cg."matchedItemCount" > 1${explicitClusterEntryClause}
     ),
     all_entry_candidates AS (
-      SELECT id, type, NULL AS "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "recommendScore"
+      SELECT id, type, NULL AS "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "qualityScore"
       FROM cluster_entries
       UNION ALL
-      SELECT id, type, "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "recommendScore"
+      SELECT id, type, "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "qualityScore"
       FROM single_entries
     ),
     entry_candidates AS (
@@ -1284,6 +1276,12 @@ function buildEntryCandidateWhereClause(filters: Pick<FeedFilters, "groupId" | "
     : Prisma.empty;
 }
 
+function getExplicitClusterEntryIds(entryKeys: FeedFilters["entryKeys"]) {
+  return entryKeys
+    .map((entryKey) => entryKey.startsWith("cluster:") ? entryKey.slice("cluster:".length) : null)
+    .filter((entryId): entryId is string => Boolean(entryId));
+}
+
 function buildFeedEntryCountCandidatesCte(
   filters: FeedFilters & {
     rangeStart: Date | null;
@@ -1293,6 +1291,10 @@ function buildFeedEntryCountCandidatesCte(
   },
   searchTerm: string | null = null,
 ) {
+  const explicitClusterEntryIds = getExplicitClusterEntryIds(filters.entryKeys);
+  const explicitClusterEntryClause = explicitClusterEntryIds.length > 0
+    ? Prisma.sql` OR fi."clusterId" IN (${Prisma.join(explicitClusterEntryIds)})`
+    : Prisma.empty;
   const nonTimeWhereClauses: Prisma.Sql[] = [
     Prisma.sql`i.status = ${"processed"}`,
     Prisma.sql`i."moderationStatus" IN (${Prisma.join([...DISPLAYABLE_MODERATION_STATUSES])})`,
@@ -1449,7 +1451,7 @@ function buildFeedEntryCountCandidatesCte(
       INNER JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId"
       LEFT JOIN cluster_dominant_groups cdg ON cdg."clusterId" = fi."clusterId"
       WHERE fi."clusterId" IS NOT NULL
-        AND cmc."matchedItemCount" > 1
+        AND (cmc."matchedItemCount" > 1${explicitClusterEntryClause})
       GROUP BY fi."clusterId"
     ),
     single_count_entries AS (
@@ -1485,9 +1487,12 @@ function buildEntityFeedEntryCandidatesCte(
   const includeDisplayFields = options.includeDisplayFields ?? true;
   const likeSearchTerm = sanitizeLikeQuery(filters.title);
   const likeEscape = "\\";
+  const explicitClusterEntryIds = getExplicitClusterEntryIds(filters.entryKeys);
   const clusterWhereClauses: Prisma.Sql[] = [
     Prisma.sql`cc.status = ${"active"}`,
-    Prisma.sql`cc."displayItemCount" > 1`,
+    explicitClusterEntryIds.length > 0
+      ? Prisma.sql`(cc."displayItemCount" > 1 OR cc.id IN (${Prisma.join(explicitClusterEntryIds)}))`
+      : Prisma.sql`cc."displayItemCount" > 1`,
     Prisma.sql`cc."latestCreatedAt" IS NOT NULL`,
   ];
   const singleWhereClauses: Prisma.Sql[] = [
@@ -1591,7 +1596,7 @@ function buildEntityFeedEntryCandidatesCte(
         cc."displayItemCount" AS "itemCount",
         cc."displayItemCount" AS "totalItemCount",
         cc."dominantGroupId" AS "entryGroupId",
-        cc."displayRecommendScore" AS "recommendScore"
+        cc."displayQualityScore" AS "qualityScore"
       FROM "content_clusters" cc
       WHERE ${Prisma.join(clusterWhereClauses, " AND ")}
     ),
@@ -1607,21 +1612,17 @@ function buildEntityFeedEntryCandidatesCte(
         1 AS "sourceCount",
         1 AS "itemCount",
         s."groupId" AS "entryGroupId",
-        ${buildRecommendScoreSql({
-          aiScore: Prisma.sql`i."qualityScore"`,
-          sourceCount: Prisma.sql`1`,
-          itemCount: Prisma.sql`1`,
-        })} AS "recommendScore"
+        ${buildFeedQualityScoreSql(Prisma.sql`i."qualityScore"`)} AS "qualityScore"
       FROM "items" i
       INNER JOIN "sources" s ON s.id = i."sourceId"
       LEFT JOIN "content_clusters" c ON c.id = i."clusterId"
       WHERE ${Prisma.join(singleWhereClauses, " AND ")}
     ),
     all_entry_candidates AS (
-      SELECT id, type, NULL AS "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "recommendScore"
+      SELECT id, type, NULL AS "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "qualityScore"
       FROM cluster_entries
       UNION ALL
-      SELECT id, type, "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "recommendScore"
+      SELECT id, type, "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "qualityScore"
       FROM single_entries
     ),
     entry_candidates AS (
@@ -1702,11 +1703,11 @@ function buildFeedEntryOrderBy(sort: FeedFilters["sort"], entryKeys: FeedFilters
   }
 
   if (sort === "score_desc") {
-    // 按综合推荐评分降序（AI锚点分 + 访客反馈 + 聚合加权）
-    return Prisma.sql`ORDER BY "recommendScore" DESC, "latestPublishedAt" DESC, "itemCount" DESC, id DESC`;
+    // 按内容质量分降序。
+    return Prisma.sql`ORDER BY "qualityScore" DESC, "latestPublishedAt" DESC, "itemCount" DESC, id DESC`;
   }
 
-  return Prisma.sql`ORDER BY "createdAt" DESC, "recommendScore" DESC, "itemCount" DESC, id DESC`;
+  return Prisma.sql`ORDER BY "createdAt" DESC, "qualityScore" DESC, "itemCount" DESC, id DESC`;
 }
 
 function resolvePaginationTotalFromGroupCounts(
@@ -1928,11 +1929,11 @@ export async function listFeedItems(
         "clusterId",
         "latestPublishedAt",
         "createdAt",
-        "recommendScore" AS score,
+        "qualityScore" AS score,
         "sourceCount",
         "itemCount",
         "totalItemCount",
-        "recommendScore"
+        "qualityScore"
       FROM entry_candidates
       ${buildFeedEntryOrderBy(filters.sort, filters.entryKeys)}
       LIMIT ${pagination.size}
@@ -2042,7 +2043,7 @@ export async function listFeedItems(
       }
       return [{
         ...item,
-        score: toNumber(row.recommendScore ?? row.score),
+        score: toNumber(row.qualityScore ?? row.score),
       }];
     }
 
@@ -2061,7 +2062,7 @@ export async function listFeedItems(
         publishedAt: toIsoString(row.latestPublishedAt),
         createdAt: toIsoString(row.createdAt),
         latestPublishedAt: toIsoString(row.latestPublishedAt),
-        score: toNumber(row.recommendScore ?? row.score),
+        score: toNumber(row.qualityScore ?? row.score),
         sourceCount: toNumber(row.sourceCount),
         itemCount: totalCount,
         itemsPreview: previewItems,

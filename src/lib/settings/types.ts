@@ -60,10 +60,38 @@ export type AdminHeaderLink = {
   updatedAt: string;
 };
 
+export type AdminEventBriefingConfig = {
+  id: string;
+  minRankScore: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminBriefingPreferenceConfig = {
+  id: string;
+  weightedRules: AdminBriefingWeightRule[];
+  maxCuratorBoost: number;
+  maxCuratorPenalty: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminBriefingWeightRuleType = "tag" | "keyword" | "source_group" | "event_type";
+
+export type AdminBriefingWeightRule = {
+  type: AdminBriefingWeightRuleType;
+  value: string;
+  weight: number;
+};
+
 export type AdminSettingsSnapshot = {
   modelApiConfigs: AdminModelApiConfig[];
   promptConfigs: AdminPromptConfig[];
   headerLinks?: AdminHeaderLink[];
+  eventBriefing: {
+    config: AdminEventBriefingConfig;
+    preference: AdminBriefingPreferenceConfig;
+  };
   contentExtraction: {
     id: string;
     jinaEnabled: boolean;

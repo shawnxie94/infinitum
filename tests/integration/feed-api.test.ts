@@ -219,28 +219,28 @@ describe("/api/feed", () => {
       id: "cluster-a",
       title: "OpenAI Agent 发布",
       itemCount: 2,
-      score: 84,
+      score: 90,
     });
     expect(json.items[1]).toMatchObject({
       type: "single",
       id: "item-timezone-created",
       title: "按创建时间归档",
       itemCount: 1,
-      score: 71,
+      score: 75,
     });
     expect(json.items[2]).toMatchObject({
       type: "single",
       id: "item-b1",
       title: "故事 B",
       itemCount: 1,
-      score: 60,
+      score: 62,
     });
     expect(json.items[3]).toMatchObject({
       type: "single",
       id: "item-c1",
       title: "故事 C1",
       itemCount: 1,
-      score: 89,
+      score: 98,
     });
     expect(json.pagination).toMatchObject({
       page: 1,
@@ -249,6 +249,35 @@ describe("/api/feed", () => {
       totalPages: 1,
     });
     expect(json.sort).toBe("time_desc");
+
+    vi.useRealTimers();
+  });
+
+  it("returns an explicitly requested singleton cluster by entry key", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
+
+    const { GET } = await import("@/app/api/feed/route");
+    const response = await GET(
+      new Request("http://localhost/api/feed?entryKeys=cluster:cluster-b&includeTags=false"),
+    );
+
+    const json = await response.json();
+
+    expect(json.range).toBe("all");
+    expect(json.items).toHaveLength(1);
+    expect(json.items[0]).toMatchObject({
+      type: "cluster",
+      id: "cluster-b",
+      title: "独立内容",
+      itemCount: 1,
+    });
+    expect(json.pagination).toMatchObject({
+      page: 1,
+      size: 50,
+      total: 1,
+      totalPages: 1,
+    });
 
     vi.useRealTimers();
   });
@@ -507,7 +536,7 @@ describe("/api/feed", () => {
         id: "cluster-temporal",
         title: "Temporal Cluster",
         itemCount: 2,
-        score: 64,
+        score: 66,
         hasMoreItems: false,
       });
       expect(json.items[0].itemsPreview).toHaveLength(2);
@@ -630,7 +659,7 @@ describe("/api/feed", () => {
         type: "cluster",
         itemCount: 2,
         sourceCount: 1,
-        score: 51,
+        score: 50,
       });
       expect(entry?.type === "cluster" ? entry.itemsPreview.map((item) => item.id) : []).toEqual([
         "item-enabled-visible-1",
@@ -1083,22 +1112,22 @@ describe("/api/feed", () => {
       expect(json.items[0]).toMatchObject({
         type: "single",
         id: "item-c1",
-        score: 89,
+        score: 98,
       });
       expect(json.items[1]).toMatchObject({
         type: "cluster",
         id: "cluster-a",
-        score: 84,
+        score: 90,
       });
       expect(json.items[2]).toMatchObject({
         type: "single",
         id: "item-timezone-created",
-        score: 71,
+        score: 75,
       });
       expect(json.items[3]).toMatchObject({
         type: "single",
         id: "item-b1",
-        score: 60,
+        score: 62,
       });
       expect(json.sort).toBe("score_desc");
     } finally {
@@ -1106,7 +1135,7 @@ describe("/api/feed", () => {
     }
   });
 
-  it("boosts multi-source clusters in score sorting", async () => {
+  it("keeps score sorting tied to content quality instead of multi-source boosts", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
 
@@ -1182,16 +1211,16 @@ describe("/api/feed", () => {
       const json = await response.json();
 
       expect(json.items[0]).toMatchObject({
-        type: "cluster",
-        id: "cluster-boosted",
-        score: 92,
-        sourceCount: 3,
-        itemCount: 3,
-      });
-      expect(json.items[1]).toMatchObject({
         type: "single",
         id: "item-c1",
-        score: 89,
+        score: 98,
+      });
+      expect(json.items[1]).toMatchObject({
+        type: "cluster",
+        id: "cluster-boosted",
+        score: 93,
+        sourceCount: 3,
+        itemCount: 3,
       });
     } finally {
       vi.useRealTimers();

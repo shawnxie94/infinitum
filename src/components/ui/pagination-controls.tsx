@@ -14,6 +14,8 @@ type PaginationControlsProps = {
   className?: string;
   disabled?: boolean;
   nextLabel?: string;
+  itemLabel?: string;
+  totalLabel?: string;
   jumpValue?: string;
   onJumpValueChange?: (value: string) => void;
   onJump?: () => void;
@@ -32,6 +34,8 @@ export function PaginationControls({
   className,
   disabled = false,
   nextLabel = "下一页",
+  itemLabel = "条",
+  totalLabel = itemLabel,
   jumpValue,
   onJumpValueChange,
   onJump,
@@ -57,7 +61,7 @@ export function PaginationControls({
             label: String(option),
           }))}
         />
-        <span className="whitespace-nowrap">条，共 {totalItems} 条</span>
+        <span className="whitespace-nowrap">{itemLabel}，共 {totalItems} {totalLabel}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="secondary" size="sm" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={!canGoPrevious}>

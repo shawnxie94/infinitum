@@ -1,0 +1,3 @@
+export const EVENT_BRIEFING_DEFAULT_PAGE_SIZE = 30;
+export const EVENT_BRIEFING_PAGE_SIZE_OPTIONS = [30, 50, 100] as const;
+export const EVENT_BRIEFING_MAX_PAGE_SIZE = 100;

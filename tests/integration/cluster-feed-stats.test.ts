@@ -167,7 +167,7 @@ describe("cluster feed stats", () => {
       latestPublishedAt: new Date("2026-04-10T10:00:00.000Z"),
       dominantGroupId: researchGroup.id,
     });
-    expect(cluster.displayRecommendScore).toBe(70);
+    expect(cluster.displayQualityScore).toBe(70);
     expect(tags.map((tag) => tag.normalized)).toEqual(["agents", "benchmarks", "openai"]);
     expect(cluster.feedSearchText).toContain("OpenAI");
     expect(cluster.feedStatsUpdatedAt).toBeInstanceOf(Date);

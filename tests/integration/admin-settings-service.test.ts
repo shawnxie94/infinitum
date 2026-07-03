@@ -36,6 +36,8 @@ describe("admin settings service", () => {
     await prisma.sourceGroup.deleteMany();
     await prisma.blacklistKeyword.deleteMany();
     await prisma.contentExtractionConfig.deleteMany();
+    await prisma.eventBriefingConfig.deleteMany();
+    await prisma.briefingPreferenceConfig.deleteMany();
   });
 
   it("seeds code defaults into model and prompt tables when the database is empty", async () => {
@@ -76,6 +78,9 @@ describe("admin settings service", () => {
     expect(settings.taskSchedule.cronExpression).toBe("0 * * * *");
     expect(settings.taskSchedule.sourceConcurrency).toBe(2);
     expect(settings.taskSchedule.fullTextFetchThreshold).toBe(80);
+    expect(settings.eventBriefing.config.minRankScore).toBe(0);
+    expect(settings.eventBriefing.preference.maxCuratorBoost).toBe(15);
+    expect(settings.eventBriefing.preference.weightedRules).toEqual([]);
     expect(settings.promptConfigs.find((config) => config.type === "item_summary")?.systemPrompt).toContain(
       "单条新闻内容助手",
     );

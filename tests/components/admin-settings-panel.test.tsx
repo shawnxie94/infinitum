@@ -98,6 +98,22 @@ function buildInitialSettings(): AdminSettingsSnapshot {
         updatedAt: "2026-04-20T10:00:00.000Z",
       },
     ],
+    eventBriefing: {
+      config: {
+        id: "event-briefing-config",
+        minRankScore: 0,
+        createdAt: "2026-04-20T10:00:00.000Z",
+        updatedAt: "2026-04-20T10:00:00.000Z",
+      },
+      preference: {
+        id: "briefing-preference-config",
+        weightedRules: [],
+        maxCuratorBoost: 15,
+        maxCuratorPenalty: 20,
+        createdAt: "2026-04-20T10:00:00.000Z",
+        updatedAt: "2026-04-20T10:00:00.000Z",
+      },
+    },
     contentExtraction: {
       id: "content-extraction-1",
       jinaEnabled: false,
@@ -1549,6 +1565,125 @@ describe("AdminSettingsPanel", () => {
     });
     await screen.findByText("正文解析设置已保存。");
     await waitForElementToBeRemoved(() => screen.queryByText("正文解析设置已保存。"), { timeout: 4000 });
+  });
+
+  it("submits event briefing display and curator preference settings", async () => {
+    const user = userEvent.setup();
+    const savedEventBriefing = {
+      config: {
+        ...buildInitialSettings().eventBriefing.config,
+        minRankScore: 20,
+      },
+      preference: {
+        ...buildInitialSettings().eventBriefing.preference,
+        weightedRules: [
+          { type: "tag", value: "AI Coding", weight: 6 },
+          { type: "keyword", value: "OpenAI", weight: -4 },
+        ],
+      },
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+
+      if (url.startsWith("/api/admin/settings/tags")) {
+        return new Response(JSON.stringify({
+          tags: [
+            {
+              id: "tag-ai-coding",
+              name: "AI Coding",
+              normalized: "ai-coding",
+              itemCount: 12,
+              aliasCount: 0,
+              aliases: [],
+              createdAt: "2026-04-20T10:00:00.000Z",
+              updatedAt: "2026-04-20T10:00:00.000Z",
+            },
+            {
+              id: "tag-marketing",
+              name: "Marketing",
+              normalized: "marketing",
+              itemCount: 3,
+              aliasCount: 0,
+              aliases: [],
+              createdAt: "2026-04-20T10:00:00.000Z",
+              updatedAt: "2026-04-20T10:00:00.000Z",
+            },
+          ],
+          totalCount: 2,
+          page: 1,
+          pageSize: 100,
+        }));
+      }
+
+      if (url === "/api/admin/settings/event-briefing" && init?.method === "PATCH") {
+        return new Response(JSON.stringify({ eventBriefing: savedEventBriefing }));
+      }
+
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
+
+    await user.click(screen.getByRole("tab", { name: "速览配置" }));
+
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText("事件偏好")).toBeInTheDocument();
+    expect(within(panel).queryByLabelText("默认重点事件数量")).not.toBeInTheDocument();
+    expect(within(panel).queryByLabelText("单页最大事件数量")).not.toBeInTheDocument();
+    expect(within(panel).queryByLabelText("来源预览数量")).not.toBeInTheDocument();
+    expect(within(panel).queryByLabelText("入选原因数量")).not.toBeInTheDocument();
+    expect(within(panel).queryByText("每行一条。偏好只影响公开排序，不采集访客行为，也不会硬过滤内容。")).not.toBeInTheDocument();
+    expect(within(panel).getByLabelText("加权上限")).toHaveValue(15);
+    expect(within(panel).getByLabelText("降权上限")).toHaveValue(20);
+
+    await user.clear(within(panel).getByLabelText("最低入选分"));
+    await user.type(within(panel).getByLabelText("最低入选分"), "20");
+    await user.click(within(panel).getByRole("button", { name: "新增规则" }));
+    let dialog = screen.getByRole("dialog", { name: "新增加权规则" });
+    await waitFor(() => {
+      expect(within(dialog).getByRole("option", { name: "AI Coding (12)" })).toBeInTheDocument();
+    });
+    await user.selectOptions(within(dialog).getByLabelText("内容"), ["AI Coding"]);
+    await user.clear(within(dialog).getByLabelText("权重"));
+    await user.type(within(dialog).getByLabelText("权重"), "6");
+    await user.click(within(dialog).getByRole("button", { name: "添加" }));
+
+    await user.click(within(panel).getByRole("button", { name: "新增规则" }));
+    dialog = screen.getByRole("dialog", { name: "新增加权规则" });
+    await user.selectOptions(within(dialog).getByLabelText("类型"), ["keyword"]);
+    await user.type(within(dialog).getByLabelText("内容"), "OpenAI");
+    await user.clear(within(dialog).getByLabelText("权重"));
+    await user.type(within(dialog).getByLabelText("权重"), "-4");
+    await user.click(within(dialog).getByRole("button", { name: "添加" }));
+
+    expect(within(panel).getByText("AI Coding (12)")).toBeInTheDocument();
+    expect(within(panel).getByText("OpenAI")).toBeInTheDocument();
+    await user.click(within(panel).getByRole("button", { name: "保存配置" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/event-briefing", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          config: {
+            minRankScore: 20,
+          },
+          preference: {
+            weightedRules: [
+              { type: "tag", value: "AI Coding", weight: 6 },
+              { type: "keyword", value: "OpenAI", weight: -4 },
+            ],
+            maxCuratorBoost: 15,
+            maxCuratorPenalty: 20,
+          },
+        }),
+      });
+    });
+    await screen.findByText("速览配置已保存。");
   });
 
   it("submits the daily report schedule candidate limit", async () => {

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { buildRecommendScoreSql } from "@/lib/feed/recommend-score";
+import { buildFeedQualityScoreSql } from "@/lib/feed/quality-score";
 
 export type DailyArticleStat = {
   date: string;
@@ -324,20 +324,16 @@ async function getDailySourceHealthStats(days: number): Promise<DailySourceHealt
 // ---------------------------------------------------------------------------
 
 async function getQualityScoreDistribution(): Promise<QualityScoreBucket[]> {
-  const singleRecommendScore = buildRecommendScoreSql({
-    aiScore: Prisma.sql`i."qualityScore"`,
-    sourceCount: Prisma.sql`1`,
-    itemCount: Prisma.sql`1`,
-  });
+  const singleQualityScore = buildFeedQualityScoreSql(Prisma.sql`i."qualityScore"`);
 
   const rows = await prisma.$queryRaw<Array<{ score: number | bigint; count: number | bigint }>>`
     WITH composite_scores AS (
-      SELECT cc."displayRecommendScore" AS score
+      SELECT cc."displayQualityScore" AS score
       FROM "content_clusters" cc
       WHERE cc.status = 'active'
         AND cc."displayItemCount" > 1
       UNION ALL
-      SELECT ${singleRecommendScore} AS score
+      SELECT ${singleQualityScore} AS score
       FROM "items" i
       INNER JOIN "sources" s ON s.id = i."sourceId"
       LEFT JOIN "content_clusters" cg ON cg.id = i."clusterId"

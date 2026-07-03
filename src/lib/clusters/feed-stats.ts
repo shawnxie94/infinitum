@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { calculateRecommendScore } from "@/lib/feed/recommend-score";
+import { normalizeFeedQualityScore } from "@/lib/feed/quality-score";
 
 const DISPLAYABLE_MODERATION_STATUSES = ["allowed", "restored"] as const;
 const DEFAULT_REFRESH_BATCH_SIZE = 200;
@@ -126,7 +126,7 @@ async function refreshCluster(cluster: RefreshableCluster) {
         displayItemCount: 0,
         displaySourceCount: 0,
         displayAverageScore: 0,
-        displayRecommendScore: 0,
+        displayQualityScore: 0,
         earliestCreatedAt: null,
         latestCreatedAt: null,
         dominantGroupId: null,
@@ -141,11 +141,7 @@ async function refreshCluster(cluster: RefreshableCluster) {
   const displayItemCount = items.length;
   const displaySourceCount = new Set(items.map((item) => item.sourceId)).size;
   const displayAverageScore = Math.round(items.reduce((sum, item) => sum + item.qualityScore, 0) / displayItemCount);
-  const displayRecommendScore = calculateRecommendScore(
-    displayAverageScore,
-    displaySourceCount,
-    displayItemCount,
-  );
+  const displayQualityScore = normalizeFeedQualityScore(displayAverageScore);
   const earliestCreatedAt = items.reduce((earliest, item) =>
     item.createdAt.getTime() < earliest.getTime() ? item.createdAt : earliest,
   items[0]!.createdAt);
@@ -163,7 +159,7 @@ async function refreshCluster(cluster: RefreshableCluster) {
       displayItemCount,
       displaySourceCount,
       displayAverageScore,
-      displayRecommendScore,
+      displayQualityScore,
       earliestCreatedAt,
       latestCreatedAt,
       latestPublishedAt,

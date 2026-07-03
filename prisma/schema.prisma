@@ -286,7 +286,7 @@ model ContentCluster {
   displayItemCount         Int                              @default(0)
   displaySourceCount       Int                              @default(0)
   displayAverageScore      Int                              @default(0)
-  displayRecommendScore    Int                              @default(0)
+  displayQualityScore      Int                              @default(0)
   earliestCreatedAt        DateTime?
   latestCreatedAt          DateTime?
   dominantGroupId          String?
@@ -305,7 +305,7 @@ model ContentCluster {
   @@index([status, latestPublishedAt])
   @@index([status, earliestCreatedAt])
   @@index([status, latestCreatedAt])
-  @@index([status, displayRecommendScore])
+  @@index([status, displayQualityScore])
   @@index([dominantGroupId, status, latestCreatedAt])
   @@map("content_clusters")
 }
@@ -445,6 +445,26 @@ model ContentExtractionConfig {
   updatedAt   DateTime @updatedAt
 
   @@map("content_extraction_configs")
+}
+
+model EventBriefingConfig {
+  id           String   @id @default(cuid())
+  minRankScore Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("event_briefing_configs")
+}
+
+model BriefingPreferenceConfig {
+  id                String   @id @default(cuid())
+  weightedRulesJson String   @default("[]")
+  maxCuratorBoost   Int      @default(15)
+  maxCuratorPenalty Int      @default(20)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("briefing_preference_configs")
 }
 
 model HeaderLink {
