@@ -1,9 +1,15 @@
+import { IconButton } from "@/components/ui/icon-button";
+import { IconThumbsDown, IconThumbsUp } from "@/components/ui/icons";
 import type { EventBriefingEntryDTO } from "@/lib/events/types";
+import { cx } from "@/lib/ui/cx";
 
 type EventBriefingCardProps = {
   entry: EventBriefingEntryDTO;
   rank: number;
+  isAdmin?: boolean;
+  activeManualFeedback?: "manual_boost" | "manual_penalty" | null;
   onOpen: (entry: EventBriefingEntryDTO) => void;
+  onManualFeedback?: (entry: EventBriefingEntryDTO, eventType: "manual_boost" | "manual_penalty") => void;
 };
 
 function formatUpdateTime(value: string) {
@@ -18,7 +24,14 @@ function formatRank(rank: number) {
   return `#${String(rank).padStart(2, "0")}`;
 }
 
-export function EventBriefingCard({ entry, rank, onOpen }: EventBriefingCardProps) {
+export function EventBriefingCard({
+  entry,
+  rank,
+  isAdmin = false,
+  activeManualFeedback = null,
+  onOpen,
+  onManualFeedback,
+}: EventBriefingCardProps) {
   const statusLabel = entry.isFollowUp ? "新进展" : "新事件";
   const meta = [
     `${entry.sourceCount} 来源`,
@@ -51,9 +64,47 @@ export function EventBriefingCard({ entry, rank, onOpen }: EventBriefingCardProp
             </span>
           </div>
           <div className="flex min-h-6 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-6 text-[var(--text-3)] sm:justify-end">
-            {meta.map((item) => (
-              <span key={item}>{item}</span>
-            ))}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {meta.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+            </div>
+            {isAdmin ? (
+              <div className="flex items-center gap-0.5">
+                <IconButton
+                  variant="secondary"
+                  size="sm"
+                  title="提升事件偏好"
+                  aria-label={`提升事件偏好：${entry.title}`}
+                  aria-pressed={activeManualFeedback === "manual_boost"}
+                  className={cx(
+                    "p-1 text-[var(--accent)] hover:text-[var(--accent)]",
+                    activeManualFeedback === "manual_boost"
+                      ? "border-[var(--accent)] bg-[rgba(59,130,246,0.12)]"
+                      : "",
+                  )}
+                  onClick={() => onManualFeedback?.(entry, "manual_boost")}
+                >
+                  <IconThumbsUp className="h-3.5 w-3.5" />
+                </IconButton>
+                <IconButton
+                  variant="secondary"
+                  size="sm"
+                  title="降低事件偏好"
+                  aria-label={`降低事件偏好：${entry.title}`}
+                  aria-pressed={activeManualFeedback === "manual_penalty"}
+                  className={cx(
+                    "p-1 text-[var(--danger-ink)] hover:text-[var(--danger-ink)]",
+                    activeManualFeedback === "manual_penalty"
+                      ? "border-[var(--danger-ink)] bg-[var(--danger-surface)]"
+                      : "",
+                  )}
+                  onClick={() => onManualFeedback?.(entry, "manual_penalty")}
+                >
+                  <IconThumbsDown className="h-3.5 w-3.5" />
+                </IconButton>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

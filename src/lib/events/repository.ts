@@ -12,6 +12,10 @@ const DISPLAYABLE_MODERATION_STATUSES = ["allowed", "restored"] as const;
 
 type PublicItemRow = Awaited<ReturnType<typeof listDailyPublicItems>>[number];
 
+type ListEventBriefingCandidateOptions = {
+  groupIds?: string[];
+};
+
 function uniqueBy<T>(values: T[], getKey: (value: T) => string) {
   const seen = new Set<string>();
   const result: T[] = [];
@@ -103,14 +107,31 @@ function buildSearchText(input: {
     .toLowerCase();
 }
 
-async function listDailyPublicItems(range: EventBriefingDateRange) {
+function normalizeGroupIds(groupIds: string[] | undefined) {
+  return [...new Set((groupIds ?? []).filter(Boolean))];
+}
+
+function buildSourceFilter(groupIds: string[] = []) {
+  return {
+    source: {
+      is: {
+        enabled: true,
+        ...(groupIds.length > 0 ? { groupId: { in: groupIds } } : {}),
+      },
+    },
+  };
+}
+
+async function listDailyPublicItems(range: EventBriefingDateRange, options: ListEventBriefingCandidateOptions = {}) {
+  const groupIds = normalizeGroupIds(options.groupIds);
+
   return prisma.item.findMany({
     where: {
       createdAt: { gte: range.start, lt: range.end },
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
-      source: { is: { enabled: true } },
+      ...buildSourceFilter(groupIds),
       AND: [
         {
           OR: [
@@ -196,10 +217,12 @@ async function listDailyPublicItems(range: EventBriefingDateRange) {
   });
 }
 
-async function listClusterPublicMembers(clusterIds: string[]) {
+async function listClusterPublicMembers(clusterIds: string[], options: ListEventBriefingCandidateOptions = {}) {
   if (clusterIds.length === 0) {
     return [];
   }
+
+  const groupIds = normalizeGroupIds(options.groupIds);
 
   return prisma.item.findMany({
     where: {
@@ -207,7 +230,7 @@ async function listClusterPublicMembers(clusterIds: string[]) {
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
-      source: { is: { enabled: true } },
+      ...buildSourceFilter(groupIds),
     },
     select: {
       id: true,
@@ -447,15 +470,18 @@ function getAggregationParentClusterIds(item: PublicItemRow) {
   ].filter((clusterId): clusterId is string => Boolean(clusterId));
 }
 
-export async function listEventBriefingCandidates(range: EventBriefingDateRange) {
-  const dailyItems = await listDailyPublicItems(range);
+export async function listEventBriefingCandidates(
+  range: EventBriefingDateRange,
+  options: ListEventBriefingCandidateOptions = {},
+) {
+  const dailyItems = await listDailyPublicItems(range, options);
   const clusterIds = uniqueBy(
     dailyItems
       .map((item) => item.clusterId)
       .filter((clusterId): clusterId is string => Boolean(clusterId)),
     (clusterId) => clusterId,
   );
-  const clusterMembers = await listClusterPublicMembers(clusterIds);
+  const clusterMembers = await listClusterPublicMembers(clusterIds, options);
   const dailyItemsByClusterId = new Map<string, PublicItemRow[]>();
   const clusterMembersByClusterId = new Map<string, PublicItemRow[]>();
 

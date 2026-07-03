@@ -91,6 +91,7 @@ function toEntryDTO(input: {
     type: input.candidate.type,
     title: input.candidate.title,
     summary: input.candidate.summary,
+    qualityScore: input.candidate.qualityScore,
     rankScore,
     baseRankScore,
     curatorBoost: curator.curatorBoost,
@@ -102,6 +103,11 @@ function toEntryDTO(input: {
     newSourceCountOnDate: input.candidate.newSourceCountOnDate,
     latestCreatedAt: input.candidate.latestCreatedAt.toISOString(),
     latestPublishedAt: input.candidate.latestPublishedAt.toISOString(),
+    eventType: input.candidate.eventType,
+    eventSubject: input.candidate.eventSubject,
+    eventAction: input.candidate.eventAction,
+    eventObject: input.candidate.eventObject,
+    eventDate: input.candidate.eventDate,
     detailHref: `/?entryKeys=${encodeURIComponent(`${input.candidate.type}:${input.candidate.id}`)}`,
     items: input.candidate.items.map((item) => ({
       id: item.id,
@@ -137,10 +143,11 @@ type RankedEventBriefing = {
 
 async function loadRankedEventBriefing(options: EventBriefingOptions): Promise<RankedEventBriefing> {
   const range = getEventBriefingDateRange(options.date, options.now);
+  const groupIds = [...new Set((options.groupIds ?? []).filter(Boolean))];
   const [configRow, preferenceRow, candidateResult] = await Promise.all([
     ensureEventBriefingConfig(),
     ensureBriefingPreferenceConfig(),
-    listEventBriefingCandidates(range),
+    listEventBriefingCandidates(range, { groupIds }),
   ]);
   const config = serializeAdminEventBriefingConfig(configRow);
   const preference = serializeAdminBriefingPreferenceConfig(preferenceRow);
@@ -207,11 +214,27 @@ function serializeRankedOptions(options: EventBriefingOptions) {
     date: options.date ?? null,
     view: options.view ?? null,
     now: options.now?.toISOString() ?? null,
+    groupIds: [...new Set((options.groupIds ?? []).filter(Boolean))].sort(),
   });
 }
 
 export async function getEventBriefing(options: EventBriefingOptions = {}) {
   return loadEventBriefing(options);
+}
+
+export async function listEventBriefingEntriesForDailyReport(options: {
+  date: string;
+  limit: number;
+  groupIds?: string[];
+}) {
+  const ranked = await loadRankedEventBriefing({
+    date: options.date,
+    view: "important",
+    groupIds: options.groupIds,
+  });
+  const limit = normalizePositiveInteger(options.limit, ranked.entries.length);
+
+  return ranked.entries.slice(0, limit);
 }
 
 export { formatTime as formatEventBriefingTime };

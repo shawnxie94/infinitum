@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComponentProps } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EventBriefingList } from "@/components/events/event-briefing-list";
+import { ToastProvider } from "@/components/ui/toast";
 import type { EventBriefingDTO } from "@/lib/events/types";
 
 const routerPushMock = vi.hoisted(() => vi.fn());
@@ -35,6 +37,7 @@ function buildBriefing(overrides: Partial<EventBriefingDTO> = {}): EventBriefing
         type: "cluster",
         title: "OpenAI 发布新的 Agent 工具链能力",
         summary: "OpenAI 更新了面向开发者的 Agent 工具链。",
+        qualityScore: 91,
         rankScore: 91,
         baseRankScore: 82,
         curatorBoost: 9,
@@ -46,6 +49,11 @@ function buildBriefing(overrides: Partial<EventBriefingDTO> = {}): EventBriefing
         newSourceCountOnDate: 2,
         latestCreatedAt: "2026-06-30T13:50:00.000Z",
         latestPublishedAt: "2026-06-30T13:10:00.000Z",
+        eventType: "launch",
+        eventSubject: "OpenAI",
+        eventAction: "发布",
+        eventObject: "Agent 工具链",
+        eventDate: "2026-06-30",
         detailHref: "/?entryKeys=cluster%3Acluster-openai",
         items: [
           {
@@ -95,13 +103,28 @@ function buildBriefing(overrides: Partial<EventBriefingDTO> = {}): EventBriefing
   };
 }
 
+function renderEventBriefingList(
+  briefing: EventBriefingDTO,
+  props: Omit<ComponentProps<typeof EventBriefingList>, "briefing"> = {},
+) {
+  return render(
+    <ToastProvider>
+      <EventBriefingList briefing={briefing} {...props} />
+    </ToastProvider>,
+  );
+}
+
 describe("EventBriefingList", () => {
   beforeEach(() => {
     routerPushMock.mockClear();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders a compact date toolbar and dense ranked event list", () => {
-    render(<EventBriefingList briefing={buildBriefing()} />);
+    renderEventBriefingList(buildBriefing());
 
     expect(screen.getByRole("heading", { name: "事件速览" })).toBeInTheDocument();
     expect(screen.queryByText(/当日采集 300 条资讯/)).not.toBeInTheDocument();
@@ -132,17 +155,68 @@ describe("EventBriefingList", () => {
     expect(within(card).queryByText(/排序/)).not.toBeInTheDocument();
     expect(within(card).queryByText(/入选/)).not.toBeInTheDocument();
     expect(within(card).queryByText(/OpenAI Blog/)).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /提升事件偏好/ })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /降低事件偏好/ })).not.toBeInTheDocument();
+  });
+
+  it("shows manual preference buttons only for admins and records manual feedback", () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderEventBriefingList(buildBriefing(), { initialIsAdmin: true });
+
+    const card = screen.getByRole("article");
+    const boostButton = within(card).getByRole("button", {
+      name: "提升事件偏好：OpenAI 发布新的 Agent 工具链能力",
+    });
+    const penaltyButton = within(card).getByRole("button", {
+      name: "降低事件偏好：OpenAI 发布新的 Agent 工具链能力",
+    });
+
+    fireEvent.click(boostButton);
+    expect(boostButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("已记录为更关注的事件。")).toBeInTheDocument();
+    fireEvent.click(penaltyButton);
+    expect(penaltyButton).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("已记录为降低关注的事件。")).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/curator-behavior", expect.objectContaining({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventType: "manual_boost",
+        targetType: "event",
+        targetId: "cluster-openai",
+        entryType: "cluster",
+        entryId: "cluster-openai",
+        clusterId: "cluster-openai",
+        itemId: null,
+      }),
+    }));
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/curator-behavior", expect.objectContaining({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventType: "manual_penalty",
+        targetType: "event",
+        targetId: "cluster-openai",
+        entryType: "cluster",
+        entryId: "cluster-openai",
+        clusterId: "cluster-openai",
+        itemId: null,
+      }),
+    }));
   });
 
   it("marks non-follow-up entries as new events", () => {
-    render(<EventBriefingList briefing={buildBriefing({
+    renderEventBriefingList(buildBriefing({
       entries: [
         {
           ...buildBriefing().entries[0]!,
           isFollowUp: false,
         },
       ],
-    })} />);
+    }));
 
     const card = screen.getByRole("article");
 
@@ -151,14 +225,14 @@ describe("EventBriefingList", () => {
   });
 
   it("opens a detail modal with full summaries and expandable cluster items", () => {
-    render(<EventBriefingList briefing={buildBriefing({
+    renderEventBriefingList(buildBriefing({
       entries: [
         {
           ...buildBriefing().entries[0]!,
           summary: "**Agent SDK** 发布，参考 [文档](/docs) 和 `npm` 包。",
         },
       ],
-    })} />);
+    }));
 
     const card = screen.getByRole("article");
 
@@ -193,7 +267,7 @@ describe("EventBriefingList", () => {
   });
 
   it("does not render original item list for single event details", () => {
-    render(<EventBriefingList briefing={buildBriefing({
+    renderEventBriefingList(buildBriefing({
       entries: [
         {
           ...buildBriefing().entries[0]!,
@@ -216,7 +290,7 @@ describe("EventBriefingList", () => {
           ],
         },
       ],
-    })} />);
+    }));
 
     fireEvent.click(screen.getByRole("button", { name: "单篇重点事件" }));
 
@@ -232,7 +306,7 @@ describe("EventBriefingList", () => {
   });
 
   it("renders an empty state when no events are available", () => {
-    render(<EventBriefingList briefing={buildBriefing({
+    renderEventBriefingList(buildBriefing({
       entries: [],
       summary: {
         eventCount: 0,
@@ -245,21 +319,21 @@ describe("EventBriefingList", () => {
         total: 0,
         totalPages: 1,
       },
-    })} />);
+    }));
 
     expect(screen.getByText("当天暂无可展示的重点事件。")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "查看主页" })).toHaveAttribute("href", "/");
   });
 
   it("uses the shared pagination style and preserves non-default page size", () => {
-    const { container } = render(<EventBriefingList briefing={buildBriefing({
+    const { container } = renderEventBriefingList(buildBriefing({
       pagination: {
         page: 2,
         pageSize: 50,
         total: 96,
         totalPages: 2,
       },
-    })} />);
+    }));
 
     expect(container.querySelector('input[name="size"]')).toHaveAttribute("value", "50");
     expect(screen.getByRole("combobox", { name: "每页显示" })).toHaveValue("50");
@@ -272,7 +346,7 @@ describe("EventBriefingList", () => {
   });
 
   it("preserves active quick filter in date search and pagination", () => {
-    const { container } = render(<EventBriefingList briefing={buildBriefing({
+    const { container } = renderEventBriefingList(buildBriefing({
       view: "updates",
       pagination: {
         page: 1,
@@ -280,7 +354,7 @@ describe("EventBriefingList", () => {
         total: 11,
         totalPages: 2,
       },
-    })} />);
+    }));
 
     expect(screen.getByRole("link", { name: "最新进展 11" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute(

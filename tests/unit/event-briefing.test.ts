@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { getEventBriefingDateRange } from "@/lib/events/date";
+import { compressBehaviorNetScore, getCuratorBehaviorScore } from "@/lib/curator-behavior/service";
 import { calculateCuratorPreference } from "@/lib/events/preferences";
 import type { EventBriefingCandidate } from "@/lib/events/types";
 
@@ -74,5 +75,15 @@ describe("event briefing helpers", () => {
 
     expect(result.curatorBoost).toBe(10);
     expect(result.curatorPenalty).toBe(8);
+  });
+
+  it("compresses behavior evidence into small suggested rule weights", () => {
+    expect(getCuratorBehaviorScore("event_source_clicked")).toBe(2);
+    expect(getCuratorBehaviorScore("cluster_hidden")).toBe(-5);
+    expect(compressBehaviorNetScore(1)).toBe(1);
+    expect(compressBehaviorNetScore(6)).toBe(2);
+    expect(compressBehaviorNetScore(7)).toBe(3);
+    expect(compressBehaviorNetScore(-3)).toBe(-2);
+    expect(compressBehaviorNetScore(0)).toBe(0);
   });
 });

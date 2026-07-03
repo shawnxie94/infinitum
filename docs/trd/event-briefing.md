@@ -40,13 +40,13 @@ Infinitum 生产环境每天约有 300 条资讯进入信息流。当前系统�
 
 - 不在第一期建设完整实体体系、知识图谱或 claim-level 证据链。
 - 不新增个人已读、忽略、收藏、置顶等用户状态；该页面面向公众展示。
-- 不做多用户个性化推荐，不采集访客点击、停留、已读等行为信号参与第一期排序。
+- 不做多用户个性化推荐，不采集访客点击、停留、已读等行为信号参与排序。
+- 管理者行为只用于生成待确认的站点偏好建议，不直接影响公开排序。
 - 不恢复已删除的实时热榜或 trending board。
 - 不把多源确认、最新进展拆成独立主内容区；它们是重点事件的排序信号和解释标签。
-- 不要求页面打开时实时调用 AI。
-- 二期 AI brief 只在 ingestion 结束后异步生成；不设计定时兜底，也不为历史日期补数据。
+- 不要求页面打开时实时调用 AI；`EventBrief` 作为后续可选表达增强，不作为近期阶段前置依赖。
 - 不替代 `/daily`；日报仍作为叙事型归档总结。
-- 日报深度化不进入一期和二期范围；三期再调整日报生成逻辑。
+- 日报深化首版只替换候选池来源，不直接重写日报模板、发布、归档、RSS 和审核流程。
 
 ## 当前系统上下文
 
@@ -87,7 +87,7 @@ Infinitum 生产环境每天约有 300 条资讯进入信息流。当前系统�
 阅读层级：
 
 - `主页`：完整资讯流。
-- `速览`：某一天重要内容的快速入口。一期只包含事件速览；四期扩展为 `事件 / 观点` 二级视图。
+- `速览`：某一天重要内容的快速入口。一期只包含事件速览；三期扩展为 `事件 / 观点` 二级视图。
 - `日报`：某一天重要事件的叙事型总结和归档。
 
 公开速览排序语义：
@@ -100,23 +100,24 @@ Infinitum 生产环境每天约有 300 条资讯进入信息流。当前系统�
 
 ### Phase Roadmap
 
-本功能按“先压缩信息，再增强表达，再深化分析，再覆盖观点”的顺序推进：
+本功能按“先压缩信息，再复用速览深化日报，再覆盖观点，最后按真实痛点补增强能力”的顺序推进：
 
 | Phase | 目标 | 交付边界 |
 |---|---|---|
 | Phase 1 | 建立可用的公开事件速览 | `/events` 单日重点事件列表、Header `速览` 入口、主页式分页、规则排序、站点级主理人偏好加权。 |
-| Phase 2 | 提升事件表达和可追溯性 | ingestion 成功后异步生成 `EventBrief`，补轻量实体、证据锚点和时间线摘要；页面只读取缓存 brief，不同步调用 AI，不定时兜底，不补历史日期。 |
-| Phase 3 | 深化日报 | 日报候选来自事件速览 Top N，结合 `EventBrief` 和可缓存外部证据，生成主题化深度简报。 |
-| Phase 4 | 覆盖高质量博客和新观点 | 在同一 `速览` 入口下增加 `事件 / 观点` 二级视图，独立建设内容类型识别、`ArticleInsightBrief` 和 `insightScore`。 |
+| Phase 2 | 日报候选池接入事件速览 | 日报候选来自事件速览 `rankScore` Top N；复用现有“候选内容上限”和“日报分组范围”配置；首版保持现有日报模板、输出结构、发布、归档、RSS 和审核流程。 |
+| Phase 2.1 | 管理者行为生成偏好建议 | 记录管理员打开详情、点击原文、手动过滤/隐藏等行为，生成 `tag`、`keyword`、`source_group`、`event_type` 偏好建议；管理员接受后才写入事件偏好。 |
+| Phase 3 | 覆盖高质量博客和新观点 | 在同一 `速览` 入口下增加 `事件 / 观点` 二级视图，独立建设内容类型识别、`ArticleInsightBrief` 和 `insightScore`。 |
+| Phase 4 | 可选增强能力 | 按实际痛点再选择 `EventBrief`、外部证据检索、速览预计算/校准视图、实体追踪或多用户个性化；这些不作为 Phase 2 前置。 |
 
 暂不单独规划“Phase 5 个性化”。当前产品主要是站点主理人自用、公开浏览，因此第一期直接做 **站点级公开偏好**。只有未来出现多用户登录、私有收藏、行为反馈或“我的速览”诉求时，才需要另起行为个性化阶段。
 
 优化后的路线判断：
 
 - **一期先做可用性，不做智能化大工程**：先解决“每天 300 条里先看什么”，把入口、单日语义、排序、卡片密度、分页和站点级偏好跑通。
-- **二期补表达可信度，而不是先建设完整知识图谱**：事件卡片需要更好的 `发生了什么 / 为什么重要 / 最新变化`，但不需要先做完整实体体系和 claim-level 证据链；二期只补轻量实体识别、来源证据锚点和 brief 输入快照。
-- **三期再把日报做深**：日报不再重新从全部内容里判断重点，而是复用速览 Top 事件和二期 brief，再通过外部证据检索补背景、影响和不确定性。
-- **四期再处理博客和观点**：技术博客、新观点、教程和研究笔记不要混进事件排序；它们需要独立内容类型、`insightScore` 和观点卡片。
+- **二期先复用速览结果深化日报选材**：日报不再重新从全量信息流里判断重点，而是优先使用事件速览 Top N 作为候选池；首版只替换候选来源，不改变现有日报模板和输出形态。
+- **三期再处理博客和观点**：技术博客、新观点、教程和研究笔记不要混进事件排序；它们需要独立内容类型、`insightScore` 和观点卡片。
+- **EventBrief 和外部证据后置**：如果后续发现点开事件理解成本仍高，再做 `EventBrief`；如果日报需要更强背景和事实支撑，再做可缓存外部证据检索。
 - **个性化不单独提前排期**：当前需求本质是“主理人公开精选视角”，站点级偏好已经覆盖主要口味差异；多用户行为个性化会增加登录、隐私、缓存和解释复杂度，暂不进入近期主线。
 
 ### 页面信息架构
@@ -184,11 +185,11 @@ Header
 - 指标行：来源数、条目数、最近更新时间。
 - 点击标题打开事件详情弹窗。
 
-卡片不默认展示完整来源列表、完整时间线、长摘要、入选原因或原文片段。一期 DTO 只保留当前 UI 和排序需要的字段；`whatHappened`、`whyItMatters`、证据解释等表达增强字段留到二期 `EventBrief`。
+卡片不默认展示完整来源列表、完整时间线、长摘要、入选原因或原文片段。一期 DTO 只保留当前 UI 和排序需要的字段；`whatHappened`、`whyItMatters`、证据解释等表达增强字段留到后续可选 `EventBrief`。
 
-### Phase 4 Preview: Opinion and Blog Briefing
+### Phase 3 Preview: Opinion and Blog Briefing
 
-四期在同一个 `速览` 入口下增加 **观点速览**，用于处理技术博客、工程实践、观点文章、教程、研究笔记等非事件型内容。
+三期在同一个 `速览` 入口下增加 **观点速览**，用于处理技术博客、工程实践、观点文章、教程、研究笔记等非事件型内容。
 
 核心区别：
 
@@ -197,7 +198,7 @@ Header
 
 不要把技术博客硬塞进事件模型。很多技术博客不是事件，而是解释、经验、观点、教程或研究笔记；它们需要独立的内容类型识别、评分和卡片表达。
 
-四期页面形态：
+三期页面形态：
 
 ```text
 速览
@@ -263,7 +264,7 @@ insightScore =
 - `structureBoost`：内容是否结构完整，有清晰结论、步骤或案例。
 - `recencyBoost`：当天新增内容轻微加分。
 
-四期更依赖 AI。建议新增异步 `ArticleInsightBrief`：
+三期更依赖 AI。建议新增异步 `ArticleInsightBrief`：
 
 ```prisma
 model ArticleInsightBrief {
@@ -299,18 +300,18 @@ model ArticleInsightBrief {
 - 不在页面访问时同步生成。
 - 不补历史日期，除非后续增加管理员手动重跑。
 
-四期配置建议：
+三期配置建议：
 
 - `defaultInsightLimit`：观点速览默认展示数量，建议初始 20。
 - `maxInsightLimit`：单页最大展示数量。
 - `minContentLengthForInsight`：观点候选最小正文长度。
-- `contentKindWeightsJson`：观点速览内容类型权重，可复用站点级偏好配置或在四期扩展偏好模型。
+- `contentKindWeightsJson`：观点速览内容类型权重，可复用站点级偏好配置或在三期扩展偏好模型。
 
-四期不改变：
+三期不改变：
 
 - Header 不新增新的主导航，仍使用 `速览`。
 - 事件速览和观点速览不合并排序。
-- 日报三期仍以事件主题为主；是否把观点速览纳入日报是后续独立决策。
+- 日报二期仍以事件主题为主；是否把观点速览纳入日报是后续独立决策。
 
 ### Phase 1 Delivery Boundary
 
@@ -427,11 +428,79 @@ model BriefingPreferenceConfig {
 }
 ```
 
+管理者行为建议单独建模，避免把行为分直接混进 `rankScore`：
+
+```prisma
+model CuratorBehaviorEvent {
+  id           String   @id @default(cuid())
+  eventType    String
+  targetType   String
+  targetId     String
+  entryType    String?
+  entryId      String?
+  itemId       String?
+  clusterId    String?
+  score        Int
+  metadataJson String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@map("curator_behavior_events")
+}
+
+model CuratorBehaviorDimension {
+  id             String   @id @default(cuid())
+  eventId        String
+  ruleType       String
+  value          String
+  label          String?
+  score          Int
+  targetDedupKey String   @unique
+  occurredAt     DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([ruleType, value, occurredAt])
+  @@map("curator_behavior_dimensions")
+}
+
+model BriefingPreferenceSuggestion {
+  id              String   @id @default(cuid())
+  suggestionKey   String   @unique
+  ruleType        String
+  value           String
+  label           String?
+  suggestedWeight Int
+  confidence      Float
+  positiveScore   Int      @default(0)
+  negativeScore   Int      @default(0)
+  sampleCount     Int      @default(0)
+  reason          String
+  status          String   @default("pending")
+  dismissedAt     DateTime?
+  acceptedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, confidence])
+  @@index([ruleType, value])
+  @@map("briefing_preference_suggestions")
+}
+```
+
 配置规则：
 
 - `minRankScore`：可选过滤阈值，默认 0 表示只按排序和分页展示。
 - `weightedRulesJson`：事件偏好规则列表，元素为 `{ type, value, weight }`；`type` 支持 `tag`、`keyword`、`source_group`、`event_type`；`weight` 支持正负，正数加权、负数降权。
 - `maxCuratorBoost` / `maxCuratorPenalty`：控制偏好影响上限，避免把全局重要性完全覆盖。
+
+管理者行为建议规则：
+
+- 行为分只表示证据强度，不直接进入 `rankScore`。
+- 行为发生时立即写入目标维度快照，建议生成只扫描近 30 天 `curator_behavior_dimensions`，不回扫海量 `items` / `clusters`。
+- 首版正向行为：`event_detail_opened` +1、`feed_item_opened` +1、`event_source_clicked` +2、`manual_boost` +5。
+- 首版负向行为：`item_filtered` -4、`cluster_hidden` -5、`manual_penalty` -5。
+- 建议维度仅支持 `source_group`、`tag`、`event_type`、`keyword`，不生成 source 级建议。
+- 建议权重压缩到 `-3..+3`：净分 1-2 为 1，3-6 为 2，7 及以上为 3，并保留正负方向。
+- 管理员接受建议后写入 `BriefingPreferenceConfig.weightedRulesJson`；忽略建议不影响现有排序。
 
 事件类型固定集合来自 AI 分析 prompt：`release`、`launch`、`update`、`funding`、`acquisition`、`partnership`、`policy`、`research`、`security`、`other`。
 
@@ -532,7 +601,7 @@ rankScore =
 - 偏好只做加权，不做硬过滤。
 - 加权有上限，不能让偏好完全覆盖全局重要性。
 - 公开页面显示同一套排序结果，不按访客变化。
-- 第一版不使用点击、停留、保存、不感兴趣等行为信号。
+- 管理者行为可以生成偏好建议，但行为分不直接影响排序；公众访客行为不采集、不建模。
 
 未来如果要做行为个性化，可另建 `我的速览` 或登录后个人模式，不进入第一期公开速览。
 
@@ -543,7 +612,7 @@ rankScore =
 - `isFollowUp`：cluster 早于当天存在，且当天新增 item，用于展示 `新进展` 和 `最新进展` 快速筛选。
 - `sourceCount >= 2`：用于 `多源确认` 快速筛选。
 
-当前列表只展示 `新事件 / 新进展` 状态标签，以及来源数、条目数、更新时间。排序解释和证据表达放到二期 `EventBrief`，不在一期 DTO 中保留未使用字段。
+当前列表只展示 `新事件 / 新进展` 状态标签，以及来源数、条目数、更新时间。排序解释和证据表达放到后续可选 `EventBrief`，不在一期 DTO 中保留未使用字段。
 
 ### Date Semantics
 
@@ -572,25 +641,25 @@ rankScore =
 - 单篇事件不再重复展示原条目。
 - 聚合事件默认折叠原始内容，只显示 `N 条` 展开入口；展开后展示相关子条目、来源、发表时间和原文链接。
 
-独立详情页、时间线和证据链仍延后到二期或更后。
+独立详情页、时间线和证据链仍延后到后续可选阶段。
 
-### Phase 2 AI Brief
+### Optional Later: EventBrief
 
-二期可以接入 AI 作为异步表达增强层，用于提高卡片和详情的信息密度，但不能成为页面可用性的前置条件。
+`EventBrief` 作为后续可选能力，用于在点开事件后降低理解成本。它不是近期 Phase 2 的前置能力，也不参与事件排序；只有当运行一段时间后确认“弹窗仍需要读太多原摘要”时再实施。
 
-AI 负责生成结构化 brief：
+如果实施，AI 负责生成结构化 brief：
 
 - `whatHappened`：发生了什么，一句话。
 - `whyItMatters`：为什么重要，一句话。
 - `latestChange`：当天新增内容带来的最新变化，可为空。
-- `entities`：轻量实体列表，例如公司、产品、人物、组织、项目、漏洞编号；只用于解释和检索，不在二期做完整实体库。
+- `entities`：轻量实体列表，例如公司、产品、人物、组织、项目、漏洞编号；只用于解释和检索，不先做完整实体库。
 - `evidenceItems`：证据锚点列表，记录 brief 中关键判断来自哪些站内 item/source。
 - `evidenceSummary`：来源依据摘要，可用于详情页。
-- `timeline`：事件详情页使用的 3-5 个关键节点，二期后段再启用。
+- `timeline`：事件详情页使用的 3-5 个关键节点，建议在 `EventBrief` 首版之后再评估，不作为首版必做。
 
 AI 不负责第一期核心排序。`rankScore` 仍以规则为主；AI 输出只用于更好的表达、解释和详情展示。
 
-二期的证据边界：
+`EventBrief` 的证据边界：
 
 - 做 **轻量证据锚点**，不做完整 claim graph。
 - 证据锚点只引用站内已采集 item、source、publishedAt/createdAt 和摘要片段。
@@ -644,7 +713,7 @@ ingestion succeeded
   -> enqueue missing or stale event_brief_generate jobs
 ```
 
-二期明确不做：
+`EventBrief` 首版明确不做：
 
 - 不做每 30 分钟或其他定时兜底。
 - 不在用户访问 `/events` 时同步生成 brief。
@@ -665,7 +734,7 @@ ingestion succeeded
 - 拒绝近似原文的大段复制。
 - `evidenceItems` 只能引用 brief 输入中的 item/source，不能生成不存在的来源。
 - `entities` 数量需要限制，第一版建议最多 8 个，避免把 brief 变成实体抽取任务。
-- 对无法从站内输入确认的外部背景，不在二期 brief 中展开；三期日报外部证据检索再处理。
+- 对无法从站内输入确认的外部背景，不在 brief 中展开；外部证据检索作为更后续的日报增强能力再处理。
 - 失败原因写入 `errorMessage`，任务状态进入现有 task monitor。
 
 ## Data and State
@@ -723,24 +792,73 @@ cluster 统计：
 - 后台保存后应使事件速览缓存失效。
 - JSON 字段解析失败时使用空偏好，并记录配置错误。
 - 配置 UI 应明确这是“事件偏好”，不是个人隐私画像。
+- 偏好建议 UI 应明确“接受后生效”，避免把管理者行为证据误解为实时排序分。
 
-### Phase 3 Daily Report Deepening
+### Phase 2 Daily Report Candidate Pool
 
-三期调整日报生成逻辑，让日报从“候选事件摘要”升级为“基于事件速览的深度简报”。核心边界：
+二期首版只调整日报候选池来源：让日报从事件速览的 Top 事件中选择输入候选，而不是继续从当天全量信息流里独立计算候选。这样可以复用速览已经完成的事件聚合、去重、`rankScore` 和站点级偏好，同时避免一次性重写日报模板造成内容形态剧烈变化。
+
+二期边界：
 
 - 事件速览负责选择层：哪些事件重要、为什么进入当天重点。
-- AI brief 负责表达层：事件级 `发生了什么 / 为什么重要 / 最新变化 / 来源依据`。
-- 日报负责分析层：主题归纳、事件关系、影响分析、后续观察和不确定性。
+- 日报生成仍负责表达层：沿用现有 `daily_report` prompt template、JSON 输出结构、Markdown 渲染和发布审核流程。
+- 不依赖 `EventBrief`。
+- 不接入外部证据检索。
+- 不直接切换为全新的 `今日判断 / 核心主题 / 风险与不确定性 / 附录` 结构。
 
-三期目标：
+二期目标：
 
-- 日报候选来源迁移到 `EventBriefingService`，复用当天 Top N 重点事件、`rankScore` 和入选原因。
-- 日报生成输入优先使用二期 `EventBrief`，减少从大量 item 摘要中重新判断重点。
-- 日报正文不再只是复述事件列表，而是提炼 3-5 个主题。
-- 每个主题下组织相关事件，说明事件之间的关系、影响和后续观察点。
-- 保留重点事件附录，方便从深度分析回溯到结构化事件列表。
+- 日报候选来源迁移到 `EventBriefingService`，复用当天满足 `minRankScore` 的事件速览排序结果。
+- 复用现有“候选内容上限”配置作为 Top N：从事件速览 `rankScore` 排名前 N 的事件中构造日报候选。
+- 复用现有“日报分组范围”配置作为候选来源过滤条件；选择全部分组时使用所有公开来源。
+- 保留现有日报模板和栏目，降低内容风格、后台审核、历史归档和 RSS 的兼容风险。
+- 保留现有候选快照、inputHash、候选不足跳过、AI 调用统计和 task monitor 行为。
 
-建议三期日报结构：
+候选规则：
+
+```text
+日报候选 =
+  选定日期内
+  + 符合“日报分组范围”的公开来源
+  + 满足事件速览 minRankScore
+  + 按 rankScore 排序
+  + 取前 “候选内容上限” 个事件
+```
+
+分组范围处理：
+
+- 候选资格：事件当天新增内容中至少有一个 item 来自选定来源组。
+- 输入来源：传给日报模型的 source registry 只包含选定来源组内的 item/source。
+- 展示标题和摘要：可继续使用 cluster title/summary 作为事件级表达，但引用来源必须限定在日报分组范围内。
+
+Top N 配置：
+
+- 继续使用现有“候选内容上限”，不新增新的 Top N 配置。
+- 该参数在二期后的语义为：从事件速览排序结果中取前 N 个事件作为日报候选。
+- 若符合条件的事件不足 N，只使用实际数量，不为了凑数引入低分事件。
+- 如果候选不足现有最小候选数，继续沿用“候选内容不足，跳过生成”的逻辑。
+
+二期不改变：
+
+- `/daily` 的发布、归档、RSS、导出和 admin 审核流程。
+- 日报仍按日期归档。
+- 日报仍可独立访问；事件速览只是候选和上下文来源。
+- 现有 `daily_report` prompt config、templateJson、runtime fallback rules 和 JSON repair 机制。
+- 现有日报标题生成、sourceIds 校验、Markdown 渲染和 source registry 存储。
+
+二期需要新增或调整：
+
+- Daily report candidate 读取改为从 `src/lib/events/service.ts` 获取事件候选。
+- 将事件速览 entry 转换为现有 `DailyReportCandidate` 结构，尽量保持 provider 输入契约不变。
+- `candidateScore` 可映射自事件 `rankScore`，保留 `qualityScore`、`sourceCount`、`itemCount`、`clusterId`、`itemId`、event signature 等字段。
+- `candidateSnapshot` 记录候选来自事件速览排序结果，方便后台审核时理解候选来源。
+- `inputHash` 纳入事件 entry id、`rankScore`、标题、摘要、来源范围和候选上限，避免配置变更后误判为输入未变化。
+
+### Optional Later: Daily Report Structure and Research Evidence
+
+在候选池替换跑稳定后，如果日报仍然显得像“事件摘要集合”，再进入下一步：轻量调整日报模板表达，或增加外部证据补充。该能力只服务日报深度化，不进入事件速览排序，也不在页面访问时触发。
+
+可选的新日报结构：
 
 ```text
 今日判断
@@ -754,9 +872,6 @@ cluster 统计：
   - 影响分析
   - 后续观察
 
-- 主题 B
-  ...
-
 风险与不确定性
 - 单一来源、尚未官方确认、影响范围不明确的事项。
 
@@ -764,22 +879,7 @@ cluster 统计：
 - 来自当天事件速览的 Top events。
 ```
 
-三期不改变：
-
-- `/daily` 的发布、归档、RSS、导出和 admin 审核流程。
-- 日报仍按日期归档。
-- 日报仍可独立访问；事件速览只是候选和上下文来源。
-
-三期需要新增或调整：
-
-- Daily report candidate 读取改为从 `src/lib/events/service.ts` 获取事件候选。
-- Daily report prompt 新增主题归纳、影响分析、后续观察和不确定性要求。
-- Daily report validation 增加主题结构、引用事件覆盖率、附录完整性检查。
-- Daily report source records 需要能关联 event entry，包括 cluster 和 single item。
-
-#### Daily Report Research Evidence
-
-三期可以增加 **外部证据补充**，用于让日报的主题分析不止停留在站内事件表面。该能力只服务日报深度化，不进入事件速览排序，也不在页面访问时触发。
+该结构不进入二期首版；若后续启用，应作为新的日报模板版本，并确认历史日报、标题生成、Markdown 渲染、RSS 和审核体验的兼容性。
 
 外部证据补充的目标：
 
@@ -792,7 +892,7 @@ cluster 统计：
 - 只对日报归纳出的 3-5 个核心主题执行，不对事件速览 Top N 的每个事件执行。
 - 每个主题最多保留 3-5 条外部证据。
 - 每份日报最多使用 15-20 条外部证据。
-- 搜索失败或抓取失败时，日报退回站内事件和 `EventBrief`，不能阻断生成。
+- 搜索失败或抓取失败时，日报退回站内事件速览候选和现有站内摘要，不能阻断生成。
 - 外部证据必须缓存，不允许日报生成过程中反复无缓存搜索相同主题。
 
 建议流程：
@@ -891,7 +991,7 @@ model ExternalEvidenceSource {
 
 日报 prompt 约束：
 
-- 只能基于站内事件、`EventBrief` 和 evidence pack 做判断。
+- 只能基于站内事件、现有站内摘要和 evidence pack 做判断；如果后续已实现 `EventBrief`，可作为增强输入。
 - 重要结论应能对应到站内事件或外部证据来源。
 - 对证据不足的地方明确标注不确定性。
 - 不把外部搜索结果当作事实核查的万能结论。
@@ -899,7 +999,7 @@ model ExternalEvidenceSource {
 
 任务边界：
 
-- 外部证据检索作为 `daily_report_generate` 三期流程的一段，或拆出 `daily_report_research_evidence` 子任务。
+- 外部证据检索作为后续 `daily_report_generate` 流程的一段，或拆出 `daily_report_research_evidence` 子任务。
 - 不在 `/events` 或 `/daily` 页面访问时触发。
 - 不对历史日报主动补研究证据，除非管理员手动重新生成日报。
 
@@ -931,7 +1031,7 @@ Header
 - 不做视觉层级突出前几条；重要性只由排序体现。
 - 所有卡片同一规格，便于快速扫读。
 - 移动端单列；桌面也以单列或紧凑双列评估，但第一期优先单列以保持日报和主页阅读连续性。
-- 第一期不展示 `事件 / 观点` 二级视图；四期观点速览上线时再增加二级视图，并复用相同页面壳和日期切换。
+- 第一期不展示 `事件 / 观点` 二级视图；三期观点速览上线时再增加二级视图，并复用相同页面壳和日期切换。
 
 ### Card Density
 
@@ -1008,10 +1108,10 @@ Header
 ### Compatibility
 
 - `/` feed 的展示评分回归 `qualityScore`，不要复用事件排序分。
-- 不改变 `/daily` 报告生成逻辑。
+- 一期不改变 `/daily` 报告生成逻辑；二期仅替换日报候选来源。
 - 不改变 feed time filtering 的 `items.createdAt` 语义。
 - 不改变 cluster assignment 和 merge pipeline。
-- 三期前不改变 `/daily` 的候选、生成、发布和归档流程。
+- 二期前不改变 `/daily` 的候选、生成、发布和归档流程；二期只调整候选读取，不改变生成、发布和归档流程。
 
 ### Rollback
 
@@ -1088,7 +1188,7 @@ npm run build
 
 缺点：新增任务、缓存、失败处理和成本；会拖慢第一期交付。
 
-结论：第一期使用已有摘要和规则 fallback。二期可添加异步 AI brief，但必须缓存，且只在 ingestion 成功后对当天 Top N 事件生成；不做定时兜底、不在页面访问时同步生成、不主动补历史日期。
+结论：第一期使用已有摘要和规则 fallback。`EventBrief` 后置为可选能力；如果后续实施，必须异步缓存，只在 ingestion 成功后对当天 Top N 事件生成，不做定时兜底、不在页面访问时同步生成、不主动补历史日期。
 
 ### Alternative E: 一期同步改造日报
 
@@ -1096,7 +1196,7 @@ npm run build
 
 缺点：会把一期从公开速览页面扩展为日报生成链路改造，影响现有日报稳定性，也会扩大 AI prompt、validator、发布流程和归档兼容风险。
 
-结论：不采用。一期不动日报，二期补事件级 AI brief，三期再基于事件速览和 brief 深化日报。
+结论：不采用。一期不动日报；二期只将日报候选池切换为事件速览 Top N，并保持现有日报模板和输出结构，避免一次性扩大改造面。
 
 ### Alternative F: 将偏好加权推迟到五期
 
@@ -1117,10 +1217,11 @@ npm run build
 ## Open Questions
 
 - `官方来源` 是否已有可靠 source metadata 支撑？当前一期不展示，未来如补 source metadata 再考虑。
-- 二期 AI brief 的 prompt 是否复用现有 cluster summary 模型配置，还是新增独立 `eventBrief` prompt config？
-- 三期日报深度化是否保留当前日报模板兼容模式，还是直接切换到新结构？
-- 四期观点速览的主 label 是否使用 `观点`、`深读` 还是 `博客`？本 TRD 推荐 `观点`，因为它覆盖博客、教程、研究笔记和新观点。
-- `contentKind` 是直接落在 `Item` 上，还是放在 `ArticleInsightBrief` 中作为 AI 派生结果？四期实施前需要结合迁移成本决定。
+- 日报候选改用事件速览 Top N 后，现有默认“候选内容上限”是否需要从 120 下调到 30-50？命名暂不调整。
+- 事件速览候选服务如何在不影响公开 `/events` 默认结果的前提下应用“日报分组范围”？
+- 三期观点速览的主 label 是否使用 `观点`、`深读` 还是 `博客`？本 TRD 推荐 `观点`，因为它覆盖博客、教程、研究笔记和新观点。
+- `contentKind` 是直接落在 `Item` 上，还是放在 `ArticleInsightBrief` 中作为 AI 派生结果？三期实施前需要结合迁移成本决定。
+- 后续如重新启动 `EventBrief`，prompt 应新增独立 `event_brief` 类型，不复用 cluster summary。
 
 ## Execution Plan Inputs
 
@@ -1140,26 +1241,17 @@ npm run build
 - 不做同步 AI、外部搜索、日报生成逻辑变更和历史数据回填。
 - 不采集公众访问者行为。
 
-二期 AI 切片：
+二期日报候选池切片：
 
-1. 新增 `EventBrief` schema、repository、inputHash、轻量实体字段、证据锚点字段和质量校验。
-2. 新增 `event_brief_generate` task kind、handler、AI provider 方法和 prompt config。
-3. ingestion 成功后计算当天 Top N 并 enqueue 缺失/过期 brief 任务。
-4. 事件速览 DTO 读取可用 brief，失败时保留规则 fallback。
-5. 在 prompt 和 validator 中约束 `evidenceItems` 只能引用输入 item/source，避免无来源判断。
-6. 补任务、AI 输出校验、缓存失效和页面 fallback 测试。
+1. 为 `src/lib/events/service.ts` 增加日报候选读取入口，支持 date、limit 和 groupIds。
+2. 复用现有“候选内容上限”作为 limit，从事件速览 `rankScore` Top N 读取候选，不新增 Top N 配置。
+3. 复用现有“日报分组范围”作为来源过滤条件，确保 source registry 只引用选定来源组内的 item/source。
+4. 将事件速览 entry 转换为现有 `DailyReportCandidate`，保持 `provider.generateDailyReport()` 输入结构、prompt template 和 validator 基本不变。
+5. `candidateScore` 映射自 `rankScore`，`candidateSnapshot` 标记候选来自事件速览，`inputHash` 纳入候选来源、rankScore、limit 和 groupIds。
+6. 保留旧 `listDailyReportCandidates()` 作为兼容 fallback 或回滚路径。
+7. 验证日报生成、跳过逻辑、候选快照、sourceIds 校验、发布、归档、RSS、Markdown 导出和 admin 重新生成流程。
 
-三期日报切片：
-
-1. 将日报候选读取迁移到事件速览候选服务，保留旧逻辑作为兼容 fallback。
-2. 调整日报 prompt 和 validator，输出 `今日判断 / 核心主题 / 风险与不确定性 / 重点事件附录`。
-3. 复用 `EventBrief` 作为日报输入上下文，缺失时 fallback 到规则 DTO 和现有摘要。
-4. 扩展 `DailyReportSource` 或 source snapshot，记录日报主题和事件 entry 的对应关系。
-5. 增加外部证据补充：search provider adapter、evidence fetcher、evidence store、evidence pack DTO。
-6. 将 evidence pack 接入日报生成 prompt，并在 validator 中检查来源追溯和不确定性表达。
-7. 验证日报发布、归档、RSS、Markdown 导出和 admin 重新生成流程。
-
-四期观点速览切片：
+三期观点速览切片：
 
 1. 新增内容类型识别：规则初筛 + AI `ArticleInsightBrief`，区分事件新闻、技术博客、观点、教程、研究笔记等。
 2. 新增 `insightScore` 和观点入选原因生成逻辑，不复用事件 `rankScore`。
@@ -1175,5 +1267,5 @@ npm run build
 - 卡片信息密度过高可能导致移动端溢出，需要组件测试和截图验证。
 - 如果 DTO 复用 feed DTO 过多，可能把 Feed 语义和事件速览语义耦合；建议单独建 `src/lib/events/types.ts`。
 - 站点级偏好如果权重过高会变成窄化信息来源，必须保留全局重要性基线和 boost/penalty 上限。
-- 三期外部证据检索可能引入成本、延迟和来源质量风险，必须限制主题数、来源数并缓存结果。
-- 四期观点速览如果内容类型识别不准，会把普通新闻或营销稿误判为观点，需要 AI 质量校验和来源/长度/结构规则兜底。
+- 后续外部证据检索可能引入成本、延迟和来源质量风险，必须限制主题数、来源数并缓存结果。
+- 三期观点速览如果内容类型识别不准，会把普通新闻或营销稿误判为观点，需要 AI 质量校验和来源/长度/结构规则兜底。

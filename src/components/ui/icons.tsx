@@ -218,6 +218,28 @@ export function IconArrowUp(props: IconProps) {
   );
 }
 
+export function IconThumbsUp(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M7 10v12" />
+      <path d="M15 5.9 14 10h5.8a2 2 0 0 1 2 2.3l-1.4 8a2 2 0 0 1-2 1.7H7" />
+      <path d="M7 10H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3" />
+      <path d="M14 10V5a3 3 0 0 0-3-3l-4 8" />
+    </IconBase>
+  );
+}
+
+export function IconThumbsDown(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M17 14V2" />
+      <path d="m9 18.1 1-4.1H4.2a2 2 0 0 1-2-2.3l1.4-8A2 2 0 0 1 5.6 2H17" />
+      <path d="M17 14h3a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-3" />
+      <path d="M10 14v5a3 3 0 0 0 3 3l4-8" />
+    </IconBase>
+  );
+}
+
 export function IconLink(props: IconProps) {
   return (
     <IconBase {...props}>

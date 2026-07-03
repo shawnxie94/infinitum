@@ -10,6 +10,7 @@ export type EventBriefingOptions = {
   pageSize?: number;
   view?: EventBriefingView | null;
   now?: Date;
+  groupIds?: string[];
 };
 
 export type EventBriefingPaginationDTO = {
@@ -30,6 +31,7 @@ export type EventBriefingEntryDTO = {
   type: EventBriefingEntryType;
   title: string;
   summary: string;
+  qualityScore: number;
   rankScore: number;
   baseRankScore: number;
   curatorBoost: number;
@@ -41,6 +43,11 @@ export type EventBriefingEntryDTO = {
   newSourceCountOnDate: number;
   latestCreatedAt: string;
   latestPublishedAt: string;
+  eventType: string | null;
+  eventSubject: string | null;
+  eventAction: string | null;
+  eventObject: string | null;
+  eventDate: string | null;
   detailHref: string;
   items: EventBriefingItemDTO[];
 };

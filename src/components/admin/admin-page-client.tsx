@@ -292,6 +292,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
   const contentPageSize = normalizePositiveInteger(searchParams.get("contentPageSize"));
   const shouldOpenClusterReview = searchParams.get("review") === "pending";
   const shouldOpenTagSuggestions = searchParams.get("suggestions") === "open";
+  const shouldOpenBriefingPreferenceSuggestions = searchParams.get("suggestions") === "open";
   const shouldOpenSourceAttentionSummary = searchParams.get("sourceSummary") === "open";
   const selectedPromptType = normalizePromptType(searchParams.get("promptType"));
   const [collapsedSections, setCollapsedSections] = useState(() =>
@@ -385,6 +386,12 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
         params.set("view", routeState.aiSubSection);
       } else if (routeState.settingsSection === "content") {
         params.set("view", routeState.contentSettingsSubSection);
+        if (
+          routeState.contentSettingsSubSection === "event-briefing" &&
+          shouldOpenBriefingPreferenceSuggestions
+        ) {
+          params.set("suggestions", "open");
+        }
       } else if (routeState.settingsSection === "tasks") {
         params.set("view", routeState.taskSettingsSubSection);
       }
@@ -397,6 +404,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
     routeState,
     rangeDaysFilter,
     shouldOpenClusterReview,
+    shouldOpenBriefingPreferenceSuggestions,
     shouldOpenSourceAttentionSummary,
     shouldOpenTagSuggestions,
     taskKindFilter,
@@ -623,7 +631,14 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
       settingsSection === "content" &&
       contentSettingsSubSection === "event-briefing"
     ) {
-      return <AdminSettingsPanel initialSettings={settings!} activeSection="event-briefing" embedMode />;
+      return (
+        <AdminSettingsPanel
+          initialSettings={settings!}
+          activeSection="event-briefing"
+          embedMode
+          initialOpenBriefingPreferenceSuggestions={shouldOpenBriefingPreferenceSuggestions}
+        />
+      );
     }
 
     // Settings - Groups

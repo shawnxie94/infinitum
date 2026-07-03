@@ -1686,6 +1686,114 @@ describe("AdminSettingsPanel", () => {
     await screen.findByText("速览配置已保存。");
   });
 
+  it("opens briefing preference suggestions in a governance-style modal", async () => {
+    const user = userEvent.setup();
+    const updatedPreference = {
+      ...buildInitialSettings().eventBriefing.preference,
+      weightedRules: [
+        { type: "tag", value: "ai-coding", weight: 3 },
+      ],
+    };
+    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
+      const url = String(input);
+
+      if (url.startsWith("/api/admin/settings/tags")) {
+        return new Response(JSON.stringify({
+          tags: [],
+          totalCount: 0,
+          page: 1,
+          pageSize: 100,
+        }));
+      }
+
+      if (url === "/api/admin/settings/event-briefing/suggestions" && init?.method === "GET") {
+        return new Response(JSON.stringify({
+          suggestions: [
+            {
+              id: "suggestion-ai-coding",
+              ruleType: "tag",
+              value: "ai-coding",
+              label: "AI Coding",
+              suggestedWeight: 3,
+              confidence: 0.71,
+              positiveScore: 8,
+              negativeScore: 0,
+              sampleCount: 3,
+              reason: "标签「AI Coding」近 30 天偏好更强，来自 3 次管理行为。",
+              status: "pending",
+              createdAt: "2026-07-01T00:00:00.000Z",
+              updatedAt: "2026-07-01T00:00:00.000Z",
+            },
+          ],
+        }));
+      }
+
+      if (url === "/api/admin/settings/event-briefing/suggestions" && init?.method === "POST") {
+        return new Response(JSON.stringify({ suggestions: [] }));
+      }
+
+      if (url === "/api/admin/settings/event-briefing/suggestions/suggestion-ai-coding/accept") {
+        return new Response(JSON.stringify({
+          suggestion: {
+            id: "suggestion-ai-coding",
+            status: "accepted",
+          },
+          preference: updatedPreference,
+        }));
+      }
+
+      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(
+      <AdminSettingsPanel
+        initialSettings={buildInitialSettings()}
+        activeSection="event-briefing"
+        embedMode
+      />,
+    );
+
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByRole("button", { name: "偏好建议" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "新增规则" })).toBeInTheDocument();
+    expect(within(panel).queryByText("根据近 30 天管理行为生成，接受后写入上方事件偏好。")).not.toBeInTheDocument();
+
+    await user.click(within(panel).getByRole("button", { name: "偏好建议" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "偏好建议" });
+    expect(within(dialog).getByLabelText("偏好建议筛选")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("偏好建议排序")).toHaveValue("sample_desc");
+    expect(within(dialog).queryByRole("option", { name: "按证据强度" })).not.toBeInTheDocument();
+    expect(within(dialog).getByText("AI Coding")).toBeInTheDocument();
+    expect(within(dialog).getByText("+3")).toBeInTheDocument();
+    expect(within(dialog).getByText("3 次")).toBeInTheDocument();
+    expect(within(dialog).queryByText("3 次 / 71%")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("ai-coding")).not.toBeInTheDocument();
+
+    await user.type(within(dialog).getByLabelText("偏好建议筛选"), "Coding");
+    expect(within(dialog).getByText("AI Coding")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "接受偏好建议：AI Coding" }));
+    const acceptDialog = screen.getByRole("dialog", { name: "接受偏好建议" });
+    expect(within(acceptDialog).getByText("标签：AI Coding +3")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "/api/admin/settings/event-briefing/suggestions/suggestion-ai-coding/accept",
+      expect.anything(),
+    );
+    await user.click(within(acceptDialog).getByRole("button", { name: "接受" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/admin/settings/event-briefing/suggestions/suggestion-ai-coding/accept",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    expect(await screen.findByText("偏好建议已写入事件偏好。")).toBeInTheDocument();
+    expect(within(panel).getByText("ai-coding")).toBeInTheDocument();
+  });
+
   it("submits the daily report schedule candidate limit", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(

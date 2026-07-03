@@ -65,8 +65,17 @@ vi.mock("@/components/admin/action-items-panel", () => ({
 }));
 
 vi.mock("@/components/admin/admin-settings-panel", () => ({
-  AdminSettingsPanel: ({ activeSection }: { activeSection: string }) => (
-    <div>{`设置面板:${activeSection}`}</div>
+  AdminSettingsPanel: ({
+    activeSection,
+    initialOpenBriefingPreferenceSuggestions,
+  }: {
+    activeSection: string;
+    initialOpenBriefingPreferenceSuggestions?: boolean;
+  }) => (
+    <div>
+      {`设置面板:${activeSection}`}
+      {initialOpenBriefingPreferenceSuggestions ? <span>打开偏好建议</span> : null}
+    </div>
   ),
 }));
 
@@ -216,6 +225,22 @@ describe("AdminPageClient", () => {
       expect(screen.getByText("设置模块")).toBeInTheDocument();
     });
     expect(screen.getByText("设置面板:content-extraction")).toBeInTheDocument();
+  });
+
+  it("restores event briefing preference suggestions from the url query", async () => {
+    searchParamsState.value = "tab=settings&section=content&view=event-briefing&suggestions=open";
+
+    renderAdminPageClient();
+
+    await waitFor(() => {
+      expect(screen.getByText("设置面板:event-briefing")).toBeInTheDocument();
+    });
+    expect(screen.getByText("打开偏好建议")).toBeInTheDocument();
+    expect(replaceStateSpy).toHaveBeenLastCalledWith(
+      null,
+      "",
+      "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
+    );
   });
 
   it("restores task subsections from the url query", async () => {

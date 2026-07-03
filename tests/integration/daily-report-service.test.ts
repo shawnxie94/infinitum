@@ -7,6 +7,7 @@ import {
   generateDailyReport,
 } from "@/lib/daily-report/service";
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
+import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
 
 const {
   generateDailyReportMock,
@@ -687,6 +688,8 @@ describe("daily report service", () => {
     await prisma.sourceGroup.deleteMany();
     await prisma.blacklistKeyword.deleteMany();
     await prisma.taskSchedule.deleteMany();
+    await prisma.eventBriefingConfig.deleteMany();
+    await prisma.briefingPreferenceConfig.deleteMany();
   });
 
   it("turns an existing published report into a clean draft when regenerated", async () => {
@@ -872,6 +875,126 @@ describe("daily report service", () => {
       itemCount: 1,
     });
     expect(candidates.filter((candidate) => candidate.clusterId === cluster.id)).toHaveLength(1);
+  });
+
+  it("uses event briefing rankScore and candidate limit when generating reports", async () => {
+    const priorityGroup = await prisma.sourceGroup.create({
+      data: { name: "Priority Sources" },
+    });
+    const [prioritySource, regularSource] = await Promise.all([
+      prisma.source.create({
+        data: {
+          name: "Priority Source",
+          rssUrl: "https://priority.example.com/feed.xml",
+          siteUrl: "https://priority.example.com",
+          groupId: priorityGroup.id,
+        },
+      }),
+      prisma.source.create({
+        data: {
+          name: "Regular Source",
+          rssUrl: "https://regular.example.com/feed.xml",
+          siteUrl: "https://regular.example.com",
+        },
+      }),
+    ]);
+    await prisma.item.createMany({
+      data: [
+        {
+          sourceId: regularSource.id,
+          originalUrl: "https://regular.example.com/high-quality",
+          canonicalUrl: "https://regular.example.com/high-quality",
+          urlHash: "daily-event-rank-regular",
+          originalTitle: "高质量但未偏好内容",
+          publishedAt: new Date("2026-04-24T01:00:00.000Z"),
+          createdAt: new Date("2026-04-24T01:00:00.000Z"),
+          status: "processed",
+          moderationStatus: "allowed",
+          summaryText: "这条内容质量很高，但没有命中事件偏好。",
+          qualityScore: 99,
+          eventType: "other",
+        },
+        {
+          sourceId: prioritySource.id,
+          originalUrl: "https://priority.example.com/security",
+          canonicalUrl: "https://priority.example.com/security",
+          urlHash: "daily-event-rank-priority",
+          originalTitle: "安全事件需要优先进入日报",
+          publishedAt: new Date("2026-04-24T02:00:00.000Z"),
+          createdAt: new Date("2026-04-24T02:00:00.000Z"),
+          status: "processed",
+          moderationStatus: "allowed",
+          summaryText: "这条内容质量较低，但命中事件类型偏好，应通过事件速览排序进入日报。",
+          qualityScore: 70,
+          eventType: "security",
+        },
+      ],
+    });
+    await prisma.taskSchedule.create({
+      data: {
+        key: "daily_report_default",
+        enabled: false,
+        cronExpression: "30 8 * * *",
+        sourceConcurrency: 2,
+        fullTextFetchThreshold: 80,
+        perSourceItemLimit: 20,
+        dailyReportCandidateLimit: 2,
+        dailyReportOffsetDays: 0,
+        dailyReportAutoPublish: false,
+        timezone: "Asia/Shanghai",
+        nextRunAt: new Date("2026-04-25T00:30:00.000Z"),
+      },
+    });
+    await updateEventBriefingConfig({ minRankScore: 0 });
+    await updateBriefingPreferenceConfig({
+      weightedRules: [
+        { type: "event_type", value: "security", weight: 30 },
+      ],
+      maxCuratorBoost: 30,
+      maxCuratorPenalty: 20,
+    });
+    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+      headline: "安全事件优先",
+      blocks: [
+        {
+          type: "text",
+          title: "摘要",
+          body: "今天日报候选应来自事件速览排序结果，而不是旧的质量分候选池。",
+        },
+        {
+          type: "section",
+          title: "今日大事",
+          items: [{
+            title: "安全事件需要优先进入日报",
+            body: "该事件命中事件速览偏好规则，即使质量分不是最高，也应作为日报候选。",
+            sourceIds: [1],
+          }],
+        },
+        {
+          type: "text",
+          title: "趋势观察",
+          body: "候选池切换后，日报会跟随事件速览的主理人偏好和排序逻辑，减少两套重点判断互相打架的问题。",
+        },
+      ],
+    }));
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const articles = getLastGeneratedDailyReportArticles();
+    const snapshot = JSON.parse(result.report?.candidateSnapshot ?? "{}") as {
+      candidateSource?: string;
+      candidates?: Array<{ title: string; candidateScore: number }>;
+    };
+
+    expect(articles).toHaveLength(2);
+    expect(articles[0]).toMatchObject({
+      title: "安全事件需要优先进入日报",
+      candidateScore: expect.any(Number),
+    });
+    expect(snapshot.candidateSource).toBe("event_briefing");
+    expect(snapshot.candidates?.map((candidate) => candidate.title)).toEqual([
+      "安全事件需要优先进入日报",
+      "高质量但未偏好内容",
+    ]);
   });
 
   it("expands selected clustered candidates into all clustered source links", async () => {

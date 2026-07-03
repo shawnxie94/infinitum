@@ -467,6 +467,65 @@ model BriefingPreferenceConfig {
   @@map("briefing_preference_configs")
 }
 
+model CuratorBehaviorEvent {
+  id           String                     @id @default(cuid())
+  eventType    String
+  targetType   String
+  targetId     String
+  entryType    String?
+  entryId      String?
+  itemId       String?
+  clusterId    String?
+  score        Int
+  metadataJson String                     @default("{}")
+  createdAt    DateTime                   @default(now())
+  dimensions   CuratorBehaviorDimension[]
+
+  @@index([eventType, createdAt])
+  @@index([targetType, targetId, createdAt])
+  @@map("curator_behavior_events")
+}
+
+model CuratorBehaviorDimension {
+  id             String               @id @default(cuid())
+  eventId        String
+  ruleType       String
+  value          String
+  label          String?
+  score          Int
+  targetDedupKey String               @unique
+  occurredAt     DateTime             @default(now())
+  event          CuratorBehaviorEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([occurredAt])
+  @@index([ruleType, value, occurredAt])
+  @@index([targetDedupKey, occurredAt])
+  @@map("curator_behavior_dimensions")
+}
+
+model BriefingPreferenceSuggestion {
+  id              String   @id @default(cuid())
+  suggestionKey   String   @unique
+  ruleType        String
+  value           String
+  label           String?
+  suggestedWeight Int
+  confidence      Float
+  positiveScore   Int      @default(0)
+  negativeScore   Int      @default(0)
+  sampleCount     Int      @default(0)
+  reason          String
+  status          String   @default("pending")
+  dismissedAt     DateTime?
+  acceptedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, confidence])
+  @@index([ruleType, value])
+  @@map("briefing_preference_suggestions")
+}
+
 model HeaderLink {
   id           String   @id @default(cuid())
   label        String

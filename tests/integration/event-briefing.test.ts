@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import {
+  acceptBriefingPreferenceSuggestion,
+  generateBriefingPreferenceSuggestions,
+  recordCuratorBehavior,
+} from "@/lib/curator-behavior/service";
 import { prisma } from "@/lib/db";
 import { getEventBriefing } from "@/lib/events/service";
 import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
 
 describe("event briefing service", () => {
   beforeEach(async () => {
+    await prisma.briefingPreferenceSuggestion.deleteMany();
+    await prisma.curatorBehaviorDimension.deleteMany();
+    await prisma.curatorBehaviorEvent.deleteMany();
     await prisma.itemTag.deleteMany();
     await prisma.tag.deleteMany();
     await prisma.item.deleteMany();
@@ -14,6 +22,90 @@ describe("event briefing service", () => {
     await prisma.sourceGroup.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
     await prisma.briefingPreferenceConfig.deleteMany();
+  });
+
+  it("turns curator behavior snapshots into accepted briefing preference rules", async () => {
+    const group = await prisma.sourceGroup.create({
+      data: { id: "group-ai-behavior", name: "AI", sortOrder: 0 },
+    });
+    const source = await prisma.source.create({
+      data: {
+        id: "source-ai-behavior",
+        name: "AI Blog",
+        rssUrl: "https://behavior.example.com/feed.xml",
+        siteUrl: "https://behavior.example.com",
+        groupId: group.id,
+      },
+    });
+    const tag = await prisma.tag.create({
+      data: { id: "tag-ai-behavior", name: "AI Coding", normalized: "ai-coding" },
+    });
+    await prisma.item.create({
+      data: {
+        id: "item-ai-behavior",
+        sourceId: source.id,
+        originalUrl: "https://behavior.example.com/openai-agent",
+        canonicalUrl: "https://behavior.example.com/openai-agent",
+        urlHash: "hash-ai-behavior",
+        originalTitle: "OpenAI Agent tools",
+        translatedTitle: "OpenAI 发布 Agent 工具",
+        publishedAt: new Date("2026-06-30T07:30:00.000Z"),
+        summaryText: "OpenAI 发布面向开发者的 Agent 工具。",
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 88,
+        eventType: "launch",
+        eventSubject: "OpenAI",
+        eventObject: "Agent tools",
+        createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      },
+    });
+    await prisma.itemTag.create({
+      data: { itemId: "item-ai-behavior", tagId: tag.id },
+    });
+
+    await recordCuratorBehavior({
+      eventType: "feed_item_opened",
+      targetType: "item",
+      targetId: "item-ai-behavior",
+      occurredAt: new Date("2026-07-01T00:00:00.000Z"),
+    });
+    await recordCuratorBehavior({
+      eventType: "event_source_clicked",
+      targetType: "item",
+      targetId: "item-ai-behavior",
+      occurredAt: new Date("2026-07-01T01:00:00.000Z"),
+    });
+    await recordCuratorBehavior({
+      eventType: "manual_boost",
+      targetType: "item",
+      targetId: "item-ai-behavior",
+      occurredAt: new Date("2026-07-01T02:00:00.000Z"),
+    });
+
+    const suggestions = await generateBriefingPreferenceSuggestions({
+      now: new Date("2026-07-02T00:00:00.000Z"),
+    });
+    const tagSuggestion = suggestions.find((suggestion) => (
+      suggestion.ruleType === "tag" && suggestion.value === "ai-coding"
+    ));
+
+    expect(tagSuggestion).toMatchObject({
+      suggestedWeight: 3,
+      positiveScore: 8,
+      negativeScore: 0,
+      sampleCount: 3,
+    });
+
+    const result = await acceptBriefingPreferenceSuggestion(tagSuggestion!.id);
+
+    expect(result.preference.weightedRules).toContainEqual({
+      type: "tag",
+      value: "ai-coding",
+      weight: 3,
+    });
+    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBeGreaterThan(0);
+    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
   });
 
   it("ranks public daily clusters and singles with curator preferences", async () => {

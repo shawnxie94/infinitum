@@ -84,6 +84,22 @@ export type AdminBriefingWeightRule = {
   weight: number;
 };
 
+export type AdminBriefingPreferenceSuggestion = {
+  id: string;
+  ruleType: AdminBriefingWeightRuleType;
+  value: string;
+  label: string | null;
+  suggestedWeight: number;
+  confidence: number;
+  positiveScore: number;
+  negativeScore: number;
+  sampleCount: number;
+  reason: string;
+  status: "pending" | "accepted" | "dismissed";
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type AdminSettingsSnapshot = {
   modelApiConfigs: AdminModelApiConfig[];
   promptConfigs: AdminPromptConfig[];

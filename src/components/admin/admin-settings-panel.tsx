@@ -19,8 +19,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
+  acceptBriefingPreferenceSuggestion,
+  generateBriefingPreferenceSuggestions,
   importSourcesFromOpmlText,
   deleteHeaderLink,
+  dismissBriefingPreferenceSuggestion,
+  listBriefingPreferenceSuggestions,
   listAdminTags,
   reorderHeaderLinks,
   reorderSourceGroups,
@@ -51,6 +55,7 @@ import { TextArea } from "@/components/ui/text-area";
 import { TextInput } from "@/components/ui/text-input";
 import { useToast } from "@/components/ui/toast";
 import type {
+  AdminBriefingPreferenceSuggestion,
   AdminBriefingWeightRule,
   AdminBriefingWeightRuleType,
   AdminSettingsSnapshot,
@@ -85,6 +90,7 @@ type AdminSettingsPanelProps = {
   activeSection?: AdminSettingsSection;
   initialPromptType?: PromptConfigType;
   initialOpenTagSuggestions?: boolean;
+  initialOpenBriefingPreferenceSuggestions?: boolean;
 };
 
 type AdminSettingsSection =
@@ -153,6 +159,184 @@ const eventBriefingRuleTypeLabels: Record<AdminBriefingWeightRuleType, string> =
   source_group: "来源组",
   event_type: "事件类型",
 };
+type BriefingPreferenceSuggestionSort = "sample_desc" | "weight_desc" | "updated_desc";
+const briefingPreferenceSuggestionSortOptions: Array<{ value: BriefingPreferenceSuggestionSort; label: string }> = [
+  { value: "sample_desc", label: "按证据次数" },
+  { value: "weight_desc", label: "按建议权重" },
+  { value: "updated_desc", label: "按更新时间" },
+];
+const BRIEFING_PREFERENCE_SUGGESTION_PAGE_SIZE = 10;
+
+type BriefingPreferenceSuggestionModalProps = {
+  suggestions: AdminBriefingPreferenceSuggestion[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  search: string;
+  sort: BriefingPreferenceSuggestionSort;
+  isOpen: boolean;
+  isBusy: boolean;
+  onClose: () => void;
+  onSearchChange: (value: string) => void;
+  onSortChange: (value: BriefingPreferenceSuggestionSort) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  onAccept: (suggestion: AdminBriefingPreferenceSuggestion) => void;
+  onDismiss: (suggestion: AdminBriefingPreferenceSuggestion) => void;
+  onRefresh: () => void;
+};
+
+function formatSignedWeight(value: number) {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+function BriefingPreferenceSuggestionModal({
+  suggestions,
+  totalCount,
+  page,
+  pageSize,
+  search,
+  sort,
+  isOpen,
+  isBusy,
+  onClose,
+  onSearchChange,
+  onSortChange,
+  onPageChange,
+  onPageSizeChange,
+  onAccept,
+  onDismiss,
+  onRefresh,
+}: BriefingPreferenceSuggestionModalProps) {
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  return (
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      title="偏好建议"
+      widthClassName="max-w-6xl"
+      headerClassName="border-b border-[color:var(--line)] p-4"
+      bodyClassName="space-y-4 p-4 max-h-[76vh] overflow-y-auto"
+      footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
+      footer={
+        <div className="flex flex-wrap items-center justify-end gap-4">
+          <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
+            刷新建议
+          </Button>
+          <Button onClick={onClose} variant="secondary" disabled={isBusy}>
+            关闭
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2">
+          <FilterInput
+            id="briefing-preference-suggestion-keyword"
+            label="筛选建议"
+            ariaLabel="偏好建议筛选"
+            placeholder="搜索类型、内容或原因"
+            value={search}
+            onChange={onSearchChange}
+          />
+          <FilterSelect
+            id="briefing-preference-suggestion-sort"
+            label="排序"
+            ariaLabel="偏好建议排序"
+            value={sort}
+            onChange={(value) => onSortChange(value as BriefingPreferenceSuggestionSort)}
+            options={briefingPreferenceSuggestionSortOptions}
+            showSearch={false}
+          />
+        </div>
+
+        {suggestions.length === 0 ? (
+          <EmptyState className="border-0 bg-[var(--bg-muted)]">
+            {search.trim() ? "暂无匹配建议" : "暂无待处理建议"}
+          </EmptyState>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <table className="w-full table-auto text-sm">
+              <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
+                <tr>
+                  <th className="w-[12%] whitespace-nowrap px-3 py-2 text-left">类型</th>
+                  <th className="w-[24%] px-3 py-2 text-left">建议</th>
+                  <th className="w-[10%] whitespace-nowrap px-3 py-2 text-right">权重</th>
+                  <th className="w-[14%] whitespace-nowrap px-3 py-2 text-right">证据次数</th>
+                  <th className="px-3 py-2 text-left">原因</th>
+                  <th className="w-[12%] whitespace-nowrap px-3 py-2 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[color:var(--line)]">
+                {suggestions.map((suggestion) => (
+                  <tr key={suggestion.id} className="align-top transition-colors hover:bg-[var(--bg-muted)]">
+                    <td className="px-3 py-3 text-[var(--text-2)]">
+                      {eventBriefingRuleTypeLabels[suggestion.ruleType]}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="font-medium text-[var(--foreground)]">
+                        {suggestion.label ?? suggestion.value}
+                      </div>
+                    </td>
+                    <td className={cx(
+                      "px-3 py-3 text-right font-mono font-medium",
+                      suggestion.suggestedWeight > 0 ? "text-[var(--accent-strong)]" : "text-[var(--danger-ink)]",
+                    )}>
+                      {formatSignedWeight(suggestion.suggestedWeight)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-[var(--text-2)]">
+                      {suggestion.sampleCount} 次
+                    </td>
+                    <td className="px-3 py-3 text-xs leading-5 text-[var(--text-2)]">
+                      {suggestion.reason}
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <IconButton
+                          aria-label={`接受偏好建议：${suggestion.label ?? suggestion.value}`}
+                          title="接受建议"
+                          size="sm"
+                          variant="ghost"
+                          disabled={isBusy}
+                          onClick={() => onAccept(suggestion)}
+                        >
+                          <IconCheck className="h-4 w-4" />
+                        </IconButton>
+                        <IconButton
+                          aria-label={`忽略偏好建议：${suggestion.label ?? suggestion.value}`}
+                          title="忽略建议"
+                          size="sm"
+                          variant="ghost"
+                          disabled={isBusy}
+                          onClick={() => onDismiss(suggestion)}
+                        >
+                          <IconX className="h-4 w-4" />
+                        </IconButton>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {totalCount > 0 ? (
+          <PaginationControls
+            totalItems={totalCount}
+            page={page}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+            disabled={isBusy}
+          />
+        ) : null}
+      </div>
+    </ModalShell>
+  );
+}
 
 function normalizeHeaderLinkRelOption(rel: string) {
   return rel.split(/\s+/).includes("sponsored") ? HEADER_LINK_REL_SPONSORED : HEADER_LINK_REL_DEFAULT;
@@ -298,6 +482,7 @@ export function AdminSettingsPanel({
   activeSection: externalActiveSection,
   initialPromptType,
   initialOpenTagSuggestions = false,
+  initialOpenBriefingPreferenceSuggestions = false,
 }: AdminSettingsPanelProps) {
   type AdminSource = AdminSettingsSnapshot["sources"][number];
   type AdminHeaderLink = NonNullable<AdminSettingsSnapshot["headerLinks"]>[number];
@@ -456,6 +641,22 @@ export function AdminSettingsPanel({
     value: string;
     weight: string;
   }>({ type: "tag", value: "", weight: "5" });
+  const [briefingPreferenceSuggestions, setBriefingPreferenceSuggestions] = useState<AdminBriefingPreferenceSuggestion[]>([]);
+  const [briefingPreferenceSuggestionsLoaded, setBriefingPreferenceSuggestionsLoaded] = useState(false);
+  const [briefingPreferenceSuggestionModalOpen, setBriefingPreferenceSuggestionModalOpen] = useState(
+    initialOpenBriefingPreferenceSuggestions,
+  );
+  const [briefingPreferenceSuggestionSearch, setBriefingPreferenceSuggestionSearch] = useState("");
+  const [briefingPreferenceSuggestionSort, setBriefingPreferenceSuggestionSort] =
+    useState<BriefingPreferenceSuggestionSort>("sample_desc");
+  const [briefingPreferenceSuggestionPage, setBriefingPreferenceSuggestionPage] = useState(1);
+  const [briefingPreferenceSuggestionPageSize, setBriefingPreferenceSuggestionPageSize] = useState(
+    BRIEFING_PREFERENCE_SUGGESTION_PAGE_SIZE,
+  );
+  const [briefingPreferenceAcceptTarget, setBriefingPreferenceAcceptTarget] =
+    useState<AdminBriefingPreferenceSuggestion | null>(null);
+  const [briefingPreferenceDismissTarget, setBriefingPreferenceDismissTarget] =
+    useState<AdminBriefingPreferenceSuggestion | null>(null);
   const [eventBriefingTags, setEventBriefingTags] = useState<AdminTag[]>([]);
   const [eventBriefingTagsLoaded, setEventBriefingTagsLoaded] = useState(false);
   const normalizedBlacklistKeywords = blacklistText
@@ -543,6 +744,37 @@ export function AdminSettingsPanel({
     };
   }, [activeSection, eventBriefingTagsLoaded]);
 
+  useEffect(() => {
+    if (
+      activeSection !== "event-briefing" ||
+      !briefingPreferenceSuggestionModalOpen ||
+      briefingPreferenceSuggestionsLoaded
+    ) {
+      return;
+    }
+
+    let ignore = false;
+
+    listBriefingPreferenceSuggestions()
+      .then((suggestions) => {
+        if (ignore) {
+          return;
+        }
+        setBriefingPreferenceSuggestions(suggestions);
+        setBriefingPreferenceSuggestionsLoaded(true);
+      })
+      .catch(() => {
+        if (ignore) {
+          return;
+        }
+        setBriefingPreferenceSuggestionsLoaded(true);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeSection, briefingPreferenceSuggestionModalOpen, briefingPreferenceSuggestionsLoaded]);
+
   // Lighter-weight search for the group-linking modal — fetches with a larger
   // page size since the modal needs instant client-side filtering.
   const [groupLinkSourceList, setGroupLinkSourceList] = useState<AdminSource[]>([]);
@@ -586,9 +818,56 @@ export function AdminSettingsPanel({
 
     return getEventBriefingRuleOptions(rule.type).find((option) => option.value === rule.value)?.label ?? rule.value;
   };
+  const filteredBriefingPreferenceSuggestions = briefingPreferenceSuggestions
+    .filter((suggestion) => {
+      const search = briefingPreferenceSuggestionSearch.trim().toLowerCase();
+      if (!search) {
+        return true;
+      }
+
+      return [
+        eventBriefingRuleTypeLabels[suggestion.ruleType],
+        suggestion.value,
+        suggestion.label,
+        suggestion.reason,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(search);
+    })
+    .sort((left, right) => {
+      if (briefingPreferenceSuggestionSort === "sample_desc") {
+        return right.sampleCount - left.sampleCount || right.confidence - left.confidence;
+      }
+      if (briefingPreferenceSuggestionSort === "weight_desc") {
+        return Math.abs(right.suggestedWeight) - Math.abs(left.suggestedWeight) || right.confidence - left.confidence;
+      }
+      if (briefingPreferenceSuggestionSort === "updated_desc") {
+        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+      }
+
+      return right.sampleCount - left.sampleCount || right.confidence - left.confidence;
+    });
+  const briefingPreferenceSuggestionTotalCount = filteredBriefingPreferenceSuggestions.length;
+  const briefingPreferenceSuggestionTotalPages = Math.max(
+    1,
+    Math.ceil(briefingPreferenceSuggestionTotalCount / briefingPreferenceSuggestionPageSize),
+  );
+  const safeBriefingPreferenceSuggestionPage = Math.min(
+    briefingPreferenceSuggestionPage,
+    briefingPreferenceSuggestionTotalPages,
+  );
+  const pagedBriefingPreferenceSuggestions = filteredBriefingPreferenceSuggestions.slice(
+    (safeBriefingPreferenceSuggestionPage - 1) * briefingPreferenceSuggestionPageSize,
+    safeBriefingPreferenceSuggestionPage * briefingPreferenceSuggestionPageSize,
+  );
   const openEventBriefingRuleModal = () => {
     setEventBriefingRuleDraft({ type: "tag", value: "", weight: "5" });
     setEventBriefingRuleModalOpen(true);
+  };
+  const openBriefingPreferenceSuggestionModal = () => {
+    setBriefingPreferenceSuggestionModalOpen(true);
   };
   const addEventBriefingWeightRule = () => {
     const value = eventBriefingRuleDraft.value.trim();
@@ -614,6 +893,52 @@ export function AdminSettingsPanel({
   };
   const removeEventBriefingWeightRule = (index: number) => {
     setEventBriefingWeightedRules((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+  const refreshBriefingPreferenceSuggestions = () => {
+    startTransition(async () => {
+      try {
+        const suggestions = await generateBriefingPreferenceSuggestions();
+        setBriefingPreferenceSuggestions(suggestions);
+        setBriefingPreferenceSuggestionsLoaded(true);
+        setBriefingPreferenceSuggestionPage(1);
+        showToast(suggestions.length > 0 ? "偏好建议已更新。" : "暂无新的偏好建议。", "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "偏好建议生成失败。", "error");
+      }
+    });
+  };
+  const acceptBriefingPreferenceSuggestionItem = (suggestion: AdminBriefingPreferenceSuggestion) => {
+    startTransition(async () => {
+      try {
+        const preference = await acceptBriefingPreferenceSuggestion(suggestion.id);
+        const nextSnapshot = {
+          ...eventBriefingSnapshot,
+          preference,
+        };
+
+        setEventBriefingSnapshot(nextSnapshot);
+        setEventBriefingWeightedRules(preference.weightedRules);
+        setEventBriefingMaxCuratorBoost(String(preference.maxCuratorBoost));
+        setEventBriefingMaxCuratorPenalty(String(preference.maxCuratorPenalty));
+        setBriefingPreferenceSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+        setBriefingPreferenceSuggestionPage(1);
+        showToast("偏好建议已写入事件偏好。", "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "偏好建议接受失败。", "error");
+      }
+    });
+  };
+  const dismissBriefingPreferenceSuggestionItem = (suggestion: AdminBriefingPreferenceSuggestion) => {
+    startTransition(async () => {
+      try {
+        await dismissBriefingPreferenceSuggestion(suggestion.id);
+        setBriefingPreferenceSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
+        setBriefingPreferenceSuggestionPage(1);
+        showToast("偏好建议已忽略。", "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "偏好建议忽略失败。", "error");
+      }
+    });
   };
 
   const updateSourceFilterUrl = (next: {
@@ -1611,13 +1936,22 @@ export function AdminSettingsPanel({
                   <h3 id="event-briefing-preference-settings" className="text-sm font-semibold text-[var(--text-1)]">
                     事件偏好
                   </h3>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={openEventBriefingRuleModal}
-                  >
-                    新增规则
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={openBriefingPreferenceSuggestionModal}
+                    >
+                      偏好建议
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={openEventBriefingRuleModal}
+                    >
+                      新增规则
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1700,7 +2034,124 @@ export function AdminSettingsPanel({
                     </div>
                   )}
                 </div>
+
               </section>
+
+              <BriefingPreferenceSuggestionModal
+                suggestions={pagedBriefingPreferenceSuggestions}
+                totalCount={briefingPreferenceSuggestionTotalCount}
+                page={safeBriefingPreferenceSuggestionPage}
+                pageSize={briefingPreferenceSuggestionPageSize}
+                search={briefingPreferenceSuggestionSearch}
+                sort={briefingPreferenceSuggestionSort}
+                isOpen={briefingPreferenceSuggestionModalOpen}
+                isBusy={isPending}
+                onClose={() => setBriefingPreferenceSuggestionModalOpen(false)}
+                onSearchChange={(value) => {
+                  setBriefingPreferenceSuggestionSearch(value);
+                  setBriefingPreferenceSuggestionPage(1);
+                }}
+                onSortChange={(value) => {
+                  setBriefingPreferenceSuggestionSort(value);
+                  setBriefingPreferenceSuggestionPage(1);
+                }}
+                onPageChange={setBriefingPreferenceSuggestionPage}
+                onPageSizeChange={(nextPageSize) => {
+                  setBriefingPreferenceSuggestionPageSize(nextPageSize);
+                  setBriefingPreferenceSuggestionPage(1);
+                }}
+                onAccept={setBriefingPreferenceAcceptTarget}
+                onDismiss={setBriefingPreferenceDismissTarget}
+                onRefresh={refreshBriefingPreferenceSuggestions}
+              />
+
+              <ModalShell
+                isOpen={Boolean(briefingPreferenceAcceptTarget)}
+                onClose={() => setBriefingPreferenceAcceptTarget(null)}
+                title="接受偏好建议"
+                widthClassName="max-w-md"
+                bodyClassName="space-y-3 p-6"
+                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
+                footer={
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setBriefingPreferenceAcceptTarget(null)}
+                      disabled={isPending}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        if (!briefingPreferenceAcceptTarget) {
+                          return;
+                        }
+
+                        const target = briefingPreferenceAcceptTarget;
+                        setBriefingPreferenceAcceptTarget(null);
+                        acceptBriefingPreferenceSuggestionItem(target);
+                      }}
+                      disabled={isPending}
+                    >
+                      接受
+                    </Button>
+                  </div>
+                }
+              >
+                <p className="text-sm leading-6 text-[var(--text-2)]">
+                  接受后会写入事件偏好规则，并影响后续事件速览排序。
+                </p>
+                <div className="rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-1)]">
+                  {briefingPreferenceAcceptTarget
+                    ? `${eventBriefingRuleTypeLabels[briefingPreferenceAcceptTarget.ruleType]}：${briefingPreferenceAcceptTarget.label ?? briefingPreferenceAcceptTarget.value} ${formatSignedWeight(briefingPreferenceAcceptTarget.suggestedWeight)}`
+                    : ""}
+                </div>
+              </ModalShell>
+
+              <ModalShell
+                isOpen={Boolean(briefingPreferenceDismissTarget)}
+                onClose={() => setBriefingPreferenceDismissTarget(null)}
+                title="忽略偏好建议"
+                widthClassName="max-w-md"
+                bodyClassName="space-y-3 p-6"
+                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
+                footer={
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setBriefingPreferenceDismissTarget(null)}
+                      disabled={isPending}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        if (!briefingPreferenceDismissTarget) {
+                          return;
+                        }
+
+                        const target = briefingPreferenceDismissTarget;
+                        setBriefingPreferenceDismissTarget(null);
+                        dismissBriefingPreferenceSuggestionItem(target);
+                      }}
+                      disabled={isPending}
+                    >
+                      忽略
+                    </Button>
+                  </div>
+                }
+              >
+                <p className="text-sm leading-6 text-[var(--text-2)]">
+                  忽略后这条建议会从待处理列表中移除，不会写入事件偏好规则。
+                </p>
+                <div className="rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-1)]">
+                  {briefingPreferenceDismissTarget
+                    ? `${eventBriefingRuleTypeLabels[briefingPreferenceDismissTarget.ruleType]}：${briefingPreferenceDismissTarget.label ?? briefingPreferenceDismissTarget.value}`
+                    : ""}
+                </div>
+              </ModalShell>
 
               <ModalShell
                 isOpen={eventBriefingRuleModalOpen}

@@ -11,7 +11,7 @@ const MIN_TAG_SUGGESTION_AFFECTED_COUNT = 3;
 
 export type ActionableMonitorRangeDays = (typeof ACTIONABLE_MONITOR_RANGE_DAYS)[number];
 export type ActionableMonitorSeverity = "critical" | "warning" | "info";
-export type ActionableMonitorCategory = "source" | "content" | "tag" | "cluster" | "split" | "task";
+export type ActionableMonitorCategory = "source" | "content" | "tag" | "preference" | "cluster" | "split" | "task";
 
 export type ActionableMonitorItem = {
   id: string;
@@ -56,6 +56,7 @@ export async function getActionableMonitorSnapshot(
     sourceSnapshot,
     filteredItemCount,
     tagSuggestions,
+    briefingPreferenceSuggestionCount,
     autoMergeableTagCount,
     clusterReview,
     aggregationSplitCounts,
@@ -70,6 +71,9 @@ export async function getActionableMonitorSnapshot(
       },
     }),
     listAdminTagSuggestions({ page: 1, pageSize: 1, sort: "affected_desc" }),
+    prisma.briefingPreferenceSuggestion.count({
+      where: { status: "pending" },
+    }),
     prisma.tagSuggestionCandidate.count({
       where: {
         status: "active",
@@ -154,6 +158,20 @@ export async function getActionableMonitorSnapshot(
           : `当前有 ${tagSuggestions.totalCount} 条标签建议等待复核。`,
       count: tagSuggestions.totalCount,
       href: "/admin?tab=monitoring&section=content&view=tags&suggestions=open",
+      actionLabel: "查看",
+      details: [],
+    });
+  }
+
+  if (briefingPreferenceSuggestionCount > 0) {
+    items.push({
+      id: "briefing-preferences",
+      category: "preference",
+      severity: "info",
+      title: "偏好建议",
+      description: `当前有 ${briefingPreferenceSuggestionCount} 条事件偏好建议等待复核。`,
+      count: briefingPreferenceSuggestionCount,
+      href: "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
       actionLabel: "查看",
       details: [],
     });

@@ -32,6 +32,8 @@ import {
 } from "@/lib/daily-report/types";
 import { parseDailyReportContent } from "@/lib/daily-report/validator";
 import { normalizeEventSignatureForStorage } from "@/lib/clusters/normalization";
+import { listEventBriefingEntriesForDailyReport } from "@/lib/events/service";
+import type { EventBriefingEntryDTO } from "@/lib/events/types";
 import { getDisplaySummary, getDisplayTitle } from "@/lib/feed/presentation";
 import { getIngestionRuntimeConfig } from "@/lib/settings/runtime-service";
 import { DEFAULT_DAILY_REPORT_TASK_LABEL, type TaskTimelineNodeSnapshot } from "@/lib/tasks/types";
@@ -132,6 +134,67 @@ function compactDailyReportCandidates(candidates: DailyReportCandidate[]) {
     ...candidate,
     id: index + 1,
   }));
+}
+
+function eventBriefingEntryToDailyReportCandidate(
+  entry: EventBriefingEntryDTO,
+  index: number,
+): DailyReportCandidate | null {
+  const representativeItem = entry.items[0];
+
+  if (!representativeItem) {
+    return null;
+  }
+
+  return {
+    id: index + 1,
+    sourceKey: entry.type === "cluster" ? `cluster:${entry.id}` : `item:${entry.id}`,
+    itemId: representativeItem.id,
+    clusterId: entry.type === "cluster" ? entry.id : null,
+    title: entry.title,
+    itemTitle: representativeItem.title,
+    sourceName: representativeItem.sourceName,
+    url: representativeItem.originalUrl,
+    summary: entry.summary,
+    qualityScore: entry.qualityScore,
+    candidateScore: entry.rankScore,
+    sourceCount: entry.sourceCount,
+    itemCount: entry.itemCount,
+    createdAt: entry.latestCreatedAt,
+    publishedAt: representativeItem.publishedAt,
+    eventType: entry.eventType,
+    eventSubject: entry.eventSubject,
+    eventAction: entry.eventAction,
+    eventObject: entry.eventObject,
+    eventDate: entry.eventDate,
+  };
+}
+
+async function listDailyReportEventBriefingCandidates(date: string, limit: number, groupIds: string[] = []) {
+  const entries = await listEventBriefingEntriesForDailyReport({
+    date,
+    limit,
+    groupIds,
+  });
+
+  return entries
+    .map(eventBriefingEntryToDailyReportCandidate)
+    .filter((candidate): candidate is DailyReportCandidate => Boolean(candidate));
+}
+
+async function listDailyReportGenerationCandidates(date: string, limit: number, groupIds: string[] = []) {
+  try {
+    return {
+      source: "event_briefing" as const,
+      candidates: await listDailyReportEventBriefingCandidates(date, limit, groupIds),
+    };
+  } catch (error) {
+    console.warn("[daily-report] falling back to legacy candidate query", error);
+    return {
+      source: "legacy_daily_report" as const,
+      candidates: await listDailyReportCandidates(date, limit, groupIds),
+    };
+  }
 }
 
 function normalizeOptionalDailyReportText(value: string | null | undefined) {
@@ -748,7 +811,12 @@ export async function generateDailyReport(input: {
   const dailyReportGroupIds = parseDailyReportGroupIdsJson(schedule.dailyReportGroupIdsJson);
   const recentSources = await listRecentDailyReportSourceSnapshots(date, DAILY_REPORT_RECENT_SOURCE_LOOKBACK_DAYS);
   const recentTopics = buildRecentDailyReportTopics(recentSources);
-  const rawCandidates = await listDailyReportCandidates(date, schedule.dailyReportCandidateLimit, dailyReportGroupIds);
+  const candidateResult = await listDailyReportGenerationCandidates(
+    date,
+    schedule.dailyReportCandidateLimit,
+    dailyReportGroupIds,
+  );
+  const rawCandidates = candidateResult.candidates;
   const excludedRecentDuplicates = buildDailyReportExcludedRecentDuplicateSnapshots(rawCandidates, recentSources);
   const candidates = filterRecentDailyReportDuplicates(rawCandidates, recentSources);
   await input.onCandidatesLoaded?.(candidates.length);
@@ -844,6 +912,7 @@ export async function generateDailyReport(input: {
     Array.from(expandedSourcesByNumber.values()).flat(),
   );
   const candidateSnapshot = JSON.stringify({
+    candidateSource: candidateResult.source,
     candidates: candidates.map(toCandidateSnapshotEntry),
     excludedRecentDuplicates,
     candidateCount: candidates.length,

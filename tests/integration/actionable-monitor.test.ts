@@ -5,6 +5,9 @@ import { prisma } from "@/lib/db";
 
 describe("actionable monitor snapshot", () => {
   beforeEach(async () => {
+    await prisma.briefingPreferenceSuggestion.deleteMany();
+    await prisma.curatorBehaviorDimension.deleteMany();
+    await prisma.curatorBehaviorEvent.deleteMany();
     await prisma.clusterDecision.deleteMany();
     await prisma.tagSuggestionCandidate.deleteMany();
     await prisma.itemTag.deleteMany();
@@ -112,6 +115,36 @@ describe("actionable monitor snapshot", () => {
         updatedAt: new Date("2026-06-29T11:00:00.000Z"),
       },
     });
+    await prisma.briefingPreferenceSuggestion.createMany({
+      data: [
+        {
+          suggestionKey: "tag:ai-coding",
+          ruleType: "tag",
+          value: "ai-coding",
+          label: "AI Coding",
+          suggestedWeight: 3,
+          confidence: 0.72,
+          positiveScore: 8,
+          negativeScore: 0,
+          sampleCount: 3,
+          reason: "标签「AI Coding」近 30 天偏好更强，来自 3 次管理行为。",
+          status: "pending",
+        },
+        {
+          suggestionKey: "keyword:openai",
+          ruleType: "keyword",
+          value: "openai",
+          label: "openai",
+          suggestedWeight: 2,
+          confidence: 0.64,
+          positiveScore: 5,
+          negativeScore: 0,
+          sampleCount: 2,
+          reason: "关键词「openai」近 30 天偏好更强，来自 2 次管理行为。",
+          status: "pending",
+        },
+      ],
+    });
     await prisma.contentCluster.createMany({
       data: [
         {
@@ -173,13 +206,14 @@ describe("actionable monitor snapshot", () => {
 
     expect(snapshot.rangeDays).toBe(1);
     expect(snapshot.since).toBe("2026-06-29T00:00:00.000Z");
-    expect(snapshot.totalCount).toBe(6);
+    expect(snapshot.totalCount).toBe(8);
     expect(snapshot.criticalCount).toBe(2);
     expect(snapshot.warningCount).toBe(3);
     expect(snapshot.items.map((item) => item.id)).toEqual([
       "sources",
       "filtered-content",
       "tags",
+      "briefing-preferences",
       "aggregation-splits",
       "clusters",
       "tasks",
@@ -188,6 +222,10 @@ describe("actionable monitor snapshot", () => {
     expect(snapshot.items.find((item) => item.id === "filtered-content")?.description).toContain("近 1 天");
     expect(snapshot.items.find((item) => item.id === "aggregation-splits")?.description).toContain("失败 1 条");
     expect(snapshot.items.find((item) => item.id === "tags")?.description).toContain("当前有 1 条标签建议");
+    expect(snapshot.items.find((item) => item.id === "briefing-preferences")?.description).toContain("当前有 2 条事件偏好建议");
+    expect(snapshot.items.find((item) => item.id === "briefing-preferences")?.href).toBe(
+      "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
+    );
     expect(snapshot.items.find((item) => item.id === "sources")?.href).toBe(
       "/admin?tab=monitoring&section=dashboard&sourceSummary=open",
     );

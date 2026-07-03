@@ -14,6 +14,7 @@ import {
 } from "react";
 
 import { ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS, STATUS_POLL_INTERVAL_MS } from "@/config/constants";
+import { recordCuratorBehaviorClient } from "@/components/curator-behavior/record";
 import {
   deleteItem,
   filterItem,
@@ -2231,6 +2232,12 @@ export function FeedPanel({
                                   href={clusterItem.originalUrl}
                                   target="_blank"
                                   rel="noreferrer"
+                                  onClick={() => recordCuratorBehaviorClient({
+                                    eventType: "feed_item_opened",
+                                    targetType: "item",
+                                    targetId: clusterItem.id,
+                                    itemId: clusterItem.id,
+                                  })}
                                 >
                                   {clusterItem.title}
                                 </a>
@@ -2331,6 +2338,12 @@ export function FeedPanel({
                             href={entry.originalUrl}
                             target="_blank"
                             rel="noreferrer"
+                            onClick={() => recordCuratorBehaviorClient({
+                              eventType: "feed_item_opened",
+                              targetType: "item",
+                              targetId: entry.id,
+                              itemId: entry.id,
+                            })}
                           >
                             {entry.title}
                           </a>
