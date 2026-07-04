@@ -271,6 +271,9 @@ function querySqliteNumber(sql) {
 function hasPendingClusterFeedStatsBackfill() {
   if (
     !ftsTableExists("content_clusters") ||
+    !ftsTableExists("items") ||
+    !ftsTableExists("sources") ||
+    !tableColumnExists("content_clusters", "latestCreatedAt") ||
     !tableColumnExists("content_clusters", "feedStatsUpdatedAt")
   ) {
     return false;
@@ -278,8 +281,23 @@ function hasPendingClusterFeedStatsBackfill() {
 
   return querySqliteNumber(`
     SELECT COUNT(*)
-    FROM "content_clusters"
-    WHERE "feedStatsUpdatedAt" IS NULL
+    FROM (
+      SELECT c.id
+      FROM "content_clusters" c
+      LEFT JOIN "items" i ON i."clusterId" = c.id
+      LEFT JOIN "sources" s ON s.id = i."sourceId"
+      WHERE c."feedStatsUpdatedAt" IS NULL
+        OR (
+          i.id IS NOT NULL
+          AND i.status = 'processed'
+          AND i."moderationStatus" IN ('allowed', 'restored')
+          AND i."isAggregation" = false
+          AND s.enabled = true
+        )
+      GROUP BY c.id, c."feedStatsUpdatedAt", c."latestCreatedAt"
+      HAVING c."feedStatsUpdatedAt" IS NULL
+        OR MAX(i."createdAt") > COALESCE(c."latestCreatedAt", 0)
+    )
   `) > 0;
 }
 
@@ -292,9 +310,21 @@ function applyClusterFeedStatsBackfill() {
     input: `
       DROP TABLE IF EXISTS "_cluster_feed_backfill_targets";
       CREATE TEMP TABLE "_cluster_feed_backfill_targets" AS
-      SELECT id
-      FROM "content_clusters"
-      WHERE "feedStatsUpdatedAt" IS NULL;
+      SELECT c.id
+      FROM "content_clusters" c
+      LEFT JOIN "items" i ON i."clusterId" = c.id
+      LEFT JOIN "sources" s ON s.id = i."sourceId"
+      WHERE c."feedStatsUpdatedAt" IS NULL
+        OR (
+          i.id IS NOT NULL
+          AND i.status = 'processed'
+          AND i."moderationStatus" IN ('allowed', 'restored')
+          AND i."isAggregation" = false
+          AND s.enabled = true
+        )
+      GROUP BY c.id, c."feedStatsUpdatedAt", c."latestCreatedAt"
+      HAVING c."feedStatsUpdatedAt" IS NULL
+        OR MAX(i."createdAt") > COALESCE(c."latestCreatedAt", 0);
       CREATE INDEX "_cluster_feed_backfill_targets_id_idx" ON "_cluster_feed_backfill_targets"(id);
 
       DROP TABLE IF EXISTS "_cluster_feed_stats_backfill";
@@ -379,48 +409,18 @@ function applyClusterFeedStatsBackfill() {
 
       UPDATE "content_clusters"
       SET
-        "displayItemCount" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "displayItemCount" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0)
-          ELSE "displayItemCount"
-        END,
-        "displaySourceCount" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "displaySourceCount" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0)
-          ELSE "displaySourceCount"
-        END,
-        "displayAverageScore" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "displayAverageScore" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0)
-          ELSE "displayAverageScore"
-        END,
-        "displayQualityScore" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "displayAverageScore" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0)
-          ELSE "displayQualityScore"
-        END,
+        "displayItemCount" = COALESCE((SELECT "displayItemCount" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0),
+        "displaySourceCount" = COALESCE((SELECT "displaySourceCount" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0),
+        "displayAverageScore" = COALESCE((SELECT "displayAverageScore" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0),
+        "displayQualityScore" = COALESCE((SELECT "displayAverageScore" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), 0),
         "earliestCreatedAt" = (SELECT "earliestCreatedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id),
-        "latestCreatedAt" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN (SELECT "latestCreatedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id)
-          ELSE "latestCreatedAt"
-        END,
-        "latestPublishedAt" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "latestPublishedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), "latestPublishedAt")
-          ELSE "latestPublishedAt"
-        END,
-        "dominantGroupId" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN (SELECT "groupId" FROM "_cluster_feed_group_backfill" groups WHERE groups."clusterId" = "content_clusters".id)
-          ELSE "dominantGroupId"
-        END,
-        "feedTagsJson" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN COALESCE((SELECT "feedTagsJson" FROM "_cluster_feed_tag_json_backfill" tags WHERE tags."clusterId" = "content_clusters".id), '[]')
-          ELSE "feedTagsJson"
-        END,
-        "feedSearchText" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN TRIM(COALESCE(title, '') || ' ' || COALESCE(summary, '') || ' ' || COALESCE((SELECT "tagSearchText" FROM "_cluster_feed_tag_json_backfill" tags WHERE tags."clusterId" = "content_clusters".id), ''))
-          ELSE "feedSearchText"
-        END,
-        "feedStatsUpdatedAt" = CASE
-          WHEN "feedStatsUpdatedAt" IS NULL THEN CURRENT_TIMESTAMP
-          ELSE "feedStatsUpdatedAt"
-        END
-      WHERE "feedStatsUpdatedAt" IS NULL;
+        "latestCreatedAt" = (SELECT "latestCreatedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id),
+        "latestPublishedAt" = COALESCE((SELECT "latestPublishedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), "latestPublishedAt"),
+        "dominantGroupId" = (SELECT "groupId" FROM "_cluster_feed_group_backfill" groups WHERE groups."clusterId" = "content_clusters".id),
+        "feedTagsJson" = COALESCE((SELECT "feedTagsJson" FROM "_cluster_feed_tag_json_backfill" tags WHERE tags."clusterId" = "content_clusters".id), '[]'),
+        "feedSearchText" = TRIM(COALESCE(title, '') || ' ' || COALESCE(summary, '') || ' ' || COALESCE((SELECT "tagSearchText" FROM "_cluster_feed_tag_json_backfill" tags WHERE tags."clusterId" = "content_clusters".id), '')),
+        "feedStatsUpdatedAt" = CURRENT_TIMESTAMP
+      WHERE id IN (SELECT id FROM "_cluster_feed_backfill_targets");
 
       DROP TABLE IF EXISTS "_cluster_feed_backfill_targets";
       DROP TABLE IF EXISTS "_cluster_feed_stats_backfill";

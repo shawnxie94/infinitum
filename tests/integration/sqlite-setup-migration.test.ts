@@ -278,4 +278,63 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COALESCE("earliestCreatedAt", '') FROM "content_clusters" WHERE id = 'cluster-backfilled'`)).toBe("");
   }, 20_000);
 
+  it("repairs stale cluster feed stats when a newer visible item exists after initialization", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-cluster-stale-backfill-"));
+    const dbPath = path.join(tempDir, "cluster-stale-backfill.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    runSqlite(
+      dbPath,
+      `
+      PRAGMA trusted_schema = ON;
+
+      INSERT INTO "sources" (
+        "id", "name", "rssUrl", "siteUrl", "enabled", "aiParsingEnabled", "aggregationEnabled", "aggregationDetectionEnabled", "updatedAt"
+      ) VALUES (
+        'source-stale-backfilled', 'Stale Backfilled Source', 'https://stale-backfilled.example.com/feed.xml', 'https://stale-backfilled.example.com',
+        true, true, true, false, CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO "content_clusters" (
+        "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status", "fingerprint",
+        "displayItemCount", "displaySourceCount", "displayAverageScore", "displayQualityScore", "earliestCreatedAt", "latestCreatedAt",
+        "feedSearchText", "feedTagsJson", "feedStatsUpdatedAt", "updatedAt"
+      ) VALUES (
+        'cluster-stale-backfilled', 'topic', 'Stale Backfilled Cluster', 'Stale backfilled summary', 50, 1, '2026-04-10T10:00:00.000Z', 'active', 'cluster-stale-backfilled',
+        1, 1, 50, 50, '2026-04-10T10:05:00.000Z', '2026-04-10T10:05:00.000Z', 'stale text', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO "items" (
+        "id", "sourceId", "clusterId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle",
+        "publishedAt", "status", "moderationStatus", "qualityScore", "qualityRationale", "language", "createdAt", "updatedAt"
+      ) VALUES
+      (
+        'item-stale-old', 'source-stale-backfilled', 'cluster-stale-backfilled', 'https://stale-backfilled.example.com/old',
+        'https://stale-backfilled.example.com/old', 'item-stale-old', 'Stale Old Item',
+        '2026-04-10T10:00:00.000Z', 'processed', 'allowed', 50, 'ok', 'en', '2026-04-10T10:05:00.000Z', CURRENT_TIMESTAMP
+      ),
+      (
+        'item-stale-new', 'source-stale-backfilled', 'cluster-stale-backfilled', 'https://stale-backfilled.example.com/new',
+        'https://stale-backfilled.example.com/new', 'item-stale-new', 'Stale New Item',
+        '2026-04-11T10:00:00.000Z', 'processed', 'allowed', 90, 'ok', 'en', '2026-04-11T10:05:00.000Z', CURRENT_TIMESTAMP
+      );
+      `,
+    );
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT "displayItemCount" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("2");
+    expect(runSqlite(dbPath, `SELECT "displayQualityScore" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("70");
+    expect(runSqlite(dbPath, `SELECT "latestCreatedAt" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("2026-04-11T10:05:00.000Z");
+  }, 20_000);
+
 });

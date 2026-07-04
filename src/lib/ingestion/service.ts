@@ -10,6 +10,7 @@ import {
   recomputeCluster,
   type ClusterRecomputeResult,
 } from "@/lib/clusters/service";
+import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { createClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { prisma } from "@/lib/db";
 import {
@@ -891,6 +892,8 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
         }
       }
     }
+
+    await refreshClusterFeedStatsSafely([...affectedClusterIds], "ingestion cluster finalize");
   } finally {
     stageTracker.finishStage(clusterFinalizeStage);
   }
