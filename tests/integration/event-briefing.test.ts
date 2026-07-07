@@ -240,6 +240,22 @@ describe("event briefing service", () => {
 
     await updateEventBriefingConfig({
       minRankScore: 0,
+      channels: [
+        {
+          id: "important",
+          name: "重点事件",
+          sourceGroupIds: [],
+          enabled: true,
+          sortOrder: 0,
+        },
+        {
+          id: "ai-channel",
+          name: "AI 频道",
+          sourceGroupIds: [group.id],
+          enabled: true,
+          sortOrder: 1,
+        },
+      ],
     });
     await updateBriefingPreferenceConfig({
       weightedRules: [
@@ -274,20 +290,14 @@ describe("event briefing service", () => {
     expect(secondPage.entries[0]?.detailHref).toBe("/?entryKeys=single%3Aitem-single");
     expect(secondPage.pagination.totalPages).toBe(2);
 
-    const updatesView = await getEventBriefing({ date: "2026-06-30", view: "updates" });
+    const aiChannel = await getEventBriefing({ date: "2026-06-30", channelId: "ai-channel" });
 
-    expect(updatesView.view).toBe("updates");
-    expect(updatesView.summary.eventCount).toBe(2);
-    expect(updatesView.summary.updatedEventCount).toBe(1);
-    expect(updatesView.pagination.total).toBe(1);
-    expect(updatesView.entries.map((entry) => entry.id)).toEqual(["cluster-openai"]);
-
-    const multiSourceView = await getEventBriefing({ date: "2026-06-30", view: "multi-source" });
-
-    expect(multiSourceView.view).toBe("multi-source");
-    expect(multiSourceView.summary.multiSourceCount).toBe(1);
-    expect(multiSourceView.pagination.total).toBe(1);
-    expect(multiSourceView.entries.map((entry) => entry.id)).toEqual(["cluster-openai"]);
+    expect(aiChannel.channel).toMatchObject({ id: "ai-channel", name: "AI 频道" });
+    expect(aiChannel.channels.map((channel) => [channel.id, channel.count])).toEqual([
+      ["important", 2],
+      ["ai-channel", 1],
+    ]);
+    expect(aiChannel.entries.map((entry) => entry.id)).toEqual(["cluster-openai"]);
   });
 
   it("degrades singleton clusters to single entries in event briefing", async () => {

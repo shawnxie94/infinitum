@@ -1,16 +1,22 @@
 import type { AdminBriefingPreferenceConfig, AdminEventBriefingConfig } from "@/lib/settings/types";
 
 export type EventBriefingEntryType = "cluster" | "single";
-export const EVENT_BRIEFING_VIEW_VALUES = ["important", "updates", "multi-source"] as const;
-export type EventBriefingView = (typeof EVENT_BRIEFING_VIEW_VALUES)[number];
+
+export type EventBriefingChannelDTO = {
+  id: string;
+  name: string;
+  sourceGroupIds: string[];
+  enabled: boolean;
+  sortOrder: number;
+  count: number;
+};
 
 export type EventBriefingOptions = {
   date?: string | null;
   page?: number;
   pageSize?: number;
-  view?: EventBriefingView | null;
+  channelId?: string | null;
   now?: Date;
-  groupIds?: string[];
 };
 
 export type EventBriefingPaginationDTO = {
@@ -22,8 +28,6 @@ export type EventBriefingPaginationDTO = {
 
 export type EventBriefingSummaryDTO = {
   eventCount: number;
-  multiSourceCount: number;
-  updatedEventCount: number;
 };
 
 export type EventBriefingEntryDTO = {
@@ -65,7 +69,8 @@ export type EventBriefingItemDTO = {
 
 export type EventBriefingDTO = {
   date: string;
-  view: EventBriefingView;
+  channel: EventBriefingChannelDTO;
+  channels: EventBriefingChannelDTO[];
   timezone: "Asia/Shanghai";
   generatedAt: string;
   summary: EventBriefingSummaryDTO;

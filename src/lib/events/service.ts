@@ -4,15 +4,17 @@ import { calculateCuratorPreference } from "@/lib/events/preferences";
 import { listEventBriefingCandidates } from "@/lib/events/repository";
 import type {
   BriefingPreferenceForRuntime,
+  EventBriefingConfigForRuntime,
+  EventBriefingChannelDTO,
   EventBriefingCandidate,
   EventBriefingDTO,
   EventBriefingEntryDTO,
   EventBriefingOptions,
   EventBriefingSummaryDTO,
-  EventBriefingView,
 } from "@/lib/events/types";
 import { withEventBriefingCache } from "@/lib/events/cache";
 import {
+  DEFAULT_EVENT_BRIEFING_CHANNEL_ID,
   ensureBriefingPreferenceConfig,
   ensureEventBriefingConfig,
   serializeAdminBriefingPreferenceConfig,
@@ -25,22 +27,6 @@ function clamp(value: number, min: number, max: number) {
 
 function normalizePositiveInteger(value: number | undefined, fallback: number) {
   return Number.isInteger(value) && value && value > 0 ? value : fallback;
-}
-
-function normalizeBriefingView(view: EventBriefingOptions["view"]): EventBriefingView {
-  return view === "updates" || view === "multi-source" ? view : "important";
-}
-
-function filterEntriesByView(entries: EventBriefingEntryDTO[], view: EventBriefingView) {
-  if (view === "updates") {
-    return entries.filter((entry) => entry.isFollowUp);
-  }
-
-  if (view === "multi-source") {
-    return entries.filter((entry) => entry.sourceCount >= 2);
-  }
-
-  return entries;
 }
 
 function calculateEvidenceScore(candidate: EventBriefingCandidate) {
@@ -134,45 +120,111 @@ function sortEntries(left: EventBriefingEntryDTO, right: EventBriefingEntryDTO) 
 
 type RankedEventBriefing = {
   date: string;
-  view: EventBriefingView;
+  channel: EventBriefingChannelDTO;
+  channels: EventBriefingChannelDTO[];
   timezone: "Asia/Shanghai";
   generatedAt: string;
   summary: EventBriefingSummaryDTO;
   entries: EventBriefingEntryDTO[];
 };
 
-async function loadRankedEventBriefing(options: EventBriefingOptions): Promise<RankedEventBriefing> {
-  const range = getEventBriefingDateRange(options.date, options.now);
-  const groupIds = [...new Set((options.groupIds ?? []).filter(Boolean))];
-  const [configRow, preferenceRow, candidateResult] = await Promise.all([
+function toChannelDTO(channel: {
+  id: string;
+  name: string;
+  sourceGroupIds: string[];
+  enabled: boolean;
+  sortOrder: number;
+}, count = 0): EventBriefingChannelDTO {
+  return {
+    id: channel.id,
+    name: channel.name,
+    sourceGroupIds: channel.sourceGroupIds,
+    enabled: channel.enabled,
+    sortOrder: channel.sortOrder,
+    count,
+  };
+}
+
+function resolveSelectedChannel(
+  channels: EventBriefingChannelDTO[],
+  channelId: string | null | undefined,
+) {
+  return channels.find((channel) => channel.id === channelId)
+    ?? channels.find((channel) => channel.id === DEFAULT_EVENT_BRIEFING_CHANNEL_ID)
+    ?? channels[0]!;
+}
+
+function getActiveChannels(config: EventBriefingConfigForRuntime) {
+  return (config.channels.some((channel) => channel.enabled)
+    ? config.channels.filter((channel) => channel.enabled)
+    : config.channels)
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name))
+    .map((channel) => toChannelDTO(channel));
+}
+
+async function loadEventBriefingRuntime() {
+  const [configRow, preferenceRow] = await Promise.all([
     ensureEventBriefingConfig(),
     ensureBriefingPreferenceConfig(),
-    listEventBriefingCandidates(range, { groupIds }),
   ]);
   const config = serializeAdminEventBriefingConfig(configRow);
-  const preference = serializeAdminBriefingPreferenceConfig(preferenceRow);
-  const view = normalizeBriefingView(options.view);
-  const allEntries = candidateResult.candidates
+
+  return {
+    config,
+    preference: serializeAdminBriefingPreferenceConfig(preferenceRow),
+    activeChannels: getActiveChannels(config),
+  };
+}
+
+async function loadEntriesForChannel(input: {
+  channel: EventBriefingChannelDTO;
+  range: ReturnType<typeof getEventBriefingDateRange>;
+  preference: BriefingPreferenceForRuntime;
+  minRankScore: number;
+}) {
+  const candidateResult = await listEventBriefingCandidates(input.range, { groupIds: input.channel.sourceGroupIds });
+
+  return candidateResult.candidates
     .map((candidate) => toEntryDTO({
       candidate,
-      preference,
+      preference: input.preference,
     }))
-    .filter((entry) => entry.rankScore >= config.minRankScore)
+    .filter((entry) => entry.rankScore >= input.minRankScore)
     .sort(sortEntries);
-  const visibleEntries = filterEntriesByView(allEntries, view);
-  const updatedEventCount = allEntries.filter((entry) => entry.isFollowUp).length;
+}
+
+async function loadRankedEventBriefing(options: EventBriefingOptions): Promise<RankedEventBriefing> {
+  const range = getEventBriefingDateRange(options.date, options.now);
+  const { config, preference, activeChannels } = await loadEventBriefingRuntime();
+  const selectedChannel = resolveSelectedChannel(activeChannels, options.channelId);
+  const channelEntries = await Promise.all(
+    activeChannels.map(async (channel) => ({
+      channel,
+      entries: await loadEntriesForChannel({
+        channel,
+        range,
+        preference,
+        minRankScore: config.minRankScore,
+      }),
+    })),
+  );
+  const channels = channelEntries.map(({ channel, entries }) => ({
+    ...channel,
+    count: entries.length,
+  }));
+  const selectedChannelWithCount = resolveSelectedChannel(channels, selectedChannel.id);
+  const allEntries = channelEntries.find(({ channel }) => channel.id === selectedChannel.id)?.entries ?? [];
 
   return {
     date: range.date,
-    view,
+    channel: selectedChannelWithCount,
+    channels,
     timezone: range.timezone,
     generatedAt: new Date().toISOString(),
     summary: {
       eventCount: allEntries.length,
-      multiSourceCount: allEntries.filter((entry) => entry.sourceCount >= 2).length,
-      updatedEventCount,
     },
-    entries: visibleEntries,
+    entries: allEntries,
   };
 }
 
@@ -195,7 +247,8 @@ async function loadEventBriefing(options: EventBriefingOptions): Promise<EventBr
 
   return {
     date: ranked.date,
-    view: ranked.view,
+    channel: ranked.channel,
+    channels: ranked.channels,
     timezone: ranked.timezone,
     generatedAt: ranked.generatedAt,
     summary: ranked.summary,
@@ -212,9 +265,8 @@ async function loadEventBriefing(options: EventBriefingOptions): Promise<EventBr
 function serializeRankedOptions(options: EventBriefingOptions) {
   return JSON.stringify({
     date: options.date ?? null,
-    view: options.view ?? null,
+    channelId: options.channelId ?? null,
     now: options.now?.toISOString() ?? null,
-    groupIds: [...new Set((options.groupIds ?? []).filter(Boolean))].sort(),
   });
 }
 
@@ -225,16 +277,77 @@ export async function getEventBriefing(options: EventBriefingOptions = {}) {
 export async function listEventBriefingEntriesForDailyReport(options: {
   date: string;
   limit: number;
-  groupIds?: string[];
+  channelIds?: string[];
 }) {
-  const ranked = await loadRankedEventBriefing({
-    date: options.date,
-    view: "important",
-    groupIds: options.groupIds,
-  });
-  const limit = normalizePositiveInteger(options.limit, ranked.entries.length);
+  const ranked = await withEventBriefingCache(
+    `event-briefing-daily:${JSON.stringify({
+      date: options.date,
+      channelIds: [...new Set((options.channelIds ?? []).filter(Boolean))].sort(),
+    })}`,
+    () => loadDailyReportRankedEntries(options),
+  );
+  const limit = normalizePositiveInteger(options.limit, ranked.length);
 
-  return ranked.entries.slice(0, limit);
+  return ranked.slice(0, limit);
+}
+
+function resolveSelectedChannelIds(
+  channels: EventBriefingChannelDTO[],
+  channelIds: string[] | undefined,
+) {
+  const activeIds = new Set(channels.map((channel) => channel.id));
+  const normalized = [...new Set((channelIds ?? []).map((channelId) => channelId.trim()).filter(Boolean))]
+    .filter((channelId) => activeIds.has(channelId));
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  const fallback = resolveSelectedChannel(channels, DEFAULT_EVENT_BRIEFING_CHANNEL_ID);
+  return [fallback.id];
+}
+
+async function loadDailyReportRankedEntries(options: {
+  date: string;
+  channelIds?: string[];
+}) {
+  const range = getEventBriefingDateRange(options.date);
+  const { config, preference, activeChannels } = await loadEventBriefingRuntime();
+  const selectedChannelIds = resolveSelectedChannelIds(activeChannels, options.channelIds);
+  const selectedChannels = activeChannels.filter((channel) => selectedChannelIds.includes(channel.id));
+  const entriesByKey = new Map<string, EventBriefingEntryDTO>();
+  const channelEntries = await Promise.all(
+    selectedChannels.map((channel) => loadEntriesForChannel({
+      channel,
+      range,
+      preference,
+      minRankScore: config.minRankScore,
+    })),
+  );
+
+  for (const entry of channelEntries.flat()) {
+    const key = `${entry.type}:${entry.id}`;
+    const current = entriesByKey.get(key);
+    if (!current || entry.rankScore > current.rankScore) {
+      entriesByKey.set(key, entry);
+    }
+  }
+
+  return [...entriesByKey.values()].sort(sortEntries);
+}
+
+export async function resolveDailyReportChannelSourceGroupIds(channelIds?: string[]) {
+  const configRow = await ensureEventBriefingConfig();
+  const config = serializeAdminEventBriefingConfig(configRow);
+  const activeChannels = getActiveChannels(config);
+  const selectedChannelIds = resolveSelectedChannelIds(activeChannels, channelIds);
+  const selectedChannels = activeChannels.filter((channel) => selectedChannelIds.includes(channel.id));
+
+  if (selectedChannels.some((channel) => channel.sourceGroupIds.length === 0)) {
+    return [];
+  }
+
+  return [...new Set(selectedChannels.flatMap((channel) => channel.sourceGroupIds))];
 }
 
 export { formatTime as formatEventBriefingTime };

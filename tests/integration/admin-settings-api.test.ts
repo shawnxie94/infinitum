@@ -224,6 +224,15 @@ describe("/api/admin/settings", () => {
     updateEventBriefingConfig.mockResolvedValue({
       id: "event-briefing-config",
       minRankScore: 10,
+      channels: [
+        {
+          id: "important",
+          name: "重点事件",
+          sourceGroupIds: [],
+          enabled: true,
+          sortOrder: 0,
+        },
+      ],
       createdAt: "2026-06-30T00:00:00.000Z",
       updatedAt: "2026-07-01T00:00:00.000Z",
     });
@@ -246,6 +255,15 @@ describe("/api/admin/settings", () => {
         body: JSON.stringify({
           config: {
             minRankScore: 10,
+            channels: [
+              {
+                id: "important",
+                name: "重点事件",
+                sourceGroupIds: [],
+                enabled: true,
+                sortOrder: 0,
+              },
+            ],
           },
           preference: {
             weightedRules: [
@@ -267,6 +285,15 @@ describe("/api/admin/settings", () => {
     expect(json.eventBriefing.config.minRankScore).toBe(10);
     expect(updateEventBriefingConfig).toHaveBeenCalledWith({
       minRankScore: 10,
+      channels: [
+        {
+          id: "important",
+          name: "重点事件",
+          sourceGroupIds: [],
+          enabled: true,
+          sortOrder: 0,
+        },
+      ],
     });
     expect(updateBriefingPreferenceConfig).toHaveBeenCalledWith({
       weightedRules: [

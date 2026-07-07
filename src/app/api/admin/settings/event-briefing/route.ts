@@ -8,6 +8,13 @@ const eventBriefingSchema = z
   .object({
     config: z.object({
       minRankScore: z.number().int(),
+      channels: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        sourceGroupIds: z.array(z.string()),
+        enabled: z.boolean(),
+        sortOrder: z.number().int(),
+      }).strict()).max(12),
     }).strict(),
     preference: z.object({
       weightedRules: z.array(z.object({

@@ -89,6 +89,15 @@ function buildInitialSettings(): AdminSettingsSnapshot {
       config: {
         id: "event-briefing-config",
         minRankScore: 0,
+        channels: [
+          {
+            id: "important",
+            name: "重点事件",
+            sourceGroupIds: [],
+            enabled: true,
+            sortOrder: 0,
+          },
+        ],
         createdAt: "2026-04-20T10:00:00.000Z",
         updatedAt: "2026-04-20T10:00:00.000Z",
       },
@@ -129,7 +138,7 @@ function buildInitialSettings(): AdminSettingsSnapshot {
       dailyReportOffsetDays: 0,
       dailyReportAutoPublish: false,
       dailyReportMaxRetries: 0,
-      dailyReportGroupIds: [],
+      dailyReportChannelIds: ["important"],
       timezone: "Asia/Shanghai",
       lastHeartbeatAt: null,
       lastRunStartedAt: null,
@@ -151,7 +160,7 @@ function buildInitialSettings(): AdminSettingsSnapshot {
       dailyReportOffsetDays: 0,
       dailyReportAutoPublish: false,
       dailyReportMaxRetries: 0,
-      dailyReportGroupIds: [],
+      dailyReportChannelIds: ["important"],
       timezone: "Asia/Shanghai",
       lastHeartbeatAt: null,
       lastRunStartedAt: null,

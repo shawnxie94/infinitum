@@ -930,6 +930,18 @@ describe("daily report service", () => {
         },
       ],
     });
+    await updateEventBriefingConfig({
+      minRankScore: 0,
+      channels: [
+        {
+          id: "important",
+          name: "重点事件",
+          sourceGroupIds: [],
+          enabled: true,
+          sortOrder: 0,
+        },
+      ],
+    });
     await prisma.taskSchedule.create({
       data: {
         key: "daily_report_default",
@@ -1073,7 +1085,7 @@ describe("daily report service", () => {
     expect(titles).not.toContain("仅发布时间命中日报日期");
   });
 
-  it("limits scheduled daily report candidates and expanded cluster sources to selected groups", async () => {
+  it("limits scheduled daily report candidates and expanded cluster sources to selected channels", async () => {
     const [groupA, groupB] = await Promise.all([
       prisma.sourceGroup.create({ data: { name: "Scoped A" } }),
       prisma.sourceGroup.create({ data: { name: "Scoped B" } }),
@@ -1151,6 +1163,18 @@ describe("daily report service", () => {
         },
       ],
     });
+    await updateEventBriefingConfig({
+      minRankScore: 0,
+      channels: [
+        {
+          id: "important",
+          name: "重点事件",
+          sourceGroupIds: [groupA.id],
+          enabled: true,
+          sortOrder: 0,
+        },
+      ],
+    });
     await prisma.taskSchedule.create({
       data: {
         key: "daily_report_default",
@@ -1162,7 +1186,7 @@ describe("daily report service", () => {
         dailyReportCandidateLimit: 10,
         dailyReportOffsetDays: 0,
         dailyReportAutoPublish: false,
-        dailyReportGroupIdsJson: JSON.stringify([groupA.id]),
+        dailyReportChannelIdsJson: JSON.stringify(["important"]),
         timezone: "Asia/Shanghai",
         nextRunAt: new Date("2026-04-25T00:30:00.000Z"),
       },

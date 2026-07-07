@@ -58,6 +58,7 @@ import type {
   AdminBriefingPreferenceSuggestion,
   AdminBriefingWeightRule,
   AdminBriefingWeightRuleType,
+  AdminEventBriefingChannel,
   AdminSettingsSnapshot,
   PromptConfigType,
 } from "@/lib/settings/types";
@@ -111,7 +112,7 @@ const surfaceCardClassName =
   "rounded-[1.1rem] border border-[color:var(--line)] bg-[color-mix(in_srgb,var(--surface)_96%,transparent)] shadow-[var(--shadow-sm)]";
 const checkboxInputClassName =
   "h-4 w-4 rounded border-[color:var(--line-strong)] text-[var(--accent)] focus:ring-[color:var(--accent-soft)]";
-const ALL_DAILY_REPORT_GROUPS_SELECT_VALUE = "__all_daily_report_groups__";
+const DEFAULT_DAILY_REPORT_CHANNEL_ID = "important";
 const settingsNavItems: Array<{
   key: AdminSettingsSection;
   label: string;
@@ -385,6 +386,36 @@ function areWeightRulesEqual(left: AdminBriefingWeightRule[], right: AdminBriefi
   });
 }
 
+function areEventBriefingChannelsEqual(left: AdminEventBriefingChannel[], right: AdminEventBriefingChannel[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => {
+    const other = right[index];
+    return Boolean(other) &&
+      value.id === other.id &&
+      value.name === other.name &&
+      value.enabled === other.enabled &&
+      value.sortOrder === other.sortOrder &&
+      areStringArraysEqual(value.sourceGroupIds, other.sourceGroupIds);
+  });
+}
+
+function createEventBriefingChannel(index: number): AdminEventBriefingChannel {
+  const randomId = typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID().slice(0, 8)
+    : `${Date.now().toString(36)}-${index}`;
+
+  return {
+    id: `channel-${randomId}`,
+    name: `速览频道 ${index + 1}`,
+    sourceGroupIds: [],
+    enabled: true,
+    sortOrder: index,
+  };
+}
+
 function buildSelectedBackfillOptions(values: string[]) {
   return values.map((value) => ({ value, label: value }));
 }
@@ -575,8 +606,10 @@ export function AdminSettingsPanel({
   const [dailyReportMaxRetries, setDailyReportMaxRetries] = useState(
     String(initialSettings.dailyReportSchedule.dailyReportMaxRetries),
   );
-  const [dailyReportGroupIds, setDailyReportGroupIds] = useState(
-    initialSettings.dailyReportSchedule.dailyReportGroupIds ?? [],
+  const [dailyReportChannelIds, setDailyReportChannelIds] = useState(
+    initialSettings.dailyReportSchedule.dailyReportChannelIds?.length
+      ? initialSettings.dailyReportSchedule.dailyReportChannelIds
+      : [DEFAULT_DAILY_REPORT_CHANNEL_ID],
   );
   const [dailyReportScheduleSnapshot, setDailyReportScheduleSnapshot] = useState(
     initialSettings.dailyReportSchedule,
@@ -626,6 +659,13 @@ export function AdminSettingsPanel({
   const [eventBriefingMinRankScore, setEventBriefingMinRankScore] = useState(
     String(initialSettings.eventBriefing.config.minRankScore),
   );
+  const [eventBriefingChannels, setEventBriefingChannels] = useState(
+    initialSettings.eventBriefing.config.channels,
+  );
+  const [eventBriefingChannelModalMode, setEventBriefingChannelModalMode] =
+    useState<"create" | "edit" | null>(null);
+  const [eventBriefingChannelDraft, setEventBriefingChannelDraft] =
+    useState<AdminEventBriefingChannel | null>(null);
   const [eventBriefingWeightedRules, setEventBriefingWeightedRules] = useState(
     initialSettings.eventBriefing.preference.weightedRules,
   );
@@ -675,7 +715,10 @@ export function AdminSettingsPanel({
       value: group.id,
       label: group.name,
     })),
-    eventBriefingWeightedRules.filter((rule) => rule.type === "source_group").map((rule) => rule.value),
+    [
+      ...eventBriefingWeightedRules.filter((rule) => rule.type === "source_group").map((rule) => rule.value),
+      ...eventBriefingChannels.flatMap((channel) => channel.sourceGroupIds),
+    ],
   );
   const eventBriefingEventTypeSelectOptions = appendMissingOptions(
     eventTypeOptions,
@@ -818,6 +861,15 @@ export function AdminSettingsPanel({
 
     return getEventBriefingRuleOptions(rule.type).find((option) => option.value === rule.value)?.label ?? rule.value;
   };
+  const getEventBriefingChannelGroupSummary = (channel: AdminEventBriefingChannel) => {
+    if (channel.sourceGroupIds.length === 0) {
+      return "全部组";
+    }
+
+    return channel.sourceGroupIds
+      .map((groupId) => eventBriefingSourceGroupSelectOptions.find((option) => option.value === groupId)?.label ?? groupId)
+      .join("、");
+  };
   const filteredBriefingPreferenceSuggestions = briefingPreferenceSuggestions
     .filter((suggestion) => {
       const search = briefingPreferenceSuggestionSearch.trim().toLowerCase();
@@ -893,6 +945,63 @@ export function AdminSettingsPanel({
   };
   const removeEventBriefingWeightRule = (index: number) => {
     setEventBriefingWeightedRules((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+  const openCreateEventBriefingChannelModal = () => {
+    setEventBriefingChannelDraft(createEventBriefingChannel(eventBriefingChannels.length));
+    setEventBriefingChannelModalMode("create");
+  };
+  const openEditEventBriefingChannelModal = (channel: AdminEventBriefingChannel) => {
+    setEventBriefingChannelDraft({
+      ...channel,
+      sourceGroupIds: [...channel.sourceGroupIds],
+    });
+    setEventBriefingChannelModalMode("edit");
+  };
+  const closeEventBriefingChannelModal = () => {
+    setEventBriefingChannelModalMode(null);
+    setEventBriefingChannelDraft(null);
+  };
+  const saveEventBriefingChannelDraft = () => {
+    if (!eventBriefingChannelDraft) {
+      return;
+    }
+
+    const normalizedDraft: AdminEventBriefingChannel = {
+      ...eventBriefingChannelDraft,
+      name: eventBriefingChannelDraft.name.trim(),
+      sourceGroupIds: orderedGroups
+        .map((group) => group.id)
+        .filter((groupId) => eventBriefingChannelDraft.sourceGroupIds.includes(groupId)),
+    };
+
+    if (!normalizedDraft.name) {
+      showToast("速览频道名称不能为空。", "error");
+      return;
+    }
+
+    if (eventBriefingChannelModalMode === "create") {
+      setEventBriefingChannels((current) => [
+        ...current,
+        { ...normalizedDraft, sortOrder: current.length },
+      ]);
+    } else {
+      setEventBriefingChannels((current) =>
+        current.map((channel) => channel.id === normalizedDraft.id ? normalizedDraft : channel),
+      );
+    }
+    closeEventBriefingChannelModal();
+  };
+  const removeEventBriefingChannel = (channelId: string) => {
+    setEventBriefingChannels((current) => {
+      if (current.length <= 1) {
+        showToast("至少保留一个速览频道。", "error");
+        return current;
+      }
+
+      return current
+        .filter((channel) => channel.id !== channelId)
+        .map((channel, index) => ({ ...channel, sortOrder: index }));
+    });
   };
   const refreshBriefingPreferenceSuggestions = () => {
     startTransition(async () => {
@@ -1615,6 +1724,12 @@ export function AdminSettingsPanel({
     const parsedMinRankScore = Number.parseInt(eventBriefingMinRankScore.trim(), 10);
     const parsedMaxCuratorBoost = Number.parseInt(eventBriefingMaxCuratorBoost.trim(), 10);
     const parsedMaxCuratorPenalty = Number.parseInt(eventBriefingMaxCuratorPenalty.trim(), 10);
+    const normalizedChannels = eventBriefingChannels.map((channel, index) => ({
+      ...channel,
+      name: channel.name.trim(),
+      sourceGroupIds: [...new Set(channel.sourceGroupIds.filter(Boolean))],
+      sortOrder: index,
+    }));
     const numericFields: Array<[number, number, number, string]> = [
       [parsedMinRankScore, 0, 100, "最低入选分"],
       [parsedMaxCuratorBoost, 0, 30, "主理人加权上限"],
@@ -1627,6 +1742,14 @@ export function AdminSettingsPanel({
         return;
       }
     }
+    if (normalizedChannels.some((channel) => !channel.name)) {
+      showToast("速览频道名称不能为空。", "error");
+      return;
+    }
+    if (!normalizedChannels.some((channel) => channel.enabled)) {
+      showToast("至少需要启用一个速览频道。", "error");
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -1634,6 +1757,7 @@ export function AdminSettingsPanel({
           config: {
             ...eventBriefingSnapshot.config,
             minRankScore: parsedMinRankScore,
+            channels: normalizedChannels,
           },
           preference: {
             ...eventBriefingSnapshot.preference,
@@ -1645,6 +1769,7 @@ export function AdminSettingsPanel({
 
         setEventBriefingSnapshot(saved);
         setEventBriefingMinRankScore(String(saved.config.minRankScore));
+        setEventBriefingChannels(saved.config.channels);
         setEventBriefingWeightedRules(saved.preference.weightedRules);
         setEventBriefingMaxCuratorBoost(String(saved.preference.maxCuratorBoost));
         setEventBriefingMaxCuratorPenalty(String(saved.preference.maxCuratorPenalty));
@@ -1705,7 +1830,7 @@ export function AdminSettingsPanel({
           dailyReportOffsetDays: parsedDailyReportOffsetDays,
           dailyReportAutoPublish,
           dailyReportMaxRetries: parsedDailyReportMaxRetries,
-          dailyReportGroupIds,
+          dailyReportChannelIds,
         });
 
         setDailyReportScheduleSnapshot(schedule);
@@ -1715,7 +1840,9 @@ export function AdminSettingsPanel({
         setDailyReportOffsetDays(String(schedule.dailyReportOffsetDays));
         setDailyReportAutoPublish(schedule.dailyReportAutoPublish);
         setDailyReportMaxRetries(String(schedule.dailyReportMaxRetries));
-        setDailyReportGroupIds(schedule.dailyReportGroupIds ?? []);
+        setDailyReportChannelIds(schedule.dailyReportChannelIds?.length
+          ? schedule.dailyReportChannelIds
+          : [DEFAULT_DAILY_REPORT_CHANNEL_ID]);
         showToast("日报任务配置已保存。", "success");
       } catch (error) {
         showToast(error instanceof Error ? error.message : "日报任务配置保存失败。", "error");
@@ -1776,6 +1903,10 @@ export function AdminSettingsPanel({
     contentExtractionMaxChars.trim() !== String(contentExtractionSnapshot.maxChars);
   const eventBriefingIsDirty =
     eventBriefingMinRankScore.trim() !== String(eventBriefingSnapshot.config.minRankScore) ||
+    !areEventBriefingChannelsEqual(
+      eventBriefingChannels.map((channel, index) => ({ ...channel, sortOrder: index })),
+      eventBriefingSnapshot.config.channels,
+    ) ||
     !areWeightRulesEqual(eventBriefingWeightedRules, eventBriefingSnapshot.preference.weightedRules) ||
     eventBriefingMaxCuratorBoost.trim() !== String(eventBriefingSnapshot.preference.maxCuratorBoost) ||
     eventBriefingMaxCuratorPenalty.trim() !== String(eventBriefingSnapshot.preference.maxCuratorPenalty);
@@ -1786,7 +1917,12 @@ export function AdminSettingsPanel({
     dailyReportOffsetDays.trim() !== String(dailyReportScheduleSnapshot.dailyReportOffsetDays) ||
     dailyReportMaxRetries.trim() !== String(dailyReportScheduleSnapshot.dailyReportMaxRetries) ||
     dailyReportAutoPublish !== dailyReportScheduleSnapshot.dailyReportAutoPublish ||
-    !areStringArraysEqual(dailyReportGroupIds, dailyReportScheduleSnapshot.dailyReportGroupIds ?? []);
+    !areStringArraysEqual(
+      dailyReportChannelIds,
+      dailyReportScheduleSnapshot.dailyReportChannelIds?.length
+        ? dailyReportScheduleSnapshot.dailyReportChannelIds
+        : [DEFAULT_DAILY_REPORT_CHANNEL_ID],
+    );
   const cleanupScheduleIsDirty =
     cleanupScheduleEnabled !== cleanupScheduleSnapshot.enabled ||
     cleanupScheduleCronExpression.trim() !== cleanupScheduleSnapshot.cronExpression ||
@@ -1896,7 +2032,7 @@ export function AdminSettingsPanel({
                     速览配置
                   </h2>
                   <p className="text-sm text-[var(--text-3)]">
-                    配置速览的展示规则和事件偏好。
+                    配置速览的展示规则、频道和事件偏好。
                   </p>
                 </div>
                 <Button
@@ -1930,6 +2066,163 @@ export function AdminSettingsPanel({
                   </FormField>
                 </div>
               </section>
+
+              <section className="space-y-4 border-t border-[color:var(--line)] pt-5" aria-labelledby="event-briefing-channel-settings">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 id="event-briefing-channel-settings" className="text-sm font-semibold text-[var(--text-1)]">
+                    速览频道
+                  </h3>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={openCreateEventBriefingChannelModal}
+                  >
+                    新增频道
+                  </Button>
+                </div>
+
+                <div className="w-full overflow-x-auto">
+                  <table className="w-full min-w-[52rem] table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[22%]" />
+                      <col />
+                      <col className="w-[9rem]" />
+                      <col className="w-[6rem]" />
+                    </colgroup>
+                    <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
+                      <tr>
+                        <th className="whitespace-nowrap px-4 py-3 text-left">频道名称</th>
+                        <th className="px-4 py-3 text-left">候选来源组</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-left">状态</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[color:var(--line)]">
+                      {eventBriefingChannels.map((channel) => (
+                        <tr
+                          key={channel.id}
+                          className="transition-colors hover:bg-[var(--bg-muted)]"
+                        >
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-[var(--foreground)]">
+                              {channel.name}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-[var(--text-2)]">
+                            <div className="max-w-[32rem] truncate" title={getEventBriefingChannelGroupSummary(channel)}>
+                              {getEventBriefingChannelGroupSummary(channel)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-[var(--text-2)]">
+                            {channel.enabled ? "已启用" : "已停用"}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <IconButton
+                                variant="secondary"
+                                size="sm"
+                                title="编辑频道"
+                                onClick={() => openEditEventBriefingChannelModal(channel)}
+                              >
+                                <IconEdit className="h-4 w-4" />
+                              </IconButton>
+                              <IconButton
+                                variant="secondary"
+                                size="sm"
+                                title="删除频道"
+                                className="text-[var(--danger-ink)] hover:bg-[var(--danger-surface)] hover:text-[var(--danger-ink)]"
+                                onClick={() => removeEventBriefingChannel(channel.id)}
+                              >
+                                <IconTrash className="h-4 w-4" />
+                              </IconButton>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <ModalShell
+                isOpen={Boolean(eventBriefingChannelModalMode)}
+                onClose={closeEventBriefingChannelModal}
+                title={eventBriefingChannelModalMode === "edit" ? "编辑频道" : "新增频道"}
+                widthClassName="max-w-xl"
+                headerClassName="border-b border-[color:var(--line)] p-6"
+                bodyClassName="space-y-4 p-6"
+                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-6"
+                footer={
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={closeEventBriefingChannelModal}
+                      disabled={isPending}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={saveEventBriefingChannelDraft}
+                      disabled={isPending || !eventBriefingChannelDraft?.name.trim()}
+                    >
+                      {eventBriefingChannelModalMode === "edit" ? "保存" : "添加"}
+                    </Button>
+                  </div>
+                }
+              >
+                {eventBriefingChannelDraft ? (
+                  <>
+                    <FormField label="频道名称" htmlFor="event-briefing-channel-name">
+                      <TextInput
+                        id="event-briefing-channel-name"
+                        aria-label="频道名称"
+                        value={eventBriefingChannelDraft.name}
+                        maxLength={24}
+                        onChange={(event) => setEventBriefingChannelDraft((current) => (
+                          current ? { ...current, name: event.target.value } : current
+                        ))}
+                      />
+                    </FormField>
+                    <FormField label="候选来源组" htmlFor="event-briefing-channel-source-groups">
+                      <SelectField
+                        id="event-briefing-channel-source-groups"
+                        aria-label="候选来源组"
+                        mode="multiple"
+                        allowClear
+                        multiline
+                        placeholder="全部组"
+                        value={eventBriefingChannelDraft.sourceGroupIds}
+                        options={eventBriefingSourceGroupSelectOptions}
+                        onChange={(value) => {
+                          const nextIds = Array.isArray(value) ? value.map(String) : [];
+                          setEventBriefingChannelDraft((current) => (
+                            current
+                              ? {
+                                  ...current,
+                                  sourceGroupIds: orderedGroups
+                                    .map((group) => group.id)
+                                    .filter((groupId) => nextIds.includes(groupId)),
+                                }
+                              : current
+                          ));
+                        }}
+                      />
+                    </FormField>
+                    <label className="inline-flex items-center gap-2 text-sm text-[var(--text-2)]">
+                      <input
+                        className={checkboxInputClassName}
+                        type="checkbox"
+                        checked={eventBriefingChannelDraft.enabled}
+                        onChange={(event) => setEventBriefingChannelDraft((current) => (
+                          current ? { ...current, enabled: event.target.checked } : current
+                        ))}
+                      />
+                      启用频道
+                    </label>
+                  </>
+                ) : null}
+              </ModalShell>
 
               <section className="space-y-4 border-t border-[color:var(--line)] pt-5" aria-labelledby="event-briefing-preference-settings">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1981,7 +2274,7 @@ export function AdminSettingsPanel({
                   </FormField>
                 </div>
 
-                <div className="overflow-x-auto rounded-sm border border-[color:var(--line)]">
+                <div className="w-full overflow-x-auto">
                   {eventBriefingWeightedRules.length > 0 ? (
                     <table className="w-full min-w-[42rem] table-fixed text-sm">
                       <colgroup>
@@ -1992,28 +2285,31 @@ export function AdminSettingsPanel({
                       </colgroup>
                       <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
                         <tr>
-                          <th className="px-3 py-2 text-left">类型</th>
-                          <th className="px-3 py-2 text-left">内容</th>
-                          <th className="px-3 py-2 text-right">权重</th>
-                          <th className="px-3 py-2 text-right">操作</th>
+                          <th className="whitespace-nowrap px-4 py-3 text-left">类型</th>
+                          <th className="px-4 py-3 text-left">内容</th>
+                          <th className="whitespace-nowrap px-4 py-3 text-right">权重</th>
+                          <th className="whitespace-nowrap px-4 py-3 text-right">操作</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[color:var(--line)]">
                         {eventBriefingWeightedRules.map((rule, index) => (
-                          <tr key={`${rule.type}:${rule.value}:${rule.weight}:${index}`} className="bg-[var(--surface)]">
-                            <td className="px-3 py-2 text-[var(--text-2)]">
+                          <tr
+                            key={`${rule.type}:${rule.value}:${rule.weight}:${index}`}
+                            className="transition-colors hover:bg-[var(--bg-muted)]"
+                          >
+                            <td className="px-4 py-3 text-[var(--text-2)]">
                               {eventBriefingRuleTypeLabels[rule.type]}
                             </td>
-                            <td className="px-3 py-2 font-medium text-[var(--text-1)]">
+                            <td className="px-4 py-3 font-medium text-[var(--text-1)]">
                               {getEventBriefingRuleLabel(rule)}
                             </td>
                             <td className={cx(
-                              "px-3 py-2 text-right font-mono text-sm",
+                              "px-4 py-3 text-right font-mono text-sm",
                               rule.weight > 0 ? "text-[var(--accent)]" : "text-[var(--danger-ink)]",
                             )}>
                               {rule.weight > 0 ? `+${rule.weight}` : rule.weight}
                             </td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-4 py-3 text-right">
                               <IconButton
                                 variant="secondary"
                                 size="sm"
@@ -3497,42 +3793,32 @@ export function AdminSettingsPanel({
               </div>
 
               <div className="mt-4">
-                <FormField label="日报分组范围" htmlFor="daily-report-group-ids">
+                <FormField label="日报候选频道" htmlFor="daily-report-channel-ids">
                   <SelectField
-                    id="daily-report-group-ids"
-                    aria-label="日报分组范围"
+                    id="daily-report-channel-ids"
+                    aria-label="日报候选频道"
                     mode="multiple"
-                    allowClear
                     multiline
                     className="w-full"
-                    placeholder="全部分组"
-                    value={dailyReportGroupIds.length > 0 ? dailyReportGroupIds : [ALL_DAILY_REPORT_GROUPS_SELECT_VALUE]}
-                    options={[
-                      {
-                        value: ALL_DAILY_REPORT_GROUPS_SELECT_VALUE,
-                        label: "全部分组",
-                      },
-                      ...orderedGroups.map((group) => ({
-                        value: group.id,
-                        label: group.name,
-                      })),
-                    ]}
+                    placeholder="选择速览频道"
+                    value={dailyReportChannelIds}
+                    options={eventBriefingChannels
+                      .filter((channel) => channel.enabled)
+                      .map((channel) => ({
+                        value: channel.id,
+                        label: channel.name,
+                      }))}
                     onChange={(value) => {
                       const nextIds = Array.isArray(value) ? value.map(String) : [];
                       if (nextIds.length === 0) {
-                        setDailyReportGroupIds([]);
+                        setDailyReportChannelIds([DEFAULT_DAILY_REPORT_CHANNEL_ID]);
                         return;
                       }
-                      if (nextIds.includes(ALL_DAILY_REPORT_GROUPS_SELECT_VALUE)) {
-                        const concreteIds = nextIds.filter((groupId) => groupId !== ALL_DAILY_REPORT_GROUPS_SELECT_VALUE);
-                        setDailyReportGroupIds(dailyReportGroupIds.length > 0 ? [] : concreteIds);
-                        return;
-                      }
-                      setDailyReportGroupIds(
-                        orderedGroups
-                          .map((group) => group.id)
-                          .filter((groupId) => nextIds.includes(groupId)),
-                      );
+                      const selectedIds = eventBriefingChannels
+                        .filter((channel) => channel.enabled)
+                        .map((channel) => channel.id)
+                        .filter((channelId) => nextIds.includes(channelId));
+                      setDailyReportChannelIds(selectedIds.length > 0 ? selectedIds : [DEFAULT_DAILY_REPORT_CHANNEL_ID]);
                     }}
                   />
                 </FormField>

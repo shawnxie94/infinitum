@@ -63,8 +63,17 @@ export type AdminHeaderLink = {
 export type AdminEventBriefingConfig = {
   id: string;
   minRankScore: number;
+  channels: AdminEventBriefingChannel[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type AdminEventBriefingChannel = {
+  id: string;
+  name: string;
+  sourceGroupIds: string[];
+  enabled: boolean;
+  sortOrder: number;
 };
 
 export type AdminBriefingPreferenceConfig = {
@@ -136,7 +145,7 @@ export type AdminSettingsSnapshot = {
     dailyReportOffsetDays: number;
     dailyReportAutoPublish: boolean;
     dailyReportMaxRetries: number;
-    dailyReportGroupIds?: string[];
+    dailyReportChannelIds?: string[];
     processingStartAt?: string | null;
     cleanupRetentionDays: number;
     timezone: string;
@@ -159,7 +168,7 @@ export type AdminSettingsSnapshot = {
     dailyReportOffsetDays: number;
     dailyReportAutoPublish: boolean;
     dailyReportMaxRetries: number;
-    dailyReportGroupIds: string[];
+    dailyReportChannelIds: string[];
     processingStartAt?: string | null;
     cleanupRetentionDays: number;
     timezone: string;

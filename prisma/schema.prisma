@@ -415,7 +415,7 @@ model TaskSchedule {
   dailyReportOffsetDays     Int                   @default(0)
   dailyReportAutoPublish    Boolean               @default(false)
   dailyReportMaxRetries     Int                   @default(0)
-  dailyReportGroupIdsJson   String                @default("")
+  dailyReportChannelIdsJson String                @default("[\"important\"]")
   cleanupRetentionDays      Int                   @default(365)
   processingStartAt         DateTime?
   timezone                  String
@@ -448,10 +448,11 @@ model ContentExtractionConfig {
 }
 
 model EventBriefingConfig {
-  id           String   @id @default(cuid())
-  minRankScore Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  minRankScore         Int      @default(0)
+  briefingChannelsJson String   @default("[]")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@map("event_briefing_configs")
 }

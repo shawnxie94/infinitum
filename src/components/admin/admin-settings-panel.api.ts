@@ -243,7 +243,7 @@ export async function saveDefaultDailyReportSchedule(input: {
   dailyReportOffsetDays: number;
   dailyReportAutoPublish: boolean;
   dailyReportMaxRetries: number;
-  dailyReportGroupIds: string[];
+  dailyReportChannelIds: string[];
 }) {
   const payload = await requestAdminSettingsJson<DailyReportSchedulePayload>(
     "/api/admin/monitor/schedule/daily-report-default",
@@ -311,6 +311,7 @@ export async function saveEventBriefingSettings(input: AdminSettingsSnapshot["ev
     {
       config: {
         minRankScore: input.config.minRankScore,
+        channels: input.config.channels,
       },
       preference: {
         weightedRules: input.preference.weightedRules,

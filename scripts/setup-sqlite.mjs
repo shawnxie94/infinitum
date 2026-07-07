@@ -445,6 +445,9 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
+  addColumnIfMissing("task_schedules", "dailyReportChannelIdsJson", "TEXT NOT NULL DEFAULT '[\"important\"]'");
+  dropColumnIfPresent("task_schedules", "dailyReportGroupIdsJson");
+
   if (!ftsTableExists("tags")) {
     runSqlite([dbPath], {
       input: `
@@ -525,6 +528,7 @@ function applyAdditiveSchemaUpgrades() {
         CREATE TABLE IF NOT EXISTS "event_briefing_configs" (
           "id" TEXT NOT NULL PRIMARY KEY,
           "minRankScore" INTEGER NOT NULL DEFAULT 0,
+          "briefingChannelsJson" TEXT NOT NULL DEFAULT '[]',
           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "updatedAt" DATETIME NOT NULL
         );
@@ -532,6 +536,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
   dropColumnIfPresent("event_briefing_configs", "includeSingleItems");
+  addColumnIfMissing("event_briefing_configs", "briefingChannelsJson", "TEXT NOT NULL DEFAULT '[]'");
 
   if (!ftsTableExists("briefing_preference_configs")) {
     runSqlite([dbPath], {

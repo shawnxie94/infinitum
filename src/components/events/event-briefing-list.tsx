@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { useClientAdminSession } from "@/components/ui/use-client-admin-session";
 import { EVENT_BRIEFING_DEFAULT_PAGE_SIZE } from "@/lib/events/pagination";
-import type { EventBriefingDTO, EventBriefingEntryDTO, EventBriefingView } from "@/lib/events/types";
+import type { EventBriefingDTO, EventBriefingEntryDTO } from "@/lib/events/types";
 import { cx } from "@/lib/ui/cx";
 
 type EventBriefingListProps = {
@@ -20,22 +20,13 @@ type EventBriefingListProps = {
   hydrateAdminClient?: boolean;
 };
 
-const viewLabels: Record<EventBriefingView, string> = {
-  important: "重点事件",
-  updates: "最新进展",
-  "multi-source": "多源确认",
-};
-
-function buildEventsViewHref(input: { date: string; pageSize: number; view: EventBriefingView }) {
+function buildEventsHref(input: { date: string; pageSize: number; channelId: string }) {
   const params = new URLSearchParams();
   params.set("date", input.date);
+  params.set("channel", input.channelId);
 
   if (input.pageSize !== EVENT_BRIEFING_DEFAULT_PAGE_SIZE) {
     params.set("size", String(input.pageSize));
-  }
-
-  if (input.view !== "important") {
-    params.set("view", input.view);
   }
 
   return `/events?${params.toString()}`;
@@ -57,11 +48,6 @@ export function EventBriefingList({
   const { page, pageSize, totalPages, total } = briefing.pagination;
   const firstRank = (page - 1) * pageSize + 1;
   const shouldShowPagination = total > EVENT_BRIEFING_DEFAULT_PAGE_SIZE || totalPages > 1;
-  const viewItems: Array<{ view: EventBriefingView; count: number }> = [
-    { view: "important", count: briefing.summary.eventCount },
-    { view: "updates", count: briefing.summary.updatedEventCount },
-    { view: "multi-source", count: briefing.summary.multiSourceCount },
-  ];
   const openEntry = (entry: EventBriefingEntryDTO) => {
     setSelectedEntry(entry);
     recordCuratorBehaviorClient({
@@ -109,13 +95,13 @@ export function EventBriefingList({
         <h1 className="sr-only">事件速览</h1>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-col">
-            <nav aria-label="事件筛选" className="flex flex-wrap items-center gap-1.5">
-              {viewItems.map((item) => {
-                const isActive = briefing.view === item.view;
+            <nav aria-label="速览频道" className="flex flex-wrap items-center gap-1.5">
+              {briefing.channels.map((channel) => {
+                const isActive = briefing.channel.id === channel.id;
 
                 return (
                   <Link
-                    key={item.view}
+                    key={channel.id}
                     aria-current={isActive ? "page" : undefined}
                     className={cx(
                       "inline-flex h-7 items-center rounded-sm border px-2 text-xs font-medium transition",
@@ -123,9 +109,13 @@ export function EventBriefingList({
                         ? "border-[var(--accent)] bg-[rgba(59,130,246,0.10)] text-[var(--accent)]"
                         : "border-[color:var(--line)] bg-[var(--surface)] text-[var(--text-3)] hover:border-[var(--accent)] hover:text-[var(--accent)]",
                     )}
-                    href={buildEventsViewHref({ date: briefing.date, pageSize, view: item.view })}
+                    href={buildEventsHref({
+                      date: briefing.date,
+                      pageSize,
+                      channelId: channel.id,
+                    })}
                   >
-                    {viewLabels[item.view]} {item.count}
+                    {channel.name} {channel.count}
                   </Link>
                 );
               })}
@@ -140,9 +130,7 @@ export function EventBriefingList({
               defaultValue={briefing.date}
             />
             <input name="size" type="hidden" value={pageSize} />
-            {briefing.view !== "important" ? (
-              <input name="view" type="hidden" value={briefing.view} />
-            ) : null}
+            <input name="channel" type="hidden" value={briefing.channel.id} />
             <button
               className="lumina-home-action-button lumina-home-action-button--primary inline-flex h-8 items-center justify-center rounded-sm bg-[var(--accent)] px-3 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
               type="submit"
@@ -154,7 +142,7 @@ export function EventBriefingList({
       </header>
 
       <section
-        aria-label={`事件列表，共 ${total} 个事件`}
+        aria-label={`速览列表，共 ${total} 条`}
         className={cx(
           "overflow-hidden rounded-sm border border-[color:var(--line)] bg-[var(--surface)]",
           hasEntries ? "divide-y divide-[color:var(--line)]" : "px-4 py-8",
@@ -182,7 +170,7 @@ export function EventBriefingList({
               </Link>
             }
           >
-            {briefing.view === "important" ? "当天暂无可展示的重点事件。" : "当前筛选下暂无事件。"}
+            当天暂无可展示的速览内容。
           </EmptyState>
         )}
       </section>
@@ -192,7 +180,7 @@ export function EventBriefingList({
           date={briefing.date}
           page={page}
           pageSize={pageSize}
-          view={briefing.view}
+          channelId={briefing.channel.id}
           total={total}
           totalPages={totalPages}
         />

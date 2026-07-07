@@ -5,20 +5,25 @@ import { useEffect, useState } from "react";
 
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { EVENT_BRIEFING_DEFAULT_PAGE_SIZE, EVENT_BRIEFING_PAGE_SIZE_OPTIONS } from "@/lib/events/pagination";
-import type { EventBriefingView } from "@/lib/events/types";
 
 type EventBriefingPaginationProps = {
   date: string;
   page: number;
   pageSize: number;
-  view: EventBriefingView;
+  channelId: string;
   total: number;
   totalPages: number;
 };
 
-function buildEventsHref(input: { date: string; page?: number; pageSize?: number; view: EventBriefingView }) {
+function buildEventsHref(input: {
+  date: string;
+  page?: number;
+  pageSize?: number;
+  channelId: string;
+}) {
   const params = new URLSearchParams();
   params.set("date", input.date);
+  params.set("channel", input.channelId);
 
   if (input.page && input.page > 1) {
     params.set("page", String(input.page));
@@ -28,10 +33,6 @@ function buildEventsHref(input: { date: string; page?: number; pageSize?: number
     params.set("size", String(input.pageSize));
   }
 
-  if (input.view !== "important") {
-    params.set("view", input.view);
-  }
-
   return `/events?${params.toString()}`;
 }
 
@@ -39,7 +40,7 @@ export function EventBriefingPagination({
   date,
   page,
   pageSize,
-  view,
+  channelId,
   total,
   totalPages,
 }: EventBriefingPaginationProps) {
@@ -57,7 +58,7 @@ export function EventBriefingPagination({
       : page;
 
     setJumpToPage(String(nextPage));
-    router.push(buildEventsHref({ date, page: nextPage, pageSize, view }));
+    router.push(buildEventsHref({ date, page: nextPage, pageSize, channelId }));
   }
 
   return (
@@ -69,10 +70,10 @@ export function EventBriefingPagination({
       pageSize={pageSize}
       pageSizeOptions={EVENT_BRIEFING_PAGE_SIZE_OPTIONS}
       onPageChange={(nextPage) => {
-        router.push(buildEventsHref({ date, page: nextPage, pageSize, view }));
+        router.push(buildEventsHref({ date, page: nextPage, pageSize, channelId }));
       }}
       onPageSizeChange={(nextPageSize) => {
-        router.push(buildEventsHref({ date, pageSize: nextPageSize, view }));
+        router.push(buildEventsHref({ date, pageSize: nextPageSize, channelId }));
       }}
       itemLabel="条"
       jumpValue={jumpToPage}

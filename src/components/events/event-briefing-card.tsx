@@ -32,7 +32,7 @@ export function EventBriefingCard({
   onOpen,
   onManualFeedback,
 }: EventBriefingCardProps) {
-  const statusLabel = entry.isFollowUp ? "新进展" : "新事件";
+  const statusLabel = entry.isFollowUp ? "新进展" : "新内容";
   const meta = [
     `${entry.sourceCount} 来源`,
     `${entry.itemCount} 条`,

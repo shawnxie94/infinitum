@@ -49,6 +49,7 @@ import { prisma } from "@/lib/db";
 
 export const TASK_RUN_CANCELLED_MESSAGE = "管理员手动终止任务。";
 export const TASK_RUN_CANCELLED_LABEL = "任务已终止";
+const DEFAULT_DAILY_REPORT_CHANNEL_IDS = ["important"];
 
 const TASK_AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
   item_summary: "条目摘要",
@@ -320,26 +321,31 @@ function serializeTaskTimeline(taskTimeline: TaskTimelineNodeSnapshot[] | null) 
   return JSON.stringify(taskTimeline);
 }
 
-export function parseDailyReportGroupIdsJson(value: string | null | undefined) {
+export function parseDailyReportChannelIdsJson(value: string | null | undefined) {
   if (!value) {
-    return [];
+    return DEFAULT_DAILY_REPORT_CHANNEL_IDS;
   }
 
   try {
     const parsed = JSON.parse(value) as unknown;
 
     if (!Array.isArray(parsed)) {
-      return [];
+      return DEFAULT_DAILY_REPORT_CHANNEL_IDS;
     }
 
-    return [...new Set(parsed.filter((groupId): groupId is string => typeof groupId === "string" && groupId.trim().length > 0))];
+    const channelIds = parsed
+      .filter((channelId): channelId is string => typeof channelId === "string" && channelId.trim().length > 0)
+      .map((channelId) => channelId.trim());
+
+    const uniqueChannelIds = [...new Set(channelIds)];
+    return uniqueChannelIds.length > 0 ? uniqueChannelIds : DEFAULT_DAILY_REPORT_CHANNEL_IDS;
   } catch {
-    return [];
+    return DEFAULT_DAILY_REPORT_CHANNEL_IDS;
   }
 }
 
-function serializeDailyReportGroupIds(groupIds: string[]) {
-  return JSON.stringify([...new Set(groupIds.map((groupId) => groupId.trim()).filter(Boolean))]);
+function serializeDailyReportChannelIds(channelIds: string[]) {
+  return JSON.stringify([...new Set(channelIds.map((channelId) => channelId.trim()).filter(Boolean))]);
 }
 
 function getHeartbeatScheduleKeyForTaskKind(kind: BackgroundTaskRunKind) {
@@ -522,7 +528,7 @@ export function toTaskScheduleSnapshot(schedule: {
   dailyReportOffsetDays: number | null;
   dailyReportAutoPublish: boolean | null;
   dailyReportMaxRetries: number | null;
-  dailyReportGroupIdsJson?: string | null;
+  dailyReportChannelIdsJson?: string | null;
   cleanupRetentionDays: number | null;
   processingStartAt: Date | null;
   timezone: string;
@@ -544,7 +550,7 @@ export function toTaskScheduleSnapshot(schedule: {
     dailyReportOffsetDays: schedule.dailyReportOffsetDays ?? DEFAULT_DAILY_REPORT_OFFSET_DAYS,
     dailyReportAutoPublish: schedule.dailyReportAutoPublish ?? false,
     dailyReportMaxRetries: schedule.dailyReportMaxRetries ?? DEFAULT_DAILY_REPORT_MAX_RETRIES,
-    dailyReportGroupIds: parseDailyReportGroupIdsJson(schedule.dailyReportGroupIdsJson),
+    dailyReportChannelIds: parseDailyReportChannelIdsJson(schedule.dailyReportChannelIdsJson),
     cleanupRetentionDays: schedule.cleanupRetentionDays ?? DEFAULT_CLEANUP_RETENTION_DAYS,
     processingStartAt: schedule.processingStartAt?.toISOString() ?? null,
     timezone: schedule.timezone,
@@ -602,7 +608,7 @@ export async function updateDefaultDailyReportSchedule(input: {
   dailyReportOffsetDays: number;
   dailyReportAutoPublish: boolean;
   dailyReportMaxRetries: number;
-  dailyReportGroupIds?: string[];
+  dailyReportChannelIds?: string[];
 }) {
   const cronExpression = input.cronExpression.trim();
 
@@ -646,19 +652,9 @@ export async function updateDefaultDailyReportSchedule(input: {
     );
   }
 
-  const dailyReportGroupIds = [...new Set((input.dailyReportGroupIds ?? []).map((groupId) => groupId.trim()).filter(Boolean))];
-  if (dailyReportGroupIds.length > 0) {
-    const existingGroupCount = await prisma.sourceGroup.count({
-      where: {
-        id: {
-          in: dailyReportGroupIds,
-        },
-      },
-    });
-
-    if (existingGroupCount !== dailyReportGroupIds.length) {
-      throw new Error("Daily report group scope contains an invalid source group.");
-    }
+  const dailyReportChannelIds = [...new Set((input.dailyReportChannelIds ?? []).map((channelId) => channelId.trim()).filter(Boolean))];
+  if (dailyReportChannelIds.length === 0) {
+    throw new Error("Daily report candidate channels must include at least one channel.");
   }
 
   const currentSchedule = await ensureDefaultDailyReportSchedule();
@@ -679,7 +675,7 @@ export async function updateDefaultDailyReportSchedule(input: {
       dailyReportOffsetDays: input.dailyReportOffsetDays,
       dailyReportAutoPublish: input.dailyReportAutoPublish,
       dailyReportMaxRetries: input.dailyReportMaxRetries,
-      dailyReportGroupIdsJson: serializeDailyReportGroupIds(dailyReportGroupIds),
+      dailyReportChannelIdsJson: serializeDailyReportChannelIds(dailyReportChannelIds),
       nextRunAt,
     },
   });

@@ -17,13 +17,36 @@ vi.mock("next/navigation", () => ({
 function buildBriefing(overrides: Partial<EventBriefingDTO> = {}): EventBriefingDTO {
   return {
     date: "2026-06-30",
-    view: "important",
+    channel: {
+      id: "important",
+      name: "重点事件",
+      sourceGroupIds: [],
+      enabled: true,
+      sortOrder: 0,
+      count: 96,
+    },
+    channels: [
+      {
+        id: "important",
+        name: "重点事件",
+        sourceGroupIds: [],
+        enabled: true,
+        sortOrder: 0,
+        count: 96,
+      },
+      {
+        id: "insight",
+        name: "观点实践",
+        sourceGroupIds: ["group-blog"],
+        enabled: true,
+        sortOrder: 1,
+        count: 24,
+      },
+    ],
     timezone: "Asia/Shanghai",
     generatedAt: "2026-06-30T10:00:00.000Z",
     summary: {
       eventCount: 96,
-      multiSourceCount: 18,
-      updatedEventCount: 11,
     },
     pagination: {
       page: 1,
@@ -135,14 +158,12 @@ describe("EventBriefingList", () => {
     expect(screen.getByLabelText("选择日期")).toHaveAttribute("name", "date");
     expect(screen.getByRole("button", { name: "查看" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "最新进展 11" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "观点实践 24" })).toHaveAttribute(
       "href",
-      "/events?date=2026-06-30&view=updates",
+      "/events?date=2026-06-30&channel=insight",
     );
-    expect(screen.getByRole("link", { name: "多源确认 18" })).toHaveAttribute(
-      "href",
-      "/events?date=2026-06-30&view=multi-source",
-    );
+    expect(screen.queryByRole("link", { name: /全部/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /最新进展/ })).not.toBeInTheDocument();
 
     const card = screen.getByRole("article");
     expect(within(card).getByText("#01")).toBeInTheDocument();
@@ -208,7 +229,7 @@ describe("EventBriefingList", () => {
     }));
   });
 
-  it("marks non-follow-up entries as new events", () => {
+  it("marks non-follow-up entries as new content", () => {
     renderEventBriefingList(buildBriefing({
       entries: [
         {
@@ -220,7 +241,7 @@ describe("EventBriefingList", () => {
 
     const card = screen.getByRole("article");
 
-    expect(within(card).getByText("新事件")).toBeInTheDocument();
+    expect(within(card).getByText("新内容")).toBeInTheDocument();
     expect(within(card).queryByText("新进展")).not.toBeInTheDocument();
   });
 
@@ -310,8 +331,6 @@ describe("EventBriefingList", () => {
       entries: [],
       summary: {
         eventCount: 0,
-        multiSourceCount: 0,
-        updatedEventCount: 0,
       },
       pagination: {
         page: 1,
@@ -321,7 +340,7 @@ describe("EventBriefingList", () => {
       },
     }));
 
-    expect(screen.getByText("当天暂无可展示的重点事件。")).toBeInTheDocument();
+    expect(screen.getByText("当天暂无可展示的速览内容。")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "查看主页" })).toHaveAttribute("href", "/");
   });
 
@@ -339,31 +358,30 @@ describe("EventBriefingList", () => {
     expect(screen.getByRole("combobox", { name: "每页显示" })).toHaveValue("50");
     expect(screen.getByRole("spinbutton", { name: "跳转页码" })).toHaveValue(2);
     fireEvent.click(screen.getByRole("button", { name: "上一页" }));
-    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&size=50");
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&channel=important&size=50");
     fireEvent.change(screen.getByRole("spinbutton", { name: "跳转页码" }), { target: { value: "1" } });
     fireEvent.click(screen.getByRole("button", { name: "跳转" }));
-    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&size=50");
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&channel=important&size=50");
   });
 
-  it("preserves active quick filter in date search and pagination", () => {
+  it("preserves active channel in date search and pagination", () => {
     const { container } = renderEventBriefingList(buildBriefing({
-      view: "updates",
       pagination: {
         page: 1,
         pageSize: 50,
-        total: 11,
+        total: 96,
         totalPages: 2,
       },
     }));
 
-    expect(screen.getByRole("link", { name: "最新进展 11" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute(
       "href",
-      "/events?date=2026-06-30&size=50",
+      "/events?date=2026-06-30&channel=important&size=50",
     );
-    expect(container.querySelector('input[name="view"]')).toHaveAttribute("value", "updates");
+    expect(container.querySelector('input[name="channel"]')).toHaveAttribute("value", "important");
+    expect(container.querySelector('input[name="view"]')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&page=2&size=50&view=updates");
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&channel=important&page=2&size=50");
   });
 });

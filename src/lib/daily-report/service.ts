@@ -32,13 +32,13 @@ import {
 } from "@/lib/daily-report/types";
 import { parseDailyReportContent } from "@/lib/daily-report/validator";
 import { normalizeEventSignatureForStorage } from "@/lib/clusters/normalization";
-import { listEventBriefingEntriesForDailyReport } from "@/lib/events/service";
+import { listEventBriefingEntriesForDailyReport, resolveDailyReportChannelSourceGroupIds } from "@/lib/events/service";
 import type { EventBriefingEntryDTO } from "@/lib/events/types";
 import { getDisplaySummary, getDisplayTitle } from "@/lib/feed/presentation";
 import { getIngestionRuntimeConfig } from "@/lib/settings/runtime-service";
 import { DEFAULT_DAILY_REPORT_TASK_LABEL, type TaskTimelineNodeSnapshot } from "@/lib/tasks/types";
 import type { TaskAiCallBreakdownSnapshot } from "@/lib/tasks/types";
-import { enqueueTaskRun, ensureDefaultDailyReportSchedule, parseDailyReportGroupIdsJson, updateTaskRun } from "@/lib/tasks/service";
+import { enqueueTaskRun, ensureDefaultDailyReportSchedule, parseDailyReportChannelIdsJson, updateTaskRun } from "@/lib/tasks/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 
 const MIN_CANDIDATE_COUNT = 2;
@@ -65,12 +65,12 @@ export function buildDailyReportTitle(date: string, content?: DailyReportContent
 function buildInputHash(
   date: string,
   candidates: DailyReportCandidate[],
-  groupIds: string[] = [],
+  channelIds: string[] = [],
   recentTopics: RecentDailyReportTopic[] = [],
 ) {
   const hash = createHash("sha256");
   hash.update(date);
-  hash.update(JSON.stringify([...groupIds].sort()));
+  hash.update(JSON.stringify([...channelIds].sort()));
   hash.update(JSON.stringify(recentTopics));
   for (const candidate of candidates) {
     hash.update(JSON.stringify({
@@ -170,11 +170,11 @@ function eventBriefingEntryToDailyReportCandidate(
   };
 }
 
-async function listDailyReportEventBriefingCandidates(date: string, limit: number, groupIds: string[] = []) {
+async function listDailyReportEventBriefingCandidates(date: string, limit: number, channelIds: string[] = []) {
   const entries = await listEventBriefingEntriesForDailyReport({
     date,
     limit,
-    groupIds,
+    channelIds,
   });
 
   return entries
@@ -182,17 +182,22 @@ async function listDailyReportEventBriefingCandidates(date: string, limit: numbe
     .filter((candidate): candidate is DailyReportCandidate => Boolean(candidate));
 }
 
-async function listDailyReportGenerationCandidates(date: string, limit: number, groupIds: string[] = []) {
+async function listDailyReportGenerationCandidates(
+  date: string,
+  limit: number,
+  channelIds: string[] = [],
+  fallbackGroupIds: string[] = [],
+) {
   try {
     return {
       source: "event_briefing" as const,
-      candidates: await listDailyReportEventBriefingCandidates(date, limit, groupIds),
+      candidates: await listDailyReportEventBriefingCandidates(date, limit, channelIds),
     };
   } catch (error) {
     console.warn("[daily-report] falling back to legacy candidate query", error);
     return {
       source: "legacy_daily_report" as const,
-      candidates: await listDailyReportCandidates(date, limit, groupIds),
+      candidates: await listDailyReportCandidates(date, limit, fallbackGroupIds),
     };
   }
 }
@@ -808,19 +813,21 @@ export async function generateDailyReport(input: {
 }) {
   const { date } = getDailyReportDateRange(input.date);
   const schedule = await ensureDefaultDailyReportSchedule();
-  const dailyReportGroupIds = parseDailyReportGroupIdsJson(schedule.dailyReportGroupIdsJson);
+  const dailyReportChannelIds = parseDailyReportChannelIdsJson(schedule.dailyReportChannelIdsJson);
+  const dailyReportSourceGroupIds = await resolveDailyReportChannelSourceGroupIds(dailyReportChannelIds);
   const recentSources = await listRecentDailyReportSourceSnapshots(date, DAILY_REPORT_RECENT_SOURCE_LOOKBACK_DAYS);
   const recentTopics = buildRecentDailyReportTopics(recentSources);
   const candidateResult = await listDailyReportGenerationCandidates(
     date,
     schedule.dailyReportCandidateLimit,
-    dailyReportGroupIds,
+    dailyReportChannelIds,
+    dailyReportSourceGroupIds,
   );
   const rawCandidates = candidateResult.candidates;
   const excludedRecentDuplicates = buildDailyReportExcludedRecentDuplicateSnapshots(rawCandidates, recentSources);
   const candidates = filterRecentDailyReportDuplicates(rawCandidates, recentSources);
   await input.onCandidatesLoaded?.(candidates.length);
-  const inputHash = buildInputHash(date, candidates, dailyReportGroupIds, recentTopics);
+  const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics);
   const existing = await prisma.dailyReport.findUnique({
     where: {
       date_timezone: {
@@ -902,7 +909,7 @@ export async function generateDailyReport(input: {
   const expandedSourcesByNumber = await buildExpandedDailyReportSourceRegistry({
     candidatesById,
     sourceRows,
-    groupIds: dailyReportGroupIds,
+    groupIds: dailyReportSourceGroupIds,
   });
   const title = buildDailyReportTitle(date, content);
   const renderedMarkdown = renderDailyReportMarkdown(

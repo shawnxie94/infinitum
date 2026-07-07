@@ -102,6 +102,15 @@ function buildInitialSettings(): AdminSettingsSnapshot {
       config: {
         id: "event-briefing-config",
         minRankScore: 0,
+        channels: [
+          {
+            id: "important",
+            name: "重点事件",
+            sourceGroupIds: [],
+            enabled: true,
+            sortOrder: 0,
+          },
+        ],
         createdAt: "2026-04-20T10:00:00.000Z",
         updatedAt: "2026-04-20T10:00:00.000Z",
       },
@@ -142,7 +151,7 @@ function buildInitialSettings(): AdminSettingsSnapshot {
       dailyReportOffsetDays: 0,
       dailyReportAutoPublish: false,
       dailyReportMaxRetries: 0,
-      dailyReportGroupIds: [],
+      dailyReportChannelIds: ["important"],
       timezone: "Asia/Shanghai",
       lastHeartbeatAt: "2026-04-20T10:00:00.000Z",
       lastRunStartedAt: "2026-04-20T10:00:00.000Z",
@@ -164,7 +173,7 @@ function buildInitialSettings(): AdminSettingsSnapshot {
       dailyReportOffsetDays: 0,
       dailyReportAutoPublish: false,
       dailyReportMaxRetries: 0,
-      dailyReportGroupIds: [],
+      dailyReportChannelIds: ["important"],
       timezone: "Asia/Shanghai",
       lastHeartbeatAt: "2026-04-20T10:00:00.000Z",
       lastRunStartedAt: null,
@@ -1573,6 +1582,22 @@ describe("AdminSettingsPanel", () => {
       config: {
         ...buildInitialSettings().eventBriefing.config,
         minRankScore: 20,
+        channels: [
+          {
+            id: "important",
+            name: "重点事件",
+            sourceGroupIds: [],
+            enabled: true,
+            sortOrder: 0,
+          },
+          {
+            id: "channel-test",
+            name: "观点实践",
+            sourceGroupIds: ["group-1"],
+            enabled: true,
+            sortOrder: 1,
+          },
+        ],
       },
       preference: {
         ...buildInitialSettings().eventBriefing.preference,
@@ -1630,18 +1655,32 @@ describe("AdminSettingsPanel", () => {
 
     const panel = screen.getByRole("tabpanel");
     expect(within(panel).getByText("事件偏好")).toBeInTheDocument();
+    expect(within(panel).getByText("速览频道")).toBeInTheDocument();
     expect(within(panel).queryByLabelText("默认重点事件数量")).not.toBeInTheDocument();
     expect(within(panel).queryByLabelText("单页最大事件数量")).not.toBeInTheDocument();
     expect(within(panel).queryByLabelText("来源预览数量")).not.toBeInTheDocument();
     expect(within(panel).queryByLabelText("入选原因数量")).not.toBeInTheDocument();
     expect(within(panel).queryByText("每行一条。偏好只影响公开排序，不采集访客行为，也不会硬过滤内容。")).not.toBeInTheDocument();
+    expect(within(panel).queryByText("一级筛选按频道展示，候选内容由来源组圈定；未选择来源组时使用全部来源。")).not.toBeInTheDocument();
+    expect(within(panel).getByText("全部组")).toBeInTheDocument();
+    expect(within(panel).queryByText("全部来源组")).not.toBeInTheDocument();
     expect(within(panel).getByLabelText("加权上限")).toHaveValue(15);
     expect(within(panel).getByLabelText("降权上限")).toHaveValue(20);
 
     await user.clear(within(panel).getByLabelText("最低入选分"));
     await user.type(within(panel).getByLabelText("最低入选分"), "20");
+    vi.stubGlobal("crypto", { randomUUID: () => "test-channel-id" });
+    await user.click(within(panel).getByRole("button", { name: "新增频道" }));
+    let dialog = screen.getByRole("dialog", { name: "新增频道" });
+    const newChannelNameInput = within(dialog).getByLabelText("频道名称");
+    await user.clear(newChannelNameInput);
+    await user.type(newChannelNameInput, "观点实践");
+    await user.selectOptions(within(dialog).getByLabelText("候选来源组"), ["group-1"]);
+    await user.click(within(dialog).getByRole("button", { name: "添加" }));
+    expect(within(panel).getByText("观点实践")).toBeInTheDocument();
+    expect(within(panel).getByText("Core")).toBeInTheDocument();
     await user.click(within(panel).getByRole("button", { name: "新增规则" }));
-    let dialog = screen.getByRole("dialog", { name: "新增加权规则" });
+    dialog = screen.getByRole("dialog", { name: "新增加权规则" });
     await waitFor(() => {
       expect(within(dialog).getByRole("option", { name: "AI Coding (12)" })).toBeInTheDocument();
     });
@@ -1671,6 +1710,22 @@ describe("AdminSettingsPanel", () => {
         body: JSON.stringify({
           config: {
             minRankScore: 20,
+            channels: [
+              {
+                id: "important",
+                name: "重点事件",
+                sourceGroupIds: [],
+                enabled: true,
+                sortOrder: 0,
+              },
+              {
+                id: "channel-test-cha",
+                name: "观点实践",
+                sourceGroupIds: ["group-1"],
+                enabled: true,
+                sortOrder: 1,
+              },
+            ],
           },
           preference: {
             weightedRules: [
@@ -1806,7 +1861,7 @@ describe("AdminSettingsPanel", () => {
             dailyReportCandidateLimit: 80,
             dailyReportOffsetDays: 1,
             dailyReportAutoPublish: true,
-            dailyReportGroupIds: ["group-1"],
+            dailyReportChannelIds: ["important"],
           },
         }),
       ),
@@ -1823,7 +1878,7 @@ describe("AdminSettingsPanel", () => {
     expect(within(taskPanel).queryByText("下次运行")).not.toBeInTheDocument();
     expect(within(taskPanel).getByLabelText("T-")).toHaveValue(0);
     expect(within(taskPanel).getByLabelText("候选内容上限")).toHaveValue(120);
-    expect(within(taskPanel).getByLabelText("日报分组范围")).toHaveValue(["__all_daily_report_groups__"]);
+    expect(within(taskPanel).getByLabelText("日报候选频道")).toHaveValue(["important"]);
 
     await user.click(within(taskPanel).getByLabelText("启用 AI 日报任务"));
     await user.clear(within(taskPanel).getByLabelText("日报 Cron 表达式"));
@@ -1833,7 +1888,7 @@ describe("AdminSettingsPanel", () => {
     await user.clear(within(taskPanel).getByLabelText("候选内容上限"));
     await user.type(within(taskPanel).getByLabelText("候选内容上限"), "80");
     await user.click(within(taskPanel).getByLabelText("生成后自动发布 AI 日报"));
-    await user.selectOptions(within(taskPanel).getByLabelText("日报分组范围"), ["group-1"]);
+    await user.selectOptions(within(taskPanel).getByLabelText("日报候选频道"), ["important"]);
     await user.click(within(taskPanel).getAllByRole("button", { name: "保存配置" })[1]!);
 
     await waitFor(() => {
@@ -1849,7 +1904,7 @@ describe("AdminSettingsPanel", () => {
           dailyReportOffsetDays: 1,
           dailyReportAutoPublish: true,
           dailyReportMaxRetries: 0,
-          dailyReportGroupIds: ["group-1"],
+          dailyReportChannelIds: ["important"],
         }),
       });
     });

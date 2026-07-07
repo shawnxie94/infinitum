@@ -87,7 +87,7 @@ export function EventBriefingDetailModal({ entry, onClose }: EventBriefingDetail
   }
 
   const isCluster = entry.type === "cluster";
-  const statusLabel = entry.isFollowUp ? "新进展" : "新事件";
+  const statusLabel = entry.isFollowUp ? "新进展" : "新内容";
   const primaryOriginalUrl = !isCluster ? entry.items[0]?.originalUrl : null;
   const primaryItemId = !isCluster ? entry.items[0]?.id : null;
   const sourceListId = `event-briefing-items-${buildDomId(entry.type)}-${buildDomId(entry.id)}`;

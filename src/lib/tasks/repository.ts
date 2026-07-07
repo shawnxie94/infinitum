@@ -37,7 +37,7 @@ export async function upsertDefaultIngestionSchedule() {
       dailyReportOffsetDays: DEFAULT_DAILY_REPORT_OFFSET_DAYS,
       dailyReportAutoPublish: false,
       dailyReportMaxRetries: DEFAULT_DAILY_REPORT_MAX_RETRIES,
-      dailyReportGroupIdsJson: "",
+      dailyReportChannelIdsJson: JSON.stringify(["important"]),
       timezone: DEFAULT_SCHEDULE_TIMEZONE,
       nextRunAt: computeNextRunAt({
         cronExpression: DEFAULT_SCHEDULE_CRON_EXPRESSION,
@@ -66,7 +66,7 @@ export async function upsertDefaultDailyReportSchedule() {
       dailyReportOffsetDays: DEFAULT_DAILY_REPORT_OFFSET_DAYS,
       dailyReportAutoPublish: false,
       dailyReportMaxRetries: DEFAULT_DAILY_REPORT_MAX_RETRIES,
-      dailyReportGroupIdsJson: "",
+      dailyReportChannelIdsJson: JSON.stringify(["important"]),
       timezone: DEFAULT_SCHEDULE_TIMEZONE,
       nextRunAt: computeNextRunAt({
         cronExpression: "30 8 * * *",
@@ -95,7 +95,7 @@ export async function upsertDefaultItemCleanupSchedule() {
       dailyReportOffsetDays: DEFAULT_DAILY_REPORT_OFFSET_DAYS,
       dailyReportAutoPublish: false,
       dailyReportMaxRetries: DEFAULT_DAILY_REPORT_MAX_RETRIES,
-      dailyReportGroupIdsJson: "",
+      dailyReportChannelIdsJson: JSON.stringify(["important"]),
       cleanupRetentionDays: DEFAULT_CLEANUP_RETENTION_DAYS,
       timezone: DEFAULT_SCHEDULE_TIMEZONE,
       nextRunAt: computeNextRunAt({

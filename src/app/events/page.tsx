@@ -5,7 +5,6 @@ import { BackToTopButton } from "@/components/ui/back-to-top-button";
 import { PageShell } from "@/components/ui/page-shell";
 import { EVENT_BRIEFING_MAX_PAGE_SIZE } from "@/lib/events/pagination";
 import { getEventBriefing } from "@/lib/events/service";
-import { EVENT_BRIEFING_VIEW_VALUES, type EventBriefingView } from "@/lib/events/types";
 import { listPublicHeaderLinks } from "@/lib/settings/service";
 import {
   buildBreadcrumbListJsonLd,
@@ -43,12 +42,6 @@ function parseOptionalPositiveInteger(value: string | undefined) {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, EVENT_BRIEFING_MAX_PAGE_SIZE) : undefined;
-}
-
-function parseEventBriefingView(value: string | undefined): EventBriefingView {
-  return EVENT_BRIEFING_VIEW_VALUES.includes(value as EventBriefingView)
-    ? (value as EventBriefingView)
-    : "important";
 }
 
 export async function generateMetadata({ searchParams }: EventsPageProps): Promise<Metadata> {
@@ -120,9 +113,9 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
   const selectedDate = getSearchParamValue(resolvedSearchParams, "date") ?? null;
   const page = parsePositiveInteger(getSearchParamValue(resolvedSearchParams, "page"), 1);
   const pageSize = parseOptionalPositiveInteger(getSearchParamValue(resolvedSearchParams, "size"));
-  const view = parseEventBriefingView(getSearchParamValue(resolvedSearchParams, "view"));
+  const channelId = getSearchParamValue(resolvedSearchParams, "channel") ?? null;
   const [briefing, headerLinks] = await Promise.all([
-    getEventBriefing({ date: selectedDate, page, pageSize, view }),
+    getEventBriefing({ date: selectedDate, page, pageSize, channelId }),
     listPublicHeaderLinks(),
   ]);
   const origin = getSiteOrigin();

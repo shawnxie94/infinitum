@@ -87,7 +87,7 @@ Infinitum 生产环境每天约有 300 条资讯进入信息流。当前系统�
 阅读层级：
 
 - `主页`：完整资讯流。
-- `速览`：某一天重要内容的快速入口。一期只包含事件速览；三期扩展为 `事件 / 观点` 二级视图。
+- `速览`：某一天重要内容的快速入口。一期通过可配置频道承载重点事件；后续可继续增加观点实践等频道。
 - `日报`：某一天重要事件的叙事型总结和归档。
 
 公开速览排序语义：
@@ -105,9 +105,9 @@ Infinitum 生产环境每天约有 300 条资讯进入信息流。当前系统�
 | Phase | 目标 | 交付边界 |
 |---|---|---|
 | Phase 1 | 建立可用的公开事件速览 | `/events` 单日重点事件列表、Header `速览` 入口、主页式分页、规则排序、站点级主理人偏好加权。 |
-| Phase 2 | 日报候选池接入事件速览 | 日报候选来自事件速览 `rankScore` Top N；复用现有“候选内容上限”和“日报分组范围”配置；首版保持现有日报模板、输出结构、发布、归档、RSS 和审核流程。 |
+| Phase 2 | 日报候选池接入事件速览 | 日报候选来自所选速览频道的 `rankScore` Top N；复用现有“候选内容上限”，将“日报分组范围”调整为“日报候选频道”；首版保持现有日报模板、输出结构、发布、归档、RSS 和审核流程。 |
 | Phase 2.1 | 管理者行为生成偏好建议 | 记录管理员打开详情、点击原文、手动过滤/隐藏等行为，生成 `tag`、`keyword`、`source_group`、`event_type` 偏好建议；管理员接受后才写入事件偏好。 |
-| Phase 3 | 覆盖高质量博客和新观点 | 在同一 `速览` 入口下增加 `事件 / 观点` 二级视图，独立建设内容类型识别、`ArticleInsightBrief` 和 `insightScore`。 |
+| Phase 3 | 覆盖高质量博客和新观点 | 在同一 `速览` 入口下增加观点实践类频道，独立建设内容类型识别、`ArticleInsightBrief` 和 `insightScore`。 |
 | Phase 4 | 可选增强能力 | 按实际痛点再选择 `EventBrief`、外部证据检索、速览预计算/校准视图、实体追踪或多用户个性化；这些不作为 Phase 2 前置。 |
 
 暂不单独规划“Phase 5 个性化”。当前产品主要是站点主理人自用、公开浏览，因此第一期直接做 **站点级公开偏好**。只有未来出现多用户登录、私有收藏、行为反馈或“我的速览”诉求时，才需要另起行为个性化阶段。
@@ -126,12 +126,12 @@ Infinitum 生产环境每天约有 300 条资讯进入信息流。当前系统�
 
 > 这一天最值得优先了解的事件有哪些？
 
-首屏不做复杂 dashboard，不做多区块看板，不做并列的“多源确认 / 最新进展”内容区。`多源确认`、`最新进展` 保留为排序信号和轻量快速筛选入口，避免用户只能从完整列表里肉眼找。
+首屏不做复杂 dashboard，不做多区块看板，不做并列的“多源确认 / 最新进展”内容区。`多源确认`、`最新进展` 保留为排序信号和卡片状态标签，避免用户只能从完整列表里肉眼找。
 
 一期顶部只保留：
 
 - 日期选择 + `查看`。
-- 紧凑筛选：`重点事件 / 最新进展 / 多源确认`，并在筛选入口显示计数。默认是 `重点事件`，表示按重要性排序后的完整事件速览；`最新进展` 只展示跨日期事件在当天有新增内容的条目；`多源确认` 只展示来源数达到多源阈值的条目。
+- 频道切换：例如 `重点事件`、`观点实践`。频道由后台配置名称和候选来源组，入口展示对应频道的候选数量。
 
 页面结构：
 
@@ -139,10 +139,9 @@ Infinitum 生产环境每天约有 300 条资讯进入信息流。当前系统�
 Header
 
 事件速览
-快速筛选：重点事件 N / 最新进展 U / 多源确认 M
-日期选择 / 查看
+频道：重点事件 N / 观点实践 M      日期选择 / 查看
 
-重点事件
+当前频道
 - 事件卡片
 - 事件卡片
 - 事件卡片
@@ -157,15 +156,15 @@ Header
 
 > 当前日期内有新增内容、可公开展示，并按 `rankScore` 排序后优先展示的事件。
 
-它不是所有事件，也不是所有多源事件。`多源确认`、`有新进展`、`高质量分` 等主要作为排序信号和筛选计数来源；当前列表卡片只展示必要状态和指标，降低阅读负担。
+它不是所有事件，也不是所有多源事件。`多源确认`、`有新进展`、`高质量分` 等主要作为排序信号和状态标签来源；当前列表卡片只展示必要状态和指标，降低阅读负担。
 
-筛选语义：
+状态标签语义：
 
-- `重点事件`：默认视图。展示当天所有达到 `minRankScore` 的候选，并按 `rankScore` 排序。
-- `最新进展`：候选为跨日期 cluster，且选定日期内有新增 item。
-- `多源确认`：候选来源数达到多源阈值；一期阈值为 `sourceCount >= 2`。
+- `新内容`：候选在当前日期内首次出现，或单条内容本身就是当天新增。
+- `新进展`：候选为跨日期 cluster，且选定日期内有新增 item。
+- `多源确认`：候选来源数达到多源阈值；一期阈值为 `sourceCount >= 2`，只作为排序信号和指标，不单独提供筛选页签。
 
-筛选只影响列表和分页总数；快速筛选上的计数保留全量视角。
+频道会影响列表和分页总数；频道计数表示当前日期下各频道达到 `minRankScore` 的候选数量。
 
 第一期重点事件来源：
 
@@ -317,7 +316,7 @@ model ArticleInsightBrief {
 
 第一期只交付能真正减少阅读时间的最小闭环：
 
-- 必做：`/events` 公开列表页、单日日期选择、快速筛选、紧凑事件卡片、分页、Header `速览` nav、站点级偏好配置、规则排序、缓存失效和基础测试。
+- 必做：`/events` 公开列表页、单日日期选择、频道切换、紧凑事件卡片、分页、Header `速览` nav、站点级偏好配置、规则排序、缓存失效和基础测试。
 - 可选：公开 JSON API。若第一版完全 RSC 渲染且分页用链接完成，可以不新增 `/api/events`。
 - 延后：`/events/[entryId]` 独立详情页、时间线、AI brief、外部证据、日报改造、观点速览、行为个性化。第一期使用弹窗详情承载完整摘要和聚合子条目展开。
 
@@ -328,10 +327,10 @@ model ArticleInsightBrief {
 截至 2026-07-03，本地 Docker 运行态按当前实现验收：
 
 - `app` 和 `worker` 容器正常运行，`http://localhost:3001/events` 返回 200。
-- 默认日期为当天；页面展示单日事件速览、快速筛选、日期选择和主页式分页。
+- 默认日期为当天；页面展示单日事件速览、频道切换、日期选择和主页式分页。
 - 列表卡片只展示编号、标题、`新事件 / 新进展`、来源数、条目数和更新时间，不展示长摘要、入选原因或来源预览。
 - 点击标题打开弹窗详情；single 事件只展示事件摘要和外链，cluster 事件的子条目默认折叠，展开按钮文案为 `N 条`。
-- `2026-07-02` 样例数据下分页文案为 `每页显示 30 条，共 59 条`，跳转页码和 `30 / 50 / 100` 分页数量切换可用，并保留 `date`、`view`、`size` query。
+- `2026-07-02` 样例数据下分页文案为 `每页显示 30 条，共 59 条`，跳转页码和 `30 / 50 / 100` 分页数量切换可用，并保留 `date`、`channel`、`size` query。
 - HTTP 响应仍由 Next 动态渲染输出 `no-store`，一期接受服务层 `EventBriefingCache` 作为主要缓存机制。
 
 ## Proposed Design
@@ -341,7 +340,7 @@ model ArticleInsightBrief {
 `src/app/events/page.tsx`
 
 - 新增公开事件速览页面。
-- 解析 `date`、`view`、`page`、`size` query。
+- 解析 `date`、`channel`、`page`、`size` query。
 - 获取公开 header links。
 - 调用事件速览服务读取数据。
 - 使用 `PageShell` 保持和 `/daily` 风格一致。
@@ -350,7 +349,7 @@ model ArticleInsightBrief {
 `src/components/events/event-briefing-list.tsx`
 
 - 客户端或服务端友好的列表组件。
-- 渲染日期选择、快速筛选、重点事件列表、分页。
+- 渲染频道切换、日期选择、重点事件列表、分页。
 - 保持卡片统一规格和紧凑密度。
 
 `src/components/events/event-briefing-card.tsx`
@@ -365,8 +364,8 @@ model ArticleInsightBrief {
 - 解析日期窗口。
 - 调用 repository 获取候选。
 - 计算 `baseRankScore`、站点级 `curatorBoost/curatorPenalty` 和最终 `rankScore`。
-- 应用 `minRankScore`、快速筛选、最大分页大小和排序。
-- 按日期和视图缓存完整排序结果，翻页时只做内存切片，避免每次翻页重复查库和重算。
+- 应用 `minRankScore`、频道候选来源组、最大分页大小和排序。
+- 按日期和频道缓存完整排序结果，翻页时只做内存切片，避免每次翻页重复查库和重算。
 
 `src/lib/events/preferences.ts`
 
@@ -514,7 +513,7 @@ model BriefingPreferenceSuggestion {
 第一期可以仅使用 RSC 直读服务，不一定新增公开 JSON API。若组件需要客户端分页，则新增：
 
 ```http
-GET /api/events?date=2026-06-30&page=1&size=30&view=updates
+GET /api/events?date=2026-06-30&page=1&size=30&channel=important
 ```
 
 Query：
@@ -522,7 +521,7 @@ Query：
 | Parameter | Type | Default | Notes |
 |---|---:|---:|---|
 | `date` | `YYYY-MM-DD` | 今天 | 按站点时区计算当天入库窗口。 |
-| `view` | `important \| updates \| multi-source` | `important` | 快速筛选视图。`important` 为默认重点排序；`updates` 为最新进展；`multi-source` 为多源确认。 |
+| `channel` | string | `important` | 速览频道 ID，默认使用重点事件频道。 |
 | `page` | integer | 1 | 从 1 开始。 |
 | `size` | integer | 30 | 每页事件数量，参考主页分页设计，当前可选 30 / 50 / 100。 |
 
@@ -531,12 +530,27 @@ Response DTO：
 ```json
 {
   "date": "2026-06-30",
-  "view": "important",
+  "channel": {
+    "id": "important",
+    "name": "重点事件",
+    "sourceGroupIds": [],
+    "enabled": true,
+    "sortOrder": 0,
+    "count": 96
+  },
+  "channels": [
+    {
+      "id": "important",
+      "name": "重点事件",
+      "sourceGroupIds": [],
+      "enabled": true,
+      "sortOrder": 0,
+      "count": 96
+    }
+  ],
   "generatedAt": "2026-06-30T14:32:00.000Z",
   "summary": {
-    "eventCount": 96,
-    "multiSourceCount": 18,
-    "updatedEventCount": 11
+    "eventCount": 96
   },
   "pagination": {
     "page": 1,
@@ -607,10 +621,10 @@ rankScore =
 
 ### Status and Display Policy
 
-第一期公开列表不展示完整排序解释或 badge 列表，避免卡片信息过载。服务层只保留当前 UI 和筛选需要的状态字段：
+第一期公开列表不展示完整排序解释或 badge 列表，避免卡片信息过载。服务层只保留当前 UI 需要的状态字段：
 
-- `isFollowUp`：cluster 早于当天存在，且当天新增 item，用于展示 `新进展` 和 `最新进展` 快速筛选。
-- `sourceCount >= 2`：用于 `多源确认` 快速筛选。
+- `isFollowUp`：cluster 早于当天存在，且当天新增 item，用于展示 `新进展` 状态标签。
+- `sourceCount >= 2`：用于多源确认排序信号和指标。
 
 当前列表只展示 `新事件 / 新进展` 状态标签，以及来源数、条目数、更新时间。排序解释和证据表达放到后续可选 `EventBrief`，不在一期 DTO 中保留未使用字段。
 
@@ -810,7 +824,7 @@ cluster 统计：
 
 - 日报候选来源迁移到 `EventBriefingService`，复用当天满足 `minRankScore` 的事件速览排序结果。
 - 复用现有“候选内容上限”配置作为 Top N：从事件速览 `rankScore` 排名前 N 的事件中构造日报候选。
-- 复用现有“日报分组范围”配置作为候选来源过滤条件；选择全部分组时使用所有公开来源。
+- 使用“日报候选频道”配置作为候选范围：频道由速览配置定义候选来源组，日报任务选择一个或多个频道。
 - 保留现有日报模板和栏目，降低内容风格、后台审核、历史归档和 RSS 的兼容风险。
 - 保留现有候选快照、inputHash、候选不足跳过、AI 调用统计和 task monitor 行为。
 
@@ -819,17 +833,18 @@ cluster 统计：
 ```text
 日报候选 =
   选定日期内
-  + 符合“日报分组范围”的公开来源
+  + 属于“日报候选频道”的公开来源
   + 满足事件速览 minRankScore
   + 按 rankScore 排序
   + 取前 “候选内容上限” 个事件
 ```
 
-分组范围处理：
+频道范围处理：
 
-- 候选资格：事件当天新增内容中至少有一个 item 来自选定来源组。
-- 输入来源：传给日报模型的 source registry 只包含选定来源组内的 item/source。
-- 展示标题和摘要：可继续使用 cluster title/summary 作为事件级表达，但引用来源必须限定在日报分组范围内。
+- 候选资格：事件当天新增内容中至少有一个 item 命中所选频道的候选来源组；如果频道未配置来源组，则表示全部公开来源。
+- 多频道处理：合并多个频道的候选，按 `type:id` 去重，再按 `rankScore` 排序取 Top N。
+- 输入来源：传给日报模型的 source registry 只包含所选频道范围内的 item/source；若任一所选频道为全部来源，则 source registry 使用全部公开来源。
+- 展示标题和摘要：继续使用事件速览 entry 的标题、摘要和 `rankScore`，确保日报候选和公开速览排序一致。
 
 Top N 配置：
 
@@ -1013,7 +1028,7 @@ model ExternalEvidenceSource {
 Header
 
 事件速览
-重点事件 N / 最新进展 U / 多源确认 M      日期选择 / 查看
+重点事件 N / 观点实践 M                  日期选择 / 查看
 
 重点事件
 #01  OpenAI 发布新的 Agent 工具链能力        5 来源 12 条 13:50 更新
@@ -1031,7 +1046,7 @@ Header
 - 不做视觉层级突出前几条；重要性只由排序体现。
 - 所有卡片同一规格，便于快速扫读。
 - 移动端单列；桌面也以单列或紧凑双列评估，但第一期优先单列以保持日报和主页阅读连续性。
-- 第一期不展示 `事件 / 观点` 二级视图；三期观点速览上线时再增加二级视图，并复用相同页面壳和日期切换。
+- 第一期不展示二级筛选；三期观点速览上线时优先作为新增频道接入，并复用相同页面壳和日期切换。
 
 ### Card Density
 
@@ -1218,7 +1233,7 @@ npm run build
 
 - `官方来源` 是否已有可靠 source metadata 支撑？当前一期不展示，未来如补 source metadata 再考虑。
 - 日报候选改用事件速览 Top N 后，现有默认“候选内容上限”是否需要从 120 下调到 30-50？命名暂不调整。
-- 事件速览候选服务如何在不影响公开 `/events` 默认结果的前提下应用“日报分组范围”？
+- 事件速览候选服务如何在不影响公开 `/events` 默认频道结果的前提下支持多频道合并？当前方案为日报专用入口按频道 ID 合并去重。
 - 三期观点速览的主 label 是否使用 `观点`、`深读` 还是 `博客`？本 TRD 推荐 `观点`，因为它覆盖博客、教程、研究笔记和新观点。
 - `contentKind` 是直接落在 `Item` 上，还是放在 `ArticleInsightBrief` 中作为 AI 派生结果？三期实施前需要结合迁移成本决定。
 - 后续如重新启动 `EventBrief`，prompt 应新增独立 `event_brief` 类型，不复用 cluster summary。
@@ -1243,11 +1258,11 @@ npm run build
 
 二期日报候选池切片：
 
-1. 为 `src/lib/events/service.ts` 增加日报候选读取入口，支持 date、limit 和 groupIds。
+1. 为 `src/lib/events/service.ts` 增加日报候选读取入口，支持 date、limit 和 channelIds。
 2. 复用现有“候选内容上限”作为 limit，从事件速览 `rankScore` Top N 读取候选，不新增 Top N 配置。
-3. 复用现有“日报分组范围”作为来源过滤条件，确保 source registry 只引用选定来源组内的 item/source。
+3. 将“日报分组范围”改为“日报候选频道”，由速览频道的来源组定义候选范围；多频道合并去重后再截断 Top N。
 4. 将事件速览 entry 转换为现有 `DailyReportCandidate`，保持 `provider.generateDailyReport()` 输入结构、prompt template 和 validator 基本不变。
-5. `candidateScore` 映射自 `rankScore`，`candidateSnapshot` 标记候选来自事件速览，`inputHash` 纳入候选来源、rankScore、limit 和 groupIds。
+5. `candidateScore` 映射自 `rankScore`，`candidateSnapshot` 标记候选来自事件速览，`inputHash` 纳入候选频道、候选来源、rankScore 和 limit。
 6. 保留旧 `listDailyReportCandidates()` 作为兼容 fallback 或回滚路径。
 7. 验证日报生成、跳过逻辑、候选快照、sourceIds 校验、发布、归档、RSS、Markdown 导出和 admin 重新生成流程。
 
@@ -1257,7 +1272,7 @@ npm run build
 2. 新增 `insightScore` 和观点入选原因生成逻辑，不复用事件 `rankScore`。
 3. 新增 `ArticleInsightBrief` schema、task kind、AI provider 方法、prompt 和质量校验。
 4. ingestion 成功后对当天疑似长文/观点候选 enqueue insight brief 任务。
-5. `/events` 或 `/briefing` 页面增加 `事件 / 观点` 二级视图，Header 仍只保留 `速览`。
+5. `/events` 页面增加观点实践类速览频道，Header 仍只保留 `速览`。
 6. 新增观点卡片组件，展示核心观点、值得读原因、目标读者、阅读时间和入选原因。
 7. 补充观点速览 repository、service、component 和任务测试。
 
