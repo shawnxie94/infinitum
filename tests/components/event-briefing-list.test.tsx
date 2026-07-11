@@ -265,6 +265,8 @@ describe("EventBriefingList", () => {
 
     const dialog = screen.getByRole("dialog", { name: "事件详情" });
     expect(within(dialog).getAllByText("Agent SDK")[0]).toHaveClass("font-semibold");
+    expect(within(dialog).getByText("来源: 5 个")).toBeInTheDocument();
+    expect(within(dialog).getByText("条目: 12 条")).toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: "文档" })).toHaveAttribute("href", "/docs");
     expect(within(dialog).getByText("npm").tagName.toLowerCase()).toBe("code");
     expect(within(dialog).getByRole("button", { name: "4 条" })).toHaveAttribute("aria-expanded", "false");
@@ -317,6 +319,9 @@ describe("EventBriefingList", () => {
 
     const dialog = screen.getByRole("dialog", { name: "事件详情" });
     expect(within(dialog).getByText("单篇")).toBeInTheDocument();
+    expect(within(dialog).getByText("来源: Tech Media")).toBeInTheDocument();
+    expect(within(dialog).queryByText("来源: 1 个")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("条目: 1 条")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: "单篇重点事件" })).toHaveAttribute(
       "href",
       "https://example.com/single",
@@ -324,6 +329,31 @@ describe("EventBriefingList", () => {
     expect(within(dialog).queryByRole("button", { name: /条/ })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("link", { name: "单篇原文标题" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText("单篇原文摘要。")).not.toBeInTheDocument();
+  });
+
+  it("shows the source name for a single-source cluster", () => {
+    const entry = buildBriefing().entries[0]!;
+
+    renderEventBriefingList(buildBriefing({
+      entries: [
+        {
+          ...entry,
+          sourceCount: 1,
+          itemCount: 2,
+          items: entry.items.slice(0, 2).map((item) => ({
+            ...item,
+            sourceName: "OpenAI Blog",
+          })),
+        },
+      ],
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "OpenAI 发布新的 Agent 工具链能力" }));
+
+    const dialog = screen.getByRole("dialog", { name: "事件详情" });
+    expect(within(dialog).getByText("来源: OpenAI Blog")).toBeInTheDocument();
+    expect(within(dialog).queryByText("来源: 1 个")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("条目: 2 条")).toBeInTheDocument();
   });
 
   it("renders an empty state when no events are available", () => {

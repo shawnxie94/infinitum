@@ -90,6 +90,9 @@ export function EventBriefingDetailModal({ entry, onClose }: EventBriefingDetail
   const statusLabel = entry.isFollowUp ? "新进展" : "新内容";
   const primaryOriginalUrl = !isCluster ? entry.items[0]?.originalUrl : null;
   const primaryItemId = !isCluster ? entry.items[0]?.id : null;
+  const sourceLabel = entry.sourceCount === 1
+    ? entry.items.find((item) => item.sourceName.trim())?.sourceName ?? "1 个"
+    : `${entry.sourceCount} 个`;
   const sourceListId = `event-briefing-items-${buildDomId(entry.type)}-${buildDomId(entry.id)}`;
   const toggleExpanded = () => setExpanded((current) => !current);
   const handleContentClick = (event: MouseEvent<HTMLDivElement>) => {
@@ -174,8 +177,10 @@ export function EventBriefingDetailModal({ entry, onClose }: EventBriefingDetail
                 <span className={accentBadgeClassName}>{entry.type === "cluster" ? "聚合" : "单篇"}</span>
                 <span className={accentBadgeClassName}>{statusLabel}</span>
                 <span className={neutralBadgeClassName}>{entry.rankScore}</span>
-                <span className={metaTextClassName}>{formatMetaLabel("来源", `${entry.sourceCount} 个`)}</span>
-                <span className={metaTextClassName}>{formatMetaLabel("条目", `${entry.itemCount} 条`)}</span>
+                <span className={metaTextClassName}>{formatMetaLabel("来源", sourceLabel)}</span>
+                {entry.itemCount > 1 ? (
+                  <span className={metaTextClassName}>{formatMetaLabel("条目", `${entry.itemCount} 条`)}</span>
+                ) : null}
                 <span className={metaTextClassName}>{formatMetaLabel("更新", formatDateTime(entry.latestCreatedAt))}</span>
               </div>
               <div className={summaryClassName}>
