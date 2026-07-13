@@ -4,9 +4,7 @@ import {
   DEFAULT_CLUSTER_MERGE_PROMPT,
   DEFAULT_CLUSTER_SUMMARY_PROMPT,
   DEFAULT_DAILY_REPORT_PROMPT,
-  DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT,
-  DEFAULT_ITEM_ANALYSIS_PROMPT,
-  DEFAULT_ITEM_SUMMARY_PROMPT,
+  DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { DEFAULT_SOURCE_CONFIGS } from "@/config/sources";
 import type { SourceConfig } from "@/lib/feed/types";
@@ -45,34 +43,14 @@ export type RuntimeConfig = {
     customHeaders?: Record<string, string>;
   };
   prompts: {
-    itemSummary: string;
-    itemAnalysis: string;
-    itemAggregation: string;
+    itemUnderstanding: string;
     clusterSummary: string;
     clusterMatch: string;
     clusterMerge: string;
     dailyReport: string;
   };
   selectedPromptConfigs?: {
-    itemSummary: {
-      name: string;
-      systemPrompt: string;
-      promptTemplate: string;
-      temperature?: number | null;
-      maxTokens?: number | null;
-      topP?: number | null;
-      modelApi?: RuntimeConfig["modelApi"] | null;
-    };
-    itemAnalysis: {
-      name: string;
-      systemPrompt: string;
-      promptTemplate: string;
-      temperature?: number | null;
-      maxTokens?: number | null;
-      topP?: number | null;
-      modelApi?: RuntimeConfig["modelApi"] | null;
-    };
-    itemAggregation: {
+    itemUnderstanding: {
       name: string;
       systemPrompt: string;
       promptTemplate: string;
@@ -150,9 +128,7 @@ export function getRuntimeConfig(): RuntimeConfig {
       customHeaders: {},
     },
     prompts: {
-      itemSummary: DEFAULT_ITEM_SUMMARY_PROMPT,
-      itemAnalysis: DEFAULT_ITEM_ANALYSIS_PROMPT,
-      itemAggregation: DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT,
+      itemUnderstanding: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
       clusterSummary: DEFAULT_CLUSTER_SUMMARY_PROMPT,
       clusterMatch: DEFAULT_CLUSTER_MATCH_PROMPT,
       clusterMerge: DEFAULT_CLUSTER_MERGE_PROMPT,

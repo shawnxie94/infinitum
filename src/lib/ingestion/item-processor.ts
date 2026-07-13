@@ -2,7 +2,7 @@ import type { Item } from "@prisma/client";
 
 import { AGGREGATION_PARSE_STATUS, RETRIABLE_AGGREGATION_PARSE_STATUSES } from "@/lib/aggregation/status";
 import { persistAggregationChildItems } from "@/lib/aggregation/persist";
-import { normalizeStoredSummary, requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
+import { normalizeStoredSummary } from "@/lib/ai/summary-quality";
 import type { AiEventSignature } from "@/lib/ai/provider";
 import type { ClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { assignItemToCluster } from "@/lib/clusters/service";
@@ -16,9 +16,9 @@ import { shouldSkipJinaForUrl } from "@/lib/ingestion/article";
 import { buildDedupeKeys, shouldFetchFullText } from "@/lib/ingestion/dedupe";
 import { evaluateRuleFilter } from "@/lib/ingestion/filtering";
 import {
-  buildAggregationParsingInput,
-  buildItemSummaryInput,
-} from "@/lib/ingestion/model-input";
+  buildItemUnderstandingInput,
+  ITEM_UNDERSTANDING_VERSION,
+} from "@/lib/ingestion/content-input";
 import { replaceItemTags } from "@/lib/tags/service";
 import type {
   ParsedFeedItem,
@@ -122,32 +122,6 @@ function appendIssue(issues: string[], error: unknown, fallbackMessage: string) 
   issues.push(error instanceof Error ? error.message : fallbackMessage);
 }
 
-function getErrorMessage(error: unknown, fallbackMessage: string) {
-  return error instanceof Error ? error.message : fallbackMessage;
-}
-
-function classifySummaryFailure(error: unknown): NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["summaryFailureReason"]> {
-  const message = getErrorMessage(error, "").toLowerCase();
-  if (message.includes("empty")) return "empty_response";
-  if (message.includes("source text") || message.includes("source-like") || message.includes("resembles source")) return "source_like";
-  if (message.includes("json") || message.includes("invalid") || message.includes("expected")) return "invalid_response";
-  return "other";
-}
-
-function classifyAggregationFailure(error: unknown): NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["aggregationFailureReason"]> {
-  const message = getErrorMessage(error, "").toLowerCase();
-  if (message.includes("no events")) return "no_events";
-  if (message.includes("json") || message.includes("invalid") || message.includes("expected")) return "invalid_response";
-  return "other";
-}
-
-function classifyAnalysisFailure(error: unknown): NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["analysisFailureReason"]> {
-  const message = getErrorMessage(error, "").toLowerCase();
-  if (message.includes("json") || message.includes("invalid") || message.includes("expected")) return "invalid_response";
-  if (message.includes("timeout") || message.includes("rate") || message.includes("429") || message.includes("503") || message.includes("upstream")) return "provider_error";
-  return "other";
-}
-
 async function replaceItemTagsSafely(itemId: string, tags: unknown, issues: string[]) {
   try {
     await replaceItemTags(itemId, tags);
@@ -161,8 +135,6 @@ function createItemProcessingTimings() {
     totalMs: 0,
     fullTextFetchMs: 0,
     ruleFilterMs: 0,
-    summaryMs: 0,
-    aggregationMs: 0,
     analysisMs: 0,
     clusterAssignmentMs: 0,
     dbWriteMs: 0,
@@ -230,22 +202,6 @@ function readStoredEventSignature(item?: {
   };
 }
 
-function hasAnalysisInputsChanged(
-  existing: {
-    originalTitle: string;
-    publishedAt: Date;
-  },
-  next: {
-    originalTitle: string;
-    publishedAt: Date;
-  },
-) {
-  return (
-    existing.originalTitle !== next.originalTitle ||
-    existing.publishedAt.getTime() !== next.publishedAt.getTime()
-  );
-}
-
 function hasRetriableAggregationParse(existing?: {
   aggregationParseStatus?: string | null;
   isAggregation?: boolean | null;
@@ -255,7 +211,7 @@ function hasRetriableAggregationParse(existing?: {
   }
 
   // Items whose aggregation parse failed or was detected-but-not-parsed in a
-  // previous run must be re-processed so the next run can retry parseAggregation.
+  // previous run must be re-processed so the next unified understanding can retry it.
   // Without this guard, the "reused existing" early return would silently skip
   // them and the failure would never recover.
   if (existing.aggregationParseStatus && (RETRIABLE_AGGREGATION_PARSE_STATUSES as readonly string[]).includes(existing.aggregationParseStatus)) {
@@ -288,15 +244,25 @@ function isCompletedExistingItem(existing?: {
   return existing.status === "processed" && hasSucceededSummary(existing) && hasSucceededAnalysis(existing);
 }
 
-function canReuseExistingByUrl(
+function canReuseExistingUnderstanding(
   existing: Item | null | undefined,
   lookup: PreparedFeedItemLookup | null,
 ) {
+  if (!existing || !lookup || existing.urlHash !== lookup.dedupeKeys.urlHash) {
+    return false;
+  }
+
+  const input = buildItemUnderstandingInput({
+    fullText: existing.fullText,
+    rssContent: lookup.rssContent,
+    rssExcerpt: lookup.rssExcerpt,
+    originalTitle: lookup.originalTitle,
+  });
+
   return Boolean(
-    existing &&
-      lookup &&
-      existing.urlHash === lookup.dedupeKeys.urlHash &&
-      isCompletedExistingItem(existing),
+    isCompletedExistingItem(existing) &&
+      existing.understandingVersion === ITEM_UNDERSTANDING_VERSION &&
+      existing.understandingInputHash === input.inputHash,
   );
 }
 
@@ -332,9 +298,9 @@ export function estimatePreparedItemAiWork(
   lookup: PreparedFeedItemLookup | null,
   existing: Item | null | undefined,
   blacklist: string[],
-): { summary: boolean; analysis: boolean } {
+): boolean {
   if (!lookup || !preparedItem.aiParsingEnabled) {
-    return { summary: false, analysis: false };
+    return false;
   }
 
   const initialFilterMatch = evaluateRuleFilter({
@@ -346,19 +312,14 @@ export function estimatePreparedItemAiWork(
   });
 
   if (initialFilterMatch.filtered) {
-    return { summary: false, analysis: false };
+    return false;
   }
 
-  if (canReuseExistingByUrl(existing, lookup)) {
-    return { summary: false, analysis: false };
+  if (canReuseExistingUnderstanding(existing, lookup)) {
+    return false;
   }
 
-  const inputsChanged = existing ? hasAnalysisInputsChanged(existing, lookup) : true;
-
-  return {
-    summary: !Boolean(existing && !inputsChanged && hasSucceededSummary(existing)),
-    analysis: !Boolean(existing && !inputsChanged && hasSucceededAnalysis(existing)),
-  };
+  return true;
 }
 
 export async function processFeedItem({
@@ -421,12 +382,6 @@ export async function processFeedItem({
       : existingItem;
   const author = getFeedItemAuthor(item);
   const isNew = !existing;
-  const analysisInputsChanged = existing
-    ? hasAnalysisInputsChanged(existing, {
-        originalTitle,
-        publishedAt,
-      })
-    : true;
 
   let fullText = existing?.fullText ?? null;
   let translatedTitle = existing?.translatedTitle ?? null;
@@ -449,26 +404,32 @@ export async function processFeedItem({
   let fullTextFetched = false;
   let summaryCompleted = false;
   let summaryFailed = false;
-  let summaryFailureReason: NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["summaryFailureReason"]> | undefined;
   let analysisCompleted = false;
   let analysisFailed = false;
-  let analysisFailureReason: NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["analysisFailureReason"]> | undefined;
   let aggregationParsed = false;
   let aggregationParseFailed = false;
-  let aggregationFailureReason: NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["aggregationFailureReason"]> | undefined;
   let aggregationEventCount = 0;
-  // If a previous run detected this item as aggregation but the parse then
-  // failed (or never finished), the DB isAggregation flag was reset to false on
-  // the failure path. Recover the original detection so parseAggregation is
-  // re-attempted instead of silently degraded again on this run. Only honor
-  // the recovery when this source still has aggregation detection enabled,
-  // otherwise an admin who turned the flag off would still see retries fire.
+  const aggregationChildClusterIds = new Set<string>();
+  const clusterAssignmentMetrics: NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["clusterAssignment"]> = {
+    exactMatch: 0,
+    cheapRankDirect: 0,
+    aiMatch: 0,
+    skippedIncompleteSignature: 0,
+    newCluster: 0,
+  };
+  let hasClusterAssignmentMetrics = false;
+  // A detected or failed aggregation parse must force another unified
+  // understanding call. Preserve the prior aggregation flag until a valid new
+  // aggregation result is available, so a transient model failure cannot expose
+  // the parent as a regular feed item while its existing children are still live.
   let isAggregation =
     (existing?.isAggregation ?? false) ||
     (aggregationDetectionEnabled && hasRetriableAggregationParse(existing));
   let aggregationCheckedAt: Date | null = existing?.aggregationCheckedAt ?? null;
   let aggregationParseStatus: string | null = existing?.aggregationParseStatus ?? null;
   let storedItemId = existing?.id ?? null;
+  let understandingInputHash = existing?.understandingInputHash ?? null;
+  let understandingVersion = existing?.understandingVersion ?? null;
   const issues: string[] = [];
   const processingStartedAt = Date.now();
   const timings = createItemProcessingTimings();
@@ -477,13 +438,8 @@ export async function processFeedItem({
     return timings;
   };
   const contentForFullTextDecision = fullText || rssContent || rssExcerpt || "";
-  const canReuseExistingAnalysis = Boolean(
-    canReuseExistingByUrl(existing, lookup) ||
-      (existing &&
-        !analysisInputsChanged &&
-        hasSucceededSummary(existing) &&
-        hasSucceededAnalysis(existing) &&
-        isCompletedExistingItem(existing)),
+  const canReuseExistingUnderstandingResult = Boolean(
+    canReuseExistingUnderstanding(existing, lookup),
   );
   const initialRuleFilterStartedAt = Date.now();
   const initialRuleFilter = evaluateRuleFilter({
@@ -555,7 +511,7 @@ export async function processFeedItem({
     };
   }
 
-  if (canReuseExistingAnalysis && existing) {
+  if (canReuseExistingUnderstandingResult && existing) {
     const stored = existing;
 
     return {
@@ -624,72 +580,68 @@ export async function processFeedItem({
     moderationDetail = ruleFilter.detail;
   } else if (aiParsingEnabled) {
     const translateTitle = shouldTranslateTitle(originalTitle);
-    const summarySourceText = buildItemSummaryInput(fullText || rssContent || rssExcerpt || originalTitle) || originalTitle;
-    const canReuseExistingSummary = Boolean(existing && !analysisInputsChanged && hasSucceededSummary(existing));
-    const canReuseExistingCompletedAnalysis = Boolean(existing && !analysisInputsChanged && hasSucceededAnalysis(existing));
+    const understandingInput = buildItemUnderstandingInput({
+      fullText,
+      rssContent,
+      rssExcerpt,
+      originalTitle,
+    });
+    const understandingStartedAt = Date.now();
 
-    if (canReuseExistingSummary) {
-      summaryText = normalizeStoredSummary(existing?.summaryText) || buildFallbackSummary(rssExcerpt);
-      summaryStatus = "succeeded";
-    } else {
-      const summaryStartedAt = Date.now();
-      try {
-        const summaryOutput = await aiProvider.summarizeItem(summarySourceText, {
-          title: originalTitle,
-          sourceName,
-        });
-        addElapsed(timings, "summaryMs", summaryStartedAt);
+    try {
+      const understanding = await aiProvider.understandItem(understandingInput.text, {
+        title: originalTitle,
+        sourceName,
+        translateTitle,
+      });
+      addElapsed(timings, "analysisMs", understandingStartedAt);
+      understandingInputHash = understandingInput.inputHash;
+      understandingVersion = ITEM_UNDERSTANDING_VERSION;
 
-        summaryText = requireUsableGeneratedSummary(summaryOutput.summary, summarySourceText);
-        isAggregation = aggregationDetectionEnabled && summaryOutput.isAggregation === true;
-        aggregationCheckedAt = aggregationDetectionEnabled ? new Date() : null;
-        aggregationParseStatus = aggregationDetectionEnabled
-          ? isAggregation ? AGGREGATION_PARSE_STATUS.detected : AGGREGATION_PARSE_STATUS.notAggregation
-          : null;
-        summaryCompleted = true;
-        summaryStatus = "succeeded";
-      } catch (error) {
-        addElapsed(timings, "summaryMs", summaryStartedAt);
-        appendIssue(issues, error, "Unknown item summary error");
-        summaryFailed = true;
-        summaryFailureReason = classifySummaryFailure(error);
-        summaryStatus = "failed";
-        summaryText = buildFallbackSummary(rssExcerpt);
-      }
-    }
+      summaryText = understanding.diagnostics.summaryValid
+        ? normalizeStoredSummary(understanding.summary)
+        : buildFallbackSummary(rssExcerpt);
+      summaryStatus = understanding.diagnostics.summaryValid ? "succeeded" : "failed";
+      summaryCompleted = understanding.diagnostics.summaryValid;
+      summaryFailed = !understanding.diagnostics.summaryValid;
 
-
-    let aggregationSucceeded = false;
-    if (isAggregation) {
-      // Aggregation items skip enrichContent and route through parseAggregation.
-      // parseAggregation produces both sub-events and a main event signature that fills Item.event*.
-      // Sub-events are now persisted as full child Item rows (one per event) so they appear
-      // in the main feed, FTS, and cluster pipeline. The parent is hidden from the feed by
-      // buildFeedEntryCandidatesCte's isAggregation=false filter.
-      const aggregationStartedAt = Date.now();
-      let aggregationMeasured = false;
-      try {
-        const aggregationSourceText = buildAggregationParsingInput(fullText || rssContent || rssExcerpt || originalTitle) || originalTitle;
-        const aggregationResult = await aiProvider.parseAggregation(aggregationSourceText, {
-          title: originalTitle,
-          sourceName,
-        });
-        addElapsed(timings, "aggregationMs", aggregationStartedAt);
-        aggregationMeasured = true;
-        const mainEventSig = aggregationResult.mainEvent;
-        const events = aggregationResult.events ?? [];
-        if (events.length === 0) {
-          throw new Error("Aggregation parsing returned no events");
+      if (understanding.diagnostics.analysisValid) {
+        if (translateTitle) {
+          translatedTitle = understanding.translatedTitle?.trim() || originalTitle;
         }
+        moderationStatus = understanding.moderationStatus === "restored" ? "allowed" : understanding.moderationStatus;
+        moderationReason = understanding.moderationReason;
+        moderationDetail = understanding.moderationDetail;
+        qualityScore = understanding.qualityScore;
+        qualityRationale = understanding.qualityRationale;
+        eventSignature = understanding.eventSignature;
+        itemTags = understanding.tags;
+      }
+      analysisStatus = understanding.diagnostics.analysisValid ? "succeeded" : "failed";
+      analysisCompleted = understanding.diagnostics.analysisValid;
+      analysisFailed = !understanding.diagnostics.analysisValid;
 
-        // 1. Pre-upsert the parent so we can use its id as parentItemId.
-        //    Final upsert below will overwrite with complete fields.
+      aggregationCheckedAt = aggregationDetectionEnabled ? new Date() : null;
+      if (aggregationDetectionEnabled && understanding.diagnostics.aggregationValid) {
+        isAggregation = Boolean(
+          moderationStatus !== "filtered" && understanding.aggregation.isAggregation,
+        );
+      }
+      aggregationParseStatus = aggregationDetectionEnabled
+        ? understanding.diagnostics.aggregationValid
+          ? isAggregation ? AGGREGATION_PARSE_STATUS.detected : AGGREGATION_PARSE_STATUS.notAggregation
+          : AGGREGATION_PARSE_STATUS.failed
+        : null;
+
+      if (aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid) {
+        aggregationParseFailed = true;
+      }
+
+      if (isAggregation) {
+        const events = understanding.aggregation.events;
         const preUpsertStartedAt = Date.now();
         const preUpsert = await upsertItem(
-          {
-            id: existing?.id,
-            urlHash: dedupeKeys.urlHash,
-          },
+          { id: existing?.id, urlHash: dedupeKeys.urlHash },
           {
             sourceId,
             originalUrl,
@@ -706,34 +658,33 @@ export async function processFeedItem({
             language: shouldTranslateTitle(originalTitle) ? "en" : "unknown",
             status,
             summaryStatus,
-            analysisStatus: "pending",
+            analysisStatus,
             filterReason,
             moderationStatus,
             moderationReason,
             moderationDetail,
-            qualityScore: 50,
-            qualityRationale: "聚合内容拆条中",
-            eventType: null,
-            eventSubject: null,
-            eventAction: null,
-            eventObject: null,
-            eventDate: null,
+            qualityScore,
+            qualityRationale,
+            eventType: eventSignature?.eventType ?? null,
+            eventSubject: eventSignature?.eventSubject ?? null,
+            eventAction: eventSignature?.eventAction ?? null,
+            eventObject: eventSignature?.eventObject ?? null,
+            eventDate: eventSignature?.eventDate ?? null,
             isAggregation: true,
             aggregationCheckedAt,
             aggregationParseStatus: AGGREGATION_PARSE_STATUS.detected,
+            understandingInputHash,
+            understandingVersion,
             parentItemId: null,
-            aiProcessedAt: null,
-            clusterId: existing?.clusterId ?? null,
-            manualClusterAssignedAt: existing?.manualClusterAssignedAt ?? null,
+            aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
+            clusterId: null,
+            manualClusterAssignedAt: null,
             errorMessage: null,
           },
         );
         addElapsed(timings, "dbWriteMs", preUpsertStartedAt);
         storedItemId = preUpsert.id;
 
-        // 2. Persist each parsed event as a full child Item inside a single transaction.
-        //    The transaction guarantees that an aggregation parent always has either 0 or
-        //    all N child items; partial states can't be observed by readers.
         const childPersistStartedAt = Date.now();
         const { childItemIds } = await persistAggregationChildItems({
           sourceId,
@@ -743,137 +694,48 @@ export async function processFeedItem({
         });
         addElapsed(timings, "dbWriteMs", childPersistStartedAt);
 
-        // 3. Assign each child to a cluster. Done outside the upsert transaction because
-        //    assignItemToCluster acquires its own window-level lock and may invoke AI for
-        //    cluster matching. Failures here are non-fatal: the child item exists, and the
-        //    batch-level cluster_finalize pass will recompute affected clusters.
         for (const childId of childItemIds) {
           const childClusterAssignmentStartedAt = Date.now();
           try {
-            await assignItemToCluster(childId, {
+            const assignment = await assignItemToCluster(childId, {
               aiProvider,
               coordinator: clusterAssignmentCoordinator,
               aggregationEnabled: true,
             });
-            addElapsed(timings, "clusterAssignmentMs", childClusterAssignmentStartedAt);
+            hasClusterAssignmentMetrics = true;
+            clusterAssignmentMetrics.exactMatch += assignment.matchSource === "exact_match" ? 1 : 0;
+            clusterAssignmentMetrics.cheapRankDirect += assignment.matchSource === "cheap_rank_direct" ? 1 : 0;
+            clusterAssignmentMetrics.aiMatch += assignment.matchSource === "ai_match" ? 1 : 0;
+            clusterAssignmentMetrics.skippedIncompleteSignature += assignment.skippedIncompleteSignature ? 1 : 0;
+            clusterAssignmentMetrics.newCluster += assignment.createdNewCluster ? 1 : 0;
+            if (assignment.clusterId) {
+              aggregationChildClusterIds.add(assignment.clusterId);
+            }
           } catch (assignError) {
+            appendIssue(issues, assignError, `Unknown cluster assignment error for child item ${childId}`);
+          } finally {
             addElapsed(timings, "clusterAssignmentMs", childClusterAssignmentStartedAt);
-            appendIssue(
-              issues,
-              assignError,
-              `Unknown cluster assignment error for child item ${childId}`,
-            );
           }
         }
 
-        if (mainEventSig) {
-          eventSignature = {
-            eventType: mainEventSig.eventType as AiEventSignature["eventType"],
-            eventSubject: mainEventSig.eventSubject,
-            eventAction: mainEventSig.eventAction,
-            eventObject: mainEventSig.eventObject,
-            eventDate: mainEventSig.eventDate,
-          };
-        }
-        qualityScore = events.length > 0
-          ? Math.max(...events.map((event) => event.qualityScore))
-          : 50;
+        qualityScore = Math.max(qualityScore, ...events.map((event) => event.qualityScore));
         qualityRationale = `聚合内容拆出 ${events.length} 条子事件`;
         aggregationParseStatus = AGGREGATION_PARSE_STATUS.parsed;
         aggregationParsed = true;
         aggregationEventCount = events.length;
-        analysisCompleted = true;
-        analysisStatus = "succeeded";
-        aggregationSucceeded = true;
-      } catch (aggregationError) {
-        if (!aggregationMeasured) {
-          addElapsed(timings, "aggregationMs", aggregationStartedAt);
-        }
-        appendIssue(issues, aggregationError, "Unknown aggregation parsing error");
+      }
+    } catch (error) {
+      addElapsed(timings, "analysisMs", understandingStartedAt);
+      appendIssue(issues, error, "Unknown item understanding error");
+      summaryStatus = "failed";
+      summaryText = existing?.summaryText ?? buildFallbackSummary(rssExcerpt);
+      summaryFailed = true;
+      analysisStatus = "failed";
+      analysisFailed = true;
+      if (aggregationDetectionEnabled) {
+        aggregationCheckedAt = new Date();
         aggregationParseStatus = AGGREGATION_PARSE_STATUS.failed;
         aggregationParseFailed = true;
-        aggregationFailureReason = classifyAggregationFailure(aggregationError);
-        // Degrade parent to a regular item so the feed can still surface it.
-        isAggregation = false;
-      }
-    }
-    if (isAggregation && aggregationSucceeded) {
-      // Aggregation parse succeeded; parent is already a full aggregation item.
-      // Skip the non-aggregation enrichContent / reuse-analysis branches below.
-    } else if (!isAggregation && aggregationParseStatus === AGGREGATION_PARSE_STATUS.failed) {
-      // Aggregation parse failed: run enrichContent on the parent as a regular item.
-      const analysisStartedAt = Date.now();
-      try {
-        const enrichment = await aiProvider.enrichContent(summaryText || summarySourceText || originalTitle, {
-          title: originalTitle,
-          sourceName,
-          translateTitle,
-        });
-        addElapsed(timings, "analysisMs", analysisStartedAt);
-        if (translateTitle) {
-          translatedTitle = enrichment.translatedTitle?.trim() || originalTitle;
-        }
-        moderationStatus = enrichment.moderationStatus === "restored" ? "allowed" : enrichment.moderationStatus;
-        moderationReason = enrichment.moderationReason;
-        moderationDetail = enrichment.moderationDetail;
-        qualityScore = enrichment.qualityScore;
-        qualityRationale = enrichment.qualityRationale;
-        eventSignature = enrichment.eventSignature;
-        itemTags = enrichment.tags;
-        analysisCompleted = true;
-        analysisStatus = "succeeded";
-      } catch (enrichError) {
-        addElapsed(timings, "analysisMs", analysisStartedAt);
-        appendIssue(issues, enrichError, "Unknown ai enrichment error");
-        moderationStatus = "allowed";
-        moderationReason = null;
-        moderationDetail = null;
-        qualityScore = 50;
-        qualityRationale = "AI analysis unavailable";
-        eventSignature = null;
-        itemTags = [];
-        analysisStatus = "failed";
-        analysisFailed = true;
-        analysisFailureReason = classifyAnalysisFailure(enrichError);
-      }
-    } else if (canReuseExistingCompletedAnalysis) {
-      analysisStatus = "succeeded";
-    } else {
-      const analysisStartedAt = Date.now();
-      try {
-        const enrichment = await aiProvider.enrichContent(summaryText || summarySourceText || originalTitle, {
-          title: originalTitle,
-          sourceName,
-          translateTitle,
-        });
-        addElapsed(timings, "analysisMs", analysisStartedAt);
-
-        if (translateTitle) {
-          translatedTitle = enrichment.translatedTitle?.trim() || originalTitle;
-        }
-
-        moderationStatus = enrichment.moderationStatus === "restored" ? "allowed" : enrichment.moderationStatus;
-        moderationReason = enrichment.moderationReason;
-        moderationDetail = enrichment.moderationDetail;
-        qualityScore = enrichment.qualityScore;
-        qualityRationale = enrichment.qualityRationale;
-        eventSignature = enrichment.eventSignature;
-        itemTags = enrichment.tags;
-        analysisCompleted = true;
-        analysisStatus = "succeeded";
-      } catch (error) {
-        addElapsed(timings, "analysisMs", analysisStartedAt);
-        appendIssue(issues, error, "Unknown ai enrichment error");
-        moderationStatus = "allowed";
-        moderationReason = null;
-        moderationDetail = null;
-        qualityScore = 50;
-        qualityRationale = "AI analysis unavailable";
-        eventSignature = null;
-        itemTags = [];
-        analysisStatus = "failed";
-        analysisFailed = true;
-        analysisFailureReason = classifyAnalysisFailure(error);
       }
     }
 
@@ -933,6 +795,8 @@ export async function processFeedItem({
       isAggregation,
       aggregationCheckedAt,
       aggregationParseStatus,
+      understandingInputHash,
+      understandingVersion,
       aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
       clusterId: moderationStatus === "filtered" || isAggregation ? null : existing?.clusterId ?? null,
       manualClusterAssignedAt: moderationStatus === "filtered" || isAggregation ? null : existing?.manualClusterAssignedAt ?? null,
@@ -950,8 +814,6 @@ export async function processFeedItem({
   }
 
   let affectedClusterId: string | null = null;
-  let clusterAssignmentMetrics: NonNullable<ProcessedItemRecord["metrics"]>["clusterAssignment"] | undefined;
-
   if (moderationStatus === "filtered" || isAggregation) {
     if (existing?.clusterId) {
       affectedClusterId = existing.clusterId;
@@ -989,13 +851,12 @@ export async function processFeedItem({
     });
     addElapsed(timings, "clusterAssignmentMs", clusterAssignmentStartedAt);
 
-    clusterAssignmentMetrics = {
-      exactMatch: clusterAssignment.matchSource === "exact_match",
-      cheapRankDirect: clusterAssignment.matchSource === "cheap_rank_direct",
-      aiMatch: clusterAssignment.matchSource === "ai_match",
-      skippedIncompleteSignature: clusterAssignment.skippedIncompleteSignature,
-      newCluster: clusterAssignment.createdNewCluster,
-    };
+    hasClusterAssignmentMetrics = true;
+    clusterAssignmentMetrics.exactMatch += clusterAssignment.matchSource === "exact_match" ? 1 : 0;
+    clusterAssignmentMetrics.cheapRankDirect += clusterAssignment.matchSource === "cheap_rank_direct" ? 1 : 0;
+    clusterAssignmentMetrics.aiMatch += clusterAssignment.matchSource === "ai_match" ? 1 : 0;
+    clusterAssignmentMetrics.skippedIncompleteSignature += clusterAssignment.skippedIncompleteSignature ? 1 : 0;
+    clusterAssignmentMetrics.newCluster += clusterAssignment.createdNewCluster ? 1 : 0;
 
     if (clusterAssignment.clusterId && (isNew || existing?.clusterId !== clusterAssignment.clusterId)) {
       affectedClusterId = clusterAssignment.clusterId;
@@ -1008,19 +869,17 @@ export async function processFeedItem({
     isNew,
     errorMessage: stored.errorMessage,
     affectedClusterId,
+    affectedClusterIds: [...aggregationChildClusterIds],
     fullTextFetched,
     metrics: {
       blacklistFiltered: ruleFilter.filtered,
       summaryCompleted,
       summaryFailed,
-      summaryFailureReason,
       aggregationParsed,
       aggregationParseFailed,
-      aggregationFailureReason,
       aggregationEventCount,
       analysisCompleted,
       analysisFailed,
-      analysisFailureReason,
       analysisFiltered: analysisCompleted && moderationStatus === "filtered",
       updatedExisting: !isNew && moderationStatus !== "filtered",
       fullTextFetchAttempted,
@@ -1029,7 +888,7 @@ export async function processFeedItem({
       fullTextFetchJinaAttempted: fullTextFetchAttempted ? fullTextFetchMetrics.jinaAttempted : undefined,
       fullTextFetchSource: fullTextFetchAttempted ? fullTextFetchMetrics.used : undefined,
       timings: finalizeTimings(),
-      clusterAssignment: clusterAssignmentMetrics,
+      clusterAssignment: hasClusterAssignmentMetrics ? clusterAssignmentMetrics : undefined,
     },
   };
 }

@@ -2,8 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_DAILY_REPORT_PROMPT,
-  DEFAULT_ITEM_ANALYSIS_PROMPT,
-  DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT,
+  DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { prisma } from "@/lib/db";
 import {
@@ -53,19 +52,17 @@ describe("admin settings service", () => {
     expect(runtimeConfig.modelApi.apiKey).toBe("");
     expect(runtimeConfig.modelApi.baseURL).toBe("");
     expect(runtimeConfig.modelApi.model).toBe("gpt-4.1-mini");
-    expect(runtimeConfig.prompts.itemSummary.length).toBeGreaterThan(0);
-    expect(runtimeConfig.selectedPromptConfigs?.itemSummary.promptTemplate).toContain("{{sourceName}}");
-    expect(runtimeConfig.prompts.itemAnalysis.length).toBeGreaterThan(0);
-    expect(runtimeConfig.selectedPromptConfigs?.itemAnalysis.promptTemplate).toContain("{{title}}");
-    expect(runtimeConfig.prompts.itemAggregation).toBe(DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT);
-    expect(runtimeConfig.selectedPromptConfigs?.itemAggregation.promptTemplate).toContain("{{inputText}}");
+    expect(runtimeConfig.prompts.itemUnderstanding).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.promptTemplate).toContain("{{sourceName}}");
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.promptTemplate).toContain("{{title}}");
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.promptTemplate).toContain("{{inputText}}");
 
     expect(settings.modelApiConfigs).toHaveLength(1);
     expect(settings.modelApiConfigs[0]?.baseUrl).toBe("");
     expect(settings.modelApiConfigs[0]?.apiKeyMasked).toBe("");
     expect(settings.modelApiConfigs[0]?.ingestionItemConcurrency).toBe(3);
     expect(settings.taskSchedule.aggregationSplitMaxEvents).toBe(20);
-    expect(settings.promptConfigs).toHaveLength(7);
+    expect(settings.promptConfigs).toHaveLength(5);
     expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toContain("AI 新闻日报");
     expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.templateJson).toBe(
       DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
@@ -81,28 +78,12 @@ describe("admin settings service", () => {
     expect(settings.eventBriefing.config.minRankScore).toBe(0);
     expect(settings.eventBriefing.preference.maxCuratorBoost).toBe(15);
     expect(settings.eventBriefing.preference.weightedRules).toEqual([]);
-    expect(settings.promptConfigs.find((config) => config.type === "item_summary")?.systemPrompt).toContain(
-      "单条新闻内容助手",
+    expect(settings.promptConfigs.find((config) => config.type === "item_understanding")?.systemPrompt).toContain(
+      "一次完成摘要、内容分析、事件识别与聚合拆分",
     );
-    expect(settings.promptConfigs.find((config) => config.type === "item_summary")).toMatchObject({
-      temperature: 0.2,
-      maxTokens: 600,
-      topP: null,
-    });
-    expect(settings.promptConfigs.find((config) => config.type === "item_analysis")?.systemPrompt).toContain(
-      "固定输出格式",
-    );
-    expect(settings.promptConfigs.find((config) => config.type === "item_analysis")?.systemPrompt).toContain(
-      '"tags"',
-    );
-    expect(settings.promptConfigs.find((config) => config.type === "item_analysis")).toMatchObject({
-      temperature: 0.2,
-      maxTokens: 1000,
-      topP: null,
-    });
-    expect(settings.promptConfigs.find((config) => config.type === "item_aggregation")).toMatchObject({
-      name: "默认聚合拆分提示词",
-      systemPrompt: DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT,
+    expect(settings.promptConfigs.find((config) => config.type === "item_understanding")).toMatchObject({
+      name: "默认条目理解提示词",
+      systemPrompt: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
       temperature: 0,
       maxTokens: 8000,
       topP: null,
@@ -110,12 +91,12 @@ describe("admin settings service", () => {
       isEnabled: true,
       isDefault: true,
     });
-    expect(settings.promptConfigs.find((config) => config.type === "item_aggregation")?.systemPrompt).toContain(
+    expect(settings.promptConfigs.find((config) => config.type === "item_understanding")?.systemPrompt).toContain(
       '"tags"',
     );
     expect(settings.promptConfigs.find((config) => config.type === "cluster_summary")).toMatchObject({
       temperature: 0.2,
-      maxTokens: 450,
+      maxTokens: 2000,
       topP: null,
     });
     expect(settings.promptConfigs.find((config) => config.type === "cluster_match")).toMatchObject({
@@ -282,24 +263,12 @@ describe("admin settings service", () => {
     });
 
     await createPromptConfig({
-      name: "默认条目摘要提示词",
-      type: "item_summary",
-      systemPrompt: "条目摘要系统提示词",
+      name: "默认条目理解提示词",
+      type: "item_understanding",
+      systemPrompt: "条目理解系统提示词",
       prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
-      temperature: 0.2,
-      maxTokens: 300,
-      topP: null,
-      modelApiConfigId: null,
-      isEnabled: true,
-      isDefault: true,
-    });
-    await createPromptConfig({
-      name: "默认内容分析提示词",
-      type: "item_analysis",
-      systemPrompt: "分析系统提示词",
-      prompt: "标题：{{title}}\n正文：{{inputText}}",
-      temperature: 0.2,
-      maxTokens: 1000,
+      temperature: 0,
+      maxTokens: 8000,
       topP: null,
       modelApiConfigId: modelConfig.id,
       isEnabled: true,
@@ -337,12 +306,9 @@ describe("admin settings service", () => {
     expect(runtimeConfig.ingestion.fullTextFetchThreshold).toBe(80);
     expect(runtimeConfig.ingestion.aggregationSplitMaxEvents).toBe(20);
     expect(runtimeConfig.modelApi.model).toBe("gpt-live");
-    expect(runtimeConfig.selectedPromptConfigs?.itemSummary.systemPrompt).toBe("条目摘要系统提示词");
-    expect(runtimeConfig.selectedPromptConfigs?.itemSummary.maxTokens).toBe(300);
-    expect(runtimeConfig.selectedPromptConfigs?.itemAnalysis.systemPrompt).toBe("分析系统提示词");
-    expect(runtimeConfig.selectedPromptConfigs?.itemAnalysis.modelApi?.model).toBe("gpt-live");
-    expect(runtimeConfig.selectedPromptConfigs?.itemAnalysis.maxTokens).toBe(1000);
-    expect(runtimeConfig.selectedPromptConfigs?.itemAggregation.systemPrompt).toBe(DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT);
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.systemPrompt).toBe("条目理解系统提示词");
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.modelApi?.model).toBe("gpt-live");
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.maxTokens).toBe(8000);
     expect(runtimeConfig.selectedPromptConfigs?.clusterSummary.maxTokens).toBe(300);
     expect(runtimeConfig.selectedPromptConfigs?.clusterMatch.maxTokens).toBe(80);
   });
@@ -374,7 +340,7 @@ describe("admin settings service", () => {
 
     const promptConfig = await createPromptConfig({
       name: "默认内容分析提示词",
-      type: "item_analysis",
+      type: "item_understanding",
       systemPrompt: "分析系统提示词",
       prompt: "标题：{{title}}\n正文：{{inputText}}",
       temperature: 0.2,
@@ -563,6 +529,34 @@ describe("admin settings service", () => {
     expect(config?.maxTokens).toBe(2048);
   });
 
+  it("upgrades only the legacy default cluster_summary token budget", async () => {
+    await getIngestionRuntimeConfig();
+    await prisma.promptConfig.updateMany({
+      where: { type: "cluster_summary", isDefault: true },
+      data: { maxTokens: 450 },
+    });
+    const custom = await prisma.promptConfig.create({
+      data: {
+        name: "自定义聚合摘要",
+        type: "cluster_summary",
+        prompt: "候选：{{inputText}}",
+        systemPrompt: "自定义提示词",
+        maxTokens: 900,
+        isEnabled: true,
+        isDefault: false,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const defaultConfig = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "cluster_summary", isDefault: true },
+    });
+    const customConfig = await prisma.promptConfig.findUniqueOrThrow({ where: { id: custom.id } });
+    expect(defaultConfig.maxTokens).toBe(2000);
+    expect(customConfig.maxTokens).toBe(900);
+  });
+
   it("upgrades legacy default daily_report prompt to the template-based format", async () => {
     await getIngestionRuntimeConfig();
     const legacyPrompt = `你是中文 AI 新闻日报编辑。只基于输入候选内容生成一份 Briefing 型 AI 日报。
@@ -627,54 +621,6 @@ describe("admin settings service", () => {
     expect(config?.systemPrompt).toContain("固定输出格式：");
     expect(config?.systemPrompt).toContain('"blocks"');
     expect(config?.maxTokens).toBe(40960);
-  });
-
-  it("upgrades legacy default item_analysis prompt to include tags", async () => {
-    await getIngestionRuntimeConfig();
-    const legacyPrompt = `你是新闻内容分析助手。
-
-固定输出格式：
-{"translatedTitle":"...","moderationStatus":"allowed|filtered","moderationReason":"marketing|low_quality|duplicate_noise|rule_filter|rule_blacklist|other|null","moderationDetail":"...","qualityScore":0,"qualityRationale":"...","eventType":"release|launch|update|funding|acquisition|partnership|policy|research|security|other|null","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}`;
-    await prisma.promptConfig.updateMany({
-      where: { type: "item_analysis", isDefault: true },
-      data: {
-        systemPrompt: legacyPrompt,
-        maxTokens: 2048,
-      },
-    });
-
-    await ensureRuntimeConfigSeeded();
-
-    const config = await prisma.promptConfig.findFirst({
-      where: { type: "item_analysis", isDefault: true },
-    });
-    expect(config?.systemPrompt).toBe(DEFAULT_ITEM_ANALYSIS_PROMPT);
-    expect(config?.systemPrompt).toContain('"tags"');
-    expect(config?.maxTokens).toBe(2048);
-  });
-
-  it("upgrades legacy default item_aggregation prompt to include event tags", async () => {
-    await getIngestionRuntimeConfig();
-    const legacyPrompt = `你是聚合内容拆条助手。
-
-固定输出格式：
-{"mainEvent":{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}|null,"events":[{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null","title":"...","oneLiner":"...","qualityScore":0,"sourceUrl":"https://...|null"}]}`;
-    await prisma.promptConfig.updateMany({
-      where: { type: "item_aggregation", isDefault: true },
-      data: {
-        systemPrompt: legacyPrompt,
-        maxTokens: 2048,
-      },
-    });
-
-    await ensureRuntimeConfigSeeded();
-
-    const config = await prisma.promptConfig.findFirst({
-      where: { type: "item_aggregation", isDefault: true },
-    });
-    expect(config?.systemPrompt).toBe(DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT);
-    expect(config?.systemPrompt).toContain('"tags"');
-    expect(config?.maxTokens).toBe(2048);
   });
 
   it("preserves null daily_report systemPrompts when reseeding", async () => {

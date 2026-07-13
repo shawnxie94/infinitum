@@ -118,9 +118,7 @@ enum ClusterConstraintScope {
 }
 
 enum PromptConfigType {
-  item_summary
-  item_analysis
-  item_aggregation
+  item_understanding
   cluster_summary
   cluster_match
   cluster_merge
@@ -196,6 +194,8 @@ model Item {
   isAggregation            Boolean                    @default(false)
   aggregationCheckedAt     DateTime?
   aggregationParseStatus   String?
+  understandingInputHash   String?
+  understandingVersion     String?
   parentItemId             String?
   errorMessage             String?
   createdAt                DateTime                   @default(now())

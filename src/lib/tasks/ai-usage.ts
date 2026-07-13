@@ -11,9 +11,7 @@ export type TaskAiUsageSnapshot = {
 };
 
 const AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
-  item_summary: "条目摘要",
-  item_analysis: "内容分析",
-  item_aggregation: "聚合拆条",
+  item_understanding: "条目理解",
   cluster_match: "聚合匹配",
   cluster_summary: "聚合摘要",
   cluster_merge: "聚合合并",
@@ -24,9 +22,7 @@ type TaskAiUsageBreakdownState = Record<TaskAiCallBreakdownKey, { actual: number
 
 function createEmptyBreakdownState(): TaskAiUsageBreakdownState {
   return {
-    item_summary: { actual: 0, estimated: 0 },
-    item_analysis: { actual: 0, estimated: 0 },
-    item_aggregation: { actual: 0, estimated: 0 },
+    item_understanding: { actual: 0, estimated: 0 },
     cluster_match: { actual: 0, estimated: 0 },
     cluster_summary: { actual: 0, estimated: 0 },
     cluster_merge: { actual: 0, estimated: 0 },
@@ -52,7 +48,7 @@ function sumBreakdown(state: TaskAiUsageBreakdownState, field: "actual" | "estim
 
 export function createTaskAiUsageTracker(
   initialEstimated = 0,
-  initialEstimatedKey: TaskAiCallBreakdownKey = "item_analysis",
+  initialEstimatedKey: TaskAiCallBreakdownKey = "item_understanding",
 ) {
   const state: TaskAiUsageSnapshot = {
     actual: 0,
@@ -95,45 +91,30 @@ export function createTaskAiUsageTracker(
         breakdown: state.breakdown.map((entry) => ({ ...entry })),
       };
     },
-    setEstimated(value: number, key: TaskAiCallBreakdownKey = "item_analysis") {
+    setEstimated(value: number, key: TaskAiCallBreakdownKey = "item_understanding") {
       breakdownState[key].estimated = Math.max(0, value);
       syncEstimateFloor();
     },
-    addEstimated(value: number, key: TaskAiCallBreakdownKey = "item_analysis") {
+    addEstimated(value: number, key: TaskAiCallBreakdownKey = "item_understanding") {
       breakdownState[key].estimated += Math.max(0, value);
       syncEstimateFloor();
     },
     wrapProvider(
       aiProvider: AiProvider,
       options?: {
-        summarizeItemEstimated?: boolean;
-        enrichContentEstimated?: boolean;
+        understandItemEstimated?: boolean;
         summarizeClusterEstimated?: boolean;
         matchClusterCandidateEstimated?: boolean;
       },
     ): AiProvider {
       return {
-        async summarizeItem(inputText, metadata) {
-          incrementActual("item_summary");
-          if (options?.summarizeItemEstimated ?? true) {
-            incrementEstimated("item_summary");
+        async understandItem(inputText, metadata) {
+          incrementActual("item_understanding");
+          if (options?.understandItemEstimated ?? true) {
+            incrementEstimated("item_understanding");
           }
           syncEstimateFloor();
-          return aiProvider.summarizeItem(inputText, metadata);
-        },
-        async parseAggregation(inputText, metadata) {
-          incrementActual("item_aggregation");
-          incrementEstimated("item_aggregation");
-          syncEstimateFloor();
-          return aiProvider.parseAggregation(inputText, metadata);
-        },
-        async enrichContent(inputText, metadata) {
-          incrementActual("item_analysis");
-          if (options?.enrichContentEstimated) {
-            incrementEstimated("item_analysis");
-          }
-          syncEstimateFloor();
-          return aiProvider.enrichContent(inputText, metadata);
+          return aiProvider.understandItem(inputText, metadata);
         },
         async summarizeCluster(inputText, metadata) {
           incrementActual("cluster_summary");

@@ -31,6 +31,9 @@ const sqliteRuntimePragmas = [
 const removedPromptConfigTypes = [
   "daily_report_refinement_chat",
   "daily_report_refinement_generate",
+  "item_summary",
+  "item_analysis",
+  "item_aggregation",
 ];
 
 function resolvePrismaCliPath() {
@@ -568,6 +571,8 @@ function applyAdditiveSchemaUpgrades() {
     addColumnIfMissing("content_clusters", "feedStatsUpdatedAt", "DATETIME"),
   ].some(Boolean);
   addColumnIfMissing("content_clusters", "earliestCreatedAt", "DATETIME");
+  addColumnIfMissing("items", "understandingInputHash", "TEXT");
+  addColumnIfMissing("items", "understandingVersion", "TEXT");
   applyScoreFieldRenames();
 
   runSqlite([dbPath], {

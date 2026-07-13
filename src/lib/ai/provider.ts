@@ -14,17 +14,12 @@ import {
   DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE,
   DEFAULT_DAILY_REPORT_PROMPT,
   DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
-  DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT,
-  DEFAULT_ITEM_AGGREGATION_USER_PROMPT_TEMPLATE,
-  DEFAULT_ITEM_ANALYSIS_PROMPT,
-  DEFAULT_ITEM_ANALYSIS_USER_PROMPT_TEMPLATE,
-  DEFAULT_ITEM_SUMMARY_PROMPT,
-  DEFAULT_ITEM_SUMMARY_USER_PROMPT_TEMPLATE,
+  DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
 } from "@/config/prompts";
 import type { RuntimeConfig } from "@/config/runtime";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
-import { shouldRegenerateChineseSummary } from "@/lib/ai/summary-language";
 import { buildDailyReportRuntimeFallbackInstructionLines } from "@/lib/daily-report/runtime-rules";
 import { normalizeItemTags } from "@/lib/tags/normalization";
 import { normalizeOptionalText } from "@/lib/utils/text";
@@ -48,7 +43,7 @@ export type AiEventSignature = {
   eventDate: string | null;
 };
 
-export type AiEnrichment = {
+type AiEnrichment = {
   translatedTitle: string | null;
   moderationStatus: "allowed" | "filtered" | "restored";
   moderationReason: "marketing" | "low_quality" | "duplicate_noise" | "rule_filter" | "rule_blacklist" | "other" | null;
@@ -59,12 +54,7 @@ export type AiEnrichment = {
   tags: string[];
 };
 
-export type ItemSummaryResult = {
-  summary: string;
-  isAggregation: boolean;
-};
-
-export type ParsedEventSignature = {
+type ParsedEventSignature = {
   eventType: string | null;
   eventSubject: string | null;
   eventAction: string | null;
@@ -72,7 +62,7 @@ export type ParsedEventSignature = {
   eventDate: string | null;
 };
 
-export type ParsedEvent = ParsedEventSignature & {
+type ParsedEvent = ParsedEventSignature & {
   title: string | null;
   oneLiner: string;
   qualityScore: number;
@@ -80,31 +70,27 @@ export type ParsedEvent = ParsedEventSignature & {
   tags: string[];
 };
 
-export type ParsedAggregation = {
-  mainEvent: ParsedEventSignature | null;
-  events: ParsedEvent[];
+export type ItemUnderstandingResult = AiEnrichment & {
+  summary: string;
+  aggregation: {
+    isAggregation: boolean;
+    mainEvent: ParsedEventSignature | null;
+    events: ParsedEvent[];
+  };
+  diagnostics: {
+    summaryValid: boolean;
+    analysisValid: boolean;
+    aggregationValid: boolean;
+  };
 };
-
-type ParsedEnrichmentResult =
-  | {
-      ok: true;
-      recovered: boolean;
-      value: AiEnrichment;
-    }
-  | {
-      ok: false;
-      reason: string;
-    };
 
 export type MergeGroup = string[];
 
 export type AiProvider = {
-  summarizeItem(inputText: string, metadata: { title: string; sourceName?: string }): Promise<ItemSummaryResult>;
-  parseAggregation(inputText: string, metadata: { title: string; sourceName?: string }): Promise<ParsedAggregation>;
-  enrichContent(
+  understandItem(
     inputText: string,
     metadata: { title: string; sourceName?: string; translateTitle: boolean },
-  ): Promise<AiEnrichment>;
+  ): Promise<ItemUnderstandingResult>;
   summarizeCluster(inputText: string, metadata: { title: string }): Promise<string>;
   matchClusterCandidate(
     inputText: string,
@@ -119,6 +105,7 @@ export type AiProvider = {
 
 type CompletionResponse = {
   choices?: Array<{
+    finish_reason?: string | null;
     message?: {
       content?: string | null;
       reasoning_content?: string | null;
@@ -144,9 +131,7 @@ type PromptRuntimeConfig = {
 };
 
 type PromptOverrides = {
-  itemSummary?: PromptRuntimeConfig;
-  itemAnalysis?: PromptRuntimeConfig;
-  itemAggregation?: PromptRuntimeConfig;
+  itemUnderstanding?: PromptRuntimeConfig;
   clusterSummary?: PromptRuntimeConfig;
   clusterMatch?: PromptRuntimeConfig;
   clusterMerge?: PromptRuntimeConfig;
@@ -161,9 +146,15 @@ type CompletionResponseFormat = {
   type: "json_object";
 };
 
+type CompletionOptions = {
+  responseFormat?: CompletionResponseFormat;
+  requireCompleteJson?: boolean;
+};
+
 const DEFAULT_PARSED_AGGREGATION_MAX_EVENTS = 20;
 const TRANSIENT_MODEL_API_RETRY_COUNT = 1;
 const JSON_PARSE_RETRY_COUNT = 1;
+const MAX_DAILY_REPORT_REPAIR_TOKENS = 8192;
 
 type ModelApiCircuitState = {
   failures: number[];
@@ -370,113 +361,140 @@ function getFallbackEnrichment(
   };
 }
 
-function getFallbackSummary(): ItemSummaryResult {
-  return { summary: "", isAggregation: false };
+function getFallbackUnderstanding(
+  metadata: { title: string; translateTitle: boolean },
+): ItemUnderstandingResult {
+  return {
+    ...getFallbackEnrichment(metadata),
+    summary: "",
+    aggregation: { isAggregation: false, mainEvent: null, events: [] },
+    diagnostics: {
+      summaryValid: false,
+      analysisValid: false,
+      aggregationValid: false,
+    },
+  };
 }
 
-function getFallbackAggregation(): ParsedAggregation {
-  return { mainEvent: null, events: [] };
+function isValidQualityScore(value: unknown) {
+  const numeric = typeof value === "number"
+    ? value
+    : typeof value === "string" && value.trim()
+      ? Number(value)
+      : Number.NaN;
+
+  return Number.isFinite(numeric) && numeric >= 0 && numeric <= 100;
 }
 
-function parseSummaryAndClassification(rawContent: string, fallback: ItemSummaryResult): ItemSummaryResult {
+function hasCompleteParsedEvent(event: ParsedEvent) {
+  return Boolean(
+    event.title &&
+    event.oneLiner &&
+    event.eventSubject &&
+    event.eventAction &&
+    event.eventObject &&
+    isValidQualityScore(event.qualityScore),
+  );
+}
+
+function parseItemUnderstandingOutput(
+  rawContent: string,
+  inputText: string,
+  fallback: ItemUnderstandingResult,
+  translateTitle: boolean,
+  maxEvents: number,
+): ItemUnderstandingResult {
   const normalized = normalizeModelResponseText(rawContent);
+  let parsed: Record<string, unknown>;
 
-  if (!normalized) {
-    throw new Error("Invalid item summary response: empty response.");
-  }
-
-  let parseError: unknown = null;
   try {
-    const parsed = JSON.parse(normalized) as { summary?: string; isAggregation?: boolean };
-    const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
-    const isAggregation = parsed.isAggregation === true;
-
-    if (summary) {
-      return { summary, isAggregation };
-    }
+    parsed = JSON.parse(normalized) as Record<string, unknown>;
   } catch (error) {
-    parseError = error;
-    // Fall through to tolerant parsing below.
-  }
-
-  const recoveredSummary = recoverSummaryFromJsonLikeOutput(normalized);
-  if (recoveredSummary) {
-    return { summary: recoveredSummary, isAggregation: fallback.isAggregation };
-  }
-
-  if (parseError) {
     throw new InvalidJsonModelResponseError(
-      `Invalid item summary JSON: ${getJsonParseErrorMessage(parseError)}`,
+      `统一条目理解模型返回了无法解析的 JSON：${getJsonParseErrorMessage(error)}`,
     );
   }
 
-  throw new Error("Invalid item summary response: expected JSON with a non-empty summary.");
-}
-
-function recoverSummaryFromJsonLikeOutput(value: string): string {
-  const match = value.match(/^\s*\{\s*"summary"\s*:\s*"([\s\S]*)/);
-  if (!match?.[1]) {
-    return "";
+  let summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+  let summaryValid = false;
+  if (summary) {
+    try {
+      summary = requireUsableGeneratedSummary(summary, inputText);
+      summaryValid = true;
+    } catch {
+      summary = "";
+    }
   }
 
-  const rawSummary = match[1];
-  const closingQuoteIndex = rawSummary.search(/"[\s,}]*("isAggregation"|})/);
-  const candidate = closingQuoteIndex >= 0 ? rawSummary.slice(0, closingQuoteIndex) : rawSummary;
+  const analysisValid =
+    (parsed.moderationStatus === "allowed" || parsed.moderationStatus === "filtered") &&
+    isValidQualityScore(parsed.qualityScore) &&
+    typeof parsed.qualityRationale === "string" &&
+    parsed.qualityRationale.trim().length > 0;
+  const enrichment = buildEnrichmentFromParsed(
+    parsed as Parameters<typeof buildEnrichmentFromParsed>[0],
+    fallback,
+    translateTitle,
+  );
+  const rawAggregation = parsed.aggregation && typeof parsed.aggregation === "object"
+    ? parsed.aggregation as Record<string, unknown>
+    : null;
+  const isAggregation = rawAggregation?.isAggregation === true;
+  const events = Array.isArray(rawAggregation?.events)
+    ? rawAggregation.events
+        .map((event) => normalizeParsedEvent(event as Partial<ParsedEvent>))
+        .filter((event): event is ParsedEvent => event !== null)
+        .filter(hasCompleteParsedEvent)
+        .slice(0, maxEvents)
+    : [];
+  const mainEvent = normalizeParsedEventSignature(
+    rawAggregation?.mainEvent as Partial<ParsedEventSignature> | null | undefined,
+  );
+  const aggregationValid = Boolean(
+    rawAggregation &&
+    typeof rawAggregation.isAggregation === "boolean" &&
+    (!isAggregation || events.length > 0),
+  );
+  return {
+    ...enrichment,
+    summary,
+    aggregation: aggregationValid
+      ? { isAggregation, mainEvent, events: isAggregation ? events : [] }
+      : fallback.aggregation,
+    diagnostics: {
+      summaryValid,
+      analysisValid,
+      aggregationValid,
+    },
+  };
+}
+
+function parseClusterSummaryOutput(rawContent: string): string {
+  const normalized = normalizeModelResponseText(rawContent);
+  let parsed: { title?: unknown; summary?: unknown };
 
   try {
-    return JSON.parse(`"${candidate.replace(/\\?$/, "")}"`).trim();
-  } catch {
-    return candidate
-      .replace(/\\"/g, "\"")
-      .replace(/\\\\/g, "\\")
-      .replace(/\\n/g, "\n")
-      .trim();
+    parsed = JSON.parse(normalized) as { title?: unknown; summary?: unknown };
+  } catch (error) {
+    throw new InvalidJsonModelResponseError(
+      `聚合摘要模型返回了无法解析的 JSON：${getJsonParseErrorMessage(error)}`,
+    );
   }
-}
 
-function parseSummaryOutput(rawContent: string, fallback: string): string {
-  const normalized = normalizeModelResponseText(rawContent);
-  return normalized || fallback;
+  const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
+  const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+
+  if (!title || !summary) {
+    throw new InvalidJsonModelResponseError("聚合摘要 JSON 必须包含非空的 title 和 summary。");
+  }
+
+  return JSON.stringify({ title, summary });
 }
 
 function normalizeAggregationSplitMaxEvents(value: number | null | undefined) {
   return typeof value === "number" && Number.isInteger(value) && value > 0
     ? value
     : DEFAULT_PARSED_AGGREGATION_MAX_EVENTS;
-}
-
-function parseAggregationOutput(
-  rawContent: string,
-  fallback: ParsedAggregation,
-  maxEvents = DEFAULT_PARSED_AGGREGATION_MAX_EVENTS,
-): ParsedAggregation {
-  const normalized = normalizeModelResponseText(rawContent);
-
-  if (!normalized) {
-    return fallback;
-  }
-
-  try {
-    const parsed = JSON.parse(normalized) as {
-      mainEvent?: Partial<ParsedEventSignature> | null;
-      events?: Array<Partial<ParsedEvent>>;
-    };
-
-    const events = Array.isArray(parsed.events)
-      ? parsed.events
-          .map((event) => normalizeParsedEvent(event))
-          .filter((event): event is ParsedEvent => event !== null)
-          .slice(0, maxEvents)
-      : [];
-
-    const mainEvent = normalizeParsedEventSignature(parsed.mainEvent);
-
-    return { mainEvent, events };
-  } catch (error) {
-    throw new InvalidJsonModelResponseError(
-      `聚合拆分模型返回了无法解析的 JSON：${error instanceof Error ? error.message : "Unknown parse error"}`,
-    );
-  }
 }
 
 function normalizeParsedEventSignature(
@@ -504,7 +522,7 @@ function normalizeParsedEvent(raw: Partial<ParsedEvent>): ParsedEvent | null {
   const title = typeof raw.title === "string" ? raw.title.trim().slice(0, 120) || null : null;
   const oneLiner = typeof raw.oneLiner === "string" ? raw.oneLiner.trim() : "";
 
-  if (!oneLiner) {
+  if (!title || !oneLiner || !isValidQualityScore(raw.qualityScore)) {
     return null;
   }
 
@@ -534,89 +552,6 @@ function normalizeParsedEvent(raw: Partial<ParsedEvent>): ParsedEvent | null {
     qualityScore: normalizeScore(raw.qualityScore, 50),
     sourceUrl: normalizeSourceUrl(raw.sourceUrl ?? null),
     tags: normalizeItemTags(raw.tags).map((tag) => tag.name),
-  };
-}
-
-function buildChineseSummaryRetryPrompt(userContent: string) {
-  return `${userContent}
-
-重要：上一次输出不是中文摘要。请重新生成，必须使用中文，并只输出 JSON：
-{"summary":"100-200字中文摘要","isAggregation":false}`;
-}
-
-function parseJsonLikeEnrichment(
-  rawContent: string,
-  fallback: AiEnrichment,
-  translateTitle: boolean,
-): ParsedEnrichmentResult {
-  const normalized = normalizeModelResponseText(rawContent);
-
-  try {
-    const parsed = JSON.parse(normalized) as {
-      translatedTitle?: string | null;
-      moderationStatus?: string | null;
-      moderationReason?: string | null;
-      moderationDetail?: string | null;
-      qualityScore?: number | string | null;
-      qualityRationale?: string | null;
-      eventType?: string | null;
-      eventSubject?: string | null;
-      eventAction?: string | null;
-      eventObject?: string | null;
-      eventDate?: string | null;
-      eventSignature?: {
-        eventType?: string | null;
-        eventSubject?: string | null;
-        eventAction?: string | null;
-        eventObject?: string | null;
-        eventDate?: string | null;
-      } | null;
-      tags?: unknown;
-    };
-
-    return {
-      ok: true,
-      recovered: false,
-      value: buildEnrichmentFromParsed(parsed, fallback, translateTitle),
-    };
-  } catch {
-    // Fall through to tolerant parsing below.
-  }
-
-  const translatedTitleMatch = normalized.match(
-    /"?translatedTitle"?\s*:\s*(?:"([^"]*)"|'([^']*)'|([^,\n}]+))/i,
-  );
-  const hasStructuredField =
-    translatedTitleMatch ||
-    /"?moderationStatus"?\s*:/i.test(normalized) ||
-    /"?qualityScore"?\s*:/i.test(normalized) ||
-    /"?eventType"?\s*:/i.test(normalized) ||
-    /"?eventSignature"?\s*:/i.test(normalized);
-
-  if (!hasStructuredField) {
-    return {
-      ok: false,
-      reason: `Unable to parse model response: ${normalized.slice(0, 200)}`,
-    };
-  }
-
-  const translatedCandidate = translatedTitleMatch
-    ? translatedTitleMatch[1] ?? translatedTitleMatch[2] ?? translatedTitleMatch[3] ?? ""
-    : "";
-
-  return {
-    ok: true,
-    recovered: true,
-    value: {
-      translatedTitle: translateTitle ? translatedCandidate.trim() || fallback.translatedTitle : null,
-      moderationStatus: fallback.moderationStatus,
-      moderationReason: fallback.moderationReason,
-      moderationDetail: fallback.moderationDetail,
-      qualityScore: fallback.qualityScore,
-      qualityRationale: fallback.qualityRationale,
-      eventSignature: fallback.eventSignature,
-      tags: fallback.tags,
-    },
   };
 }
 
@@ -1052,9 +987,7 @@ async function completeText(
   config: RuntimeConfig["modelApi"],
   promptConfig: PromptRuntimeConfig,
   userContent: string,
-  options?: {
-    responseFormat?: CompletionResponseFormat;
-  },
+  options?: CompletionOptions,
 ): Promise<string> {
   const response = await client.chat.completions.create({
     model: config.model,
@@ -1074,13 +1007,22 @@ async function completeText(
     response_format: options?.responseFormat,
   }) as CompletionResponse;
 
-  const message = response.choices?.[0]?.message;
+  const choice = response.choices?.[0];
+  const message = choice?.message;
   const content = message?.content?.trim();
+  const reasoningContent = message?.reasoning_content?.trim();
+
+  if (options?.requireCompleteJson && choice?.finish_reason === "length") {
+    throw new InvalidJsonModelResponseError(
+      `模型 JSON 输出被截断（finish_reason=length，content=${content?.length ?? 0} 字符，reasoning=${reasoningContent?.length ?? 0} 字符）`,
+    );
+  }
+
   if (content) {
     return normalizeModelResponseText(content);
   }
 
-  return normalizeModelResponseText(message?.reasoning_content);
+  return normalizeModelResponseText(reasoningContent);
 }
 
 async function completeTextWithTransientRetry(
@@ -1088,9 +1030,7 @@ async function completeTextWithTransientRetry(
   config: RuntimeConfig["modelApi"],
   promptConfig: PromptRuntimeConfig,
   userContent: string,
-  options?: {
-    responseFormat?: CompletionResponseFormat;
-  },
+  options?: CompletionOptions,
 ) {
   let lastError: unknown = null;
 
@@ -1117,25 +1057,15 @@ export function createAiProvider(
   const globalClient = clientOverrideArg ?? getClient(config);
   const aggregationSplitMaxEvents = normalizeAggregationSplitMaxEvents(options?.aggregationSplitMaxEvents);
   const clientCache = new Map<string, OpenAICompatibleClient | null>();
-  const itemSummaryConfig = resolvePromptConfig(
-    DEFAULT_ITEM_SUMMARY_PROMPT,
-    DEFAULT_ITEM_SUMMARY_USER_PROMPT_TEMPLATE,
-    promptOverrides?.itemSummary,
+  const resolvedItemUnderstandingConfig = resolvePromptConfig(
+    DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+    DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
+    promptOverrides?.itemUnderstanding,
   );
-  const itemAnalysisConfig = resolvePromptConfig(
-    DEFAULT_ITEM_ANALYSIS_PROMPT,
-    DEFAULT_ITEM_ANALYSIS_USER_PROMPT_TEMPLATE,
-    promptOverrides?.itemAnalysis,
-  );
-  const resolvedItemAggregationConfig = resolvePromptConfig(
-    DEFAULT_ITEM_AGGREGATION_ANALYSIS_PROMPT,
-    DEFAULT_ITEM_AGGREGATION_USER_PROMPT_TEMPLATE,
-    promptOverrides?.itemAggregation,
-  );
-  const itemAggregationConfig = promptOverrides?.itemAggregation
-    ? resolvedItemAggregationConfig
+  const itemUnderstandingConfig = promptOverrides?.itemUnderstanding
+    ? resolvedItemUnderstandingConfig
     : {
-        ...resolvedItemAggregationConfig,
+        ...resolvedItemUnderstandingConfig,
         temperature: 0,
         maxTokens: 8000,
       };
@@ -1161,18 +1091,6 @@ export function createAiProvider(
   );
 
   const getExecutionConfig = (promptConfig: PromptRuntimeConfig) => promptConfig.modelApi ?? config;
-  const getExecutionClient = (promptConfig: PromptRuntimeConfig) => {
-    const executionConfig = getExecutionConfig(promptConfig);
-    if (clientOverrideArg) {
-      return globalClient;
-    }
-    if (
-      isSameModelApiConfig(executionConfig, config)
-    ) {
-      return globalClient;
-    }
-    return getClientForConfig(executionConfig, clientCache);
-  };
   const getClientForExecutionConfig = (executionConfig: RuntimeConfig["modelApi"]) => {
     if (clientOverrideArg || isSameModelApiConfig(executionConfig, config)) {
       return globalClient;
@@ -1183,9 +1101,7 @@ export function createAiProvider(
   const completeTextWithCircuitBreaker = async (
     promptConfig: PromptRuntimeConfig,
     userContent: string,
-    options?: {
-      responseFormat?: CompletionResponseFormat;
-    },
+    options?: CompletionOptions,
   ) => {
     const executionConfig = getExecutionConfig(promptConfig);
     const isDefaultModel = isSameModelApiConfig(executionConfig, config);
@@ -1205,6 +1121,10 @@ export function createAiProvider(
 
       return output;
     } catch (error) {
+      if (isInvalidJsonModelResponseError(error)) {
+        throw error;
+      }
+
       console.error("[AI Provider] completeText failed:", error);
       if (isDefaultModel || !isSameModelApiConfig(selectedConfig, executionConfig)) {
         throw error;
@@ -1232,13 +1152,24 @@ export function createAiProvider(
     let lastParseError: InvalidJsonModelResponseError | null = null;
 
     for (let attempt = 0; attempt <= JSON_PARSE_RETRY_COUNT; attempt += 1) {
-      const output = await completeTextWithCircuitBreaker(
-        promptConfig,
-        attempt === 0 || !lastParseError ? userContent : buildJsonParseRetryPrompt(userContent, lastParseError),
-        {
-          responseFormat: { type: "json_object" },
-        },
-      );
+      let output: string | null;
+      try {
+        output = await completeTextWithCircuitBreaker(
+          promptConfig,
+          attempt === 0 || !lastParseError ? userContent : buildJsonParseRetryPrompt(userContent, lastParseError),
+          {
+            responseFormat: { type: "json_object" },
+            requireCompleteJson: true,
+          },
+        );
+      } catch (error) {
+        if (!isInvalidJsonModelResponseError(error) || attempt >= JSON_PARSE_RETRY_COUNT) {
+          throw error;
+        }
+
+        lastParseError = error;
+        continue;
+      }
 
       if (output == null) {
         return null;
@@ -1258,150 +1189,65 @@ export function createAiProvider(
     return null;
   };
 
+  const parseDailyReportJsonOutput = (output: string) => {
+    const normalized = normalizeModelResponseText(output);
+    if (!normalized) {
+      throw new InvalidJsonModelResponseError("日报模型未返回最终 JSON 内容。");
+    }
+
+    try {
+      const parsed = JSON.parse(normalized) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("顶层必须是 JSON 对象");
+      }
+      return normalized;
+    } catch (error) {
+      throw new InvalidJsonModelResponseError(
+        `日报模型返回了无法解析的 JSON（${normalized.length} 字符）：${getJsonParseErrorMessage(error)}`,
+      );
+    }
+  };
+
   return {
-    async summarizeItem(inputText, metadata) {
-      const fallback = getFallbackSummary();
-      const userContent = renderPromptTemplate(itemSummaryConfig.promptTemplate, {
-        title: metadata.title,
-        sourceName: metadata.sourceName ?? "未知来源",
-        inputText,
-      });
-      const parsedResult = await completeJsonWithParseRetry(
-        itemSummaryConfig,
-        userContent,
-        (output) => parseSummaryAndClassification(output, fallback),
-      );
-
-      if (parsedResult == null) {
-        throw new Error("Item summary unavailable: model client is not configured.");
-      }
-
-      const result = {
-        summary: requireUsableGeneratedSummary(parsedResult.summary, inputText),
-        isAggregation: parsedResult.isAggregation,
-      };
-
-      if (!shouldRegenerateChineseSummary(result.summary)) {
-        return result;
-      }
-
-      const retryResult = await completeJsonWithParseRetry(
-        itemSummaryConfig,
-        buildChineseSummaryRetryPrompt(userContent),
-        (output) => parseSummaryAndClassification(output, result),
-      );
-
-      if (retryResult == null) {
-        throw new Error("Item summary unavailable: retry model client is not configured.");
-      }
-
-      return {
-        summary: requireUsableGeneratedSummary(retryResult.summary, inputText),
-        isAggregation: retryResult.isAggregation,
-      };
-    },
-    async parseAggregation(inputText, metadata) {
-      const fallback = getFallbackAggregation();
-      const userContent = renderPromptTemplate(itemAggregationConfig.promptTemplate, {
-        title: metadata.title,
-        sourceName: metadata.sourceName ?? "未知来源",
-        maxEvents: aggregationSplitMaxEvents,
-        inputText,
-      });
-      const parsedAggregation = await completeJsonWithParseRetry(
-        itemAggregationConfig,
-        userContent,
-        (output) => parseAggregationOutput(output, fallback, aggregationSplitMaxEvents),
-      );
-
-      if (parsedAggregation == null) {
-        return fallback;
-      }
-
-      return parsedAggregation;
-    },
-    async enrichContent(inputText, metadata) {
-      const fallback = getFallbackEnrichment(metadata);
-      const executionClient = getExecutionClient(itemAnalysisConfig);
-
-      let lastFailureReason = "Unknown invalid ai enrichment response";
-      let recoveredFallback: AiEnrichment | null = null;
-      const userContent = renderPromptTemplate(itemAnalysisConfig.promptTemplate, {
+    async understandItem(inputText, metadata) {
+      const fallback = getFallbackUnderstanding(metadata);
+      const userContent = renderPromptTemplate(itemUnderstandingConfig.promptTemplate, {
         title: metadata.title,
         sourceName: metadata.sourceName ?? "未知来源",
         translateTitle: metadata.translateTitle ? "是" : "否",
+        maxEvents: aggregationSplitMaxEvents,
         inputText,
       });
+      const result = await completeJsonWithParseRetry(
+        itemUnderstandingConfig,
+        userContent,
+        (output) => parseItemUnderstandingOutput(
+          output,
+          inputText,
+          fallback,
+          metadata.translateTitle,
+          aggregationSplitMaxEvents,
+        ),
+      );
 
-      if (!executionClient) {
+      if (result == null) {
         return fallback;
       }
 
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const output = await completeTextWithCircuitBreaker(
-          itemAnalysisConfig,
-          userContent,
-          {
-            responseFormat: { type: "json_object" },
-          },
-        );
-
-        if (output == null) {
-          return fallback;
-        }
-
-        const parsed = parseJsonLikeEnrichment(output, fallback, metadata.translateTitle);
-
-        if (parsed.ok) {
-          if (!parsed.recovered) {
-            return parsed.value;
-          }
-
-          recoveredFallback = parsed.value;
-          lastFailureReason = `Recovered malformed model response: ${output.slice(0, 200)}`;
-          continue;
-        }
-
-        lastFailureReason = parsed.reason;
-      }
-
-      if (recoveredFallback) {
-        return recoveredFallback;
-      }
-
-      throw new Error(`Invalid AI enrichment response after retry. ${lastFailureReason}`);
+      return result;
     },
     async summarizeCluster(inputText, metadata) {
-      const fallback = inputText.trim();
       const userContent = renderPromptTemplate(clusterSummaryConfig.promptTemplate, {
         title: metadata.title,
         inputText,
       });
-      const output = await completeTextWithCircuitBreaker(
+      const output = await completeJsonWithParseRetry(
         clusterSummaryConfig,
         userContent,
+        parseClusterSummaryOutput,
       );
 
-      if (output == null) {
-        return fallback;
-      }
-
-      const summary = parseSummaryOutput(output, fallback);
-
-      if (!shouldRegenerateChineseSummary(summary)) {
-        return summary;
-      }
-
-      const retryOutput = await completeTextWithCircuitBreaker(
-        clusterSummaryConfig,
-        buildChineseSummaryRetryPrompt(userContent),
-      );
-
-      if (retryOutput == null) {
-        return summary;
-      }
-
-      return parseSummaryOutput(retryOutput, summary);
+      return output ?? "";
     },
     async matchClusterCandidate(inputText, metadata) {
       if (metadata.candidates.length === 0) {
@@ -1448,26 +1294,22 @@ export function createAiProvider(
       return groups ?? [];
     },
     async generateDailyReport(input) {
-      return completeTextWithCircuitBreaker(
+      return completeJsonWithParseRetry(
         dailyReportConfig,
         buildDailyReportUserPrompt(dailyReportConfig, input),
-        {
-          responseFormat: { type: "json_object" },
-        },
+        parseDailyReportJsonOutput,
       );
     },
     async repairDailyReportJson(rawContent) {
-      return completeTextWithCircuitBreaker(
+      return completeJsonWithParseRetry(
         {
           ...dailyReportConfig,
           systemPrompt: "你是 JSON 修复器。请把用户提供的内容修复为合法 JSON 对象，只输出修复后的 JSON，不要输出 Markdown、代码块或解释。不要补充新事实，不要改写字段含义。",
           temperature: 0,
-          maxTokens: dailyReportConfig.maxTokens ?? 4096,
+          maxTokens: Math.min(dailyReportConfig.maxTokens ?? 4096, MAX_DAILY_REPORT_REPAIR_TOKENS),
         },
         `待修复内容：\n${rawContent}`,
-        {
-          responseFormat: { type: "json_object" },
-        },
+        parseDailyReportJsonOutput,
       );
     },
   };

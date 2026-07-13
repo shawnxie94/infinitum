@@ -167,7 +167,7 @@ describe("/api/admin/clusters", () => {
     expect(response.status).toBe(200);
     expect(json.clusters[0]).toMatchObject({
       id: "cluster-1",
-      score: 79,
+      score: 84,
     });
   });
 

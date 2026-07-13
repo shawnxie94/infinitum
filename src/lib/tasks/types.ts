@@ -55,9 +55,7 @@ export type TaskTimelineNodeKey =
   | "task_finished"
   | "source_fetch"
   | "rule_filter"
-  | "item_summary"
-  | "item_aggregation"
-  | "item_analysis"
+  | "item_understanding"
   | "cluster_assignment"
   | "cluster_merge"
   | "cluster_finalize";
@@ -87,9 +85,7 @@ export type TaskTimelineNodeSnapshot = {
 };
 
 export type TaskAiCallBreakdownKey =
-  | "item_summary"
-  | "item_analysis"
-  | "item_aggregation"
+  | "item_understanding"
   | "cluster_match"
   | "cluster_summary"
   | "cluster_merge"

@@ -33,9 +33,7 @@ type IngestionDashboardProps = {
 
 const CHART_COLORS = {
   articles: "var(--accent)",
-  summaries: "#8884d8",
-  analyses: "#82ca9d",
-  aggregations: "#a78bfa",
+  itemUnderstandings: "#8884d8",
   clusterMatches: "#ffc658",
   clusterMerges: "#06b6d4",
   clusterSummaries: "#ff7300",
@@ -47,9 +45,7 @@ const CHART_COLORS = {
 
 const AI_USAGE_SERIES = [
   { dataKey: "totalCalls", name: "总调用", color: CHART_COLORS.totalCalls, strokeWidth: 2 },
-  { dataKey: "summaries", name: "摘要生成", color: CHART_COLORS.summaries, strokeWidth: 1.5 },
-  { dataKey: "analyses", name: "内容分析", color: CHART_COLORS.analyses, strokeWidth: 1.5 },
-  { dataKey: "aggregations", name: "聚合拆条", color: CHART_COLORS.aggregations, strokeWidth: 1.5 },
+  { dataKey: "itemUnderstandings", name: "条目理解", color: CHART_COLORS.itemUnderstandings, strokeWidth: 1.5 },
   { dataKey: "clusterMatches", name: "聚合匹配", color: CHART_COLORS.clusterMatches, strokeWidth: 1.5 },
   { dataKey: "clusterMerges", name: "聚合合并", color: CHART_COLORS.clusterMerges, strokeWidth: 1.5 },
   { dataKey: "clusterSummaries", name: "聚合摘要", color: CHART_COLORS.clusterSummaries, strokeWidth: 1.5 },

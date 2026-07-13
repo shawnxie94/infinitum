@@ -65,7 +65,7 @@ describe("/api/admin/settings", () => {
         {
           id: "prompt-1",
           name: "默认条目摘要提示词",
-          type: "item_summary",
+          type: "item_understanding",
           prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
           systemPrompt: "摘要内容",
           temperature: null,
@@ -105,7 +105,7 @@ describe("/api/admin/settings", () => {
 
     expect(response.status).toBe(200);
     expect(json.modelApiConfigs[0].apiKeyMasked).toBe("••••••••••••");
-    expect(json.promptConfigs[0].type).toBe("item_summary");
+    expect(json.promptConfigs[0].type).toBe("item_understanding");
     expect(json.taskSchedule.key).toBe("ingestion_default");
   });
 
@@ -315,7 +315,7 @@ describe("/api/admin/settings", () => {
         method: "POST",
         body: JSON.stringify({
           name: "默认条目摘要提示词",
-          type: "item_summary",
+          type: "item_understanding",
           prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
           systemPrompt: "摘要内容",
           temperature: null,
@@ -334,7 +334,7 @@ describe("/api/admin/settings", () => {
     expect(response.status).toBe(201);
     expect(createPromptConfig).toHaveBeenCalledWith({
       name: "默认条目摘要提示词",
-      type: "item_summary",
+      type: "item_understanding",
       prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
       systemPrompt: "摘要内容",
       temperature: null,
@@ -397,7 +397,7 @@ describe("/api/admin/settings", () => {
         method: "POST",
         body: JSON.stringify({
           name: "默认聚合拆分提示词",
-          type: "item_aggregation",
+          type: "item_understanding",
           prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
           systemPrompt: "聚合拆分系统提示词",
           temperature: 0,
@@ -416,7 +416,7 @@ describe("/api/admin/settings", () => {
     expect(response.status).toBe(201);
     expect(createPromptConfig).toHaveBeenCalledWith({
       name: "默认聚合拆分提示词",
-      type: "item_aggregation",
+      type: "item_understanding",
       prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
       systemPrompt: "聚合拆分系统提示词",
       temperature: 0,

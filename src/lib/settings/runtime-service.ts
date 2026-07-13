@@ -63,9 +63,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
     throw new Error("缺少启用中的默认模型配置。");
   }
 
-  const itemAnalysisConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.item_analysis);
-  const itemSummaryConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.item_summary);
-  const itemAggregationConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.item_aggregation);
+  const itemUnderstandingConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.item_understanding);
   const clusterSummaryConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.cluster_summary);
   const clusterMatchConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.cluster_match);
   const clusterMergeConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.cluster_merge);
@@ -85,18 +83,14 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
     contentExtraction: serializeRuntimeContentExtractionConfig(contentExtractionConfig),
     modelApi: serializeRuntimeModelApi(defaultModelConfig),
     prompts: {
-      itemSummary: resolvePromptSystemPrompt(itemSummaryConfig),
-      itemAnalysis: resolvePromptSystemPrompt(itemAnalysisConfig),
-      itemAggregation: resolvePromptSystemPrompt(itemAggregationConfig),
+      itemUnderstanding: resolvePromptSystemPrompt(itemUnderstandingConfig),
       clusterSummary: resolvePromptSystemPrompt(clusterSummaryConfig),
       clusterMatch: resolvePromptSystemPrompt(clusterMatchConfig),
       clusterMerge: resolvePromptSystemPrompt(clusterMergeConfig),
       dailyReport: resolvePromptSystemPrompt(dailyReportConfig),
     },
     selectedPromptConfigs: {
-      itemSummary: serializeSelectedPromptConfig(itemSummaryConfig),
-      itemAnalysis: serializeSelectedPromptConfig(itemAnalysisConfig),
-      itemAggregation: serializeSelectedPromptConfig(itemAggregationConfig),
+      itemUnderstanding: serializeSelectedPromptConfig(itemUnderstandingConfig),
       clusterSummary: serializeSelectedPromptConfig(clusterSummaryConfig),
       clusterMatch: serializeSelectedPromptConfig(clusterMatchConfig),
       clusterMerge: serializeSelectedPromptConfig(clusterMergeConfig),

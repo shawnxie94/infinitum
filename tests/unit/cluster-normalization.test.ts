@@ -24,6 +24,8 @@ describe("cluster normalization helpers", () => {
     expect(normalizeEventObjectForStorage("新版 Agents SDK 服务")).toBe("Agents SDK");
     expect(normalizeEventObjectForStorage("toolkit API")).toBe("toolkit API");
     expect(normalizeEventObjectForStorage("toolkit enterprise")).toBe("toolkit enterprise");
+    expect(normalizeEventObjectForStorage("Phone (4b)")).toBe("Phone (4b)");
+    expect(normalizeEventObjectForStorage("Phone（4b）手机")).toBe("Phone（4b）手机");
   });
 
   it("normalizes an event signature for storage without translating entities", () => {

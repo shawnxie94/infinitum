@@ -45,52 +45,16 @@ function buildInitialSettings(): AdminSettingsSnapshot {
     promptConfigs: [
       {
         id: "prompt-0",
-        name: "默认条目摘要提示词",
-        type: "item_summary" as const,
-        prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
-        systemPrompt: "请总结单条内容。",
-        templateJson: null,
-        temperature: 0.2,
-        maxTokens: 300,
-        topP: 1,
-        modelApiConfigId: "",
-        modelApiConfigName: "默认模型配置",
-        isUsingDefaultModel: true,
-        isEnabled: true,
-        isDefault: true,
-        createdAt: "2026-04-20T10:00:00.000Z",
-        updatedAt: "2026-04-20T10:00:00.000Z",
-      },
-      {
-        id: "prompt-1",
-        name: "默认内容分析提示词",
-        type: "item_analysis" as const,
-        prompt: "标题：{{title}}\n正文：{{inputText}}",
-        systemPrompt: "请分析内容并输出 JSON。",
-        templateJson: null,
-        temperature: 0.2,
-        maxTokens: 900,
-        topP: 1,
-        modelApiConfigId: "model-1",
-        modelApiConfigName: "默认模型配置",
-        isUsingDefaultModel: false,
-        isEnabled: true,
-        isDefault: true,
-        createdAt: "2026-04-20T10:00:00.000Z",
-        updatedAt: "2026-04-20T10:00:00.000Z",
-      },
-      {
-        id: "prompt-2",
-        name: "默认聚合拆分提示词",
-        type: "item_aggregation" as const,
-        prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
-        systemPrompt: "请拆分聚合信息并输出 JSON。",
+        name: "默认条目理解提示词",
+        type: "item_understanding" as const,
+        prompt: "标题：{{title}}\n来源：{{sourceName}}\n最多拆分事件数：{{maxEvents}}\n正文：{{inputText}}",
+        systemPrompt: "请一次完成条目理解并输出 JSON。",
         templateJson: null,
         temperature: 0,
         maxTokens: 8000,
         topP: null,
-        modelApiConfigId: null,
-        modelApiConfigName: null,
+        modelApiConfigId: "",
+        modelApiConfigName: "默认模型配置",
         isUsingDefaultModel: true,
         isEnabled: true,
         isDefault: true,
@@ -441,16 +405,10 @@ describe("AdminSettingsPanel", () => {
     await user.click(screen.getByRole("tab", { name: "提示词" }));
 
     expect(screen.getByText("提示词配置")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "条目摘要" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "聚合拆分" })).toBeInTheDocument();
-    // 切换到"内容分析"标签页以查看内容分析类提示词
-    await user.click(screen.getByRole("button", { name: "内容分析" }));
-    expect(screen.getByText("默认内容分析提示词")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "条目理解" })).toBeInTheDocument();
+    expect(screen.getByText("默认条目理解提示词")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "预览" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "聚合拆分" }));
-    expect(screen.getByText("默认聚合拆分提示词")).toBeInTheDocument();
   });
 
   it("disables deleting default model and prompt configs", async () => {
@@ -742,7 +700,7 @@ describe("AdminSettingsPanel", () => {
     renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
 
     await user.click(screen.getByRole("tab", { name: "提示词" }));
-    await user.click(screen.getByRole("button", { name: "条目摘要" }));
+    await user.click(screen.getByRole("button", { name: "条目理解" }));
     await user.click(screen.getAllByRole("button", { name: /创建配置/i })[0]);
     await user.clear(screen.getByLabelText(/配置名称/));
     await user.type(screen.getByLabelText(/配置名称/), "新的条目摘要提示词");
@@ -761,7 +719,7 @@ describe("AdminSettingsPanel", () => {
         },
         body: JSON.stringify({
           name: "新的条目摘要提示词",
-          type: "item_summary",
+          type: "item_understanding",
           prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
           systemPrompt: "总结单条内容",
           templateJson: null,
@@ -792,10 +750,10 @@ describe("AdminSettingsPanel", () => {
     expect(within(dialog).getByText(/可使用占位符：\s+\{\{clustersJson\}\}/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
 
-    await user.click(screen.getByRole("button", { name: "聚合拆分" }));
+    await user.click(screen.getByRole("button", { name: "条目理解" }));
     await user.click(screen.getAllByRole("button", { name: /创建配置/i })[0]);
     dialog = screen.getByRole("dialog", { name: "创建新提示词配置" });
-    expect(within(dialog).getByText(/可使用占位符：\s+\{\{title\}\} \/ \{\{sourceName\}\} \/ \{\{inputText\}\}/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/\{\{maxEvents\}\}/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
 
     await user.click(screen.getByRole("button", { name: "AI 日报" }));
@@ -916,7 +874,7 @@ describe("AdminSettingsPanel", () => {
       <AdminSettingsPanel
         initialSettings={buildInitialSettings()}
         activeSection="ai-prompt"
-        initialPromptType="item_summary"
+        initialPromptType="item_understanding"
       />,
     );
 

@@ -423,9 +423,16 @@ export function buildClusterMatchInput(
     .join("\n");
 }
 
-function buildClusterFallback(clusterItems: ItemWithSource[], existingTitle?: string) {
+function buildClusterFallback(
+  clusterItems: ItemWithSource[],
+  existingTitle?: string,
+  options?: { preferEventTitleFallback?: boolean },
+) {
   const primary = clusterItems[0]!;
-  const title = existingTitle || getDisplayTitle(primary.originalTitle, primary.translatedTitle);
+  const eventTitle = options?.preferEventTitleFallback
+    ? buildEventDisplayTitle(buildClusterEventSignature(clusterItems))
+    : "";
+  const title = eventTitle || existingTitle || getDisplayTitle(primary.originalTitle, primary.translatedTitle);
 
   if (clusterItems.length === 1) {
     return {
@@ -444,10 +451,6 @@ function buildClusterFallback(clusterItems: ItemWithSource[], existingTitle?: st
   };
 }
 
-function stripPresentationCodeFence(value: string): string {
-  return value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-}
-
 function normalizePresentationTitle(value: string | null | undefined, fallback: string) {
   const title = value
     ?.replace(/[\r\n]+/g, " ")
@@ -457,14 +460,36 @@ function normalizePresentationTitle(value: string | null | undefined, fallback: 
   return title || fallback;
 }
 
+const CLUSTER_PRESENTATION_REASONING_MARKERS = [
+  "分析请求",
+  "分析候选内容",
+  "提炼共同事件",
+  "撰写 title",
+  "撰写 summary",
+  "输出格式",
+  "最终输出",
+];
+
+function isAcceptableClusterPresentation(value: { title: string; summary: string }) {
+  const title = value.title.trim();
+  const summary = value.summary.trim();
+  const normalizedSummary = summary.toLowerCase();
+
+  if (!title || !summary || title.length > 80 || summary.length > 400) {
+    return false;
+  }
+
+  return !CLUSTER_PRESENTATION_REASONING_MARKERS.some((marker) => normalizedSummary.includes(marker));
+}
+
 function parseClusterPresentationOutput(
   rawContent: string | null | undefined,
   fallback: { title: string; summary: string },
 ) {
-  const normalized = stripPresentationCodeFence(rawContent ?? "");
+  const normalized = rawContent?.trim() ?? "";
 
   if (!normalized) {
-    return fallback;
+    return null;
   }
 
   try {
@@ -473,63 +498,20 @@ function parseClusterPresentationOutput(
       summary?: string | null;
     };
 
-    return {
+    const presentation = {
       title: normalizePresentationTitle(parsed.title, fallback.title),
       summary: parsed.summary?.trim() || fallback.summary,
     };
+
+    return isAcceptableClusterPresentation(presentation) ? presentation : null;
   } catch {
-    const recovered = parseMalformedClusterPresentationOutput(normalized, fallback);
-    if (recovered) {
-      return recovered;
-    }
-
-    if (looksLikeClusterPresentationJson(normalized)) {
-      return fallback;
-    }
-
-    return {
-      title: fallback.title,
-      summary: normalized || fallback.summary,
-    };
+    return null;
   }
 }
 
-function looksLikeClusterPresentationJson(value: string) {
-  return /"?title"?\s*:/i.test(value) || /"?summary"?\s*:/i.test(value);
-}
+type ClusterSummaryProvider = Pick<AiProvider, "summarizeCluster">;
 
-function parseMalformedClusterPresentationOutput(
-  value: string,
-  fallback: { title: string; summary: string },
-) {
-  const titleMatch = value.match(/"?title"?\s*:\s*"([\s\S]*?)"\s*,?\s*"?summary"?\s*:/i);
-  const summaryKeyMatch = value.match(/"?summary"?\s*:\s*"/i);
-
-  if (!summaryKeyMatch) {
-    return null;
-  }
-
-  const summaryStart = summaryKeyMatch.index! + summaryKeyMatch[0].length;
-  const summaryEndMatch = value.slice(summaryStart).match(/"\s*}\s*$/);
-  const summaryEnd = summaryEndMatch?.index;
-
-  if (summaryEnd == null) {
-    return null;
-  }
-
-  const summary = value.slice(summaryStart, summaryStart + summaryEnd).trim();
-
-  if (!summary) {
-    return null;
-  }
-
-  return {
-    title: normalizePresentationTitle(titleMatch?.[1], fallback.title),
-    summary,
-  };
-}
-
-function shouldGenerateAiClusterSummary(clusterItems: ItemWithSource[], aiProvider?: AiProvider) {
+function shouldGenerateAiClusterSummary(clusterItems: ItemWithSource[], aiProvider?: ClusterSummaryProvider) {
   return Boolean(aiProvider) && clusterItems.length >= 2;
 }
 
@@ -560,9 +542,10 @@ export function buildClusterSummaryInputHash(clusterItems: ItemWithSource[]) {
 export async function generateClusterPresentation(
   clusterItems: ItemWithSource[],
   existingTitle?: string,
-  aiProvider?: AiProvider,
+  aiProvider?: ClusterSummaryProvider,
+  options?: { preferEventTitleFallback?: boolean },
 ) {
-  const fallback = buildClusterFallback(clusterItems, existingTitle);
+  const fallback = buildClusterFallback(clusterItems, existingTitle, options);
 
   if (!shouldGenerateAiClusterSummary(clusterItems, aiProvider)) {
     return {
@@ -581,13 +564,20 @@ export async function generateClusterPresentation(
       await summaryProvider.summarizeCluster(summarySeed, { title: fallback.title }),
       fallback,
     );
+    if (!aiPresentation) {
+      return {
+        ...fallback,
+        summaryAttempted: true,
+        summarySucceeded: false,
+      };
+    }
     if (shouldRegenerateChineseSummary(aiPresentation.summary)) {
       aiPresentation = parseClusterPresentationOutput(
         await summaryProvider.summarizeCluster(summarySeed, { title: fallback.title }),
         fallback,
       );
     }
-    if (shouldRegenerateChineseSummary(aiPresentation.summary)) {
+    if (!aiPresentation || shouldRegenerateChineseSummary(aiPresentation.summary)) {
       return {
         ...fallback,
         summaryAttempted: true,

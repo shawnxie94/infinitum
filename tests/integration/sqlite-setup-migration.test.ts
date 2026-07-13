@@ -112,6 +112,8 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'summaryStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'analysisStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'manualClusterAssignedAt'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_reports') WHERE "name" = 'candidateSnapshot'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('sources') WHERE "name" = 'healthStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'displayItemCount'`)).toBe("1");
@@ -179,6 +181,12 @@ describe("sqlite setup", () => {
         'prompt-removed-chat', '旧日报微调对话提示词', 'daily_report_refinement_chat', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
       ), (
         'prompt-removed-generate', '旧日报微调生成提示词', 'daily_report_refinement_generate', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
+      ), (
+        'prompt-item-summary', '旧条目摘要提示词', 'item_summary', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
+      ), (
+        'prompt-item-analysis', '旧内容分析提示词', 'item_analysis', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
+      ), (
+        'prompt-item-aggregation', '旧聚合拆分提示词', 'item_aggregation', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
       );
       `,
     );
@@ -191,7 +199,50 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('prompt_configs') WHERE "name" = 'templateJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT "name" FROM "prompt_configs" WHERE "id" = 'prompt-old'`)).toBe("旧日报提示词");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('daily_report_refinement_chat', 'daily_report_refinement_generate')`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('item_summary', 'item_analysis', 'item_aggregation')`)).toBe("0");
   });
+
+  it("adds unified understanding columns to an existing item table without dropping items", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-understanding-upgrade-"));
+    const dbPath = path.join(tempDir, "understanding-upgrade.db");
+
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    runSqlite(
+      dbPath,
+      `
+      PRAGMA trusted_schema = ON;
+      INSERT INTO "sources" (
+        "id", "name", "rssUrl", "siteUrl", "enabled", "aiParsingEnabled", "aggregationEnabled", "aggregationDetectionEnabled", "updatedAt"
+      ) VALUES (
+        'source-understanding-upgrade', 'Upgrade Source', 'https://upgrade.example.com/feed.xml', 'https://upgrade.example.com',
+        true, true, true, false, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "items" (
+        "id", "sourceId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle", "publishedAt",
+        "status", "moderationStatus", "qualityScore", "qualityRationale", "language", "createdAt", "updatedAt"
+      ) VALUES (
+        'item-understanding-upgrade', 'source-understanding-upgrade', 'https://upgrade.example.com/item',
+        'https://upgrade.example.com/item', 'item-understanding-upgrade', 'Existing item', CURRENT_TIMESTAMP,
+        'processed', 'allowed', 50, 'existing', 'en', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      ALTER TABLE "items" DROP COLUMN "understandingInputHash";
+      ALTER TABLE "items" DROP COLUMN "understandingVersion";
+      `,
+    );
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT "originalTitle" FROM "items" WHERE "id" = 'item-understanding-upgrade'`)).toBe("Existing item");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("1");
+  }, 20_000);
 
   it("drops legacy dedupeSignature columns during setup", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-dedupe-cleanup-"));

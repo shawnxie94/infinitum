@@ -107,9 +107,7 @@ const checkboxInputClassName =
   "h-4 w-4 rounded border-[color:var(--line)] text-[var(--accent)] focus:ring-[rgba(59,130,246,0.35)]";
 
 const PROMPT_PLACEHOLDERS_BY_TYPE: Record<PromptConfigType, string[]> = {
-  item_summary: ["{{title}}", "{{sourceName}}", "{{inputText}}"],
-  item_analysis: ["{{title}}", "{{sourceName}}", "{{translateTitle}}", "{{inputText}}"],
-  item_aggregation: ["{{title}}", "{{sourceName}}", "{{inputText}}"],
+  item_understanding: ["{{title}}", "{{sourceName}}", "{{translateTitle}}", "{{maxEvents}}", "{{inputText}}"],
   cluster_summary: ["{{title}}", "{{inputText}}"],
   cluster_match: ["{{title}}", "{{inputText}}", "{{candidatesJson}}"],
   cluster_merge: ["{{clustersJson}}"],
@@ -223,7 +221,7 @@ function updatePromptTypeUrl(promptType: PromptConfigType) {
   }
 
   const url = new URL(window.location.href);
-  if (promptType === "item_summary") {
+  if (promptType === "item_understanding") {
     url.searchParams.delete("promptType");
   } else {
     url.searchParams.set("promptType", promptType);
@@ -231,7 +229,7 @@ function updatePromptTypeUrl(promptType: PromptConfigType) {
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "item_summary" }: AiSettingsPanelProps) {
+export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "item_understanding" }: AiSettingsPanelProps) {
   const { showToast } = useToast();
   const [modelConfigs, setModelConfigs] = useState(initialSettings.modelApiConfigs);
   const [promptConfigs, setPromptConfigs] = useState(initialSettings.promptConfigs);
@@ -257,7 +255,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [promptModalMode, setPromptModalMode] = useState<"create" | "edit" | "duplicate">("create");
   const [editingPromptConfig, setEditingPromptConfig] = useState<AdminPromptConfig | null>(null);
-  const [promptForm, setPromptForm] = useState<PromptFormState>(buildEmptyPromptForm("item_summary"));
+  const [promptForm, setPromptForm] = useState<PromptFormState>(buildEmptyPromptForm("item_understanding"));
   const [showPromptAdvanced, setShowPromptAdvanced] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState<AdminPromptConfig | null>(null);

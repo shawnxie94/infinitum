@@ -465,8 +465,8 @@ describe("background task persistence", () => {
       aiCallCountEstimated: 8,
       aiCallBreakdown: [
         {
-          key: "item_analysis",
-          label: "内容分析",
+          key: "item_understanding",
+          label: "条目理解",
           actual: 1,
           estimated: 2,
         },
@@ -507,22 +507,10 @@ describe("background task persistence", () => {
           ],
         },
         {
-          key: "item_summary",
-          label: "条目摘要",
+          key: "item_understanding",
+          label: "条目理解",
           status: "succeeded",
           startedAt: "2026-04-12T00:00:10.000Z",
-          finishedAt: "2026-04-12T00:00:14.000Z",
-          durationMs: 4_000,
-          metrics: [
-            { label: "完成", value: 4 },
-            { label: "失败", value: 0 },
-          ],
-        },
-        {
-          key: "item_analysis",
-          label: "内容分析",
-          status: "succeeded",
-          startedAt: "2026-04-12T00:00:15.000Z",
           finishedAt: "2026-04-12T00:00:20.000Z",
           durationMs: 5_000,
           metrics: [
@@ -554,22 +542,10 @@ describe("background task persistence", () => {
     expect(snapshot.recentTasks[0]?.aiCallCountEstimated).toBe(8);
     expect(snapshot.recentTasks[0]?.aiCallBreakdown).toEqual([
       {
-        key: "item_summary",
-        label: "条目摘要",
-        actual: 0,
-        estimated: 0,
-      },
-      {
-        key: "item_analysis",
-        label: "内容分析",
+        key: "item_understanding",
+        label: "条目理解",
         actual: 1,
         estimated: 2,
-      },
-      {
-        key: "item_aggregation",
-        label: "聚合拆条",
-        actual: 0,
-        estimated: 0,
       },
       {
         key: "cluster_match",
@@ -621,23 +597,10 @@ describe("background task persistence", () => {
         ],
       },
       {
-        key: "item_summary",
-        label: "条目摘要",
+        key: "item_understanding",
+        label: "条目理解",
         status: "succeeded",
         startedAt: "2026-04-12T00:00:10.000Z",
-        finishedAt: "2026-04-12T00:00:14.000Z",
-        durationMs: 4_000,
-        modelName: null,
-        metrics: [
-          { label: "完成", value: 4 },
-          { label: "失败", value: 0 },
-        ],
-      },
-      {
-        key: "item_analysis",
-        label: "内容分析",
-        status: "succeeded",
-        startedAt: "2026-04-12T00:00:15.000Z",
         finishedAt: "2026-04-12T00:00:20.000Z",
         durationMs: 5_000,
         modelName: null,

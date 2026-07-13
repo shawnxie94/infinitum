@@ -3,9 +3,7 @@ import {
   DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE,
   DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE,
   DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
-  DEFAULT_ITEM_AGGREGATION_USER_PROMPT_TEMPLATE,
-  DEFAULT_ITEM_ANALYSIS_USER_PROMPT_TEMPLATE,
-  DEFAULT_ITEM_SUMMARY_USER_PROMPT_TEMPLATE,
+  DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
 } from "@/config/prompts";
 import type { PromptConfigType } from "@/lib/settings/types";
 
@@ -13,9 +11,7 @@ export const PROMPT_TYPE_OPTIONS: Array<{
   value: PromptConfigType;
   label: string;
 }> = [
-  { value: "item_summary", label: "条目摘要" },
-  { value: "item_analysis", label: "内容分析" },
-  { value: "item_aggregation", label: "聚合拆分" },
+  { value: "item_understanding", label: "条目理解" },
   { value: "cluster_summary", label: "聚合摘要" },
   { value: "cluster_match", label: "归组判定" },
   { value: "cluster_merge", label: "聚合合并" },
@@ -28,12 +24,8 @@ export function getPromptTypeLabel(type: PromptConfigType): string {
 
 export function getDefaultPromptConfigName(type: PromptConfigType): string {
   switch (type) {
-    case "item_summary":
-      return "默认条目摘要提示词";
-    case "item_analysis":
-      return "默认内容分析提示词";
-    case "item_aggregation":
-      return "默认聚合拆分提示词";
+    case "item_understanding":
+      return "默认条目理解提示词";
     case "cluster_summary":
       return "默认聚合摘要提示词";
     case "cluster_match":
@@ -47,12 +39,8 @@ export function getDefaultPromptConfigName(type: PromptConfigType): string {
 
 export function getDefaultPromptTemplate(type: PromptConfigType): string {
   switch (type) {
-    case "item_summary":
-      return DEFAULT_ITEM_SUMMARY_USER_PROMPT_TEMPLATE;
-    case "item_analysis":
-      return DEFAULT_ITEM_ANALYSIS_USER_PROMPT_TEMPLATE;
-    case "item_aggregation":
-      return DEFAULT_ITEM_AGGREGATION_USER_PROMPT_TEMPLATE;
+    case "item_understanding":
+      return DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE;
     case "cluster_summary":
       return DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE;
     case "cluster_match":
@@ -70,19 +58,7 @@ export function getDefaultPromptSampling(type: PromptConfigType): {
   topP: number | null;
 } {
   switch (type) {
-    case "item_summary":
-      return {
-        temperature: 0.2,
-        maxTokens: 600,
-        topP: null,
-      };
-    case "item_analysis":
-      return {
-        temperature: 0.2,
-        maxTokens: 1000,
-        topP: null,
-      };
-    case "item_aggregation":
+    case "item_understanding":
       return {
         temperature: 0,
         maxTokens: 8000,
@@ -91,7 +67,7 @@ export function getDefaultPromptSampling(type: PromptConfigType): {
     case "cluster_summary":
       return {
         temperature: 0.2,
-        maxTokens: 450,
+        maxTokens: 2000,
         topP: null,
       };
     case "cluster_match":

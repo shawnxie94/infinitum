@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiProvider } from "@/lib/ai/provider";
 import { normalizeFingerprint } from "@/lib/clusters/helpers";
 import { executeClusterSummaryTask } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
@@ -13,53 +12,7 @@ import {
   regenerateItemContent,
 } from "@/lib/items/service";
 import { replaceItemTags } from "@/lib/tags/service";
-
-function buildEventSignature(
-  overrides: Partial<{
-    eventType: "release" | "launch" | "update" | "funding" | "acquisition" | "partnership" | "policy" | "research" | "security" | "other" | null;
-    eventSubject: string | null;
-    eventAction: string | null;
-    eventObject: string | null;
-    eventDate: string | null;
-  }> = {},
-) {
-  return {
-    eventType: null,
-    eventSubject: null,
-    eventAction: null,
-    eventObject: null,
-    eventDate: null,
-    ...overrides,
-  };
-}
-
-function buildAiProviderMock(
-  overrides?: Partial<{
-    summarizeItem: ReturnType<typeof vi.fn>;
-    parseAggregation: ReturnType<typeof vi.fn>;
-    enrichContent: ReturnType<typeof vi.fn>;
-    summarizeCluster: ReturnType<typeof vi.fn>;
-    matchClusterCandidate: ReturnType<typeof vi.fn>;
-  }>,
-): AiProvider {
-  const base = {
-    summarizeItem: vi.fn().mockResolvedValue({summary: "默认条目摘要", isAggregation: false}),
-    parseAggregation: vi.fn().mockResolvedValue({ mainEvent: null, events: [] }),
-    enrichContent: vi.fn().mockResolvedValue({
-      translatedTitle: "默认中文标题",
-      moderationStatus: "allowed",
-      moderationReason: null,
-      moderationDetail: null,
-      qualityScore: 80,
-      qualityRationale: "高质量",
-      eventSignature: buildEventSignature(),
-      tags: [],
-    }),
-    summarizeCluster: vi.fn().mockResolvedValue("默认聚合摘要"),
-    matchClusterCandidate: vi.fn().mockResolvedValue(null),
-  };
-  return { ...base, ...(overrides as unknown as Partial<AiProvider>) } as AiProvider;
-}
+import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
 
 describe("regenerateItemContent", () => {
   beforeEach(async () => {
@@ -119,7 +72,7 @@ describe("regenerateItemContent", () => {
 
     const regenerated = await regenerateItemContent(item.id, "translation", {
       aiProvider: buildAiProviderMock({
-        enrichContent: vi.fn().mockResolvedValue({
+        analysisFixture: vi.fn().mockResolvedValue({
           translatedTitle: "新的中文标题",
           moderationStatus: "allowed",
           moderationReason: null,
@@ -171,7 +124,7 @@ describe("regenerateItemContent", () => {
 
     const regenerated = await regenerateItemContent(item.id, "summary", {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
+        summaryFixture: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
         summarizeCluster: vi.fn().mockResolvedValue("聚合摘要"),
         matchClusterCandidate: vi.fn().mockResolvedValue(null),
       }),
@@ -210,7 +163,7 @@ describe("regenerateItemContent", () => {
 
     await regenerateItemContent(item.id, "summary", {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
+        summaryFixture: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
         summarizeCluster: vi.fn().mockResolvedValue("聚合摘要"),
         matchClusterCandidate: vi.fn().mockResolvedValue(null),
       }),
@@ -222,49 +175,6 @@ describe("regenerateItemContent", () => {
       orderBy: { createdAt: "asc" },
     });
     expect(storedTags.map((entry) => entry.tag.normalized)).toEqual(["openai", "benchmark"]);
-  });
-
-  it("retries item summary regeneration once when the first AI summary is English", async () => {
-    const source = await prisma.source.create({
-      data: {
-        name: "Example Feed",
-        rssUrl: "https://example.com/feed.xml",
-        siteUrl: "https://example.com",
-        enabled: true,
-        aiParsingEnabled: true,
-      },
-    });
-
-    const item = await prisma.item.create({
-      data: {
-        sourceId: source.id,
-        originalUrl: "https://example.com/posts/english-summary",
-        canonicalUrl: "https://example.com/posts/english-summary",
-        urlHash: "hash-english-summary",
-        originalTitle: "Anthropic launches an enterprise AI services company",
-        translatedTitle: "Anthropic 推出企业 AI 服务公司",
-        summaryText: "旧摘要",
-        publishedAt: new Date("2026-04-10T09:45:00.000Z"),
-        status: "processed",
-        language: "en",
-        fullText: "Anthropic announced a new enterprise AI services company with several financial partners.",
-      },
-    });
-    const summarizeItem = vi
-      .fn()
-      .mockResolvedValueOnce({summary: "Anthropic announced a new enterprise AI services company with financial partners.", isAggregation: false})
-      .mockResolvedValueOnce({summary: "Anthropic 与多家金融机构共同成立企业 AI 服务公司。", isAggregation: false});
-
-    const regenerated = await regenerateItemContent(item.id, "summary", {
-      aiProvider: buildAiProviderMock({
-        summarizeItem,
-        summarizeCluster: vi.fn().mockResolvedValue("聚合摘要"),
-        matchClusterCandidate: vi.fn().mockResolvedValue(null),
-      }),
-    });
-
-    expect(summarizeItem).toHaveBeenCalledTimes(2);
-    expect(regenerated.summaryText).toBe("Anthropic 与多家金融机构共同成立企业 AI 服务公司。");
   });
 
   it("keeps the old value and records the error when regeneration fails", async () => {
@@ -296,7 +206,7 @@ describe("regenerateItemContent", () => {
 
     const regenerated = await regenerateItemContent(item.id, "summary", {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockRejectedValue(new Error("Upstream regeneration failed")),
+        summaryFixture: vi.fn().mockRejectedValue(new Error("Upstream regeneration failed")),
         summarizeCluster: vi.fn().mockResolvedValue("聚合摘要"),
         matchClusterCandidate: vi.fn().mockResolvedValue(null),
       }),
@@ -304,91 +214,6 @@ describe("regenerateItemContent", () => {
 
     expect(regenerated.summaryText).toBe("保留原摘要");
     expect(regenerated.errorMessage).toContain("Upstream regeneration failed");
-  });
-
-  it("keeps the old value when regenerated summary resembles full article text", async () => {
-    const source = await prisma.source.create({
-      data: {
-        name: "Example Feed",
-        rssUrl: "https://example.com/feed.xml",
-        siteUrl: "https://example.com",
-        enabled: true,
-        aiParsingEnabled: true,
-      },
-    });
-    const fullText = "Body for regeneration that must not be stored as a summary. ".repeat(40).trim();
-    const item = await prisma.item.create({
-      data: {
-        sourceId: source.id,
-        originalUrl: "https://example.com/posts/source-like-summary",
-        canonicalUrl: "https://example.com/posts/source-like-summary",
-        urlHash: "hash-source-like-summary",
-        originalTitle: "OpenAI model update",
-        translatedTitle: "保留原标题",
-        summaryText: "保留原摘要",
-        publishedAt: new Date("2026-04-10T10:05:00.000Z"),
-        status: "processed",
-        language: "en",
-        fullText,
-      },
-    });
-
-    const regenerated = await regenerateItemContent(item.id, "summary", {
-      aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: fullText, isAggregation: false}),
-        summarizeCluster: vi.fn().mockResolvedValue("聚合摘要"),
-        matchClusterCandidate: vi.fn().mockResolvedValue(null),
-      }),
-    });
-
-    expect(regenerated.summaryText).toBe("保留原摘要");
-    expect(regenerated.summaryStatus).toBe("failed");
-    expect(regenerated.errorMessage).toContain("Invalid item summary response");
-  });
-
-  it("keeps the old value and records the error when regenerated summaries remain English", async () => {
-    const source = await prisma.source.create({
-      data: {
-        name: "Example Feed",
-        rssUrl: "https://example.com/feed.xml",
-        siteUrl: "https://example.com",
-        enabled: true,
-        aiParsingEnabled: true,
-      },
-    });
-
-    const item = await prisma.item.create({
-      data: {
-        sourceId: source.id,
-        originalUrl: "https://example.com/posts/english-after-retry",
-        canonicalUrl: "https://example.com/posts/english-after-retry",
-        urlHash: "hash-english-after-retry",
-        originalTitle: "SAS sells AI to Fortune 500 companies",
-        translatedTitle: "SAS 向财富500强企业推销AI",
-        summaryText: "保留中文旧摘要",
-        publishedAt: new Date("2026-04-10T10:15:00.000Z"),
-        status: "processed",
-        language: "en",
-        fullText: "Body for regeneration",
-      },
-    });
-    const summarizeItem = vi
-      .fn()
-      .mockResolvedValueOnce({summary: "SAS explains AI is just a tool for enterprise customers.", isAggregation: false})
-      .mockResolvedValueOnce({summary: "SAS still explains AI is just a tool for enterprise customers.", isAggregation: false});
-
-    const regenerated = await regenerateItemContent(item.id, "summary", {
-      aiProvider: buildAiProviderMock({
-        summarizeItem,
-        summarizeCluster: vi.fn().mockResolvedValue("聚合摘要"),
-        matchClusterCandidate: vi.fn().mockResolvedValue(null),
-      }),
-    });
-
-    expect(summarizeItem).toHaveBeenCalledTimes(2);
-    expect(regenerated.summaryText).toBe("保留中文旧摘要");
-    expect(regenerated.summaryStatus).toBe("failed");
-    expect(regenerated.errorMessage).toContain("AI summary is not Chinese after retry");
   });
 
   it("records ai usage for item summary regeneration tasks", async () => {
@@ -468,7 +293,7 @@ describe("regenerateItemContent", () => {
 
     await executeItemRegenerationTask(taskRun, "summary", {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
+        summaryFixture: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
         summarizeCluster: vi.fn().mockResolvedValue("新的聚合摘要"),
         matchClusterCandidate: vi.fn().mockResolvedValue(null),
       }),
@@ -480,11 +305,10 @@ describe("regenerateItemContent", () => {
 
     expect(storedTaskRun.status).toBe("succeeded");
     expect(storedTaskRun.aiCallCountActual).toBe(1);
-    // 1 summarizeItem + 1 matchClusterCandidate + up to 2 summarizeCluster (upper bound)
-    expect(storedTaskRun.aiCallCountEstimated).toBe(4);
+    expect(storedTaskRun.aiCallCountEstimated).toBe(1);
   });
 
-  it("reattaches summary regeneration targets to a matching cluster and records the match in task progress", async () => {
+  it("keeps the existing cluster when only the summary is regenerated", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Example Feed",
@@ -590,7 +414,7 @@ describe("regenerateItemContent", () => {
 
     await executeItemRegenerationTask(taskRun, "summary", {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
+        summaryFixture: vi.fn().mockResolvedValue({summary: "新的摘要内容", isAggregation: false}),
         summarizeCluster: vi.fn().mockResolvedValue("新的聚合摘要"),
         matchClusterCandidate: vi.fn().mockResolvedValue(null),
       }),
@@ -601,8 +425,8 @@ describe("regenerateItemContent", () => {
       prisma.item.findUniqueOrThrow({ where: { id: "summary-regeneration-match-target" } }),
     ]);
 
-    expect(updatedItem.clusterId).toBe(matchingCluster.id);
-    expect(storedTaskRun.progressLabel).toBe("已完成条目更新，聚合匹配成功：OpenAI Toolkit 发布");
+    expect(updatedItem.clusterId).toBe(previousCluster.id);
+    expect(storedTaskRun.progressLabel).toBe("已完成条目更新");
   });
 
   it("records ai usage for item reanalyze tasks", async () => {
@@ -682,8 +506,8 @@ describe("regenerateItemContent", () => {
 
     await executeItemReanalyzeTask(taskRun, {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: "新的重分析摘要", isAggregation: false}),
-        enrichContent: vi.fn().mockResolvedValue({
+        summaryFixture: vi.fn().mockResolvedValue({summary: "新的重分析摘要", isAggregation: false}),
+        analysisFixture: vi.fn().mockResolvedValue({
           translatedTitle: "另一篇 OpenAI 工具包报道",
           moderationStatus: "allowed",
           moderationReason: null,
@@ -722,8 +546,7 @@ describe("regenerateItemContent", () => {
       "已完成重新 AI 判定（非聚合 · 处理成功）",
     );
     expect(storedTaskRun.aiCallCountActual).toBe(3);
-    // 1 enrichContent + 1 summarizeItem + 1 possible parseAggregation + up to 2 summarizeCluster
-    expect(storedTaskRun.aiCallCountEstimated).toBe(6);
+    expect(storedTaskRun.aiCallCountEstimated).toBe(5);
     expect(updatedItem.eventType).toBe("launch");
     expect(updatedItem.eventSubject).toBe("OpenAI");
     expect(updatedItem.eventAction).toBe("发布");
@@ -787,8 +610,23 @@ describe("regenerateItemContent", () => {
         entityId: item.id,
       },
     });
-    const enrichContent = vi.fn();
-    const parseAggregation = vi.fn().mockResolvedValue({
+    const analysisFixture = vi.fn().mockResolvedValue({
+      translatedTitle: "AI 行业多项更新",
+      moderationStatus: "allowed",
+      moderationReason: null,
+      moderationDetail: null,
+      qualityScore: 90,
+      qualityRationale: "包含多项独立更新",
+      eventSignature: buildEventSignature({
+        eventType: "update",
+        eventSubject: "AI 行业",
+        eventAction: "发布",
+        eventObject: "多项更新",
+        eventDate: "2026-04-10",
+      }),
+      tags: [],
+    });
+    const aggregationFixture = vi.fn().mockResolvedValue({
       mainEvent: {
         eventType: "update",
         eventSubject: "AI 行业",
@@ -824,9 +662,9 @@ describe("regenerateItemContent", () => {
 
     await executeItemReanalyzeTask(taskRun, {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: "多条 AI 新闻更新", isAggregation: true}),
-        parseAggregation,
-        enrichContent,
+        summaryFixture: vi.fn().mockResolvedValue({summary: "多条 AI 新闻更新", isAggregation: true}),
+        aggregationFixture,
+        analysisFixture,
         summarizeCluster: vi.fn().mockResolvedValue("重算后的聚合摘要"),
         matchClusterCandidate: vi.fn().mockResolvedValue(null),
       }),
@@ -848,8 +686,8 @@ describe("regenerateItemContent", () => {
     expect(storedTaskRun.progressLabel).toBe(
       "已完成重新 AI 判定（聚合 · 子事件 2 · 处理成功）",
     );
-    expect(enrichContent).not.toHaveBeenCalled();
-    expect(parseAggregation).toHaveBeenCalledTimes(1);
+    expect(analysisFixture).toHaveBeenCalledOnce();
+    expect(aggregationFixture).toHaveBeenCalledTimes(1);
     expect(updatedParent).toMatchObject({
       summaryText: "多条 AI 新闻更新",
       isAggregation: true,
@@ -939,13 +777,10 @@ describe("regenerateItemContent", () => {
         entityId: parent.id,
       },
     });
-    const parseAggregation = vi.fn();
-
     await executeItemReanalyzeTask(taskRun, {
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({summary: "新的单条新闻摘要", isAggregation: false}),
-        parseAggregation,
-        enrichContent: vi.fn().mockResolvedValue({
+        summaryFixture: vi.fn().mockResolvedValue({summary: "新的单条新闻摘要", isAggregation: false}),
+        analysisFixture: vi.fn().mockResolvedValue({
           translatedTitle: "单条 AI 新闻",
           moderationStatus: "allowed",
           moderationReason: null,
@@ -970,7 +805,6 @@ describe("regenerateItemContent", () => {
       where: { id: staleChildCluster.id },
     });
 
-    expect(parseAggregation).not.toHaveBeenCalled();
     expect(updatedParent).toMatchObject({
       isAggregation: false,
       aggregationParseStatus: "not_aggregation",
@@ -984,6 +818,105 @@ describe("regenerateItemContent", () => {
       filterReason: "reparsed_parent",
     });
     expect(childCluster).toBeNull();
+  });
+
+  it("preserves an existing aggregation when unified reanalysis has an invalid aggregation field", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Aggregation Source",
+        rssUrl: "https://aggregation.example.com/feed.xml",
+        siteUrl: "https://aggregation.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationDetectionEnabled: true,
+      },
+    });
+    const parent = await prisma.item.create({
+      data: {
+        sourceId: source.id,
+        originalUrl: "https://aggregation.example.com/roundup",
+        canonicalUrl: "https://aggregation.example.com/roundup",
+        urlHash: "manual-reanalyze-invalid-aggregation-parent",
+        originalTitle: "AI roundup",
+        summaryText: "旧聚合摘要",
+        summaryStatus: "succeeded",
+        analysisStatus: "succeeded",
+        publishedAt: new Date("2026-04-10T09:00:00.000Z"),
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 80,
+        qualityRationale: "旧质量",
+        fullText: "This roundup contains several independent AI product updates for developers.",
+        isAggregation: true,
+        aggregationParseStatus: "parsed",
+      },
+    });
+    const child = await prisma.item.create({
+      data: {
+        sourceId: source.id,
+        parentItemId: parent.id,
+        originalUrl: "https://aggregation.example.com/roundup#event-existing",
+        canonicalUrl: "https://aggregation.example.com/roundup",
+        urlHash: "manual-reanalyze-invalid-aggregation-child",
+        originalTitle: "已有拆分事件",
+        summaryText: "已有拆分摘要",
+        summaryStatus: "succeeded",
+        analysisStatus: "succeeded",
+        publishedAt: new Date("2026-04-10T09:00:00.000Z"),
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 75,
+        qualityRationale: "已有拆分",
+      },
+    });
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "item_reanalyze",
+        triggerType: "admin_action",
+        status: "queued",
+        label: "重新 AI 判定",
+        entityId: parent.id,
+      },
+    });
+    const understandItem = vi.fn().mockResolvedValue({
+      summary: "新的有效摘要",
+      translatedTitle: "AI 聚合更新",
+      moderationStatus: "allowed",
+      moderationReason: null,
+      moderationDetail: null,
+      qualityScore: 90,
+      qualityRationale: "新分析有效",
+      eventSignature: buildEventSignature({ eventSubject: "AI 行业" }),
+      tags: ["AI"],
+      aggregation: { isAggregation: false, mainEvent: null, events: [] },
+      diagnostics: {
+        summaryValid: true,
+        analysisValid: true,
+        aggregationValid: false,
+      },
+    });
+
+    await executeItemReanalyzeTask(taskRun, {
+      aiProvider: buildAiProviderMock({ understandItem }),
+    });
+
+    const [updatedParent, preservedChild, updatedTask] = await Promise.all([
+      prisma.item.findUniqueOrThrow({ where: { id: parent.id } }),
+      prisma.item.findUniqueOrThrow({ where: { id: child.id } }),
+      prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } }),
+    ]);
+    expect(updatedParent).toMatchObject({
+      summaryText: "新的有效摘要",
+      isAggregation: true,
+      aggregationParseStatus: "failed",
+      qualityScore: 80,
+      qualityRationale: "旧质量",
+    });
+    expect(preservedChild.status).toBe("processed");
+    expect(updatedTask).toMatchObject({
+      status: "partial",
+      errorSummary: expect.stringContaining("aggregation"),
+    });
   });
 
   it("uses every cluster item summary and event signature when regenerating cluster summaries", async () => {
@@ -1172,7 +1105,7 @@ describe("regenerateItemContent", () => {
     expect(storedSecondTaskRun.aiCallCountActual).toBe(1);
   });
 
-  it("recovers cluster presentation JSON when the summary contains unescaped quotes", async () => {
+  it("rejects malformed cluster presentation JSON", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Example Feed",
@@ -1271,9 +1204,70 @@ describe("regenerateItemContent", () => {
       where: { id: cluster.id },
     });
 
-    expect(storedCluster.title).toBe("OpenAI 上线 GPT Image 2 登顶全球视觉模型榜首");
-    expect(storedCluster.summary).toContain('文字"漂浮感"和乱码问题');
-    expect(storedCluster.summary).not.toContain('{"title"');
+    expect(storedCluster.title).toBe("OpenAI 上线 GPT Image 2");
+    expect(storedCluster.summary).toContain("OpenAI 推出文生图模型 GPT Image 2");
+    expect(storedCluster.summary).not.toContain('文字"漂浮感"和乱码问题');
+  });
+
+  it("keeps invalid unified aggregation results retryable", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Aggregation Source",
+        rssUrl: "https://aggregation.example.com/feed.xml",
+        siteUrl: "https://aggregation.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationDetectionEnabled: true,
+      },
+    });
+    const candidate = await prisma.item.create({
+      data: {
+        sourceId: source.id,
+        originalUrl: "https://aggregation.example.com/retry-invalid",
+        canonicalUrl: "https://aggregation.example.com/retry-invalid",
+        urlHash: "reparse-invalid-aggregation",
+        originalTitle: "Potential roundup",
+        publishedAt: new Date("2026-04-10T09:00:00.000Z"),
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryText: "候选聚合内容",
+        fullText: "This article contains enough text to run unified understanding but returns an invalid aggregation field.",
+        isAggregation: false,
+        aggregationParseStatus: "failed",
+      },
+    });
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "item_reparse_aggregations",
+        triggerType: "admin_action",
+        status: "queued",
+        label: "重新识别聚合内容",
+      },
+    });
+    const understandItem = vi.fn().mockResolvedValue({
+      summary: "有效摘要",
+      translatedTitle: null,
+      moderationStatus: "allowed",
+      moderationReason: null,
+      moderationDetail: null,
+      qualityScore: 80,
+      qualityRationale: "有效分析",
+      eventSignature: buildEventSignature(),
+      tags: [],
+      aggregation: { isAggregation: false, mainEvent: null, events: [] },
+      diagnostics: { summaryValid: true, analysisValid: true, aggregationValid: false },
+    });
+
+    await executeItemReparseAggregationsTask(taskRun, {
+      aiProvider: buildAiProviderMock({ understandItem }),
+    });
+
+    const [updatedCandidate, updatedTask] = await Promise.all([
+      prisma.item.findUniqueOrThrow({ where: { id: candidate.id } }),
+      prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } }),
+    ]);
+    expect(updatedCandidate.aggregationParseStatus).toBe("failed");
+    expect(updatedTask.status).toBe("failed");
   });
 
   it("marks non-aggregation reparse candidates so they are not scanned repeatedly", async () => {
@@ -1302,7 +1296,7 @@ describe("regenerateItemContent", () => {
         isAggregation: false,
       },
     });
-    const parseAggregation = vi.fn().mockResolvedValue({ mainEvent: null, events: [] });
+    const aggregationFixture = vi.fn().mockResolvedValue({ mainEvent: null, events: [] });
     const firstTaskRun = await prisma.backgroundTaskRun.create({
       data: {
         kind: "item_reparse_aggregations",
@@ -1313,7 +1307,7 @@ describe("regenerateItemContent", () => {
     });
 
     await executeItemReparseAggregationsTask(firstTaskRun, {
-      aiProvider: buildAiProviderMock({ parseAggregation }),
+      aiProvider: buildAiProviderMock({ aggregationFixture }),
     });
     const secondTaskRun = await prisma.backgroundTaskRun.create({
       data: {
@@ -1324,7 +1318,7 @@ describe("regenerateItemContent", () => {
       },
     });
     await executeItemReparseAggregationsTask(secondTaskRun, {
-      aiProvider: buildAiProviderMock({ parseAggregation }),
+      aiProvider: buildAiProviderMock({ aggregationFixture }),
     });
 
     const item = await prisma.item.findFirstOrThrow();
@@ -1332,7 +1326,7 @@ describe("regenerateItemContent", () => {
       where: { id: secondTaskRun.id },
     });
 
-    expect(parseAggregation).toHaveBeenCalledTimes(1);
+    expect(aggregationFixture).toHaveBeenCalledTimes(1);
     expect(item.isAggregation).toBe(false);
     expect(item.aggregationParseStatus).toBe("not_aggregation");
     expect(item.aggregationCheckedAt).not.toBeNull();
@@ -1409,7 +1403,7 @@ describe("regenerateItemContent", () => {
     const summarizeCluster = vi.fn().mockResolvedValue("聚合摘要");
     await executeItemReparseAggregationsTask(taskRun, {
       aiProvider: buildAiProviderMock({
-        parseAggregation: vi.fn().mockResolvedValue({
+        aggregationFixture: vi.fn().mockResolvedValue({
           mainEvent: null,
           events: [
             {
@@ -1491,7 +1485,7 @@ describe("regenerateItemContent", () => {
         aggregationParseStatus: "failed",
       },
     });
-    const parseAggregation = vi.fn().mockResolvedValue({
+    const aggregationFixture = vi.fn().mockResolvedValue({
       mainEvent: {
         eventType: "launch",
         eventSubject: "OpenAI",
@@ -1523,7 +1517,7 @@ describe("regenerateItemContent", () => {
     const summarizeCluster = vi.fn().mockResolvedValue("聚合摘要");
     await executeItemReparseAggregationsTask(taskRun, {
       aiProvider: buildAiProviderMock({
-        parseAggregation,
+        aggregationFixture,
         summarizeCluster,
       }),
     });
@@ -1531,7 +1525,7 @@ describe("regenerateItemContent", () => {
     const updatedItem = await prisma.item.findUniqueOrThrow({ where: { id: item.id } });
     const childItems = await prisma.item.findMany({ where: { parentItemId: item.id } });
 
-    expect(parseAggregation).toHaveBeenCalledWith(
+    expect(aggregationFixture).toHaveBeenCalledWith(
       "OpenAI launches Toolkit (link: https://openai.com/toolkit?utm_source=tldrdev). Anthropic updates Console. Mistral ships a model update.",
       expect.objectContaining({ title: "Failed Roundup" }),
     );

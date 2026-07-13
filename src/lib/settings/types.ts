@@ -1,7 +1,5 @@
 export const PROMPT_CONFIG_TYPES = [
-  "item_summary",
-  "item_analysis",
-  "item_aggregation",
+  "item_understanding",
   "cluster_summary",
   "cluster_match",
   "cluster_merge",

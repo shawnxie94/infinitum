@@ -52,9 +52,7 @@ export const TASK_RUN_CANCELLED_LABEL = "任务已终止";
 const DEFAULT_DAILY_REPORT_CHANNEL_IDS = ["important"];
 
 const TASK_AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
-  item_summary: "条目摘要",
-  item_analysis: "内容分析",
-  item_aggregation: "聚合拆条",
+  item_understanding: "条目理解",
   cluster_match: "聚合匹配",
   cluster_summary: "聚合摘要",
   cluster_merge: "聚合合并",
@@ -78,9 +76,7 @@ function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdo
   const maybeSnapshot = value as Record<string, unknown>;
 
   if (
-    maybeSnapshot.key !== "item_summary" &&
-    maybeSnapshot.key !== "item_analysis" &&
-    maybeSnapshot.key !== "item_aggregation" &&
+    maybeSnapshot.key !== "item_understanding" &&
     maybeSnapshot.key !== "cluster_match" &&
     maybeSnapshot.key !== "cluster_summary" &&
     maybeSnapshot.key !== "cluster_merge" &&
@@ -233,9 +229,7 @@ function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnap
     "task_finished",
     "source_fetch",
     "rule_filter",
-    "item_summary",
-    "item_aggregation",
-    "item_analysis",
+    "item_understanding",
     "cluster_assignment",
     "cluster_merge",
     "cluster_finalize",

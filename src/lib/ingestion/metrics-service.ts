@@ -11,9 +11,7 @@ export type DailyArticleStat = {
 export type DailyAiUsageStat = {
   date: string;
   totalCalls: number;
-  summaries: number;
-  analyses: number;
-  aggregations: number;
+  itemUnderstandings: number;
   clusterMatches: number;
   clusterMerges: number;
   clusterSummaries: number;
@@ -57,9 +55,7 @@ function generateDateRange(days: number): string[] {
 }
 
 type AiBreakdown = {
-  summaries: number;
-  analyses: number;
-  aggregations: number;
+  itemUnderstandings: number;
   clusterMatches: number;
   clusterMerges: number;
   clusterSummaries: number;
@@ -69,9 +65,7 @@ type AiBreakdown = {
 /** Parse the JSON breakdown stored on a task run into typed counts. */
 function parseAiBreakdown(json: string | null): AiBreakdown {
   const result: AiBreakdown = {
-    summaries: 0,
-    analyses: 0,
-    aggregations: 0,
+    itemUnderstandings: 0,
     clusterMatches: 0,
     clusterMerges: 0,
     clusterSummaries: 0,
@@ -83,14 +77,8 @@ function parseAiBreakdown(json: string | null): AiBreakdown {
     const breakdown = JSON.parse(json) as { key: string; actual: number }[];
     for (const item of breakdown) {
       switch (item.key) {
-        case "item_summary":
-          result.summaries += item.actual;
-          break;
-        case "item_analysis":
-          result.analyses += item.actual;
-          break;
-        case "item_aggregation":
-          result.aggregations += item.actual;
+        case "item_understanding":
+          result.itemUnderstandings += item.actual;
           break;
         case "cluster_match":
           result.clusterMatches += item.actual;
@@ -211,9 +199,7 @@ async function getDailyAiUsageStats(days: number): Promise<DailyAiUsageStat[]> {
     const date = row.createdAt.toISOString().slice(0, 10);
     const entry = dateMap.get(date) ?? {
       total: 0,
-      summaries: 0,
-      analyses: 0,
-      aggregations: 0,
+      itemUnderstandings: 0,
       clusterMatches: 0,
       clusterMerges: 0,
       clusterSummaries: 0,
@@ -223,9 +209,7 @@ async function getDailyAiUsageStats(days: number): Promise<DailyAiUsageStat[]> {
     entry.total += row.aiCallCountActual;
 
     const breakdown = parseAiBreakdown(row.aiCallBreakdownJson);
-    entry.summaries += breakdown.summaries;
-    entry.analyses += breakdown.analyses;
-    entry.aggregations += breakdown.aggregations;
+    entry.itemUnderstandings += breakdown.itemUnderstandings;
     entry.clusterMatches += breakdown.clusterMatches;
     entry.clusterMerges += breakdown.clusterMerges;
     entry.clusterSummaries += breakdown.clusterSummaries;
@@ -239,9 +223,7 @@ async function getDailyAiUsageStats(days: number): Promise<DailyAiUsageStat[]> {
     return {
       date,
       totalCalls: entry?.total ?? 0,
-      summaries: entry?.summaries ?? 0,
-      analyses: entry?.analyses ?? 0,
-      aggregations: entry?.aggregations ?? 0,
+      itemUnderstandings: entry?.itemUnderstandings ?? 0,
       clusterMatches: entry?.clusterMatches ?? 0,
       clusterMerges: entry?.clusterMerges ?? 0,
       clusterSummaries: entry?.clusterSummaries ?? 0,

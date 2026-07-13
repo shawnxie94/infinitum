@@ -57,20 +57,18 @@ export type ProcessedItemRecord = {
   isNew: boolean;
   errorMessage?: string | null;
   affectedClusterId?: string | null;
+  affectedClusterIds?: string[];
   fullTextFetched?: boolean;
   metrics?: {
     blacklistFiltered?: boolean;
     reusedExisting?: boolean;
     summaryCompleted?: boolean;
     summaryFailed?: boolean;
-    summaryFailureReason?: "empty_response" | "source_like" | "invalid_response" | "other";
     aggregationParsed?: boolean;
     aggregationParseFailed?: boolean;
-    aggregationFailureReason?: "no_events" | "invalid_response" | "other";
     aggregationEventCount?: number;
     analysisCompleted?: boolean;
     analysisFailed?: boolean;
-    analysisFailureReason?: "invalid_response" | "provider_error" | "other";
     analysisFiltered?: boolean;
     updatedExisting?: boolean;
     fullTextFetchAttempted?: boolean;
@@ -82,18 +80,16 @@ export type ProcessedItemRecord = {
       totalMs?: number;
       fullTextFetchMs?: number;
       ruleFilterMs?: number;
-      summaryMs?: number;
-      aggregationMs?: number;
       analysisMs?: number;
       clusterAssignmentMs?: number;
       dbWriteMs?: number;
     };
     clusterAssignment?: {
-      exactMatch?: boolean;
-      cheapRankDirect?: boolean;
-      aiMatch?: boolean;
-      skippedIncompleteSignature?: boolean;
-      newCluster?: boolean;
+      exactMatch: number;
+      cheapRankDirect: number;
+      aiMatch: number;
+      skippedIncompleteSignature: number;
+      newCluster: number;
     };
   };
 };

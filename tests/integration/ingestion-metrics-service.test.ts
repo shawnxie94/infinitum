@@ -144,12 +144,12 @@ describe("ingestion metrics service - AI usage aggregation", () => {
     const today = new Date("2026-06-16T10:00:00.000Z");
     const yesterday = new Date("2026-06-15T10:00:00.000Z");
 
-    // ingestion task with item_summary + item_analysis + cluster_merge
+    // ingestion task with one unified item understanding + cluster merge
     await makeTaskRun({
       kind: "ingestion",
       createdAt: today,
-      aiCallCountActual: 3,
-      breakdownKeys: ["item_summary", "item_analysis", "cluster_merge"],
+      aiCallCountActual: 2,
+      breakdownKeys: ["item_understanding", "cluster_merge"],
     });
     // daily report task with daily_report
     await makeTaskRun({
@@ -165,19 +165,19 @@ describe("ingestion metrics service - AI usage aggregation", () => {
       aiCallCountActual: 1,
       breakdownKeys: ["cluster_summary"],
     });
-    // item reanalyze task with item_analysis + cluster_match
+    // item reanalyze task with unified understanding + cluster match
     await makeTaskRun({
       kind: "item_reanalyze",
       createdAt: yesterday,
       aiCallCountActual: 2,
-      breakdownKeys: ["item_analysis", "cluster_match"],
+      breakdownKeys: ["item_understanding", "cluster_match"],
     });
-    // item aggregation reparse task with item_aggregation
+    // item aggregation reparse task with unified understanding
     await makeTaskRun({
       kind: "item_reparse_aggregations",
       createdAt: yesterday,
       aiCallCountActual: 5,
-      breakdownKeys: ["item_aggregation", "item_aggregation", "item_aggregation", "item_aggregation", "item_aggregation"],
+      breakdownKeys: ["item_understanding", "item_understanding", "item_understanding", "item_understanding", "item_understanding"],
     });
     // ingestion task that failed after partial work should still be counted
     await makeTaskRun({
@@ -185,7 +185,7 @@ describe("ingestion metrics service - AI usage aggregation", () => {
       status: "failed",
       createdAt: yesterday,
       aiCallCountActual: 2,
-      breakdownKeys: ["item_summary", "cluster_match"],
+      breakdownKeys: ["item_understanding", "cluster_match"],
     });
     // irrelevant task (no AI calls) should be excluded by the in-list filter
     await makeTaskRun({
@@ -213,10 +213,8 @@ describe("ingestion metrics service - AI usage aggregation", () => {
     expect(todayStat).toBeDefined();
     expect(todayStat).toMatchObject({
       date: todayKey,
-      totalCalls: 6, // 3 ingestion + 2 daily report + 1 cluster summary
-      summaries: 1, // item_summary from ingestion
-      analyses: 1, // item_analysis from ingestion
-      aggregations: 0,
+      totalCalls: 5, // 2 ingestion + 2 daily report + 1 cluster summary
+      itemUnderstandings: 1,
       clusterMatches: 0,
       clusterMerges: 1, // cluster_merge from ingestion
       clusterSummaries: 1, // cluster_summary from cluster regen task
@@ -227,9 +225,7 @@ describe("ingestion metrics service - AI usage aggregation", () => {
     expect(yesterdayStat).toMatchObject({
       date: yesterdayKey,
       totalCalls: 9, // 2 reanalyze + 5 reparse + 2 failed ingestion
-      summaries: 1, // item_summary from failed ingestion
-      analyses: 1, // item_analysis from reanalyze
-      aggregations: 5, // item_aggregation x5 from reparse
+      itemUnderstandings: 7,
       clusterMatches: 2, // cluster_match from reanalyze + failed ingestion
       clusterMerges: 0,
       clusterSummaries: 0,
@@ -250,9 +246,7 @@ describe("ingestion metrics service - AI usage aggregation", () => {
     const metrics = await getIngestionMetrics(7);
     for (const stat of metrics.dailyAiUsageStats) {
       expect(stat.totalCalls).toBe(0);
-      expect(stat.summaries).toBe(0);
-      expect(stat.analyses).toBe(0);
-      expect(stat.aggregations).toBe(0);
+      expect(stat.itemUnderstandings).toBe(0);
       expect(stat.clusterMatches).toBe(0);
       expect(stat.clusterMerges).toBe(0);
       expect(stat.clusterSummaries).toBe(0);

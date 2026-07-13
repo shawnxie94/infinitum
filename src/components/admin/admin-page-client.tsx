@@ -122,9 +122,7 @@ function normalizeTaskSettingsSubSection(value: string | null): TaskSettingsSubS
 
 function normalizePromptType(value: string | null): PromptConfigType {
   if (
-    value === "item_summary" ||
-    value === "item_analysis" ||
-    value === "item_aggregation" ||
+    value === "item_understanding" ||
     value === "cluster_summary" ||
     value === "cluster_match" ||
     value === "cluster_merge" ||
@@ -133,7 +131,7 @@ function normalizePromptType(value: string | null): PromptConfigType {
     return value;
   }
 
-  return "item_summary";
+  return "item_understanding";
 }
 
 function normalizeTaskId(value: string | null): string | null {

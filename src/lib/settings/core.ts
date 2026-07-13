@@ -22,10 +22,6 @@ import { normalizeKeyword, normalizeText, normalizeUrl } from "@/lib/utils/text"
 
 export const DEFAULT_MODEL_CONFIG_NAME = "默认模型配置";
 const LEGACY_DAILY_REPORT_PROMPT_MARKER = '"openingSummary":"...","sections":{"今日大事"';
-const LEGACY_ITEM_ANALYSIS_PROMPT_MARKER =
-  '"eventDate":"YYYY-MM-DD|null"}';
-const LEGACY_ITEM_AGGREGATION_PROMPT_MARKER =
-  '"sourceUrl":"https://...|null"}';
 
 export type SourceInput = SourceConfig & {
   groupId?: string | null;
@@ -448,9 +444,7 @@ export async function validatePromptConfigInput(
 }
 
 const ALL_PROMPT_TYPES = [
-  PromptConfigType.item_summary,
-  PromptConfigType.item_analysis,
-  PromptConfigType.item_aggregation,
+  PromptConfigType.item_understanding,
   PromptConfigType.cluster_summary,
   PromptConfigType.cluster_match,
   PromptConfigType.cluster_merge,
@@ -460,6 +454,9 @@ const ALL_PROMPT_TYPES = [
 const REMOVED_PROMPT_CONFIG_TYPES = [
   "daily_report_refinement_chat",
   "daily_report_refinement_generate",
+  "item_summary",
+  "item_analysis",
+  "item_aggregation",
 ] as const;
 
 async function deleteRemovedPromptConfigTypes() {
@@ -489,12 +486,8 @@ function isLegacyDailyReportTemplateJson(templateJson: string) {
 
 function resolveSystemPromptByType(type: PromptConfigType, fileConfig: RuntimeConfig): string {
   switch (type) {
-    case PromptConfigType.item_summary:
-      return fileConfig.prompts.itemSummary;
-    case PromptConfigType.item_analysis:
-      return fileConfig.prompts.itemAnalysis;
-    case PromptConfigType.item_aggregation:
-      return fileConfig.prompts.itemAggregation;
+    case PromptConfigType.item_understanding:
+      return fileConfig.prompts.itemUnderstanding;
     case PromptConfigType.cluster_summary:
       return fileConfig.prompts.clusterSummary;
     case PromptConfigType.cluster_match:
@@ -517,9 +510,8 @@ async function ensureModelAndPromptConfigsSeeded() {
     prisma.blacklistKeyword.count(),
   ]);
 
-  await upgradeLegacyItemAnalysisPrompt(fileConfig);
-  await upgradeLegacyItemAggregationPrompt(fileConfig);
   await upgradeLegacyDailyReportPrompt(fileConfig);
+  await upgradeLegacyClusterSummaryTokenBudget();
 
   if (
     modelConfigCount > 0 &&
@@ -628,6 +620,19 @@ async function ensureModelAndPromptConfigsSeeded() {
   });
 }
 
+async function upgradeLegacyClusterSummaryTokenBudget() {
+  await prisma.promptConfig.updateMany({
+    where: {
+      type: PromptConfigType.cluster_summary,
+      isDefault: true,
+      maxTokens: 450,
+    },
+    data: {
+      maxTokens: getDefaultPromptSampling("cluster_summary").maxTokens,
+    },
+  });
+}
+
 async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
   const defaultDailyReportPrompts = await prisma.promptConfig.findMany({
     where: {
@@ -675,46 +680,6 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
     data: {
       systemPrompt: resolveSystemPromptByType(PromptConfigType.daily_report, fileConfig),
       templateJson: DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
-    },
-  });
-}
-
-async function upgradeLegacyItemAnalysisPrompt(fileConfig: RuntimeConfig) {
-  await prisma.promptConfig.updateMany({
-    where: {
-      type: PromptConfigType.item_analysis,
-      isDefault: true,
-      systemPrompt: {
-        contains: LEGACY_ITEM_ANALYSIS_PROMPT_MARKER,
-      },
-      NOT: {
-        systemPrompt: {
-          contains: '"tags"',
-        },
-      },
-    },
-    data: {
-      systemPrompt: resolveSystemPromptByType(PromptConfigType.item_analysis, fileConfig),
-    },
-  });
-}
-
-async function upgradeLegacyItemAggregationPrompt(fileConfig: RuntimeConfig) {
-  await prisma.promptConfig.updateMany({
-    where: {
-      type: PromptConfigType.item_aggregation,
-      isDefault: true,
-      systemPrompt: {
-        contains: LEGACY_ITEM_AGGREGATION_PROMPT_MARKER,
-      },
-      NOT: {
-        systemPrompt: {
-          contains: '"tags"',
-        },
-      },
-    },
-    data: {
-      systemPrompt: resolveSystemPromptByType(PromptConfigType.item_aggregation, fileConfig),
     },
   });
 }

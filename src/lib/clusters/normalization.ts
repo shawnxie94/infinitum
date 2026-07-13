@@ -80,10 +80,18 @@ export function normalizeEventActionForStorage(value: string | null | undefined)
 }
 
 export function normalizeEventObjectForStorage(value: string | null | undefined) {
+  const rawValue = collapseWhitespace(value ?? "").trim();
   let normalized = normalizeOptionalText(value);
 
   if (!normalized) {
     return null;
+  }
+
+  if (rawValue.endsWith(")") && rawValue.includes("(") && !normalized.endsWith(")")) {
+    normalized += ")";
+  }
+  if (rawValue.endsWith("）") && rawValue.includes("（") && !normalized.endsWith("）")) {
+    normalized += "）";
   }
 
   normalized = normalized.replace(/^(新版|全新|新款)\s*/u, "").trim();

@@ -80,9 +80,7 @@ function invalidateAndWarmFeedCache(reason: string) {
 
 type RuntimePromptConfigs = NonNullable<RuntimeConfig["selectedPromptConfigs"]>;
 type RuntimePromptConfig =
-  | RuntimePromptConfigs["itemSummary"]
-  | RuntimePromptConfigs["itemAnalysis"]
-  | RuntimePromptConfigs["itemAggregation"]
+  | RuntimePromptConfigs["itemUnderstanding"]
   | RuntimePromptConfigs["clusterSummary"]
   | RuntimePromptConfigs["clusterMatch"]
   | RuntimePromptConfigs["clusterMerge"];
@@ -165,9 +163,7 @@ async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promis
         runtimeConfig?.modelApi ?? { apiKey: "", baseURL: "", model: "gpt-4.1-mini", customHeaders: {} },
         runtimeConfig?.selectedPromptConfigs
           ? {
-              itemSummary: runtimeConfig.selectedPromptConfigs.itemSummary,
-              itemAnalysis: runtimeConfig.selectedPromptConfigs.itemAnalysis,
-              itemAggregation: runtimeConfig.selectedPromptConfigs.itemAggregation,
+              itemUnderstanding: runtimeConfig.selectedPromptConfigs.itemUnderstanding,
               clusterSummary: runtimeConfig.selectedPromptConfigs.clusterSummary,
               clusterMatch: runtimeConfig.selectedPromptConfigs.clusterMatch,
               clusterMerge: runtimeConfig.selectedPromptConfigs.clusterMerge,
@@ -209,9 +205,7 @@ async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promis
     now,
     taskTimelineModelNames: runtimeConfig?.selectedPromptConfigs
       ? {
-          itemSummary: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.itemSummary, defaultModelName),
-          itemAggregation: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.itemAggregation, defaultModelName),
-          itemAnalysis: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.itemAnalysis, defaultModelName),
+          itemUnderstanding: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.itemUnderstanding, defaultModelName),
           clusterSummary: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.clusterSummary, defaultModelName),
           clusterMatch: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.clusterMatch, defaultModelName),
           clusterMerge: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.clusterMerge, defaultModelName),
@@ -361,7 +355,7 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
   let sources: Awaited<ReturnType<typeof syncSources>> = [];
   const aiUsage = createTaskAiUsageTracker();
   const trackedAiProvider = aiUsage.wrapProvider(aiProvider, {
-    summarizeItemEstimated: false,
+    understandItemEstimated: false,
   });
   const preparedItems: PreparedFeedItem[] = [];
   const sourceMetadataCommitCandidates = new Map<string, SourceFetchMetadataUpdate>();
@@ -530,19 +524,17 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
   });
   processableItemCount = preparedLookups.length;
   timelineCounters.sourceFetch.itemsFetched = processableItemCount;
-  const estimatedAiWork = preparedLookups.reduce(
+  const estimatedUnderstandingCalls = preparedLookups.reduce(
     (total, entry) => {
       const existing = getExistingItemForLookup(entry.lookup, existingByUrlHash);
-      const estimate = estimatePreparedItemAiWork(entry.preparedItem, entry.lookup, existing, blacklist);
-      return {
-        summaries: total.summaries + (estimate.summary ? 1 : 0),
-        analyses: total.analyses + (estimate.analysis ? 1 : 0),
-      };
+      return total + (estimatePreparedItemAiWork(entry.preparedItem, entry.lookup, existing, blacklist) ? 1 : 0);
     },
-    { summaries: 0, analyses: 0 },
+    0,
   );
-  aiUsage.setEstimated(estimatedAiWork.summaries, "item_summary");
-  aiUsage.setEstimated(estimatedAiWork.analyses, "item_analysis");
+  aiUsage.setEstimated(
+    estimatedUnderstandingCalls,
+    "item_understanding",
+  );
 
   await updateFetchRunProgress(run.id, {
     sourceCount: sources.length,
@@ -632,8 +624,6 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
         timelineCounters.ruleFilter.durationMs += Math.round(result.metrics.timings.ruleFilterMs ?? 0);
         timelineCounters.ruleFilter.itemTotalDurationMs += Math.round(result.metrics.timings.totalMs ?? 0);
         timelineCounters.ruleFilter.dbWriteDurationMs += Math.round(result.metrics.timings.dbWriteMs ?? 0);
-        timelineCounters.itemSummary.durationMs += Math.round(result.metrics.timings.summaryMs ?? 0);
-        timelineCounters.aggregationParsing.durationMs += Math.round(result.metrics.timings.aggregationMs ?? 0);
         timelineCounters.itemAnalysis.durationMs += Math.round(result.metrics.timings.analysisMs ?? 0);
         timelineCounters.clusterAssignment.durationMs += Math.round(result.metrics.timings.clusterAssignmentMs ?? 0);
       }
@@ -652,20 +642,6 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
 
       if (result?.metrics?.summaryFailed) {
         timelineCounters.itemSummary.failed += 1;
-        switch (result.metrics.summaryFailureReason) {
-          case "empty_response":
-            timelineCounters.itemSummary.failedEmptyResponse += 1;
-            break;
-          case "source_like":
-            timelineCounters.itemSummary.failedSourceLike += 1;
-            break;
-          case "invalid_response":
-            timelineCounters.itemSummary.failedInvalidResponse += 1;
-            break;
-          default:
-            timelineCounters.itemSummary.failedOther += 1;
-            break;
-        }
       }
 
       if (result?.metrics?.aggregationParsed) {
@@ -674,17 +650,6 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
 
       if (result?.metrics?.aggregationParseFailed) {
         timelineCounters.aggregationParsing.failed += 1;
-        switch (result.metrics.aggregationFailureReason) {
-          case "no_events":
-            timelineCounters.aggregationParsing.failedNoEvents += 1;
-            break;
-          case "invalid_response":
-            timelineCounters.aggregationParsing.failedInvalidResponse += 1;
-            break;
-          default:
-            timelineCounters.aggregationParsing.failedOther += 1;
-            break;
-        }
       }
 
       if (result?.metrics?.aggregationEventCount) {
@@ -697,17 +662,6 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
 
       if (result?.metrics?.analysisFailed) {
         timelineCounters.itemAnalysis.failed += 1;
-        switch (result.metrics.analysisFailureReason) {
-          case "invalid_response":
-            timelineCounters.itemAnalysis.failedInvalidResponse += 1;
-            break;
-          case "provider_error":
-            timelineCounters.itemAnalysis.failedProviderError += 1;
-            break;
-          default:
-            timelineCounters.itemAnalysis.failedOther += 1;
-            break;
-        }
       }
 
       if (result?.metrics?.analysisFiltered) {
@@ -719,28 +673,32 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
       }
 
       if (result?.metrics?.clusterAssignment?.exactMatch) {
-        timelineCounters.clusterAssignment.exactMatch += 1;
+        timelineCounters.clusterAssignment.exactMatch += result.metrics.clusterAssignment.exactMatch;
       }
 
       if (result?.metrics?.clusterAssignment?.cheapRankDirect) {
-        timelineCounters.clusterAssignment.cheapRankDirect += 1;
+        timelineCounters.clusterAssignment.cheapRankDirect += result.metrics.clusterAssignment.cheapRankDirect;
       }
 
       if (result?.metrics?.clusterAssignment?.aiMatch) {
-        timelineCounters.clusterAssignment.aiMatch += 1;
+        timelineCounters.clusterAssignment.aiMatch += result.metrics.clusterAssignment.aiMatch;
       }
 
       if (result?.metrics?.clusterAssignment?.skippedIncompleteSignature) {
-        timelineCounters.clusterAssignment.skippedIncompleteSignature += 1;
+        timelineCounters.clusterAssignment.skippedIncompleteSignature +=
+          result.metrics.clusterAssignment.skippedIncompleteSignature;
       }
 
       if (result?.metrics?.clusterAssignment?.newCluster) {
-        timelineCounters.clusterAssignment.newCluster += 1;
+        timelineCounters.clusterAssignment.newCluster += result.metrics.clusterAssignment.newCluster;
       }
 
       // Collect affected clusters for batch recomputation
       if (result?.affectedClusterId) {
         affectedClusterIds.add(result.affectedClusterId);
+      }
+      for (const clusterId of result?.affectedClusterIds ?? []) {
+        affectedClusterIds.add(clusterId);
       }
 
       const shouldFlushNow =

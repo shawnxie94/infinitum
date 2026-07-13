@@ -4,9 +4,7 @@ import {
   AGGREGATION_PARSE_STATUS,
   RETRIABLE_AGGREGATION_PARSE_STATUSES,
 } from "@/lib/aggregation/status";
-import { createAiProvider, type AiEventSignature, type AiProvider, type ParsedAggregation } from "@/lib/ai/provider";
-import { normalizeStoredSummary, requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
-import { retryChineseSummary } from "@/lib/ai/summary-language";
+import { createAiProvider, type AiEventSignature, type AiProvider, type ItemUnderstandingResult } from "@/lib/ai/provider";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import {
@@ -18,7 +16,7 @@ import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import { archiveItemDedupeHistories } from "@/lib/feed/repository";
 import { shouldTranslateTitle } from "@/lib/feed/presentation";
-import { buildAggregationParsingInput } from "@/lib/ingestion/model-input";
+import { buildItemUnderstandingInput, ITEM_UNDERSTANDING_VERSION } from "@/lib/ingestion/content-input";
 import { normalizeStoredEventType } from "@/lib/clusters/normalization";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { replaceItemTags } from "@/lib/tags/service";
@@ -36,19 +34,6 @@ type RegenerationTarget = "translation" | "summary";
 
 type RegenerationOptions = {
   aiProvider?: AiProvider;
-};
-
-type ClusterReassignmentResult = {
-  clusterId: string | null;
-  clusterTitle: string | null;
-  matchedExistingCluster: boolean;
-  createdNewCluster: boolean;
-  skippedIncompleteSignature: boolean;
-};
-
-type ItemSummaryResolution = {
-  summary: string | null;
-  isAggregation: boolean | null;
 };
 
 type AggregationReparseCandidate = {
@@ -97,14 +82,6 @@ async function buildItemReanalyzeCompletionLabel(item: Item) {
   return "已完成重新 AI 判定（非聚合 · 处理成功）";
 }
 
-function getItemSourceText(item: Item): string {
-  return item.fullText || item.rssContent || item.rssExcerpt || item.originalTitle;
-}
-
-function normalizeSummary(summary: string | null | undefined): string | null {
-  return normalizeStoredSummary(summary);
-}
-
 async function replaceItemTagsSafely(itemId: string, tags: unknown) {
   try {
     await replaceItemTags(itemId, tags);
@@ -113,54 +90,18 @@ async function replaceItemTagsSafely(itemId: string, tags: unknown) {
   }
 }
 
-async function resolveItemSummaryResult(
+async function resolveItemUnderstanding(
   aiProvider: AiProvider,
   item: Item & { source: { name: string } },
-  options?: {
-    reuseExisting?: boolean;
-  },
-): Promise<ItemSummaryResolution> {
-  const existingSummary = options?.reuseExisting ? normalizeSummary(item.summaryText) : null;
+): Promise<{ result: ItemUnderstandingResult; inputHash: string }> {
+  const input = buildItemUnderstandingInput(item);
+  const result = await aiProvider.understandItem(input.text, {
+    title: item.originalTitle,
+    sourceName: item.source.name,
+    translateTitle: shouldTranslateTitle(item.originalTitle),
+  });
 
-  if (existingSummary) {
-    return {
-      summary: existingSummary,
-      isAggregation: item.isAggregation,
-    };
-  }
-
-  const inputText = getItemSourceText(item);
-  let isAggregation: boolean | null = null;
-
-  const summary = normalizeSummary(
-    await retryChineseSummary(
-      async (metadata) => {
-        const result = await aiProvider.summarizeItem(inputText, metadata);
-        isAggregation = result.isAggregation;
-        return requireUsableGeneratedSummary(result.summary, inputText);
-      },
-      {
-        title: item.originalTitle,
-        sourceName: item.source.name,
-      },
-    ),
-  );
-
-  return {
-    summary,
-    isAggregation,
-  };
-}
-
-async function resolveItemSummary(
-  aiProvider: AiProvider,
-  item: Item & { source: { name: string } },
-  options?: {
-    reuseExisting?: boolean;
-  },
-): Promise<string | null> {
-  const result = await resolveItemSummaryResult(aiProvider, item, options);
-  return result.summary;
+  return { result, inputHash: input.inputHash };
 }
 
 function serializeEventSignature(eventSignature?: {
@@ -186,9 +127,7 @@ async function resolveAiProvider(aiProvider?: AiProvider) {
 
   const runtimeConfig = await getIngestionRuntimeConfig();
   return createAiProvider(runtimeConfig.modelApi, {
-    itemSummary: runtimeConfig.selectedPromptConfigs?.itemSummary,
-    itemAnalysis: runtimeConfig.selectedPromptConfigs?.itemAnalysis,
-    itemAggregation: runtimeConfig.selectedPromptConfigs?.itemAggregation,
+    itemUnderstanding: runtimeConfig.selectedPromptConfigs?.itemUnderstanding,
     clusterSummary: runtimeConfig.selectedPromptConfigs?.clusterSummary,
     clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
   }, undefined, {
@@ -218,7 +157,7 @@ export async function regenerateItemContent(
   itemId: string,
   target: RegenerationTarget,
   options?: RegenerationOptions,
-): Promise<Item & { source: { name: string }; clusterReassignment?: ClusterReassignmentResult }> {
+): Promise<Item & { source: { name: string } }> {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
     include: { source: true },
@@ -229,77 +168,29 @@ export async function regenerateItemContent(
   }
 
   const aiProvider = await resolveAiProvider(options?.aiProvider);
-  const previousClusterId = item.clusterId;
-  let clusterReassignment: ClusterReassignmentResult | undefined;
-
   try {
+    const { result: understanding } = await resolveItemUnderstanding(aiProvider, item);
     if (target === "translation") {
-      const summaryInput = (await resolveItemSummary(aiProvider, item, { reuseExisting: true })) || item.originalTitle;
-      const enrichment = await aiProvider.enrichContent(summaryInput, {
-        title: item.originalTitle,
-        sourceName: item.source.name,
-        translateTitle: shouldTranslateTitle(item.originalTitle),
-      });
-
       await prisma.item.update({
         where: { id: item.id },
         data: {
           translatedTitle:
-            shouldTranslateTitle(item.originalTitle) ? enrichment.translatedTitle?.trim() || item.originalTitle : item.translatedTitle,
-          analysisStatus: "succeeded",
-          aiProcessedAt: new Date(),
+            shouldTranslateTitle(item.originalTitle) ? understanding.translatedTitle?.trim() || item.originalTitle : item.translatedTitle,
           errorMessage: null,
         },
       });
     } else {
-      const summaryText = await resolveItemSummary(aiProvider, item);
-
+      if (!understanding.diagnostics.summaryValid || !understanding.summary) {
+        throw new Error("Item understanding returned an invalid summary");
+      }
       await prisma.item.update({
         where: { id: item.id },
         data: {
-          summaryText: summaryText || item.summaryText,
-          summaryStatus: "succeeded",
-          analysisStatus: "pending",
-          aiProcessedAt: null,
+          summaryText: understanding.summary || item.summaryText,
+          summaryStatus: understanding.diagnostics.summaryValid ? "succeeded" : "failed",
           errorMessage: null,
         },
       });
-    }
-
-    if (previousClusterId) {
-      await prisma.item.update({
-        where: { id: item.id },
-        data: {
-          clusterId: null,
-          manualClusterAssignedAt: null,
-        },
-      });
-    }
-
-    const assignment = await assignItemToCluster(item.id, {
-      aiProvider,
-    });
-    const assignedCluster = assignment.clusterId
-      ? await prisma.contentCluster.findUnique({
-          where: { id: assignment.clusterId },
-          select: { title: true },
-        })
-      : null;
-
-    clusterReassignment = {
-      clusterId: assignment.clusterId,
-      clusterTitle: assignedCluster?.title ?? null,
-      matchedExistingCluster: Boolean(assignment.clusterId && !assignment.createdNewCluster),
-      createdNewCluster: assignment.createdNewCluster,
-      skippedIncompleteSignature: assignment.skippedIncompleteSignature,
-    };
-
-    if (assignment.clusterId) {
-      await recomputeCluster(assignment.clusterId, aiProvider);
-    }
-
-    if (previousClusterId && previousClusterId !== assignment.clusterId) {
-      await recomputeCluster(previousClusterId, aiProvider);
     }
 
     invalidateFeedCache();
@@ -310,8 +201,6 @@ export async function regenerateItemContent(
         ...(target === "summary"
           ? {
               summaryStatus: "failed" as const,
-              analysisStatus: "pending" as const,
-              aiProcessedAt: null,
             }
           : {}),
         errorMessage: error instanceof Error ? error.message : "Unknown regeneration error",
@@ -324,10 +213,7 @@ export async function regenerateItemContent(
     include: { source: true },
   });
 
-  return {
-    ...regenerated,
-    clusterReassignment,
-  };
+  return regenerated;
 }
 
 export async function executeItemRegenerationTask(
@@ -339,26 +225,12 @@ export async function executeItemRegenerationTask(
     throw new Error("Task entityId is required.");
   }
 
-  // Estimated call budget for item regeneration:
-  //   translation target:
-  //     - summarizeItem (skipped if a cached summary exists)
-  //     - enrichContent (translation pass)
-  //     - matchClusterCandidate (always called by assignItemToCluster)
-  //     - summarizeCluster (1-2x via recomputeCluster, only if hash changed)
-  //   summary target:
-  //     - summarizeItem (always, reuseExisting not set)
-  //     - matchClusterCandidate
-  //     - summarizeCluster (1-2x via recomputeCluster)
-  // Actual counts are always tracked by wrapProvider regardless of estimate.
-  const aiUsage = createTaskAiUsageTracker(
-    1,
-    target === "translation" ? "item_analysis" : "item_summary",
-  );
-  aiUsage.addEstimated(1, "cluster_match");
-  aiUsage.addEstimated(2, "cluster_summary");
+  // Summary and translation regeneration each issue one unified understanding
+  // call, while persisting only the requested target field.
+  const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
   const trackedAiProvider = aiUsage.wrapProvider(
     await resolveAiProvider(options?.aiProvider),
-    { summarizeItemEstimated: target === "translation" },
+    { understandItemEstimated: false },
   );
   const initialAiUsage = aiUsage.snapshot();
 
@@ -375,23 +247,12 @@ export async function executeItemRegenerationTask(
     aiProvider: trackedAiProvider,
   });
   const succeeded = !item.errorMessage;
-  const clusterReassignment = item.clusterReassignment;
-  const successProgressLabel =
-    clusterReassignment
-      ? clusterReassignment.matchedExistingCluster && clusterReassignment.clusterTitle
-        ? `已完成条目更新，聚合匹配成功：${clusterReassignment.clusterTitle}`
-        : clusterReassignment.createdNewCluster && clusterReassignment.clusterTitle
-          ? `已完成条目更新，未匹配已有聚合，已新建聚合：${clusterReassignment.clusterTitle}`
-          : clusterReassignment.skippedIncompleteSignature
-            ? "已完成条目更新，聚合匹配未命中：事件签名不完整"
-            : "已完成条目更新，聚合匹配未命中"
-      : "已完成条目更新";
 
   await updateTaskRun(taskRun.id, {
     status: succeeded ? "succeeded" : "failed",
     progressCurrent: 1,
     progressTotal: 1,
-    progressLabel: succeeded ? successProgressLabel : "条目更新失败",
+    progressLabel: succeeded ? "已完成条目更新" : "条目更新失败",
     aiCallCountActual: aiUsage.snapshot().actual,
     aiCallCountEstimated: aiUsage.snapshot().estimated,
     aiCallBreakdown: aiUsage.snapshot().breakdown,
@@ -633,7 +494,12 @@ export async function deleteItem(itemId: string, options?: RegenerationOptions) 
   };
 }
 
-async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
+type ItemReanalyzeOutcome = {
+  item: Item & { source: { name: string } };
+  failedFields: Array<"summary" | "analysis" | "aggregation">;
+};
+
+async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Promise<ItemReanalyzeOutcome> {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
     include: { source: true },
@@ -644,10 +510,19 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
   }
 
   const aiProvider = await resolveAiProvider(options?.aiProvider);
-  const summaryResult = await resolveItemSummaryResult(aiProvider, item);
-  const summaryText = summaryResult.summary || item.originalTitle;
+  const { result: understanding, inputHash } = await resolveItemUnderstanding(aiProvider, item);
+  const summaryText = understanding.diagnostics.summaryValid
+    ? understanding.summary
+    : item.summaryText;
   const previousClusterId = item.clusterId;
   const aggregationDetectionEnabled = item.source.aggregationDetectionEnabled === true;
+  const failedFields: ItemReanalyzeOutcome["failedFields"] = [
+    ...(!understanding.diagnostics.summaryValid ? ["summary" as const] : []),
+    ...(!understanding.diagnostics.analysisValid ? ["analysis" as const] : []),
+    ...(aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid
+      ? ["aggregation" as const]
+      : []),
+  ];
   const candidate: AggregationReparseCandidate = {
     id: item.id,
     sourceId: item.sourceId,
@@ -661,22 +536,82 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
     source: { name: item.source.name },
   };
   const affectedClusterIds = new Set<string>();
-  let fallbackAggregationParseStatus: string = AGGREGATION_PARSE_STATUS.notAggregation;
+  if (previousClusterId) {
+    affectedClusterIds.add(previousClusterId);
+  }
 
-  if (aggregationDetectionEnabled && summaryResult.isAggregation === true) {
+  const moderationStatus = understanding.moderationStatus === "restored"
+    ? "allowed"
+    : understanding.moderationStatus;
+  const analysisStatus = understanding.diagnostics.analysisValid ? "succeeded" : "failed";
+  const summaryStatus = understanding.diagnostics.summaryValid ? "succeeded" : "failed";
+  const aggregationIsValid = aggregationDetectionEnabled && understanding.diagnostics.aggregationValid;
+
+  if (!understanding.diagnostics.analysisValid || (aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid)) {
+    const updated = await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        summaryText,
+        summaryStatus,
+        ...(!understanding.diagnostics.analysisValid
+          ? { analysisStatus: "failed" as const, aiProcessedAt: null }
+          : {}),
+        ...(aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid
+          ? {
+              aggregationCheckedAt: new Date(),
+              aggregationParseStatus: AGGREGATION_PARSE_STATUS.failed,
+            }
+          : {}),
+        understandingInputHash: inputHash,
+        understandingVersion: ITEM_UNDERSTANDING_VERSION,
+        errorMessage: `统一条目理解部分字段无效：${failedFields.join(", ")}`,
+      },
+      include: { source: true },
+    });
+
+    if (previousClusterId && understanding.diagnostics.summaryValid) {
+      await recomputeCluster(previousClusterId, aiProvider);
+    }
+    invalidateFeedCache();
+
+    return { item: updated, failedFields };
+  }
+
+  const isAggregation = Boolean(
+    aggregationIsValid &&
+    moderationStatus !== "filtered" &&
+    understanding.aggregation.isAggregation,
+  );
+  let regularAggregationParseStatus = aggregationIsValid
+    ? AGGREGATION_PARSE_STATUS.notAggregation
+    : AGGREGATION_PARSE_STATUS.failed;
+
+  if (isAggregation) {
     await prisma.item.update({
       where: { id: item.id },
       data: {
-        summaryText: summaryText || item.summaryText,
-        summaryStatus: "succeeded",
-        analysisStatus: "pending",
+        translatedTitle:
+          shouldTranslateTitle(item.originalTitle)
+            ? understanding.translatedTitle?.trim() || item.originalTitle
+            : item.translatedTitle,
+        summaryText,
+        summaryStatus,
+        analysisStatus,
         status: "processed",
-        moderationStatus: "allowed",
-        moderationReason: null,
-        moderationDetail: null,
+        moderationStatus,
+        moderationReason: understanding.moderationReason,
+        moderationDetail: understanding.moderationDetail,
+        qualityScore: understanding.qualityScore,
+        qualityRationale: understanding.qualityRationale,
+        ...serializeEventSignature(understanding.eventSignature),
         isAggregation: true,
         aggregationCheckedAt: new Date(),
         aggregationParseStatus: AGGREGATION_PARSE_STATUS.detected,
+        understandingInputHash: inputHash,
+        understandingVersion: ITEM_UNDERSTANDING_VERSION,
+        aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
+        clusterId: null,
+        manualClusterAssignedAt: null,
         errorMessage: null,
       },
     });
@@ -687,6 +622,7 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
       retireExistingChildrenOnNotAggregation: false,
       retireExistingChildrenOnFailure: false,
       trackRetiredChildClusters: true,
+      understanding,
     });
 
     if (reparseResult.status === "parsed") {
@@ -697,57 +633,64 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
       invalidateFeedCache();
       invalidateDailyReportCache();
 
-      return prisma.item.findUniqueOrThrow({
+      const updated = await prisma.item.findUniqueOrThrow({
         where: { id: item.id },
         include: { source: true },
       });
+      return { item: updated, failedFields };
+    }
+
+    if (reparseResult.status === "failed") {
+      invalidateFeedCache();
+      invalidateDailyReportCache();
+      const updated = await prisma.item.findUniqueOrThrow({
+        where: { id: item.id },
+        include: { source: true },
+      });
+      return { item: updated, failedFields: [...failedFields, "aggregation"] };
     }
 
     for (const clusterId of reparseResult.affectedClusterIds) {
       affectedClusterIds.add(clusterId);
     }
-    fallbackAggregationParseStatus =
-      reparseResult.status === "failed"
-        ? AGGREGATION_PARSE_STATUS.failed
-        : AGGREGATION_PARSE_STATUS.notAggregation;
-  } else if (aggregationDetectionEnabled) {
-    fallbackAggregationParseStatus = AGGREGATION_PARSE_STATUS.notAggregation;
+    regularAggregationParseStatus = AGGREGATION_PARSE_STATUS.notAggregation;
   }
 
-  const analysis = await aiProvider.enrichContent(summaryText, {
-    title: item.originalTitle,
-    sourceName: item.source.name,
-    translateTitle: shouldTranslateTitle(item.originalTitle),
-  });
-
-  const moderationStatus = analysis.moderationStatus === "restored" ? "allowed" : analysis.moderationStatus;
   const nextStatus = moderationStatus === "filtered" ? "filtered" : "processed";
   const regularAggregationFields = aggregationDetectionEnabled
     ? {
         isAggregation: false,
         aggregationCheckedAt: new Date(),
-        aggregationParseStatus: fallbackAggregationParseStatus,
+        aggregationParseStatus: regularAggregationParseStatus,
       }
-    : {};
+    : {
+        isAggregation: false,
+        aggregationCheckedAt: null,
+        aggregationParseStatus: null,
+      };
 
   const updated = await prisma.item.update({
     where: { id: item.id },
     data: {
       translatedTitle:
-        shouldTranslateTitle(item.originalTitle) ? analysis.translatedTitle?.trim() || item.originalTitle : item.translatedTitle,
-      summaryText: summaryText || item.summaryText,
-      summaryStatus: "succeeded",
-      analysisStatus: "succeeded",
+        shouldTranslateTitle(item.originalTitle)
+          ? understanding.translatedTitle?.trim() || item.originalTitle
+          : item.translatedTitle,
+      summaryText,
+      summaryStatus,
+      analysisStatus,
       moderationStatus,
-      moderationReason: analysis.moderationReason,
-      moderationDetail: analysis.moderationDetail,
-      qualityScore: analysis.qualityScore,
-      qualityRationale: analysis.qualityRationale,
-      ...serializeEventSignature(analysis.eventSignature),
-      aiProcessedAt: new Date(),
+      moderationReason: understanding.moderationReason,
+      moderationDetail: understanding.moderationDetail,
+      qualityScore: understanding.qualityScore,
+      qualityRationale: understanding.qualityRationale,
+      ...serializeEventSignature(understanding.eventSignature),
+      understandingInputHash: inputHash,
+      understandingVersion: ITEM_UNDERSTANDING_VERSION,
+      aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
       status: nextStatus,
-      clusterId: moderationStatus === "filtered" ? null : item.clusterId,
-      manualClusterAssignedAt: moderationStatus === "filtered" ? null : item.manualClusterAssignedAt,
+      clusterId: null,
+      manualClusterAssignedAt: null,
       errorMessage: null,
       ...regularAggregationFields,
     },
@@ -755,10 +698,10 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
   });
   await replaceItemTagsSafely(
     updated.id,
-    nextStatus === "processed" ? analysis.tags : [],
+    nextStatus === "processed" && analysisStatus === "succeeded" ? understanding.tags : [],
   );
 
-  if (aggregationDetectionEnabled) {
+  if (aggregationDetectionEnabled || item.isAggregation) {
     for (const clusterId of await collectAggregationChildClusterIds(item.id)) {
       affectedClusterIds.add(clusterId);
     }
@@ -770,14 +713,13 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
       affectedClusterIds.add(previousClusterId);
     }
   } else {
-    await assignItemToCluster(updated.id, {
-      eventSignature: analysis.eventSignature,
+    const assignment = await assignItemToCluster(updated.id, {
+      eventSignature: understanding.eventSignature,
       aiProvider,
     });
-  }
-
-  if (previousClusterId && previousClusterId !== updated.clusterId) {
-    affectedClusterIds.add(previousClusterId);
+    if (assignment.clusterId) {
+      affectedClusterIds.add(assignment.clusterId);
+    }
   }
 
   for (const clusterId of affectedClusterIds) {
@@ -785,14 +727,15 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions) {
   }
 
   invalidateFeedCache();
-  if (aggregationDetectionEnabled) {
+  if (aggregationDetectionEnabled || item.isAggregation) {
     invalidateDailyReportCache();
   }
 
-  return prisma.item.findUniqueOrThrow({
+  const result = await prisma.item.findUniqueOrThrow({
     where: { id: updated.id },
     include: { source: true },
   });
+  return { item: result, failedFields };
 }
 
 export async function executeItemReanalyzeTask(
@@ -803,19 +746,13 @@ export async function executeItemReanalyzeTask(
     throw new Error("Task entityId is required.");
   }
 
-  // Estimated call budget for reanalyze:
-  //   - enrichContent (the actual reanalyze pass)
-  //   - summarizeItem (if a cached summary doesn't exist)
-  //   - parseAggregation (when source-level aggregation detection identifies a roundup)
-  //   - summarizeCluster (1-2x via recomputeCluster, only if hash changed)
-  // Actual counts are always tracked by wrapProvider regardless of estimate.
-  const aiUsage = createTaskAiUsageTracker(1, "item_analysis");
-  aiUsage.addEstimated(1, "item_summary");
-  aiUsage.addEstimated(1, "item_aggregation");
+  // One unified understanding call rewrites summary, analysis, and aggregation.
+  // Cluster summaries remain downstream and are tracked separately.
+  const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
   aiUsage.addEstimated(2, "cluster_summary");
   const trackedAiProvider = aiUsage.wrapProvider(
     await resolveAiProvider(options?.aiProvider),
-    { summarizeItemEstimated: false },
+    { understandItemEstimated: false },
   );
   const initialAiUsage = aiUsage.snapshot();
 
@@ -828,25 +765,28 @@ export async function executeItemReanalyzeTask(
   });
 
   try {
-    const item = await reanalyzeItem(taskRun.entityId, {
+    const outcome = await reanalyzeItem(taskRun.entityId, {
       ...options,
       aiProvider: trackedAiProvider,
     });
-    const completionLabel = await buildItemReanalyzeCompletionLabel(item);
+    const completionLabel = await buildItemReanalyzeCompletionLabel(outcome.item);
+    const isPartial = outcome.failedFields.length > 0;
 
     await updateTaskRun(taskRun.id, {
-      status: "succeeded",
+      status: isPartial ? "partial" : "succeeded",
       progressCurrent: 1,
       progressTotal: 1,
-      progressLabel: completionLabel,
+      progressLabel: isPartial
+        ? `${completionLabel}（部分字段失败：${outcome.failedFields.join(", ")}）`
+        : completionLabel,
       aiCallCountActual: aiUsage.snapshot().actual,
       aiCallCountEstimated: aiUsage.snapshot().estimated,
       aiCallBreakdown: aiUsage.snapshot().breakdown,
       finishedAt: new Date(),
-      errorSummary: null,
+      errorSummary: isPartial ? `统一条目理解部分字段无效：${outcome.failedFields.join(", ")}` : null,
     });
 
-    return item;
+    return outcome.item;
   } catch (error) {
     await updateTaskRun(taskRun.id, {
       status: "failed",
@@ -995,20 +935,11 @@ function serializeParsedEventSignature(input: {
 }
 
 function isCompleteParsedAggregation(
-  parsed: ParsedAggregation | null | undefined,
-): parsed is ParsedAggregation & {
+  parsed: ItemUnderstandingResult["aggregation"] | null | undefined,
+): parsed is ItemUnderstandingResult["aggregation"] & {
   events: Array<AiEventSignature & { oneLiner: string; qualityScore: number }>;
 } {
   return Boolean(parsed && parsed.events && parsed.events.length > 0);
-}
-
-function getAggregationReparseSourceText(input: {
-  fullText?: string | null;
-  rssContent?: string | null;
-  rssExcerpt?: string | null;
-}) {
-  const sourceText = input.fullText?.trim() || input.rssContent?.trim() || input.rssExcerpt?.trim() || "";
-  return buildAggregationParsingInput(sourceText);
 }
 
 async function collectAggregationChildClusterIds(parentItemId: string) {
@@ -1070,6 +1001,7 @@ async function reparseAggregationCandidate(
     retireExistingChildrenOnNotAggregation?: boolean;
     retireExistingChildrenOnFailure?: boolean;
     trackRetiredChildClusters?: boolean;
+    understanding?: ItemUnderstandingResult;
   },
 ): Promise<AggregationReparseResult> {
   const affectedClusterIds = new Set<string>();
@@ -1077,9 +1009,14 @@ async function reparseAggregationCandidate(
     affectedClusterIds.add(candidate.clusterId);
   }
 
-  const inputText = getAggregationReparseSourceText(candidate);
+  const understandingInput = buildItemUnderstandingInput({
+    fullText: candidate.fullText,
+    rssContent: candidate.rssContent,
+    rssExcerpt: candidate.rssExcerpt,
+    originalTitle: candidate.originalTitle,
+  });
 
-  if (inputText.length < REPARSE_AGGREGATIONS_MIN_TEXT_CHARS) {
+  if (understandingInput.text.length < REPARSE_AGGREGATIONS_MIN_TEXT_CHARS) {
     const retiredClusterIds = await markAggregationCandidateNotAggregation(candidate, {
       retireExistingChildren: options.retireExistingChildrenOnNotAggregation,
     });
@@ -1095,10 +1032,18 @@ async function reparseAggregationCandidate(
   }
 
   try {
-    const parsedAggregation = await options.aiProvider.parseAggregation(inputText, {
-      title: candidate.originalTitle,
-      sourceName: candidate.source.name,
-    });
+    const understanding = options.understanding ?? await options.aiProvider.understandItem(
+      understandingInput.text,
+      {
+        title: candidate.originalTitle,
+        sourceName: candidate.source.name,
+        translateTitle: shouldTranslateTitle(candidate.originalTitle),
+      },
+    );
+    if (!understanding.diagnostics.aggregationValid) {
+      throw new Error("Unified item understanding returned an invalid aggregation result");
+    }
+    const parsedAggregation = understanding.aggregation;
 
     if (!isCompleteParsedAggregation(parsedAggregation)) {
       const retiredClusterIds = await markAggregationCandidateNotAggregation(candidate, {
@@ -1146,7 +1091,13 @@ async function reparseAggregationCandidate(
 
     for (const childId of childItemIds) {
       try {
-        await assignItemToCluster(childId, { aiProvider: options.aiProvider, aggregationEnabled: true });
+        const assignment = await assignItemToCluster(childId, {
+          aiProvider: options.aiProvider,
+          aggregationEnabled: true,
+        });
+        if (assignment.clusterId) {
+          affectedClusterIds.add(assignment.clusterId);
+        }
       } catch (assignError) {
         console.error(`[Item Reparse] cluster assignment failed for ${childId}:`, assignError);
       }
@@ -1211,8 +1162,8 @@ function shouldWriteReparseProgress(processedCount: number, totalCandidates: num
 }
 
 /**
- * Backfill task that re-runs parseAggregation for items from sources that have
- * been opted into aggregation detection. Selects items where the source has
+ * Backfill task that re-runs unified item understanding for items from sources
+ * opted into aggregation detection. Selects items where the source has
  * aggregationDetectionEnabled=true, the item has not been checked or is in a
  * retriable parse state, and useful source text is available.
  */
@@ -1282,8 +1233,7 @@ export async function executeItemReparseAggregationsTask(
   }
 
   const aiProvider = await resolveAiProvider(options?.aiProvider);
-  const aiUsage = createTaskAiUsageTracker(totalCandidates);
-  aiUsage.addEstimated(totalCandidates, "item_aggregation");
+  const aiUsage = createTaskAiUsageTracker(totalCandidates, "item_understanding");
   const trackedAiProvider = aiUsage.wrapProvider(aiProvider);
   const initialAiUsage = aiUsage.snapshot();
 
@@ -1353,7 +1303,7 @@ export async function executeItemReparseAggregationsTask(
       });
       return;
     }
-    await recomputeCluster(clusterId);
+    await recomputeCluster(clusterId, trackedAiProvider);
   }
 
   if (reparsedCount > 0) {

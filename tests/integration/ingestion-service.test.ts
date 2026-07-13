@@ -1,59 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiProvider } from "@/lib/ai/provider";
 import { recomputeCluster } from "@/lib/clusters/service";
 import { findRecentActiveClusterCandidates } from "@/lib/clusters/repository";
 import { prisma } from "@/lib/db";
 import { countDisplayItemsCreatedDuringFetchRun, toFetchRunSnapshot } from "@/lib/feed/repository";
 import { runIngestion, runIngestionTask, startIngestionTask } from "@/lib/ingestion/service";
 import { buildDedupeKeys } from "@/lib/ingestion/dedupe";
-
-function buildEventSignature(
-  overrides: Partial<{
-    eventType: "release" | "launch" | "update" | "funding" | "acquisition" | "partnership" | "policy" | "research" | "security" | "other" | null;
-    eventSubject: string | null;
-    eventAction: string | null;
-    eventObject: string | null;
-    eventDate: string | null;
-  }> = {},
-) {
-  return {
-    eventType: null,
-    eventSubject: null,
-    eventAction: null,
-    eventObject: null,
-    eventDate: null,
-    ...overrides,
-  };
-}
-
-function buildAiProviderMock(
-  overrides?: Partial<{
-    summarizeItem: ReturnType<typeof vi.fn>;
-    parseAggregation: ReturnType<typeof vi.fn>;
-    enrichContent: ReturnType<typeof vi.fn>;
-    summarizeCluster: ReturnType<typeof vi.fn>;
-    matchClusterCandidate: ReturnType<typeof vi.fn>;
-  }>,
-): AiProvider {
-  const base = {
-    summarizeItem: vi.fn().mockResolvedValue({summary: "默认条目摘要", isAggregation: false}),
-    parseAggregation: vi.fn().mockResolvedValue({ mainEvent: null, events: [] }),
-    enrichContent: vi.fn().mockResolvedValue({
-      translatedTitle: "默认中文标题",
-      moderationStatus: "allowed",
-      moderationReason: null,
-      moderationDetail: null,
-      qualityScore: 80,
-      qualityRationale: "高质量",
-      eventSignature: buildEventSignature(),
-      tags: [],
-    }),
-    summarizeCluster: vi.fn().mockResolvedValue("默认聚合摘要"),
-    matchClusterCandidate: vi.fn().mockResolvedValue(null),
-  };
-  return { ...base, ...(overrides as unknown as Partial<AiProvider>) } as AiProvider;
-}
+import { buildItemUnderstandingInput, ITEM_UNDERSTANDING_VERSION } from "@/lib/ingestion/content-input";
+import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
 
 describe("runIngestion", () => {
   beforeEach(async () => {
@@ -101,8 +55,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "这篇文章介绍了 OpenAI 新发布的 agent 工具能力。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "这篇文章介绍了 OpenAI 新发布的 agent 工具能力。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布新的 Agent 工具包",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -116,7 +70,10 @@ describe("runIngestion", () => {
           eventObject: "agent toolkit",
         }),
       }),
-      summarizeCluster: vi.fn().mockResolvedValue("两篇报道都聚焦 OpenAI 新发布的 agent 工具能力。"),
+      summarizeCluster: vi.fn().mockResolvedValue(JSON.stringify({
+        title: "OpenAI 发布新的 Agent 工具包",
+        summary: "两篇报道都聚焦 OpenAI 新发布的 agent 工具能力。",
+      })),
       matchClusterCandidate: vi.fn().mockImplementation(async (_input: string, metadata: { candidates: Array<{ id: string }> }) => {
         return metadata.candidates[0]?.id ?? null;
       }),
@@ -147,8 +104,8 @@ describe("runIngestion", () => {
     expect(storedTaskRun.progressCurrent).toBe(2);
     expect(storedTaskRun.progressTotal).toBe(2);
     expect(storedTaskRun.progressLabel).toBe("已处理 2/2 条内容，来自 1 个源，失败 0 项，正文补抓 0 篇");
-    expect(storedTaskRun.aiCallCountActual).toBe(5);
-    expect(storedTaskRun.aiCallCountEstimated).toBe(5);
+    expect(storedTaskRun.aiCallCountActual).toBe(3);
+    expect(storedTaskRun.aiCallCountEstimated).toBe(3);
     expect(storedTaskRun.fullTextFetchedCount).toBe(0);
     expect(storedTaskRun.stageTimingsJson).not.toBeNull();
     expect(storedTaskRun.aiCallBreakdownJson).not.toBeNull();
@@ -170,9 +127,7 @@ describe("runIngestion", () => {
     ]);
     expect(stageTimings.every((stageTiming) => typeof stageTiming.durationMs === "number" || stageTiming.durationMs === null)).toBe(true);
     expect(aiCallBreakdown).toEqual([
-      { key: "item_summary", label: "条目摘要", actual: 2, estimated: 2 },
-      { key: "item_analysis", label: "内容分析", actual: 2, estimated: 2 },
-      { key: "item_aggregation", label: "聚合拆条", actual: 0, estimated: 0 },
+      { key: "item_understanding", label: "条目理解", actual: 2, estimated: 2 },
       { key: "cluster_match", label: "聚合匹配", actual: 0, estimated: 0 },
       { key: "cluster_summary", label: "聚合摘要", actual: 1, estimated: 1 },
       { key: "cluster_merge", label: "聚合合并", actual: 0, estimated: 0 },
@@ -181,9 +136,7 @@ describe("runIngestion", () => {
     expect(taskTimeline.map((node) => node.key)).toEqual([
       "source_fetch",
       "rule_filter",
-      "item_summary",
-      "item_aggregation",
-      "item_analysis",
+      "item_understanding",
       "cluster_assignment",
       "cluster_merge",
       "cluster_finalize",
@@ -197,29 +150,26 @@ describe("runIngestion", () => {
     expect(taskTimeline[0]?.metrics.find((metric) => metric.label === "补抓累计耗时ms")?.value).toEqual(expect.any(Number));
     expect(taskTimeline[1]?.metrics.find((metric) => metric.label === "条目累计耗时ms")?.value).toEqual(expect.any(Number));
     expect(taskTimeline[2]?.metrics).toEqual(expect.arrayContaining([
-      { label: "完成", value: 2 },
-      { label: "失败", value: 0 },
-    ]));
-    expect(taskTimeline[2]?.metrics.find((metric) => metric.label === "累计耗时ms")?.value).toEqual(expect.any(Number));
-    expect(taskTimeline[3]?.metrics).toEqual(expect.arrayContaining([
+      { label: "摘要完成", value: 2 },
+      { label: "摘要失败", value: 0 },
+      { label: "分析完成", value: 2 },
+      { label: "分析失败", value: 0 },
       { label: "拆分成功", value: 0 },
       { label: "拆分失败", value: 0 },
       { label: "子事件", value: 0 },
-    ]));
-    expect(taskTimeline[4]?.metrics).toEqual(expect.arrayContaining([
-      { label: "完成", value: 2 },
       { label: "过滤", value: 0 },
       { label: "更新/重处理", value: 0 },
     ]));
-    expect(taskTimeline[5]?.metrics).toEqual(expect.arrayContaining([
+    expect(taskTimeline[2]?.metrics.find((metric) => metric.label === "累计耗时ms")?.value).toEqual(expect.any(Number));
+    expect(taskTimeline[3]?.metrics).toEqual(expect.arrayContaining([
       { label: "指纹命中", value: 1 },
       { label: "本地直连", value: 0 },
       { label: "AI归组", value: 0 },
       { label: "跳过", value: 0 },
       { label: "新建", value: 1 },
     ]));
-    expect(taskTimeline[5]?.metrics.find((metric) => metric.label === "累计耗时ms")?.value).toEqual(expect.any(Number));
-    expect(taskTimeline[6]?.metrics).toEqual(expect.arrayContaining([
+    expect(taskTimeline[3]?.metrics.find((metric) => metric.label === "累计耗时ms")?.value).toEqual(expect.any(Number));
+    expect(taskTimeline[4]?.metrics).toEqual(expect.arrayContaining([
       { label: "送模Pair", value: expect.any(Number) },
       { label: "输入字符", value: expect.any(Number) },
       { label: "刷新数量ms", value: expect.any(Number) },
@@ -230,7 +180,7 @@ describe("runIngestion", () => {
       { label: "执行合并ms", value: expect.any(Number) },
       { label: "标记Hashms", value: expect.any(Number) },
     ]));
-    expect(taskTimeline[7]?.metrics).toEqual([
+    expect(taskTimeline[5]?.metrics).toEqual([
       { label: "参与重算", value: 1 },
       { label: "完成更新", value: 1 },
       { label: "摘要完成", value: 1 },
@@ -253,8 +203,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "OpenAI 发布 Codex 云端智能体，面向开发者自动处理编程任务。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "OpenAI 发布 Codex 云端智能体，面向开发者自动处理编程任务。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布 Codex 云端智能体",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -396,10 +346,10 @@ describe("runIngestion", () => {
         ],
       }),
     };
-    const summarizeItem = vi.fn().mockResolvedValue({summary: "清洗后的摘要", isAggregation: false});
+    const summaryFixture = vi.fn().mockResolvedValue({summary: "清洗后的摘要", isAggregation: false});
     const aiProvider = buildAiProviderMock({
-      summarizeItem,
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture,
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: null,
         moderationStatus: "allowed",
         moderationReason: null,
@@ -432,8 +382,8 @@ describe("runIngestion", () => {
       now: new Date("2026-04-10T10:30:00.000Z"),
     });
 
-    expect(summarizeItem).toHaveBeenCalledTimes(1);
-    const summaryInput = summarizeItem.mock.calls[0]?.[0] as string;
+    expect(summaryFixture).toHaveBeenCalledTimes(1);
+    const summaryInput = summaryFixture.mock.calls[0]?.[0] as string;
     expect(summaryInput.length).toBe(32_000);
     expect(summaryInput).toContain("这是一段很长的正文内容");
     expect(summaryInput).not.toContain("<p>");
@@ -458,10 +408,10 @@ describe("runIngestion", () => {
       }),
     };
     const articleFetcher = vi.fn().mockResolvedValue("Jina warning page should not be stored.");
-    const summarizeItem = vi.fn().mockResolvedValue({summary: "RSS HTML 摘要", isAggregation: false});
+    const summaryFixture = vi.fn().mockResolvedValue({summary: "RSS HTML 摘要", isAggregation: false});
     const aiProvider = buildAiProviderMock({
-      summarizeItem,
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture,
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: null,
         moderationStatus: "allowed",
         moderationReason: null,
@@ -505,8 +455,8 @@ describe("runIngestion", () => {
     const storedItem = await prisma.item.findFirstOrThrow();
     expect(storedItem.fullText).toBeNull();
     expect(storedItem.rssContent).toBe(weixinHtmlContent);
-    expect(summarizeItem).toHaveBeenCalledTimes(1);
-    expect(summarizeItem.mock.calls[0]?.[0]).toContain("这是一段来自微信公众号 RSS 的正文内容");
+    expect(summaryFixture).toHaveBeenCalledTimes(1);
+    expect(summaryFixture.mock.calls[0]?.[0]).toContain("这是一段来自微信公众号 RSS 的正文内容");
   });
 
   it("counts only processing-start eligible items in task progress and timeline", async () => {
@@ -529,8 +479,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "这是一条符合处理时间范围的新内容。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "这是一条符合处理时间范围的新内容。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "符合处理时间范围的新内容",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -730,8 +680,8 @@ describe("runIngestion", () => {
         "If-Modified-Since": "Wed, 10 Apr 2026 09:00:00 GMT",
       },
     });
-    expect(aiProvider.summarizeItem).not.toHaveBeenCalled();
-    expect(aiProvider.enrichContent).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).not.toHaveBeenCalled();
 
     const storedSource = await prisma.source.findUniqueOrThrow({
       where: { id: source.id },
@@ -756,8 +706,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "缓存内容摘要。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "缓存内容摘要。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布缓存工具包",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -804,8 +754,8 @@ describe("runIngestion", () => {
 
     expect(firstRun.itemCount).toBe(1);
     expect(secondRun.itemCount).toBe(0);
-    expect(aiProvider.summarizeItem).toHaveBeenCalledTimes(1);
-    expect(aiProvider.enrichContent).toHaveBeenCalledTimes(1);
+    expect(aiProvider.understandItem).toHaveBeenCalledTimes(1);
+    expect(aiProvider.understandItem).toHaveBeenCalledTimes(1);
 
     const storedSource = await prisma.source.findFirstOrThrow({
       where: { rssUrl: "https://example.com/feed.xml" },
@@ -838,8 +788,8 @@ describe("runIngestion", () => {
     };
     const taskRun = await startIngestionTask({ triggerType: "manual" });
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "这篇文章介绍了 OpenAI 新发布的 agent 工具能力。", isAggregation: false}),
-      enrichContent: vi.fn().mockImplementation(async () => {
+      summaryFixture: vi.fn().mockResolvedValue({summary: "这篇文章介绍了 OpenAI 新发布的 agent 工具能力。", isAggregation: false}),
+      analysisFixture: vi.fn().mockImplementation(async () => {
         enrichCallCount += 1;
 
         if (enrichCallCount === 1) {
@@ -937,7 +887,7 @@ describe("runIngestion", () => {
       .mockResolvedValue("A complete article body describing the toolkit release in enough detail to summarize.");
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockImplementation(async (_input: string, metadata: { title: string }) => {
+      summaryFixture: vi.fn().mockImplementation(async (_input: string, metadata: { title: string }) => {
         if (metadata.title === "Market wrap") {
           return {summary: "这是一篇低质量市场综述。", isAggregation: false};
         }
@@ -948,7 +898,7 @@ describe("runIngestion", () => {
 
         return {summary: "这篇文章介绍了 OpenAI 新发布的 agent 工具能力。", isAggregation: false};
       }),
-      enrichContent: vi.fn().mockImplementation(async (input: string, metadata: { title: string }) => {
+      analysisFixture: vi.fn().mockImplementation(async (input: string, metadata: { title: string }) => {
         if (metadata.title === "Market wrap") {
           return {
             translatedTitle: null,
@@ -1022,7 +972,7 @@ describe("runIngestion", () => {
     expect(result.failureCount).toBe(0);
     expect(parser.parseURL).toHaveBeenCalledWith("https://example.com/feed.xml", { headers: {} });
     expect(articleFetcher).toHaveBeenCalledTimes(2);
-    expect(aiProvider.enrichContent).toHaveBeenCalledTimes(2);
+    expect(aiProvider.understandItem).toHaveBeenCalledTimes(2);
     expect(aiProvider.matchClusterCandidate).not.toHaveBeenCalled();
 
     const storedItems = await prisma.item.findMany({
@@ -1093,14 +1043,14 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockImplementation(async (_input: string, metadata: { title: string }) => {
+      summaryFixture: vi.fn().mockImplementation(async (_input: string, metadata: { title: string }) => {
         if (metadata.title === "Microsoft releases agent framework") {
           return {summary: "这篇文章报道微软发布新的 agent framework。", isAggregation: false};
         }
 
         return {summary: "这篇文章报道 Anthropic 推出 managed agents。", isAggregation: false};
       }),
-      enrichContent: vi.fn().mockImplementation(async (_input: string, metadata: { title: string }) => {
+      analysisFixture: vi.fn().mockImplementation(async (_input: string, metadata: { title: string }) => {
         if (metadata.title === "Microsoft releases agent framework") {
           return {
             translatedTitle: "微软发布 Agent Framework",
@@ -1289,8 +1239,8 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "这是一条事件签名不完整的新内容。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "这是一条事件签名不完整的新内容。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "事件签名不完整的新内容",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -1458,8 +1408,8 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "OpenAI 发布 toolkit，并强调当天上线。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "OpenAI 发布 toolkit，并强调当天上线。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布 toolkit",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -1583,8 +1533,8 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "OpenAI 发布 toolkit 产品线的新成员。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "OpenAI 发布 toolkit 产品线的新成员。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布 toolkit 产品线新成员",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -1650,8 +1600,8 @@ describe("runIngestion", () => {
 
     const articleFetcher = vi.fn().mockRejectedValue(new Error("Article fetch failed with status 404"));
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockRejectedValue(new Error("Upstream ai timeout")),
-      enrichContent: vi.fn().mockRejectedValue(new Error("Upstream ai timeout")),
+      summaryFixture: vi.fn().mockRejectedValue(new Error("Upstream ai timeout")),
+      analysisFixture: vi.fn().mockRejectedValue(new Error("Upstream ai timeout")),
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
@@ -1706,8 +1656,8 @@ describe("runIngestion", () => {
     const fullText = "Fetched article body that should not be displayed as the item summary. ".repeat(40).trim();
     const articleFetcher = vi.fn().mockResolvedValue(fullText);
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockRejectedValue(new Error("Invalid item summary response: expected JSON")),
-      enrichContent: vi.fn().mockRejectedValue(new Error("Upstream ai timeout")),
+      summaryFixture: vi.fn().mockRejectedValue(new Error("Invalid item summary response: expected JSON")),
+      analysisFixture: vi.fn().mockRejectedValue(new Error("Upstream ai timeout")),
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
@@ -1755,7 +1705,7 @@ describe("runIngestion", () => {
       }),
     };
     const fullText = "Detailed fetched article body for downstream enrichment and clustering signals.";
-    const enrichContent = vi.fn().mockResolvedValue({
+    const analysisFixture = vi.fn().mockResolvedValue({
       translatedTitle: "OpenAI 发布研究更新",
       moderationStatus: "allowed",
       moderationReason: null,
@@ -1771,8 +1721,8 @@ describe("runIngestion", () => {
       tags: [],
     });
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockRejectedValue(new Error("Invalid item summary response: expected JSON")),
-      enrichContent,
+      summaryFixture: vi.fn().mockRejectedValue(new Error("Invalid item summary response: expected JSON")),
+      analysisFixture,
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
@@ -1795,12 +1745,12 @@ describe("runIngestion", () => {
       now: new Date("2026-04-10T10:00:00.000Z"),
     });
 
-    expect(enrichContent).toHaveBeenCalledTimes(1);
-    expect(enrichContent.mock.calls[0]?.[0]).toContain(fullText);
-    expect(enrichContent.mock.calls[0]?.[0]).not.toBe("OpenAI publishes another research update");
+    expect(analysisFixture).toHaveBeenCalledTimes(1);
+    expect(analysisFixture.mock.calls[0]?.[0]).toContain(fullText);
+    expect(analysisFixture.mock.calls[0]?.[0]).not.toBe("OpenAI publishes another research update");
   });
 
-  it("records AI failure categories while still committing successful feed metadata", async () => {
+  it("marks unified understanding partial when one output field is invalid", async () => {
     const parser = {
       parseURL: vi.fn().mockResolvedValue({
         etag: "etag-ai-failure",
@@ -1821,8 +1771,24 @@ describe("runIngestion", () => {
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockRejectedValue(new Error("Invalid item summary response: expected JSON")),
-        enrichContent: vi.fn().mockRejectedValue(new Error("Upstream ai timeout")),
+        understandItem: vi.fn().mockResolvedValue({
+          summary: "",
+          translatedTitle: "OpenAI 发布模型更新",
+          moderationStatus: "allowed",
+          moderationReason: null,
+          moderationDetail: null,
+          qualityScore: 82,
+          qualityRationale: "分析字段有效",
+          eventSignature: buildEventSignature({
+            eventType: "update",
+            eventSubject: "OpenAI",
+            eventAction: "发布",
+            eventObject: "模型更新",
+          }),
+          tags: ["OpenAI"],
+          aggregation: { isAggregation: false, mainEvent: null, events: [] },
+          diagnostics: { summaryValid: false, analysisValid: true, aggregationValid: true },
+        }),
       }),
       sourceConfigs: [
         {
@@ -1843,7 +1809,7 @@ describe("runIngestion", () => {
     ]);
     const taskTimeline = JSON.parse(
       storedTaskRun.taskTimelineJson ?? "[]",
-    ) as Array<{ key: string; metrics: Array<{ label: string; value: number }> }>;
+    ) as Array<{ key: string; status: string; metrics: Array<{ label: string; value: number }> }>;
 
     expect(storedSource.feedEtag).toBe("etag-ai-failure");
     expect(storedSource.feedLastModified).toBe("Tue, 21 Apr 2026 10:00:00 GMT");
@@ -1852,15 +1818,11 @@ describe("runIngestion", () => {
     expect(storedTaskRun.progressCurrent).toBe(1);
     expect(storedTaskRun.progressTotal).toBe(1);
     expect(storedTaskRun.progressLabel).toBe("已处理 1/1 条内容，来自 1 个源，失败 1 项，正文补抓 0 篇");
-    expect(storedTaskRun.errorSummary).toContain("Invalid item summary response");
-    expect(storedTaskRun.errorSummary).toContain("Upstream ai timeout");
-    expect(taskTimeline.find((node) => node.key === "item_summary")?.metrics).toEqual(expect.arrayContaining([
-      { label: "失败", value: 1 },
-      { label: "格式无效", value: 1 },
-    ]));
-    expect(taskTimeline.find((node) => node.key === "item_analysis")?.metrics).toEqual(expect.arrayContaining([
-      { label: "失败", value: 1 },
-      { label: "供应商错误", value: 1 },
+    const understandingNode = taskTimeline.find((node) => node.key === "item_understanding");
+    expect(understandingNode?.status).toBe("partial");
+    expect(understandingNode?.metrics).toEqual(expect.arrayContaining([
+      { label: "摘要失败", value: 1 },
+      { label: "分析完成", value: 1 },
     ]));
   });
 
@@ -1880,8 +1842,8 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "中文摘要", isAggregation: false}),
-      enrichContent: vi.fn().mockImplementation(async () => {
+      summaryFixture: vi.fn().mockResolvedValue({summary: "中文摘要", isAggregation: false}),
+      analysisFixture: vi.fn().mockImplementation(async () => {
         activeCalls += 1;
         maxConcurrentCalls = Math.max(maxConcurrentCalls, activeCalls);
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -1926,7 +1888,7 @@ describe("runIngestion", () => {
     });
 
     expect(maxConcurrentCalls).toBeLessThanOrEqual(2);
-    expect(aiProvider.enrichContent).toHaveBeenCalledTimes(4);
+    expect(aiProvider.understandItem).toHaveBeenCalledTimes(4);
   });
 
   it("stores sanitized plain-text summaries when rss content contains html", async () => {
@@ -1945,8 +1907,8 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "<p>Token economy summary</p>", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "<p>Token economy summary</p>", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "Token 经济学指南",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -1999,12 +1961,12 @@ describe("runIngestion", () => {
         ],
       }),
     };
-    const summarizeItem = vi
+    const summaryFixture = vi
       .fn()
       .mockResolvedValueOnce({summary: "这篇文章介绍了 OpenAI 面向开发者的新 agent 工具包。", isAggregation: false});
     const aiProvider = buildAiProviderMock({
-      summarizeItem,
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture,
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布新的 agent 工具包",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2042,8 +2004,8 @@ describe("runIngestion", () => {
 
     const storedItem = await prisma.item.findFirstOrThrow();
     // The Chinese retry lives inside the provider; this mock replaces the
-    // provider-level summarizeItem, so the mock only needs to run once.
-    expect(summarizeItem).toHaveBeenCalledTimes(1);
+    // provider-level summaryFixture, so the mock only needs to run once.
+    expect(summaryFixture).toHaveBeenCalledTimes(1);
     expect(storedItem.summaryText).toBe("这篇文章介绍了 OpenAI 面向开发者的新 agent 工具包。");
   });
 
@@ -2063,8 +2025,8 @@ describe("runIngestion", () => {
 
     const summarizeCluster = vi.fn().mockResolvedValue("不应该被调用");
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "这是单条内容的摘要。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "这是单条内容的摘要。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "单条发布报道",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2129,11 +2091,17 @@ describe("runIngestion", () => {
     };
     const summarizeCluster = vi
       .fn()
-      .mockResolvedValueOnce("Both reports focus on OpenAI's new agent toolkit for developers.")
-      .mockResolvedValueOnce("两篇报道都聚焦 OpenAI 面向开发者发布的新 agent 工具包。");
+      .mockResolvedValueOnce(JSON.stringify({
+        title: "OpenAI launches agent toolkit",
+        summary: "Both reports focus on OpenAI's new agent toolkit for developers.",
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        title: "OpenAI 发布 agent toolkit",
+        summary: "两篇报道都聚焦 OpenAI 面向开发者发布的新 agent 工具包。",
+      }));
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "OpenAI 发布 agent toolkit。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "OpenAI 发布 agent toolkit。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布 agent toolkit",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2200,8 +2168,8 @@ describe("runIngestion", () => {
       }),
     );
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "OpenAI 发布 agent toolkit。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "OpenAI 发布 agent toolkit。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布 agent toolkit",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2324,8 +2292,8 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "OpenAI 正式发布新版 Agents SDK 服务。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "OpenAI 正式发布新版 Agents SDK 服务。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 正式发布新版 Agents SDK 服务",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2394,6 +2362,12 @@ describe("runIngestion", () => {
     const dedupeKeys = buildDedupeKeys({
       canonicalUrl: originalUrl,
     });
+    const understandingInput = buildItemUnderstandingInput({
+      fullText: null,
+      rssContent,
+      rssExcerpt,
+      originalTitle,
+    });
 
     const existingItem = await prisma.item.create({
       data: {
@@ -2414,6 +2388,8 @@ describe("runIngestion", () => {
         moderationStatus: "allowed",
         qualityScore: 91,
         qualityRationale: "多事实点且时效性强",
+        understandingInputHash: understandingInput.inputHash,
+        understandingVersion: ITEM_UNDERSTANDING_VERSION,
         aiProcessedAt: new Date("2026-04-10T09:05:00.000Z"),
       },
     });
@@ -2432,8 +2408,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "不应该被调用",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2463,7 +2439,7 @@ describe("runIngestion", () => {
       now: new Date("2026-04-10T10:00:00.000Z"),
     });
 
-    expect(aiProvider.enrichContent).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).not.toHaveBeenCalled();
 
     const storedItem = await prisma.item.findFirstOrThrow({
       where: { sourceId: source.id },
@@ -2519,8 +2495,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "不应该被调用",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2552,11 +2528,11 @@ describe("runIngestion", () => {
     expect(run.itemCount).toBe(0);
     expect(run.itemsAdded).toBe(0);
     expect(await prisma.item.count()).toBe(0);
-    expect(aiProvider.summarizeItem).not.toHaveBeenCalled();
-    expect(aiProvider.enrichContent).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).not.toHaveBeenCalled();
   });
 
-  it("reuses existing analysis when only rss content changes", async () => {
+  it("reruns unified understanding when rss content changes", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Example Feed",
@@ -2610,14 +2586,14 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
-        translatedTitle: "不应该被调用",
+      summaryFixture: vi.fn().mockResolvedValue({summary: "更新后的统一摘要", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
+        translatedTitle: "更新后的标题",
         moderationStatus: "allowed",
         moderationReason: null,
         moderationDetail: null,
         qualityScore: 95,
-        qualityRationale: "不应该被调用",
+        qualityRationale: "新增事实带来更高信息量",
         eventSignature: buildEventSignature(),
       }),
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
@@ -2641,21 +2617,19 @@ describe("runIngestion", () => {
       now: new Date("2026-04-10T10:00:00.000Z"),
     });
 
-    expect(aiProvider.summarizeItem).not.toHaveBeenCalled();
-    expect(aiProvider.enrichContent).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).toHaveBeenCalledOnce();
 
     const storedItem = await prisma.item.findFirstOrThrow({
       where: { sourceId: source.id },
     });
-    expect(storedItem.summaryText).toBe("旧摘要");
-    expect(storedItem.qualityScore).toBe(70);
-    expect(storedItem.rssExcerpt).toBe("Old summary");
-    expect(storedItem.rssContent).toBe("Old summary");
-    expect(storedItem.aiProcessedAt?.getTime()).toBe(existingItem.aiProcessedAt?.getTime());
-    expect(storedItem.updatedAt.getTime()).toBe(existingItem.updatedAt.getTime());
+    expect(storedItem.summaryText).toBe("更新后的统一摘要");
+    expect(storedItem.qualityScore).toBe(95);
+    expect(storedItem.rssExcerpt).toBe("Updated summary with new facts");
+    expect(storedItem.rssContent).toBe("Updated summary with new facts");
+    expect(storedItem.understandingInputHash).not.toBe(existingItem.understandingInputHash);
   });
 
-  it("hard-reuses the existing item when the url matches even if title and published time change", async () => {
+  it("reruns unified understanding when title and published time change", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Example Feed",
@@ -2673,7 +2647,7 @@ describe("runIngestion", () => {
       canonicalUrl: originalUrl,
     });
 
-    const existingItem = await prisma.item.create({
+    await prisma.item.create({
       data: {
         sourceId: source.id,
         originalUrl,
@@ -2710,14 +2684,14 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
-        translatedTitle: "不应该被调用",
+      summaryFixture: vi.fn().mockResolvedValue({summary: "更新后的标题与发布时间已重新理解", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
+        translatedTitle: "OpenAI 正式发布新的 Agent 工具包",
         moderationStatus: "allowed",
         moderationReason: null,
         moderationDetail: null,
         qualityScore: 95,
-        qualityRationale: "不应该被调用",
+        qualityRationale: "标题和时间均已更新",
         eventSignature: buildEventSignature(),
       }),
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
@@ -2743,8 +2717,7 @@ describe("runIngestion", () => {
       now: new Date("2026-04-10T10:00:00.000Z"),
     });
 
-    expect(aiProvider.summarizeItem).not.toHaveBeenCalled();
-    expect(aiProvider.enrichContent).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).toHaveBeenCalledOnce();
 
     const storedItem = await prisma.item.findFirstOrThrow({
       where: { sourceId: source.id },
@@ -2756,24 +2729,23 @@ describe("runIngestion", () => {
       storedTaskRun.taskTimelineJson ?? "[]",
     ) as Array<{ key: string; metrics: Array<{ label: string; value: number }> }>;
     const ruleFilterNode = taskTimeline.find((node) => node.key === "rule_filter");
-    const itemAnalysisNode = taskTimeline.find((node) => node.key === "item_analysis");
+    const itemAnalysisNode = taskTimeline.find((node) => node.key === "item_understanding");
 
-    expect(storedItem.originalTitle).toBe(oldTitle);
-    expect(storedItem.publishedAt.getTime()).toBe(publishedAt.getTime());
-    expect(storedItem.summaryText).toBe("旧摘要");
-    expect(storedItem.qualityScore).toBe(70);
-    expect(storedItem.updatedAt.getTime()).toBe(existingItem.updatedAt.getTime());
+    expect(storedItem.originalTitle).toBe(newTitle);
+    expect(storedItem.publishedAt.toISOString()).toBe("2026-04-10T10:30:00.000Z");
+    expect(storedItem.summaryText).toBe("更新后的标题与发布时间已重新理解");
+    expect(storedItem.qualityScore).toBe(95);
     expect(ruleFilterNode?.metrics).toEqual(expect.arrayContaining([
-      { label: "复用已有处理", value: 1 },
+      { label: "复用已有处理", value: 0 },
     ]));
     expect(itemAnalysisNode?.metrics).toEqual(expect.arrayContaining([
-      { label: "完成", value: 0 },
+      { label: "分析完成", value: 1 },
       { label: "过滤", value: 0 },
-      { label: "更新/重处理", value: 0 },
+      { label: "更新/重处理", value: 1 },
     ]));
   });
 
-  it("reuses succeeded summary but reruns failed analysis when inputs are unchanged", async () => {
+  it("reruns unified understanding when any field group previously failed", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Example Feed",
@@ -2829,8 +2801,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "新的统一摘要", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "OpenAI 发布新的 Agent 工具包",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -2866,8 +2838,7 @@ describe("runIngestion", () => {
       now: new Date("2026-04-10T10:00:00.000Z"),
     });
 
-    expect(aiProvider.summarizeItem).not.toHaveBeenCalled();
-    expect(aiProvider.enrichContent).toHaveBeenCalledOnce();
+    expect(aiProvider.understandItem).toHaveBeenCalledOnce();
     const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({
       where: { id: taskRun.id },
     });
@@ -2876,11 +2847,7 @@ describe("runIngestion", () => {
       actual: number;
       estimated: number;
     }>;
-    expect(latestAiBreakdown.find((entry) => entry.key === "item_summary")).toMatchObject({
-      actual: 0,
-      estimated: 0,
-    });
-    expect(latestAiBreakdown.find((entry) => entry.key === "item_analysis")).toMatchObject({
+    expect(latestAiBreakdown.find((entry) => entry.key === "item_understanding")).toMatchObject({
       actual: 1,
       estimated: 1,
     });
@@ -2888,7 +2855,7 @@ describe("runIngestion", () => {
     const storedItem = await prisma.item.findFirstOrThrow({
       where: { sourceId: source.id },
     });
-    expect(storedItem.summaryText).toBe("保留已有摘要");
+    expect(storedItem.summaryText).toBe("新的统一摘要");
     expect(storedItem.summaryStatus).toBe("succeeded");
     expect(storedItem.analysisStatus).toBe("succeeded");
     expect(storedItem.qualityScore).toBe(92);
@@ -2964,8 +2931,8 @@ describe("runIngestion", () => {
       }),
     };
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "不应该被调用", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "不应该被调用",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -3027,7 +2994,7 @@ describe("runIngestion", () => {
       data: [
         {
           name: "数据库默认条目摘要提示词",
-          type: "item_summary",
+          type: "item_understanding",
           prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
           systemPrompt: "数据库条目摘要提示词",
           isEnabled: true,
@@ -3035,7 +3002,7 @@ describe("runIngestion", () => {
         },
         {
           name: "数据库默认内容分析提示词",
-          type: "item_analysis",
+          type: "item_understanding",
           prompt: "标题：{{title}}\n正文：{{inputText}}",
           systemPrompt: "数据库内容分析提示词",
           modelApiConfigId: modelConfig.id,
@@ -3091,8 +3058,8 @@ describe("runIngestion", () => {
     };
 
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({summary: "数据库中的运行时配置已生效。", isAggregation: false}),
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({summary: "数据库中的运行时配置已生效。", isAggregation: false}),
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "数据库驱动的标题",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -3120,7 +3087,7 @@ describe("runIngestion", () => {
 
     expect(result.status).toBe("succeeded");
     expect(parser.parseURL).toHaveBeenCalledWith("https://db.example.com/feed.xml", { headers: {} });
-    expect(aiProvider.enrichContent).toHaveBeenCalledOnce();
+    expect(aiProvider.understandItem).toHaveBeenCalledOnce();
   });
 
   it("persists parsed aggregation events without moving duplicate fingerprints across items", async () => {
@@ -3140,7 +3107,7 @@ describe("runIngestion", () => {
         ],
       })),
     };
-    const parseAggregation = vi.fn().mockResolvedValue({
+    const aggregationFixture = vi.fn().mockResolvedValue({
       mainEvent: {
         eventType: "launch",
         eventSubject: "OpenAI",
@@ -3174,9 +3141,9 @@ describe("runIngestion", () => {
       ],
     });
     const aiProvider = buildAiProviderMock({
-      summarizeItem: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
-      parseAggregation,
-      enrichContent: vi.fn().mockResolvedValue({
+      summaryFixture: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
+      aggregationFixture,
+      analysisFixture: vi.fn().mockResolvedValue({
         translatedTitle: "不应调用",
         moderationStatus: "allowed",
         moderationReason: null,
@@ -3260,17 +3227,22 @@ describe("runIngestion", () => {
     expect(consoleClusterIds.size).toBe(1);
     expect(displayItemsAdded).toBe(4);
     expect(runSnapshot.itemsAdded).toBe(4);
-    expect(taskTimeline.find((node) => node.key === "item_aggregation")?.metrics).toEqual(expect.arrayContaining([
+    expect(taskTimeline.find((node) => node.key === "item_understanding")?.metrics).toEqual(expect.arrayContaining([
       { label: "拆分成功", value: 2 },
       { label: "拆分失败", value: 0 },
       { label: "子事件", value: 4 },
     ]));
-    expect(parseAggregation.mock.calls.map((call) => call[0]).join("\n")).toContain(
+    expect(taskTimeline.find((node) => node.key === "cluster_assignment")?.metrics).toEqual(expect.arrayContaining([
+      { label: "指纹命中", value: 2 },
+      { label: "AI归组", value: 0 },
+      { label: "新建", value: 2 },
+    ]));
+    expect(aggregationFixture.mock.calls.map((call) => call[0]).join("\n")).toContain(
       "OpenAI Toolkit launch (link: https://openai.com/toolkit?utm_source=tldrdev)",
     );
     expect(createItemSpy).toHaveBeenCalledTimes(2);
-    expect(aiProvider.enrichContent).not.toHaveBeenCalled();
-    expect(aiProvider.summarizeCluster).not.toHaveBeenCalled();
+    expect(aiProvider.understandItem).toHaveBeenCalledTimes(2);
+    expect(aiProvider.summarizeCluster).toHaveBeenCalledTimes(2);
     expect(aiProvider.matchClusterCandidate).not.toHaveBeenCalled();
   });
 
@@ -3287,7 +3259,7 @@ describe("runIngestion", () => {
         ],
       }),
     };
-    const enrichContent = vi.fn().mockResolvedValue({
+    const analysisFixture = vi.fn().mockResolvedValue({
       translatedTitle: "空拆条兜底",
       moderationStatus: "allowed",
       moderationReason: null,
@@ -3307,9 +3279,9 @@ describe("runIngestion", () => {
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
-        parseAggregation: vi.fn().mockResolvedValue({ mainEvent: null, events: [] }),
-        enrichContent,
+        summaryFixture: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
+        aggregationFixture: vi.fn().mockResolvedValue({ mainEvent: null, events: [] }),
+        analysisFixture,
       }),
       sourceConfigs: [
         {
@@ -3327,7 +3299,7 @@ describe("runIngestion", () => {
 
     const item = await prisma.item.findFirstOrThrow();
 
-    expect(enrichContent).toHaveBeenCalledOnce();
+    expect(analysisFixture).toHaveBeenCalledOnce();
     // Empty parse failure degrades the parent to a regular item.
     expect(item.isAggregation).toBe(false);
     expect(item.aggregationParseStatus).toBe("failed");
@@ -3336,8 +3308,8 @@ describe("runIngestion", () => {
   });
 
   it("retries aggregation parsing on a later ingestion when a previous run failed", async () => {
-    // First parser run returns the roundup, parseAggregation fails.
-    // Second parser run returns the same roundup, parseAggregation now succeeds.
+    // First parser run returns the roundup, aggregationFixture fails.
+    // Second parser run returns the same roundup, aggregationFixture now succeeds.
     // The follow-up ingestion must NOT be dedupe-filtered by urlHash; it must
     // re-enter the aggregation branch and persist child items.
     const buildRoundupItem = (contentBody: string) => ({
@@ -3355,7 +3327,7 @@ describe("runIngestion", () => {
         .mockResolvedValueOnce({ items: [buildRoundupItem("Roundup body.")] })
         .mockResolvedValueOnce({ items: [buildRoundupItem("Roundup body with multiple events to split.")] }),
     };
-    const parseAggregationSuccess = vi.fn().mockResolvedValue({
+    const aggregationFixtureSuccess = vi.fn().mockResolvedValue({
       mainEvent: {
         eventType: "release",
         eventSubject: "OpenAI",
@@ -3386,7 +3358,7 @@ describe("runIngestion", () => {
         },
       ],
     });
-    const parseAggregationFailure = vi
+    const aggregationFixtureFailure = vi
       .fn()
       .mockRejectedValueOnce(new Error("transient model error"));
 
@@ -3401,14 +3373,14 @@ describe("runIngestion", () => {
       },
     ];
 
-    // First run: parseAggregation fails, item should be left in failed state.
+    // First run: aggregationFixture fails, item should be left in failed state.
     await runIngestion({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
-        parseAggregation: parseAggregationFailure,
+        summaryFixture: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
+        aggregationFixture: aggregationFixtureFailure,
       }),
       sourceConfigs,
       blacklist: [],
@@ -3422,15 +3394,15 @@ describe("runIngestion", () => {
     expect(firstRunParent.aggregationParseStatus).toBe("failed");
     expect(await prisma.item.count({ where: { parentItemId: firstRunParent.id } })).toBe(0);
 
-    // Second run on the same feed: parseAggregation now succeeds, and the item
+    // Second run on the same feed: aggregationFixture now succeeds, and the item
     // must not be silently dropped by the urlHash dedupe gate.
     await runIngestion({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock({
-        summarizeItem: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
-        parseAggregation: parseAggregationSuccess,
+        summaryFixture: vi.fn().mockResolvedValue({ summary: "这是一篇聚合简报。", isAggregation: true }),
+        aggregationFixture: aggregationFixtureSuccess,
       }),
       sourceConfigs,
       blacklist: [],
@@ -3442,7 +3414,7 @@ describe("runIngestion", () => {
     });
     expect(secondRunParent.aggregationParseStatus).toBe("parsed");
     expect(secondRunParent.isAggregation).toBe(true);
-    expect(parseAggregationSuccess).toHaveBeenCalledTimes(1);
+    expect(aggregationFixtureSuccess).toHaveBeenCalledTimes(1);
     const children = await prisma.item.findMany({
       where: { parentItemId: secondRunParent.id },
     });

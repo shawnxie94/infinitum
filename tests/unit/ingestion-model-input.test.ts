@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildAggregationParsingInput } from "@/lib/ingestion/model-input";
+import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
 
 describe("ingestion model input", () => {
   it("preserves decoded article links for aggregation parsing", () => {
@@ -21,5 +22,32 @@ describe("ingestion model input", () => {
     expect(output).not.toContain("tracking.tldrnewsletter.com");
     expect(output).not.toContain("window.secret");
     expect(output).not.toContain("link: https://tldr.tech/dev");
+  });
+
+  it("builds one stable understanding input from the best available source", () => {
+    const first = buildItemUnderstandingInput({
+      fullText: "<p>完整正文 <a href=\"https://example.com/source\">原始来源</a></p>",
+      rssContent: "RSS 内容",
+      rssExcerpt: "RSS 摘要",
+      originalTitle: "标题",
+    });
+    const second = buildItemUnderstandingInput({
+      fullText: "<p>完整正文 <a href=\"https://example.com/source\">原始来源</a></p>",
+      rssContent: "另一个 RSS 内容",
+      rssExcerpt: null,
+      originalTitle: "标题",
+    });
+
+    expect(first.text).toContain("完整正文");
+    expect(first.text).toContain("link: https://example.com/source");
+    expect(first.inputHash).toBe(second.inputHash);
+
+    const retitled = buildItemUnderstandingInput({
+      fullText: "<p>完整正文 <a href=\"https://example.com/source\">原始来源</a></p>",
+      rssContent: "RSS 内容",
+      rssExcerpt: "RSS 摘要",
+      originalTitle: "更新后的标题",
+    });
+    expect(retitled.inputHash).not.toBe(first.inputHash);
   });
 });

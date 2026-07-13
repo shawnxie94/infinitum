@@ -471,7 +471,9 @@ export async function recomputeCluster(
           summaryAttempted: false,
           summarySucceeded: false,
         }
-      : await generateClusterPresentation(cluster.items, cluster.title, aiProvider);
+      : await generateClusterPresentation(cluster.items, cluster.title, aiProvider, {
+          preferEventTitleFallback: Boolean(options?.forceSummary),
+        });
   const eventSignature = buildClusterEventSignature(cluster.items);
   const score = Math.max(...cluster.items.map((item) => item.qualityScore));
   const latestPublishedAt = cluster.items[0]!.publishedAt;
@@ -922,9 +924,7 @@ export async function executeClusterSummaryTask(
     const trackedAiProvider = aiUsage.wrapProvider(
       options?.aiProvider ??
         createAiProvider(runtimeConfig!.modelApi, {
-          itemSummary: runtimeConfig!.selectedPromptConfigs?.itemSummary,
-          itemAnalysis: runtimeConfig!.selectedPromptConfigs?.itemAnalysis,
-          itemAggregation: runtimeConfig!.selectedPromptConfigs?.itemAggregation,
+          itemUnderstanding: runtimeConfig!.selectedPromptConfigs?.itemUnderstanding,
           clusterSummary: runtimeConfig!.selectedPromptConfigs?.clusterSummary,
           clusterMatch: runtimeConfig!.selectedPromptConfigs?.clusterMatch,
         }, undefined, {
