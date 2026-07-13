@@ -112,8 +112,8 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'summaryStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'analysisStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'manualClusterAssignedAt'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_reports') WHERE "name" = 'candidateSnapshot'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('sources') WHERE "name" = 'healthStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'displayItemCount'`)).toBe("1");
@@ -202,7 +202,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('item_summary', 'item_analysis', 'item_aggregation')`)).toBe("0");
   });
 
-  it("adds unified understanding columns to an existing item table without dropping items", () => {
+  it("drops obsolete understanding cache columns without dropping items", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-understanding-upgrade-"));
     const dbPath = path.join(tempDir, "understanding-upgrade.db");
 
@@ -229,8 +229,8 @@ describe("sqlite setup", () => {
         'https://upgrade.example.com/item', 'item-understanding-upgrade', 'Existing item', CURRENT_TIMESTAMP,
         'processed', 'allowed', 50, 'existing', 'en', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       );
-      ALTER TABLE "items" DROP COLUMN "understandingInputHash";
-      ALTER TABLE "items" DROP COLUMN "understandingVersion";
+      ALTER TABLE "items" ADD COLUMN "understandingInputHash" TEXT;
+      ALTER TABLE "items" ADD COLUMN "understandingVersion" TEXT;
       `,
     );
 
@@ -240,8 +240,10 @@ describe("sqlite setup", () => {
     });
 
     expect(runSqlite(dbPath, `SELECT "originalTitle" FROM "items" WHERE "id" = 'item-understanding-upgrade'`)).toBe("Existing item");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'trigger' AND "name" LIKE 'items_fts_%'`)).toBe("3");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items_fts" WHERE "rowid" = (SELECT "rowid" FROM "items" WHERE "id" = 'item-understanding-upgrade')`)).toBe("1");
   }, 20_000);
 
   it("drops legacy dedupeSignature columns during setup", () => {

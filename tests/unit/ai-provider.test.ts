@@ -50,6 +50,57 @@ describe("ai provider", () => {
     expect(result.aggregation).toEqual({ isAggregation: false, mainEvent: null, events: [] });
     expect(result.diagnostics).toMatchObject({ summaryValid: true, analysisValid: true, aggregationValid: true });
     expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("双引号必须转义");
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).not.toContain("true|false");
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"isAggregation":false');
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"isAggregation":true');
+  });
+
+  it("repairs a syntactically invalid item understanding response before retrying the model", async () => {
+    const validResponse = JSON.stringify({
+      summary: "OpenAI 发布新的 Agent 工具能力。",
+      translatedTitle: "OpenAI 发布 Agent 工具",
+      moderationStatus: "allowed",
+      moderationReason: null,
+      moderationDetail: "包含明确产品发布事实。",
+      qualityScore: 88,
+      qualityRationale: "事实完整且具有时效性。",
+      eventSignature: {
+        eventType: "release",
+        eventSubject: "OpenAI",
+        eventAction: "发布",
+        eventObject: "Agent 工具",
+        eventDate: "2026-07-11",
+      },
+      tags: ["OpenAI", "AI Agent"],
+      aggregation: { isAggregation: false, mainEvent: null, events: [] },
+    });
+    const malformedResponse = validResponse.replace(
+      "新的 Agent 工具能力。",
+      '新的 "Agent" 工具能力。',
+    );
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: malformedResponse } }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      undefined,
+      { chat: { completions: { create } } },
+    );
+
+    const result = await provider.understandItem("Full source body", {
+      title: "OpenAI releases agent tooling",
+      sourceName: "OpenAI",
+      translateTitle: true,
+    });
+
+    expect(result.summary).toBe('OpenAI 发布新的 "Agent" 工具能力。');
+    expect(result.diagnostics).toEqual({
+      summaryValid: true,
+      analysisValid: true,
+      aggregationValid: true,
+    });
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it("returns aggregation children from the same understanding call", async () => {

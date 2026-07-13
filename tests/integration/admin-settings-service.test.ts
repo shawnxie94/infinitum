@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_DAILY_REPORT_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { prisma } from "@/lib/db";
 import {
@@ -527,6 +528,35 @@ describe("admin settings service", () => {
     });
     expect(config?.systemPrompt).toBe(customPrompt);
     expect(config?.maxTokens).toBe(2048);
+  });
+
+  it("upgrades only the legacy default item_understanding prompt", async () => {
+    await getIngestionRuntimeConfig();
+    await prisma.promptConfig.updateMany({
+      where: { type: "item_understanding", isDefault: true },
+      data: { systemPrompt: LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT },
+    });
+    const custom = await prisma.promptConfig.create({
+      data: {
+        name: "自定义条目理解",
+        type: "item_understanding",
+        prompt: "正文：{{inputText}}",
+        systemPrompt: "用户自定义条目理解提示词",
+        maxTokens: 3000,
+        isEnabled: true,
+        isDefault: false,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const defaultConfig = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "item_understanding", isDefault: true },
+    });
+    const customConfig = await prisma.promptConfig.findUniqueOrThrow({ where: { id: custom.id } });
+    expect(defaultConfig.systemPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
+    expect(defaultConfig.systemPrompt).toContain("双引号必须转义");
+    expect(customConfig.systemPrompt).toBe("用户自定义条目理解提示词");
   });
 
   it("upgrades only the legacy default cluster_summary token budget", async () => {

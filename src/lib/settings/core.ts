@@ -1,6 +1,10 @@
 import { JSDOM } from "jsdom";
 import { PromptConfigType } from "@prisma/client";
 
+import {
+  DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+} from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
 import type { RuntimeConfig } from "@/config/runtime";
 import { prisma } from "@/lib/db";
@@ -510,6 +514,7 @@ async function ensureModelAndPromptConfigsSeeded() {
     prisma.blacklistKeyword.count(),
   ]);
 
+  await upgradeLegacyItemUnderstandingPrompt();
   await upgradeLegacyDailyReportPrompt(fileConfig);
   await upgradeLegacyClusterSummaryTokenBudget();
 
@@ -629,6 +634,19 @@ async function upgradeLegacyClusterSummaryTokenBudget() {
     },
     data: {
       maxTokens: getDefaultPromptSampling("cluster_summary").maxTokens,
+    },
+  });
+}
+
+async function upgradeLegacyItemUnderstandingPrompt() {
+  await prisma.promptConfig.updateMany({
+    where: {
+      type: PromptConfigType.item_understanding,
+      isDefault: true,
+      systemPrompt: LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+    },
+    data: {
+      systemPrompt: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
     },
   });
 }

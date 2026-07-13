@@ -1,9 +1,19 @@
 import { compileDailyReportTemplatePrompt, DEFAULT_DAILY_REPORT_TEMPLATE } from "@/lib/daily-report/template";
 
+export const ITEM_UNDERSTANDING_JSON_SYNTAX_RULE = "所有字符串字段都必须符合 JSON 字符串语法：字符串内部双引号必须转义为 \\\", 换行必须转义为 \\n；禁止在字符串中输出未转义的控制字符，字段之间的逗号和所有括号必须完整。";
+
+const LEGACY_ITEM_UNDERSTANDING_OUTPUT_FORMAT = `{"summary":"...","translatedTitle":"...","moderationStatus":"allowed|filtered","moderationReason":"marketing|low_quality|duplicate_noise|rule_filter|rule_blacklist|other|null","moderationDetail":"...","qualityScore":0,"qualityRationale":"...","eventSignature":{"eventType":"release|launch|update|funding|acquisition|partnership|policy|research|security|other|null","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"},"tags":["..."],"aggregation":{"isAggregation":true|false,"mainEvent":{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}|null,"events":[{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null","title":"...","oneLiner":"...","qualityScore":0,"sourceUrl":"https://...|null","tags":["..."]}]}}`;
+
+const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES = `非聚合内容示例（所有字段都必须保留）：
+{"summary":"示例摘要","translatedTitle":"","moderationStatus":"allowed","moderationReason":null,"moderationDetail":"示例说明","qualityScore":80,"qualityRationale":"示例理由","eventSignature":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"tags":[],"aggregation":{"isAggregation":false,"mainEvent":null,"events":[]}}
+
+聚合内容仅将 aggregation 改为以下结构：
+{"isAggregation":true,"mainEvent":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"events":[{"eventType":"other","eventSubject":"子事件主体","eventAction":"子事件动作","eventObject":"子事件对象","eventDate":null,"title":"子事件标题","oneLiner":"子事件摘要","qualityScore":80,"sourceUrl":null,"tags":[]}]}`;
+
 export const DEFAULT_ITEM_UNDERSTANDING_PROMPT = `你是资讯内容理解助手。只基于输入标题、来源和正文，一次完成摘要、内容分析、事件识别与聚合拆分。严格输出单个 JSON 对象，不要输出 Markdown、代码块或额外解释。
 
-固定输出格式：
-{"summary":"...","translatedTitle":"...","moderationStatus":"allowed|filtered","moderationReason":"marketing|low_quality|duplicate_noise|rule_filter|rule_blacklist|other|null","moderationDetail":"...","qualityScore":0,"qualityRationale":"...","eventSignature":{"eventType":"release|launch|update|funding|acquisition|partnership|policy|research|security|other|null","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"},"tags":["..."],"aggregation":{"isAggregation":true|false,"mainEvent":{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}|null,"events":[{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null","title":"...","oneLiner":"...","qualityScore":0,"sourceUrl":"https://...|null","tags":["..."]}]}}
+固定输出格式（以下 JSON 示例都可直接解析，示例值仅说明结构，不得照抄）：
+${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 
 输出要求：
 1. summary：100 到 200 字中文摘要，覆盖主体、动作、关键结果、背景和影响；只写正文，可使用有限 Markdown 行内强调，不要链接、标题、列表或编造内容。
@@ -17,7 +27,16 @@ export const DEFAULT_ITEM_UNDERSTANDING_PROMPT = `你是资讯内容理解助手
 9. 聚合内容最多返回 {{maxEvents}} 个 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。
 10. 子事件 title 为自然可读的短标题；oneLiner 为 100-200 字中文摘要；sourceUrl 仅填写正文明确给出的对应原文 http/https URL，不得猜测。
 11. aggregation.mainEvent 仅在全文存在清晰主事件时填写；它应与顶层 eventSignature 一致或更具体。
-12. 所有文本默认中文，品牌、产品和专有名词可保留原文。最终只能输出合法 JSON。`;
+12. ${ITEM_UNDERSTANDING_JSON_SYNTAX_RULE}
+13. 所有文本默认中文，品牌、产品和专有名词可保留原文。最终只能输出合法 JSON。`;
+
+export const LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT
+  .replace(
+    `固定输出格式（以下 JSON 示例都可直接解析，示例值仅说明结构，不得照抄）：\n${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}`,
+    `固定输出格式：\n${LEGACY_ITEM_UNDERSTANDING_OUTPUT_FORMAT}`,
+  )
+  .replace(`12. ${ITEM_UNDERSTANDING_JSON_SYNTAX_RULE}\n`, "")
+  .replace("13. 所有文本默认中文", "12. 所有文本默认中文");
 
 export const DEFAULT_CLUSTER_SUMMARY_PROMPT =
   `你是聚合展示编辑。请基于给定的多条候选内容，提炼它们共同指向的同一具体事件，并生成展示标题和 100 到 200 字中文摘要。

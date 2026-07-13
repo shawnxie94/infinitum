@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { jsonrepair } from "jsonrepair";
 
 import {
   MODEL_API_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
@@ -182,7 +183,7 @@ function buildJsonParseRetryPrompt(userContent: string, error: InvalidJsonModelR
   return `${userContent}
 
 重要：上一次输出不是合法 JSON，解析错误：${error.message}
-请重新生成，必须只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外解释。`;
+请重新生成，必须只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外解释。请检查字段之间的逗号、完整闭合的括号，以及字符串内部双引号和换行的 JSON 转义。`;
 }
 
 function getClient(config: RuntimeConfig["modelApi"]): OpenAICompatibleClient | null {
@@ -409,10 +410,21 @@ function parseItemUnderstandingOutput(
 
   try {
     parsed = JSON.parse(normalized) as Record<string, unknown>;
-  } catch (error) {
-    throw new InvalidJsonModelResponseError(
-      `统一条目理解模型返回了无法解析的 JSON：${getJsonParseErrorMessage(error)}`,
-    );
+  } catch (initialError) {
+    try {
+      parsed = JSON.parse(jsonrepair(normalized)) as Record<string, unknown>;
+      console.warn(
+        `[AI Provider] Repaired invalid item understanding JSON (length=${normalized.length}, initialError=${getJsonParseErrorMessage(initialError)})`,
+      );
+    } catch (repairError) {
+      throw new InvalidJsonModelResponseError(
+        `统一条目理解模型返回了无法解析的 JSON（长度 ${normalized.length}）：${getJsonParseErrorMessage(initialError)}；本地修复失败：${getJsonParseErrorMessage(repairError)}`,
+      );
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new InvalidJsonModelResponseError("统一条目理解 JSON 顶层必须是对象。");
   }
 
   let summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";

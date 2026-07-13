@@ -106,20 +106,12 @@ RSS
 新增 `src/lib/ingestion/content-input.ts`，统一负责生成内容理解输入：
 
 ```ts
-type ItemUnderstandingInput = {
-  text: string;
-  source: "full_text" | "rss_content" | "rss_excerpt" | "title";
-  inputHash: string;
-  truncated: boolean;
-};
-
-buildItemUnderstandingInput(item): ItemUnderstandingInput
+buildItemUnderstandingInput(item): string
 ```
 
 - 输入从 `fullText -> rssContent -> rssExcerpt -> originalTitle` 选择最佳来源。
 - 裁剪时优先保留标题、导语、主体、动作、数字、日期、引用、结论和文末关键更新，避免只截取正文前部。
 - 同一份输入同时用于摘要、质量评分、标签、事件签名、聚合判断和子事件拆分，避免模型重复阅读。
-- 输入哈希包含规范化文本和理解契约版本，用于幂等、回溯和后续选择性重处理。
 
 #### 调用契约
 
@@ -162,6 +154,8 @@ understandItem(
 
 统一 Prompt 必须要求单个 JSON 对象返回全部字段。Provider 负责字段级解析与校验，而不是把整个响应视为只有成功或失败两种状态：
 
+- Prompt 必须明确要求字符串内双引号、换行和控制字符按 JSON 语法转义，并保证字段逗号与括号完整。
+- 严格 `JSON.parse` 失败时先执行一次确定性的本地语法修复；修复结果仍须通过相同字段校验，本地无法修复时才重新调用模型。
 - 摘要字段无效但分析字段有效：使用现有 fallback 摘要，`summaryStatus=failed`，保留有效质量、标签和事件签名，`analysisStatus=succeeded`。
 - 分析字段无效但摘要有效：保存摘要，分析字段使用现有中性 fallback，`summaryStatus=succeeded`，`analysisStatus=failed`。
 - 聚合字段无效但摘要、分析有效：保存普通条目理解结果，将 `aggregationParseStatus=failed`，本轮把父条目作为普通内容展示，后续重分析可重试拆分。
@@ -170,16 +164,7 @@ understandItem(
 
 #### 数据变更
 
-在 `Item` 增加：
-
-```prisma
-understandingInputHash String?
-understandingVersion   String?
-```
-
-- `understandingInputHash` 用于判断统一内容理解输入是否真正变化。
-- `understandingVersion` 标识裁剪规则和 `item_understanding` 输出契约版本，不记录模型密钥或敏感配置。
-- 现有 `summaryStatus`、`analysisStatus` 和 `aiProcessedAt` 语义保持不变。
+统一条目理解不新增 `Item` 字段。现有 `summaryStatus`、`analysisStatus` 和 `aiProcessedAt` 语义保持不变；常规 ingestion 继续沿用 `urlHash + 已完成状态` 的既有幂等规则。
 
 #### 现有执行入口与操作语义
 
@@ -193,7 +178,7 @@ understandingVersion   String?
 
 - 常规 ingestion：一次调用返回并写入全部理解字段；聚合内容在同一响应中得到子事件，不再发起第二次拆分调用。
 - “重新 AI 判定”：一次调用重新写入摘要、翻译、质量、标签、事件签名和聚合结果；按新结果事务更新子条目并重新归组。
-- “仅重生成摘要”：同样执行一次统一调用，但只提交 `summaryText/summaryStatus`，不得覆盖质量、标签、事件签名、聚类或 `understandingInputHash`；这是用较大的统一输出换取单一 Prompt 与 Provider 契约。
+- “仅重生成摘要”：同样执行一次统一调用，但只提交 `summaryText/summaryStatus`，不得覆盖质量、标签、事件签名或聚类；这是用较大的统一输出换取单一 Prompt 与 Provider 契约。
 - “仅重生成翻译”：执行一次统一调用，但只提交 `translatedTitle`。
 
 #### Prompt 配置迁移
@@ -440,7 +425,7 @@ informationProcessingV2: {
 
 ## 一致性、并发与幂等
 
-- `understandingInputHash + understandingVersion` 相同且摘要、分析、聚合状态均成功时可复用。
+- 常规 ingestion 命中相同 `urlHash`，且摘要、分析、聚合状态均已完成时直接复用；只有失败或未完成条目可自动重试。
 - `ClusterUpdate` 使用 `(clusterId, inputHash)` 唯一键，重复 Worker 或同步路径不会重复生成记录。
 - 同一 update 被重复投递时，Worker 通过状态和唯一键复用成功结果；长期停留在 `pending` 的记录按现有 stale-task 清理思路重新入队。
 - 同一 cluster 的更新生成沿用 cluster assignment 的串行协调思路，或使用数据库唯一键处理竞争。
@@ -498,10 +483,10 @@ informationProcessingV2: {
 ### 数据迁移
 
 1. 发布前备份数据库和当前 Prompt 配置，作为整版回退点。
-2. 通过 Prisma schema 增加可空 Item 字段、cluster 独立来源计数和 `ClusterUpdate`；从 `PromptConfigType` 删除三类旧 Prompt 并增加 `item_understanding`。
+2. 通过 Prisma schema 增加 cluster 独立来源计数和 `ClusterUpdate`；从 `PromptConfigType` 删除三类旧 Prompt 并增加 `item_understanding`。
 3. 数据升级删除 `item_summary`、`item_analysis`、`item_aggregation` 配置，写入内置 `item_understanding` 模板，同步更新相关 API、设置 UI 和种子数据。
 4. 应用代码一次性切换到 `understandItem`，不部署同时支持新旧 Prompt 的中间运行态。
-5. 后台分批回填 `understandingInputHash`、`contentFingerprint` 和 `evidenceOriginKey`，不得触发全量 AI 重分析。
+5. 后台分批回填 `contentFingerprint` 和 `evidenceOriginKey`，不得触发全量 AI 重分析。
 6. 重算 active cluster 的 `displayIndependentSourceCount`。
 7. 影子生成事件增量和新排序，不改变公开结果；对比指标后再开启独立证据、事件增量和多样性重排。
 
@@ -518,7 +503,7 @@ informationProcessingV2: {
 
 ### 单元测试
 
-- 内容理解输入选择、裁剪、哈希和版本变化。
+- 内容理解输入选择和裁剪。
 - 统一响应字段级校验、部分成功和 fallback。
 - 聚合字段的 `maxEvents`、子事件逐项校验和“全部无效则整体不拆分”规则。
 - 归组决策顺序：精确匹配、本地强匹配、歧义 AI 匹配和新建 cluster。
@@ -531,10 +516,11 @@ informationProcessingV2: {
 
 - ingestion 中每个条目只调用一次 `understandItem`；代码库不存在 `summarizeItem`、`enrichContent` 或 `parseAggregation` 调用。
 - 统一响应中摘要失败但分析成功，仍可写入质量、标签和事件签名；反向情况也能只保存有效摘要。
+- 可修复的字符串引号或字段逗号错误在本地恢复，不产生第二次模型调用；不可修复的整体 JSON 继续走现有重试与降级。
 - 聚合内容由同一次调用返回子事件，事务写入后每个子条目独立归组，不产生第二次拆分 AI 调用。
 - 聚合字段失败时父条目按普通内容降级，摘要和分析字段仍可成功保存。
 - 精确指纹与本地强匹配不调用 `cluster_match`，只有歧义候选产生额外 AI 调用。
-- 相同理解输入和版本不会重复调用 `understandItem`。
+- 相同 URL 的已完成条目不会在常规 ingestion 中重复调用 `understandItem`。
 - `item_reanalyze` 覆盖全部理解字段并重新归组；`item_regenerate_summary` 和翻译重生成只提交各自目标字段。
 - 同一批次多个 item 加入同一 cluster，只生成一个 input hash 对应的更新。
 - ingestion 完成不等待事件增量 AI 调用，后续 Worker 成功后正确失效速览和日报缓存。

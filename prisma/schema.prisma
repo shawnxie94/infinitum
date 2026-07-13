@@ -194,8 +194,6 @@ model Item {
   isAggregation            Boolean                    @default(false)
   aggregationCheckedAt     DateTime?
   aggregationParseStatus   String?
-  understandingInputHash   String?
-  understandingVersion     String?
   parentItemId             String?
   errorMessage             String?
   createdAt                DateTime                   @default(now())

@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db";
 import { countDisplayItemsCreatedDuringFetchRun, toFetchRunSnapshot } from "@/lib/feed/repository";
 import { runIngestion, runIngestionTask, startIngestionTask } from "@/lib/ingestion/service";
 import { buildDedupeKeys } from "@/lib/ingestion/dedupe";
-import { buildItemUnderstandingInput, ITEM_UNDERSTANDING_VERSION } from "@/lib/ingestion/content-input";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
 
 describe("runIngestion", () => {
@@ -2344,7 +2343,7 @@ describe("runIngestion", () => {
     expect(storedCluster.eventObject).toBe("Agents SDK");
   });
 
-  it("reuses existing analysis when the rss title, content, and published time are unchanged", async () => {
+  it("reuses a completed existing item by URL even when RSS metadata changes", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Example Feed",
@@ -2362,13 +2361,6 @@ describe("runIngestion", () => {
     const dedupeKeys = buildDedupeKeys({
       canonicalUrl: originalUrl,
     });
-    const understandingInput = buildItemUnderstandingInput({
-      fullText: null,
-      rssContent,
-      rssExcerpt,
-      originalTitle,
-    });
-
     const existingItem = await prisma.item.create({
       data: {
         sourceId: source.id,
@@ -2388,8 +2380,6 @@ describe("runIngestion", () => {
         moderationStatus: "allowed",
         qualityScore: 91,
         qualityRationale: "多事实点且时效性强",
-        understandingInputHash: understandingInput.inputHash,
-        understandingVersion: ITEM_UNDERSTANDING_VERSION,
         aiProcessedAt: new Date("2026-04-10T09:05:00.000Z"),
       },
     });
@@ -2398,10 +2388,10 @@ describe("runIngestion", () => {
       parseURL: vi.fn().mockResolvedValue({
         items: [
           {
-            title: originalTitle,
+            title: "OpenAI formally launches an updated agent toolkit",
             link: originalUrl,
-            isoDate: "2026-04-10T09:00:00.000Z",
-            contentSnippet: rssContent,
+            isoDate: "2026-04-10T09:30:00.000Z",
+            contentSnippet: "Updated RSS summary with new facts",
             creator: "Alex",
           },
         ],
@@ -2530,219 +2520,6 @@ describe("runIngestion", () => {
     expect(await prisma.item.count()).toBe(0);
     expect(aiProvider.understandItem).not.toHaveBeenCalled();
     expect(aiProvider.understandItem).not.toHaveBeenCalled();
-  });
-
-  it("reruns unified understanding when rss content changes", async () => {
-    const source = await prisma.source.create({
-      data: {
-        name: "Example Feed",
-        rssUrl: "https://example.com/feed.xml",
-        siteUrl: "https://example.com",
-        enabled: true,
-        aiParsingEnabled: false,
-      },
-    });
-    const publishedAt = new Date("2026-04-10T09:00:00.000Z");
-    const originalUrl = "https://example.com/posts/openai-toolkit";
-    const originalTitle = "OpenAI ships a new agent toolkit";
-    const dedupeKeys = buildDedupeKeys({
-      canonicalUrl: originalUrl,
-    });
-
-    const existingItem = await prisma.item.create({
-      data: {
-        sourceId: source.id,
-        originalUrl,
-        canonicalUrl: dedupeKeys.canonicalUrl,
-        urlHash: dedupeKeys.urlHash,
-        originalTitle,
-        translatedTitle: "旧标题",
-        author: "Alex",
-        publishedAt,
-        rssExcerpt: "Old summary",
-        rssContent: "Old summary",
-        summaryText: "旧摘要",
-        status: "processed",
-        summaryStatus: "succeeded",
-        analysisStatus: "succeeded",
-        moderationStatus: "allowed",
-        qualityScore: 70,
-        qualityRationale: "旧评分",
-        aiProcessedAt: new Date("2026-04-10T09:05:00.000Z"),
-      },
-    });
-
-    const parser = {
-      parseURL: vi.fn().mockResolvedValue({
-        items: [
-          {
-            title: originalTitle,
-            link: originalUrl,
-            isoDate: "2026-04-10T09:00:00.000Z",
-            contentSnippet: "Updated summary with new facts",
-            creator: "Alex",
-          },
-        ],
-      }),
-    };
-    const aiProvider = buildAiProviderMock({
-      summaryFixture: vi.fn().mockResolvedValue({summary: "更新后的统一摘要", isAggregation: false}),
-      analysisFixture: vi.fn().mockResolvedValue({
-        translatedTitle: "更新后的标题",
-        moderationStatus: "allowed",
-        moderationReason: null,
-        moderationDetail: null,
-        qualityScore: 95,
-        qualityRationale: "新增事实带来更高信息量",
-        eventSignature: buildEventSignature(),
-      }),
-      summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
-      matchClusterCandidate: vi.fn().mockResolvedValue(null),
-    });
-    await runIngestion({
-      trigger: "manual",
-      parser,
-      articleFetcher: vi.fn(),
-      aiProvider,
-      sourceConfigs: [
-        {
-          name: "Example Feed",
-          rssUrl: "https://example.com/feed.xml",
-          siteUrl: "https://example.com",
-          enabled: true,
-          aiParsingEnabled: true,
-        },
-      ],
-      blacklist: [],
-      now: new Date("2026-04-10T10:00:00.000Z"),
-    });
-
-    expect(aiProvider.understandItem).toHaveBeenCalledOnce();
-
-    const storedItem = await prisma.item.findFirstOrThrow({
-      where: { sourceId: source.id },
-    });
-    expect(storedItem.summaryText).toBe("更新后的统一摘要");
-    expect(storedItem.qualityScore).toBe(95);
-    expect(storedItem.rssExcerpt).toBe("Updated summary with new facts");
-    expect(storedItem.rssContent).toBe("Updated summary with new facts");
-    expect(storedItem.understandingInputHash).not.toBe(existingItem.understandingInputHash);
-  });
-
-  it("reruns unified understanding when title and published time change", async () => {
-    const source = await prisma.source.create({
-      data: {
-        name: "Example Feed",
-        rssUrl: "https://example.com/feed.xml",
-        siteUrl: "https://example.com",
-        enabled: true,
-        aiParsingEnabled: false,
-      },
-    });
-    const publishedAt = new Date("2026-04-10T09:00:00.000Z");
-    const originalUrl = "https://example.com/posts/openai-toolkit";
-    const oldTitle = "OpenAI ships an agent toolkit";
-    const newTitle = "OpenAI formally launches a new agent toolkit";
-    const dedupeKeys = buildDedupeKeys({
-      canonicalUrl: originalUrl,
-    });
-
-    await prisma.item.create({
-      data: {
-        sourceId: source.id,
-        originalUrl,
-        canonicalUrl: dedupeKeys.canonicalUrl,
-        urlHash: dedupeKeys.urlHash,
-        originalTitle: oldTitle,
-        translatedTitle: "旧标题",
-        author: "Alex",
-        publishedAt,
-        rssExcerpt: "Brief summary",
-        rssContent: "Brief summary",
-        summaryText: "旧摘要",
-        status: "processed",
-        summaryStatus: "succeeded",
-        analysisStatus: "succeeded",
-        moderationStatus: "allowed",
-        qualityScore: 70,
-        qualityRationale: "旧评分",
-        aiProcessedAt: new Date("2026-04-10T09:05:00.000Z"),
-      },
-    });
-
-    const parser = {
-      parseURL: vi.fn().mockResolvedValue({
-        items: [
-          {
-            title: newTitle,
-            link: originalUrl,
-            isoDate: "2026-04-10T10:30:00.000Z",
-            contentSnippet: "Brief summary",
-            creator: "Alex",
-          },
-        ],
-      }),
-    };
-    const aiProvider = buildAiProviderMock({
-      summaryFixture: vi.fn().mockResolvedValue({summary: "更新后的标题与发布时间已重新理解", isAggregation: false}),
-      analysisFixture: vi.fn().mockResolvedValue({
-        translatedTitle: "OpenAI 正式发布新的 Agent 工具包",
-        moderationStatus: "allowed",
-        moderationReason: null,
-        moderationDetail: null,
-        qualityScore: 95,
-        qualityRationale: "标题和时间均已更新",
-        eventSignature: buildEventSignature(),
-      }),
-      summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
-      matchClusterCandidate: vi.fn().mockResolvedValue(null),
-    });
-
-    const taskRun = await startIngestionTask({ triggerType: "manual" });
-    await runIngestionTask(taskRun, {
-      parser,
-      articleFetcher: vi.fn(),
-      aiProvider,
-      sourceConfigs: [
-        {
-          name: "Example Feed",
-          rssUrl: "https://example.com/feed.xml",
-          siteUrl: "https://example.com",
-          enabled: true,
-          aiParsingEnabled: true,
-          aggregationEnabled: false,
-        },
-      ],
-      blacklist: [],
-      now: new Date("2026-04-10T10:00:00.000Z"),
-    });
-
-    expect(aiProvider.understandItem).toHaveBeenCalledOnce();
-
-    const storedItem = await prisma.item.findFirstOrThrow({
-      where: { sourceId: source.id },
-    });
-    const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({
-      where: { id: taskRun.id },
-    });
-    const taskTimeline = JSON.parse(
-      storedTaskRun.taskTimelineJson ?? "[]",
-    ) as Array<{ key: string; metrics: Array<{ label: string; value: number }> }>;
-    const ruleFilterNode = taskTimeline.find((node) => node.key === "rule_filter");
-    const itemAnalysisNode = taskTimeline.find((node) => node.key === "item_understanding");
-
-    expect(storedItem.originalTitle).toBe(newTitle);
-    expect(storedItem.publishedAt.toISOString()).toBe("2026-04-10T10:30:00.000Z");
-    expect(storedItem.summaryText).toBe("更新后的标题与发布时间已重新理解");
-    expect(storedItem.qualityScore).toBe(95);
-    expect(ruleFilterNode?.metrics).toEqual(expect.arrayContaining([
-      { label: "复用已有处理", value: 0 },
-    ]));
-    expect(itemAnalysisNode?.metrics).toEqual(expect.arrayContaining([
-      { label: "分析完成", value: 1 },
-      { label: "过滤", value: 0 },
-      { label: "更新/重处理", value: 1 },
-    ]));
   });
 
   it("reruns unified understanding when any field group previously failed", async () => {

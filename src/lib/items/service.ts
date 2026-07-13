@@ -16,7 +16,7 @@ import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import { archiveItemDedupeHistories } from "@/lib/feed/repository";
 import { shouldTranslateTitle } from "@/lib/feed/presentation";
-import { buildItemUnderstandingInput, ITEM_UNDERSTANDING_VERSION } from "@/lib/ingestion/content-input";
+import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
 import { normalizeStoredEventType } from "@/lib/clusters/normalization";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { replaceItemTags } from "@/lib/tags/service";
@@ -93,15 +93,14 @@ async function replaceItemTagsSafely(itemId: string, tags: unknown) {
 async function resolveItemUnderstanding(
   aiProvider: AiProvider,
   item: Item & { source: { name: string } },
-): Promise<{ result: ItemUnderstandingResult; inputHash: string }> {
+): Promise<ItemUnderstandingResult> {
   const input = buildItemUnderstandingInput(item);
-  const result = await aiProvider.understandItem(input.text, {
+
+  return aiProvider.understandItem(input, {
     title: item.originalTitle,
     sourceName: item.source.name,
     translateTitle: shouldTranslateTitle(item.originalTitle),
   });
-
-  return { result, inputHash: input.inputHash };
 }
 
 function serializeEventSignature(eventSignature?: {
@@ -169,7 +168,7 @@ export async function regenerateItemContent(
 
   const aiProvider = await resolveAiProvider(options?.aiProvider);
   try {
-    const { result: understanding } = await resolveItemUnderstanding(aiProvider, item);
+    const understanding = await resolveItemUnderstanding(aiProvider, item);
     if (target === "translation") {
       await prisma.item.update({
         where: { id: item.id },
@@ -510,7 +509,7 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
   }
 
   const aiProvider = await resolveAiProvider(options?.aiProvider);
-  const { result: understanding, inputHash } = await resolveItemUnderstanding(aiProvider, item);
+  const understanding = await resolveItemUnderstanding(aiProvider, item);
   const summaryText = understanding.diagnostics.summaryValid
     ? understanding.summary
     : item.summaryText;
@@ -562,8 +561,6 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
               aggregationParseStatus: AGGREGATION_PARSE_STATUS.failed,
             }
           : {}),
-        understandingInputHash: inputHash,
-        understandingVersion: ITEM_UNDERSTANDING_VERSION,
         errorMessage: `统一条目理解部分字段无效：${failedFields.join(", ")}`,
       },
       include: { source: true },
@@ -607,8 +604,6 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
         isAggregation: true,
         aggregationCheckedAt: new Date(),
         aggregationParseStatus: AGGREGATION_PARSE_STATUS.detected,
-        understandingInputHash: inputHash,
-        understandingVersion: ITEM_UNDERSTANDING_VERSION,
         aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
         clusterId: null,
         manualClusterAssignedAt: null,
@@ -685,8 +680,6 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
       qualityScore: understanding.qualityScore,
       qualityRationale: understanding.qualityRationale,
       ...serializeEventSignature(understanding.eventSignature),
-      understandingInputHash: inputHash,
-      understandingVersion: ITEM_UNDERSTANDING_VERSION,
       aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
       status: nextStatus,
       clusterId: null,
@@ -1016,7 +1009,7 @@ async function reparseAggregationCandidate(
     originalTitle: candidate.originalTitle,
   });
 
-  if (understandingInput.text.length < REPARSE_AGGREGATIONS_MIN_TEXT_CHARS) {
+  if (understandingInput.length < REPARSE_AGGREGATIONS_MIN_TEXT_CHARS) {
     const retiredClusterIds = await markAggregationCandidateNotAggregation(candidate, {
       retireExistingChildren: options.retireExistingChildrenOnNotAggregation,
     });
@@ -1033,7 +1026,7 @@ async function reparseAggregationCandidate(
 
   try {
     const understanding = options.understanding ?? await options.aiProvider.understandItem(
-      understandingInput.text,
+      understandingInput,
       {
         title: candidate.originalTitle,
         sourceName: candidate.source.name,

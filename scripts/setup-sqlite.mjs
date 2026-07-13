@@ -539,6 +539,8 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
   dropColumnIfPresent("event_briefing_configs", "includeSingleItems");
+  dropColumnIfPresent("items", "understandingInputHash");
+  dropColumnIfPresent("items", "understandingVersion");
   addColumnIfMissing("event_briefing_configs", "briefingChannelsJson", "TEXT NOT NULL DEFAULT '[]'");
 
   if (!ftsTableExists("briefing_preference_configs")) {
@@ -571,8 +573,6 @@ function applyAdditiveSchemaUpgrades() {
     addColumnIfMissing("content_clusters", "feedStatsUpdatedAt", "DATETIME"),
   ].some(Boolean);
   addColumnIfMissing("content_clusters", "earliestCreatedAt", "DATETIME");
-  addColumnIfMissing("items", "understandingInputHash", "TEXT");
-  addColumnIfMissing("items", "understandingVersion", "TEXT");
   applyScoreFieldRenames();
 
   runSqlite([dbPath], {

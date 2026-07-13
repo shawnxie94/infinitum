@@ -15,10 +15,7 @@ import { shouldTranslateTitle, stripHtmlTags } from "@/lib/feed/presentation";
 import { shouldSkipJinaForUrl } from "@/lib/ingestion/article";
 import { buildDedupeKeys, shouldFetchFullText } from "@/lib/ingestion/dedupe";
 import { evaluateRuleFilter } from "@/lib/ingestion/filtering";
-import {
-  buildItemUnderstandingInput,
-  ITEM_UNDERSTANDING_VERSION,
-} from "@/lib/ingestion/content-input";
+import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
 import { replaceItemTags } from "@/lib/tags/service";
 import type {
   ParsedFeedItem,
@@ -244,25 +241,15 @@ function isCompletedExistingItem(existing?: {
   return existing.status === "processed" && hasSucceededSummary(existing) && hasSucceededAnalysis(existing);
 }
 
-function canReuseExistingUnderstanding(
+function canReuseExistingByUrl(
   existing: Item | null | undefined,
   lookup: PreparedFeedItemLookup | null,
 ) {
-  if (!existing || !lookup || existing.urlHash !== lookup.dedupeKeys.urlHash) {
-    return false;
-  }
-
-  const input = buildItemUnderstandingInput({
-    fullText: existing.fullText,
-    rssContent: lookup.rssContent,
-    rssExcerpt: lookup.rssExcerpt,
-    originalTitle: lookup.originalTitle,
-  });
-
   return Boolean(
-    isCompletedExistingItem(existing) &&
-      existing.understandingVersion === ITEM_UNDERSTANDING_VERSION &&
-      existing.understandingInputHash === input.inputHash,
+    existing &&
+      lookup &&
+      existing.urlHash === lookup.dedupeKeys.urlHash &&
+      isCompletedExistingItem(existing),
   );
 }
 
@@ -315,7 +302,7 @@ export function estimatePreparedItemAiWork(
     return false;
   }
 
-  if (canReuseExistingUnderstanding(existing, lookup)) {
+  if (canReuseExistingByUrl(existing, lookup)) {
     return false;
   }
 
@@ -428,8 +415,6 @@ export async function processFeedItem({
   let aggregationCheckedAt: Date | null = existing?.aggregationCheckedAt ?? null;
   let aggregationParseStatus: string | null = existing?.aggregationParseStatus ?? null;
   let storedItemId = existing?.id ?? null;
-  let understandingInputHash = existing?.understandingInputHash ?? null;
-  let understandingVersion = existing?.understandingVersion ?? null;
   const issues: string[] = [];
   const processingStartedAt = Date.now();
   const timings = createItemProcessingTimings();
@@ -438,8 +423,8 @@ export async function processFeedItem({
     return timings;
   };
   const contentForFullTextDecision = fullText || rssContent || rssExcerpt || "";
-  const canReuseExistingUnderstandingResult = Boolean(
-    canReuseExistingUnderstanding(existing, lookup),
+  const canReuseExistingByUrlResult = Boolean(
+    canReuseExistingByUrl(existing, lookup),
   );
   const initialRuleFilterStartedAt = Date.now();
   const initialRuleFilter = evaluateRuleFilter({
@@ -511,7 +496,7 @@ export async function processFeedItem({
     };
   }
 
-  if (canReuseExistingUnderstandingResult && existing) {
+  if (canReuseExistingByUrlResult && existing) {
     const stored = existing;
 
     return {
@@ -589,14 +574,12 @@ export async function processFeedItem({
     const understandingStartedAt = Date.now();
 
     try {
-      const understanding = await aiProvider.understandItem(understandingInput.text, {
+      const understanding = await aiProvider.understandItem(understandingInput, {
         title: originalTitle,
         sourceName,
         translateTitle,
       });
       addElapsed(timings, "analysisMs", understandingStartedAt);
-      understandingInputHash = understandingInput.inputHash;
-      understandingVersion = ITEM_UNDERSTANDING_VERSION;
 
       summaryText = understanding.diagnostics.summaryValid
         ? normalizeStoredSummary(understanding.summary)
@@ -673,8 +656,6 @@ export async function processFeedItem({
             isAggregation: true,
             aggregationCheckedAt,
             aggregationParseStatus: AGGREGATION_PARSE_STATUS.detected,
-            understandingInputHash,
-            understandingVersion,
             parentItemId: null,
             aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
             clusterId: null,
@@ -795,8 +776,6 @@ export async function processFeedItem({
       isAggregation,
       aggregationCheckedAt,
       aggregationParseStatus,
-      understandingInputHash,
-      understandingVersion,
       aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
       clusterId: moderationStatus === "filtered" || isAggregation ? null : existing?.clusterId ?? null,
       manualClusterAssignedAt: moderationStatus === "filtered" || isAggregation ? null : existing?.manualClusterAssignedAt ?? null,
