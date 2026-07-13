@@ -1484,11 +1484,17 @@ describe("daily report service", () => {
     await expect(prisma.dailyReport.findFirst({
       where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
     })).resolves.toBeNull();
-    await expect(prisma.backgroundTaskRun.findUniqueOrThrow({
+    const failedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({
       where: { id: taskRun.id },
-    })).resolves.toMatchObject({
+    });
+    expect(failedTaskRun).toMatchObject({
       status: "failed",
       errorSummary: expect.stringContaining("日报输出校验失败"),
+      aiCallCountActual: 2,
+      aiCallCountEstimated: 2,
     });
+    expect(JSON.parse(failedTaskRun.aiCallBreakdownJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "daily_report", actual: 2, estimated: 2 }),
+    ]));
   });
 });

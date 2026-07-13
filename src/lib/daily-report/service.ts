@@ -39,13 +39,23 @@ import { getIngestionRuntimeConfig } from "@/lib/settings/runtime-service";
 import { DEFAULT_DAILY_REPORT_TASK_LABEL, type TaskTimelineNodeSnapshot } from "@/lib/tasks/types";
 import type { TaskAiCallBreakdownSnapshot } from "@/lib/tasks/types";
 import { enqueueTaskRun, ensureDefaultDailyReportSchedule, parseDailyReportChannelIdsJson, updateTaskRun } from "@/lib/tasks/service";
-import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
+import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/ai-usage";
 
 const MIN_CANDIDATE_COUNT = 2;
 const DAILY_REPORT_RECENT_SOURCE_LOOKBACK_DAYS = 7;
 const DAILY_REPORT_RECENT_TOPIC_CONTEXT_LIMIT = 120;
 const MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE = 5;
 const DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES = ["allowed", "restored"] as const;
+
+class DailyReportGenerationError extends Error {
+  aiUsage: TaskAiUsageSnapshot;
+
+  constructor(error: unknown, aiUsage: TaskAiUsageSnapshot) {
+    super(error instanceof Error ? error.message : "AI 日报生成失败。");
+    this.name = "DailyReportGenerationError";
+    this.aiUsage = aiUsage;
+  }
+}
 
 function getFallbackDailyReportHeadline(content: DailyReportContent) {
   const sectionTitles = getDailyReportSectionBlocks(content)
@@ -863,28 +873,32 @@ export async function generateDailyReport(input: {
   const baseProvider = createAiProvider(runtimeConfig.modelApi, runtimeConfig.selectedPromptConfigs);
   // Track every AI call made during generation (main call + repair fallback)
   // so the background task run records accurate `aiCallCountActual` / breakdown.
-  const aiUsage = createTaskAiUsageTracker(1, "daily_report");
+  const aiUsage = createTaskAiUsageTracker(0, "daily_report");
   const provider = aiUsage.wrapProvider(baseProvider);
-  const rawOutput = await provider.generateDailyReport({
-    date,
-    timezone: DAILY_REPORT_TIMEZONE,
-    articles: candidates,
-    recentTopics,
-  });
-
-  if (!rawOutput) {
-    throw new Error("模型未返回日报内容。");
-  }
-
   let content: DailyReportContent;
   try {
-    content = parseDailyReportContent(rawOutput, candidates.length);
-  } catch (error) {
-    const repairedOutput = await provider.repairDailyReportJson(rawOutput);
-    if (!repairedOutput) {
-      throw error;
+    const rawOutput = await provider.generateDailyReport({
+      date,
+      timezone: DAILY_REPORT_TIMEZONE,
+      articles: candidates,
+      recentTopics,
+    });
+
+    if (!rawOutput) {
+      throw new Error("模型未返回日报内容。");
     }
-    content = parseDailyReportContent(repairedOutput, candidates.length);
+
+    try {
+      content = parseDailyReportContent(rawOutput, candidates.length);
+    } catch (error) {
+      const repairedOutput = await provider.repairDailyReportJson(rawOutput);
+      if (!repairedOutput) {
+        throw error;
+      }
+      content = parseDailyReportContent(repairedOutput, candidates.length);
+    }
+  } catch (error) {
+    throw new DailyReportGenerationError(error, aiUsage.snapshot());
   }
   assertDailyReportSourceIdsExist(content, candidates.map((candidate) => ({
     sourceNumber: candidate.id,
@@ -1083,6 +1097,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     await markDailyScheduleRunFinished(taskRun, "succeeded");
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 日报生成失败。";
+    const failedAiUsage = error instanceof DailyReportGenerationError ? error.aiUsage : null;
     const existingReport = await prisma.dailyReport.findUnique({
       where: {
         date_timezone: {
@@ -1107,6 +1122,11 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       status: "failed",
       progressLabel: message,
       errorSummary: message,
+      ...(failedAiUsage ? {
+        aiCallCountActual: failedAiUsage.actual,
+        aiCallCountEstimated: failedAiUsage.estimated,
+        aiCallBreakdown: failedAiUsage.breakdown,
+      } : {}),
       taskTimeline: buildDailyReportTaskTimeline({
         taskRun,
         status: "failed",
