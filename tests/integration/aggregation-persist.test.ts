@@ -183,6 +183,79 @@ describe("aggregation child persistence", () => {
     ]));
   });
 
+  it("auto-canonicalizes new tag variants across one aggregation batch", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Variant Tagged Roundup",
+        rssUrl: "https://variant-tagged-roundup.example.com/feed.xml",
+        siteUrl: "https://variant-tagged-roundup.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationDetectionEnabled: true,
+      },
+    });
+    const parent = await prisma.item.create({
+      data: {
+        sourceId: source.id,
+        originalUrl: "https://variant-tagged-roundup.example.com/2026-04-10",
+        canonicalUrl: "https://variant-tagged-roundup.example.com/2026-04-10",
+        urlHash: "variant-tagged-roundup-parent",
+        originalTitle: "2026-04-10 Variant Tagged Daily",
+        publishedAt: new Date("2026-04-10T08:00:00.000Z"),
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryText: "Variant tagged daily roundup",
+        isAggregation: true,
+        aggregationParseStatus: "parsed",
+        aggregationCheckedAt: new Date("2026-04-10T09:00:00.000Z"),
+      },
+    });
+
+    await persistAggregationChildItems({
+      sourceId: source.id,
+      parent,
+      publishedAt: parent.publishedAt,
+      events: [
+        {
+          eventType: "launch",
+          eventSubject: "OpenAI",
+          eventAction: "发布",
+          eventObject: "模型",
+          eventDate: "2026-04-10",
+          title: "OpenAI 发布模型",
+          oneLiner: "OpenAI 发布新模型。",
+          qualityScore: 92,
+          sourceUrl: "https://news.example.com/openai-model",
+          tags: ["OpenAI"],
+        },
+        {
+          eventType: "launch",
+          eventSubject: "Open AI",
+          eventAction: "发布",
+          eventObject: "工具",
+          eventDate: "2026-04-10",
+          title: "Open AI 发布工具",
+          oneLiner: "Open AI 发布新工具。",
+          qualityScore: 88,
+          sourceUrl: "https://news.example.com/open-ai-tool",
+          tags: ["Open AI"],
+        },
+      ],
+    });
+
+    const tags = await prisma.tag.findMany({
+      include: {
+        aliases: true,
+        items: true,
+      },
+    });
+
+    expect(tags).toHaveLength(1);
+    expect(tags[0]?.normalized).toBe("openai");
+    expect(tags[0]?.items).toHaveLength(2);
+    expect(tags[0]?.aliases.map((alias) => alias.aliasNormalized)).toEqual(["open ai"]);
+  });
+
   it("allows one parent to link events with the same semantic fingerprint when source urls differ", async () => {
     const source = await prisma.source.create({
       data: {

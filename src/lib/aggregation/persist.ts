@@ -3,7 +3,11 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { replaceItemTagsInTransaction } from "@/lib/tags/service";
+import {
+  prepareItemTagReplacements,
+  replacePreparedItemTagsInTransaction,
+  type PreparedItemTagAssignment,
+} from "@/lib/tags/service";
 
 export type AggregationChildEventInput = {
   title?: string | null;
@@ -320,10 +324,14 @@ export async function persistAggregationChildItems({
   if (events.length === 0) {
     return { childItemIds: [] };
   }
+  const preparedTagReplacements = await prepareItemTagReplacements(
+    events.map((event) => event.tags),
+  );
   const childItemIds: string[] = [];
   await prisma.$transaction(async (tx) => {
     const linkedUrlHashes = new Set<string>();
     const retainedEventIndexes: number[] = [];
+    const tagAssignments: PreparedItemTagAssignment[] = [];
     for (const [eventIndex, event] of events.entries()) {
       const childInput = buildAggregationChildItemInput({
         sourceId,
@@ -337,7 +345,13 @@ export async function persistAggregationChildItems({
       }
       linkedUrlHashes.add(urlHash);
       const child = await upsertItemInTx(tx, childInput);
-      await replaceItemTagsInTransaction(tx, child.id, event.tags);
+      tagAssignments.push({
+        itemId: child.id,
+        replacement: preparedTagReplacements[eventIndex] ?? {
+          tags: [],
+          autoCanonicalAliases: [],
+        },
+      });
       const fingerprint = event.fingerprint ?? buildSemanticEventFingerprint(event);
       await tx.aggregationSplitLink.upsert({
         where: {
@@ -367,13 +381,15 @@ export async function persistAggregationChildItems({
       childItemIds.push(child.id);
     }
 
+    await replacePreparedItemTagsInTransaction(tx, tagAssignments);
+
     await tx.aggregationSplitLink.deleteMany({
       where: {
         parentItemId: parent.id,
         eventIndex: { notIn: retainedEventIndexes },
       },
     });
-  });
+  }, { timeout: 15_000 });
   return { childItemIds };
 }
 

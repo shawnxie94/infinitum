@@ -414,77 +414,82 @@ function getSuggestionConfidence(
   return Math.min(0.99, baseConfidence + overlapBoost);
 }
 
-async function addCanonicalAliasIfSafe(
-  tx: PrismaTransaction,
-  input: {
-    tagId: string;
-    tagNormalized: string;
-    aliasName: string;
-    aliasNormalized: string;
-  },
-) {
-  if (input.aliasNormalized === input.tagNormalized) {
-    return;
-  }
+type PreparedAutoCanonicalAlias = {
+  targetNormalized: string;
+  aliasName: string;
+  aliasNormalized: string;
+};
 
-  const existingAlias = await tx.tagAlias.findUnique({
-    where: { aliasNormalized: input.aliasNormalized },
-  });
+export type PreparedItemTagReplacement = {
+  tags: NormalizedTag[];
+  autoCanonicalAliases: PreparedAutoCanonicalAlias[];
+};
 
-  if (existingAlias) {
-    return;
-  }
+export type PreparedItemTagAssignment = {
+  itemId: string;
+  replacement: PreparedItemTagReplacement;
+};
 
-  const conflictingTag = await tx.tag.findUnique({
-    where: { normalized: input.aliasNormalized },
-  });
+function findBestCanonicalTag(tag: NormalizedTag, candidates: TagCandidate[]) {
+  return candidates
+    .map((candidate) => {
+      const tagSimilarity = calculateTagSimilarity(tag.name, candidate.name)
+        ?? calculateTagSimilarity(tag.normalized, candidate.normalized);
+      const aliasSimilarity = candidate.aliases
+        ?.map((alias) => calculateTagSimilarity(tag.name, alias.aliasName)
+          ?? calculateTagSimilarity(tag.normalized, alias.aliasNormalized))
+        .filter((similarity): similarity is NonNullable<typeof similarity> => Boolean(similarity))
+        .sort((left, right) => right.confidence - left.confidence)[0];
+      const similarity = [tagSimilarity, aliasSimilarity]
+        .filter((value): value is NonNullable<typeof value> => Boolean(value))
+        .sort((left, right) => right.confidence - left.confidence)[0];
 
-  if (conflictingTag) {
-    return;
-  }
+      return similarity ? { candidate, similarity } : null;
+    })
+    .filter((match): match is NonNullable<typeof match> => Boolean(match))
+    .sort((left, right) => {
+      if (left.similarity.confidence !== right.similarity.confidence) {
+        return right.similarity.confidence - left.similarity.confidence;
+      }
 
-  await tx.tagAlias.create({
-    data: {
-      tagId: input.tagId,
-      aliasName: input.aliasName,
-      aliasNormalized: input.aliasNormalized,
-      createdBy: "system:auto-canonical",
-    },
-  });
+      return compareCanonicalPreference(left.candidate, right.candidate);
+    })[0];
 }
 
-async function resolveCanonicalTagsInTransaction(
-  tx: PrismaTransaction,
-  tags: NormalizedTag[],
-): Promise<NormalizedTag[]> {
-  if (tags.length === 0) {
-    return [];
+/**
+ * Resolve exact, alias, and fuzzy canonical tags before opening a write
+ * transaction. Virtual candidates preserve the old sequential behavior where
+ * later items in one aggregation batch can match tags introduced earlier in
+ * the same batch.
+ */
+export async function prepareItemTagReplacements(
+  tagsInputs: unknown[],
+): Promise<PreparedItemTagReplacement[]> {
+  const normalizedInputs = tagsInputs.map(normalizeItemTags);
+  const normalizedKeys = Array.from(new Set(
+    normalizedInputs.flatMap((tags) => tags.map((tag) => tag.normalized)),
+  ));
+
+  if (normalizedKeys.length === 0) {
+    return normalizedInputs.map(() => ({ tags: [], autoCanonicalAliases: [] }));
   }
 
-  const aliases = await tx.tagAlias.findMany({
-    where: {
-      aliasNormalized: {
-        in: tags.map((tag) => tag.normalized),
-      },
-    },
-    include: {
-      tag: true,
-    },
-  });
+  const [aliases, exactTags] = await Promise.all([
+    prisma.tagAlias.findMany({
+      where: { aliasNormalized: { in: normalizedKeys } },
+      include: { tag: true },
+    }),
+    prisma.tag.findMany({
+      where: { normalized: { in: normalizedKeys } },
+    }),
+  ]);
   const aliasByNormalized = new Map(aliases.map((alias) => [alias.aliasNormalized, alias.tag]));
-  const exactTags = await tx.tag.findMany({
-    where: {
-      normalized: {
-        in: tags.map((tag) => tag.normalized),
-      },
-    },
-  });
   const exactTagByNormalized = new Map(exactTags.map((tag) => [tag.normalized, tag]));
-  const unresolvedTags = tags.filter(
-    (tag) => !aliasByNormalized.has(tag.normalized) && !exactTagByNormalized.has(tag.normalized),
+  const hasUnresolvedTags = normalizedKeys.some(
+    (normalized) => !aliasByNormalized.has(normalized) && !exactTagByNormalized.has(normalized),
   );
-  const fuzzyCandidates: TagCandidate[] = unresolvedTags.length > 0
-    ? await tx.tag.findMany({
+  const fuzzyCandidates: TagCandidate[] = hasUnresolvedTags
+    ? await prisma.tag.findMany({
         include: {
           aliases: {
             select: {
@@ -501,103 +506,207 @@ async function resolveCanonicalTagsInTransaction(
         },
       })
     : [];
-  const seen = new Set<string>();
-  const canonicalTags: NormalizedTag[] = [];
+  const candidateByNormalized = new Map(
+    fuzzyCandidates.map((candidate) => [candidate.normalized, candidate]),
+  );
+  const resolvedTagByNormalized = new Map<string, NormalizedTag>();
+  const autoAliasByNormalized = new Map<string, PreparedAutoCanonicalAlias>();
+  let virtualCandidateIndex = 0;
 
-  for (const tag of tags) {
-    const canonicalTag = aliasByNormalized.get(tag.normalized);
-    const exactTag = exactTagByNormalized.get(tag.normalized);
-    let nextTag = canonicalTag
-      ? { name: canonicalTag.name, normalized: canonicalTag.normalized }
-      : exactTag
-        ? { name: exactTag.name, normalized: exactTag.normalized }
-        : tag;
+  return normalizedInputs.map((tags) => {
+    const seen = new Set<string>();
+    const canonicalTags: NormalizedTag[] = [];
+    const autoCanonicalAliases: PreparedAutoCanonicalAlias[] = [];
 
-    if (!canonicalTag && !exactTag && fuzzyCandidates.length > 0) {
-      const bestMatch = fuzzyCandidates
-        .map((candidate) => {
-          const tagSimilarity = calculateTagSimilarity(tag.name, candidate.name)
-            ?? calculateTagSimilarity(tag.normalized, candidate.normalized);
-          const aliasSimilarity = candidate.aliases
-            ?.map((alias) => calculateTagSimilarity(tag.name, alias.aliasName)
-              ?? calculateTagSimilarity(tag.normalized, alias.aliasNormalized))
-            .filter((similarity): similarity is NonNullable<typeof similarity> => Boolean(similarity))
-            .sort((left, right) => right.confidence - left.confidence)[0];
-          const similarity = [tagSimilarity, aliasSimilarity]
-            .filter((value): value is NonNullable<typeof value> => Boolean(value))
-            .sort((left, right) => right.confidence - left.confidence)[0];
+    for (const tag of tags) {
+      let nextTag = resolvedTagByNormalized.get(tag.normalized);
+      let autoAlias = autoAliasByNormalized.get(tag.normalized);
 
-          return similarity ? { candidate, similarity } : null;
-        })
-        .filter((match): match is NonNullable<typeof match> => Boolean(match))
-        .sort((left, right) => {
-          if (left.similarity.confidence !== right.similarity.confidence) {
-            return right.similarity.confidence - left.similarity.confidence;
+      if (!nextTag) {
+        const canonicalTag = aliasByNormalized.get(tag.normalized);
+        const exactTag = exactTagByNormalized.get(tag.normalized);
+        nextTag = canonicalTag
+          ? { name: canonicalTag.name, normalized: canonicalTag.normalized }
+          : exactTag
+            ? { name: exactTag.name, normalized: exactTag.normalized }
+            : tag;
+
+        if (!canonicalTag && !exactTag && fuzzyCandidates.length > 0) {
+          const bestMatch = findBestCanonicalTag(tag, fuzzyCandidates);
+          if (bestMatch && bestMatch.similarity.confidence >= AUTO_CANONICAL_CONFIDENCE_THRESHOLD) {
+            nextTag = {
+              name: bestMatch.candidate.name,
+              normalized: bestMatch.candidate.normalized,
+            };
+            autoAlias = {
+              targetNormalized: bestMatch.candidate.normalized,
+              aliasName: tag.name,
+              aliasNormalized: tag.normalized,
+            };
+            autoAliasByNormalized.set(tag.normalized, autoAlias);
           }
+        }
 
-          return compareCanonicalPreference(left.candidate, right.candidate);
-        })[0];
+        if (nextTag.normalized === tag.normalized && !candidateByNormalized.has(tag.normalized)) {
+          const virtualCandidate: TagCandidate = {
+            id: `batch:${virtualCandidateIndex}`,
+            name: tag.name,
+            normalized: tag.normalized,
+            createdAt: new Date(virtualCandidateIndex),
+            updatedAt: new Date(virtualCandidateIndex),
+            aliases: [],
+            _count: { items: 0, aliases: 0 },
+          };
+          virtualCandidateIndex += 1;
+          fuzzyCandidates.push(virtualCandidate);
+          candidateByNormalized.set(tag.normalized, virtualCandidate);
+        }
 
-      if (bestMatch && bestMatch.similarity.confidence >= AUTO_CANONICAL_CONFIDENCE_THRESHOLD) {
-        nextTag = {
-          name: bestMatch.candidate.name,
-          normalized: bestMatch.candidate.normalized,
-        };
-        await addCanonicalAliasIfSafe(tx, {
-          tagId: bestMatch.candidate.id,
-          tagNormalized: bestMatch.candidate.normalized,
-          aliasName: tag.name,
-          aliasNormalized: tag.normalized,
-        });
+        resolvedTagByNormalized.set(tag.normalized, nextTag);
+      }
+
+      if (autoAlias) {
+        autoCanonicalAliases.push(autoAlias);
+      }
+      if (!seen.has(nextTag.normalized)) {
+        seen.add(nextTag.normalized);
+        canonicalTags.push(nextTag);
+        const candidate = candidateByNormalized.get(nextTag.normalized);
+        if (candidate) {
+          candidate._count.items += 1;
+        }
       }
     }
 
-    if (seen.has(nextTag.normalized)) {
-      continue;
-    }
-
-    seen.add(nextTag.normalized);
-    canonicalTags.push(nextTag);
-  }
-
-  return canonicalTags;
+    return { tags: canonicalTags, autoCanonicalAliases };
+  });
 }
 
-export async function replaceItemTagsInTransaction(
+function setsAreEqual(left: Set<string>, right: Set<string>) {
+  return left.size === right.size && Array.from(left).every((value) => right.has(value));
+}
+
+/**
+ * Apply one or more prepared replacements with bounded transaction work:
+ * canonical tag upserts, safe alias writes, one current-state read, and at
+ * most one batched delete/create pair for changed item relations.
+ */
+export async function replacePreparedItemTagsInTransaction(
   tx: PrismaTransaction,
-  itemId: string,
-  tagsInput: unknown,
+  assignments: PreparedItemTagAssignment[],
 ) {
-  const tags = await resolveCanonicalTagsInTransaction(tx, normalizeItemTags(tagsInput));
+  const replacementByItemId = new Map(
+    assignments.map((assignment) => [assignment.itemId, assignment.replacement]),
+  );
+  const tagsByNormalized = new Map<string, NormalizedTag>();
+  const aliasesByNormalized = new Map<string, PreparedAutoCanonicalAlias>();
 
-  await tx.itemTag.deleteMany({
-    where: { itemId },
-  });
-
-  if (tags.length === 0) {
-    return;
+  for (const replacement of replacementByItemId.values()) {
+    for (const tag of replacement.tags) {
+      tagsByNormalized.set(tag.normalized, tag);
+    }
+    for (const alias of replacement.autoCanonicalAliases) {
+      aliasesByNormalized.set(alias.aliasNormalized, alias);
+    }
   }
 
-  for (const tag of tags) {
+  const tagIdByNormalized = new Map<string, string>();
+  for (const tag of tagsByNormalized.values()) {
     const storedTag = await tx.tag.upsert({
       where: { normalized: tag.normalized },
-      update: {
-        name: tag.name,
-      },
+      update: { name: tag.name },
       create: tag,
     });
-
-    await tx.itemTag.create({
-      data: {
-        itemId,
-        tagId: storedTag.id,
-      },
-    });
+    tagIdByNormalized.set(storedTag.normalized, storedTag.id);
   }
+
+  const aliasesToCheck = Array.from(aliasesByNormalized.values()).filter(
+    (alias) => alias.aliasNormalized !== alias.targetNormalized,
+  );
+  if (aliasesToCheck.length > 0) {
+    const aliasKeys = aliasesToCheck.map((alias) => alias.aliasNormalized);
+    const existingAliases = await tx.tagAlias.findMany({
+      where: { aliasNormalized: { in: aliasKeys } },
+      select: { aliasNormalized: true },
+    });
+    const conflictingTags = await tx.tag.findMany({
+      where: { normalized: { in: aliasKeys } },
+      select: { normalized: true },
+    });
+    const blockedAliases = new Set([
+      ...existingAliases.map((alias) => alias.aliasNormalized),
+      ...conflictingTags.map((tag) => tag.normalized),
+    ]);
+    const aliasData = aliasesToCheck.flatMap((alias) => {
+      const tagId = tagIdByNormalized.get(alias.targetNormalized);
+      if (!tagId || blockedAliases.has(alias.aliasNormalized)) {
+        return [];
+      }
+
+      return [{
+        tagId,
+        aliasName: alias.aliasName,
+        aliasNormalized: alias.aliasNormalized,
+        createdBy: "system:auto-canonical",
+      }];
+    });
+    if (aliasData.length > 0) {
+      await tx.tagAlias.createMany({ data: aliasData });
+    }
+  }
+
+  const itemIds = Array.from(replacementByItemId.keys());
+  if (itemIds.length === 0) {
+    return 0;
+  }
+  const currentRelations = await tx.itemTag.findMany({
+    where: { itemId: { in: itemIds } },
+    select: { itemId: true, tagId: true },
+  });
+  const currentTagIdsByItemId = new Map<string, Set<string>>();
+  for (const relation of currentRelations) {
+    const tagIds = currentTagIdsByItemId.get(relation.itemId) ?? new Set<string>();
+    tagIds.add(relation.tagId);
+    currentTagIdsByItemId.set(relation.itemId, tagIds);
+  }
+  const desiredTagIdsByItemId = new Map<string, Set<string>>();
+  for (const [itemId, replacement] of replacementByItemId) {
+    desiredTagIdsByItemId.set(itemId, new Set(
+      replacement.tags.flatMap((tag) => {
+        const tagId = tagIdByNormalized.get(tag.normalized);
+        return tagId ? [tagId] : [];
+      }),
+    ));
+  }
+  const changedItemIds = itemIds.filter((itemId) => !setsAreEqual(
+    currentTagIdsByItemId.get(itemId) ?? new Set(),
+    desiredTagIdsByItemId.get(itemId) ?? new Set(),
+  ));
+
+  if (changedItemIds.length === 0) {
+    return 0;
+  }
+
+  await tx.itemTag.deleteMany({
+    where: { itemId: { in: changedItemIds } },
+  });
+  const relationData = changedItemIds.flatMap((itemId) => Array.from(
+    desiredTagIdsByItemId.get(itemId) ?? [],
+    (tagId) => ({ itemId, tagId }),
+  ));
+  if (relationData.length > 0) {
+    await tx.itemTag.createMany({ data: relationData });
+  }
+
+  return changedItemIds.length;
 }
 
 export async function replaceItemTags(itemId: string, tagsInput: unknown) {
-  await prisma.$transaction((tx) => replaceItemTagsInTransaction(tx, itemId, tagsInput));
+  const [replacement] = await prepareItemTagReplacements([tagsInput]);
+  await prisma.$transaction((tx) => replacePreparedItemTagsInTransaction(tx, [{
+    itemId,
+    replacement: replacement ?? { tags: [], autoCanonicalAliases: [] },
+  }]));
   const item = await prisma.item.findUnique({
     where: { id: itemId },
     select: { clusterId: true },

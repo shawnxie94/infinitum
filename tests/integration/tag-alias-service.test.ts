@@ -137,6 +137,39 @@ describe("tag aliases and merge", () => {
     expect(tags[0]?.aliases[0]?.createdBy).toBe("system:auto-canonical");
   });
 
+  it("does not rewrite item tag relations when the canonical tag set is unchanged", async () => {
+    const source = await createSource();
+    await createItem({
+      id: "stable-tag-relations-item",
+      sourceId: source.id,
+      title: "OpenAI 发布 AI Agent",
+    });
+
+    await replaceItemTags("stable-tag-relations-item", ["OpenAI", "AI Agent"]);
+    const firstRelations = await prisma.itemTag.findMany({
+      where: { itemId: "stable-tag-relations-item" },
+      orderBy: { tagId: "asc" },
+      select: {
+        id: true,
+        tagId: true,
+        createdAt: true,
+      },
+    });
+
+    await replaceItemTags("stable-tag-relations-item", ["AI Agent", "OpenAI"]);
+    const secondRelations = await prisma.itemTag.findMany({
+      where: { itemId: "stable-tag-relations-item" },
+      orderBy: { tagId: "asc" },
+      select: {
+        id: true,
+        tagId: true,
+        createdAt: true,
+      },
+    });
+
+    expect(secondRelations).toEqual(firstRelations);
+  });
+
   it("merges source tags into the canonical tag and preserves old names as aliases", async () => {
     const source = await createSource();
     await createCluster();
