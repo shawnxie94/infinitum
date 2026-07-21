@@ -67,3 +67,6 @@ next-env.d.ts
 /.playwright-cli/
 /daily-detail*.png
 /graphify-out
+
+# agent-brain local
+.agent/
