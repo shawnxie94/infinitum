@@ -28,7 +28,7 @@ npm run lint
 npm run build
 ```
 
-### 默认 acceptance（可写入 task-pack）
+### 按改动面建议的验证命令
 
 按改动面选择，至少跑相关子集；大改动再跑全量：
 
