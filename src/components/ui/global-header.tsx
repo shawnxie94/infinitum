@@ -1,10 +1,29 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  startTransition,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { IconGithub, IconLock, IconLogout, IconMonitor, IconMoon, IconRss, IconSettings, IconSun } from "@/components/ui/icons";
+import {
+  IconClose,
+  IconGithub,
+  IconLock,
+  IconLogout,
+  IconMenu,
+  IconMonitor,
+  IconMoon,
+  IconRss,
+  IconSettings,
+  IconSun,
+} from "@/components/ui/icons";
 import { cx } from "@/lib/ui/cx";
 import { useClientAdminSession } from "@/components/ui/use-client-admin-session";
 import type { AdminHeaderLink } from "@/lib/settings/types";
@@ -49,9 +68,11 @@ export function GlobalHeader({
   const [isPending, setIsPending] = useState(false);
   const [theme, setTheme] = useState<ThemePreference>("system");
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileNavPanelId = useId();
   const headerIconButtonClass =
-    "inline-flex items-center justify-center w-8 h-8 rounded-sm text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--bg-muted)] transition";
+    "inline-flex items-center justify-center h-10 w-10 rounded-sm text-[var(--text-3)] transition hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)] sm:h-8 sm:w-8";
 
   const themeOptions = useMemo(
     () => [
@@ -89,6 +110,46 @@ export function GlobalHeader({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [themeMenuOpen]);
 
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const media = window.matchMedia("(min-width: 1024px)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setMobileNavOpen(false);
+      }
+    };
+
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", handleChange);
+      return () => media.removeEventListener("change", handleChange);
+    }
+
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
   const applyTheme = (nextTheme: ThemePreference) => {
     setTheme(nextTheme);
     getThemeStorage()?.setItem("theme", nextTheme);
@@ -100,6 +161,7 @@ export function GlobalHeader({
   };
 
   const goToLogin = () => {
+    setMobileNavOpen(false);
     startTransition(() => {
       const currentPath = window.location.pathname;
       const loginUrl = currentPath !== "/login" ? `/login?redirect=${encodeURIComponent(currentPath)}` : "/login";
@@ -109,6 +171,7 @@ export function GlobalHeader({
 
   const logout = () => {
     setIsPending(true);
+    setMobileNavOpen(false);
 
     startTransition(async () => {
       try {
@@ -142,8 +205,29 @@ export function GlobalHeader({
     }
 
     event.preventDefault();
+    setMobileNavOpen(false);
     onHomeClick();
   };
+
+  const closeMobileNav = () => {
+    setMobileNavOpen(false);
+  };
+
+  const navLinkClassName = (isActive: boolean) =>
+    cx(
+      "rounded-sm px-3 py-1 transition",
+      isActive
+        ? "bg-[var(--bg-muted)] text-[var(--text-1)]"
+        : "text-[var(--text-2)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]",
+    );
+
+  const mobileNavLinkClassName = (isActive: boolean) =>
+    cx(
+      "flex min-h-11 items-center rounded-sm px-3 py-2 text-base font-medium transition",
+      isActive
+        ? "bg-[var(--bg-muted)] text-[var(--text-1)]"
+        : "text-[var(--text-2)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]",
+    );
 
   return (
     <header
@@ -153,8 +237,8 @@ export function GlobalHeader({
         activeNav === "home" ? null : "sticky top-0 z-40",
       )}
     >
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-8">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-8">
           <Link
             className="inline-flex shrink-0 items-center gap-2 text-[var(--foreground)]"
             href="/"
@@ -170,12 +254,9 @@ export function GlobalHeader({
               aria-label="Infinitum"
             >
               <circle cx="64" cy="64" r="64" fill="#111111" />
-              <path
-                d="M64 28L100 100H28L64 28Z"
-                fill="white"
-              />
+              <path d="M64 28L100 100H28L64 28Z" fill="white" />
             </svg>
-            <span className="text-2xl font-bold">Infinitum</span>
+            <span className="text-xl font-bold sm:text-2xl">Infinitum</span>
           </Link>
 
           <nav aria-label="主导航" className="hidden min-w-0 flex-1 items-center gap-2 text-base font-medium lg:flex">
@@ -186,12 +267,7 @@ export function GlobalHeader({
                 <Link
                   key={item.href}
                   aria-current={isActive ? "page" : undefined}
-                  className={cx(
-                    "px-3 py-1 rounded-sm transition",
-                    isActive
-                      ? "bg-[var(--bg-muted)] text-[var(--text-1)]"
-                      : "text-[var(--text-2)] hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]",
-                  )}
+                  className={navLinkClassName(isActive)}
                   href={item.href}
                   onClick={item.key === "home" ? handleHomeClick : undefined}
                 >
@@ -202,7 +278,7 @@ export function GlobalHeader({
             {customLinks.map((link) => (
               <a
                 key={link.id}
-                className="px-3 py-1 rounded-sm text-[var(--text-2)] transition hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]"
+                className="rounded-sm px-3 py-1 text-[var(--text-2)] transition hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]"
                 href={link.url}
                 target={link.openInNewTab ? "_blank" : undefined}
                 rel={link.openInNewTab ? link.rel : undefined}
@@ -213,7 +289,7 @@ export function GlobalHeader({
           </nav>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <div className="relative" ref={themeMenuRef}>
             <button
               type="button"
@@ -256,7 +332,7 @@ export function GlobalHeader({
           <button
             type="button"
             onClick={openRss}
-            className={headerIconButtonClass}
+            className={cx(headerIconButtonClass, "hidden sm:inline-flex")}
             aria-label="RSS 订阅"
             title="RSS 订阅"
           >
@@ -266,45 +342,164 @@ export function GlobalHeader({
             href="https://github.com/shawnxie94/infinitum"
             target="_blank"
             rel="noreferrer"
-            className={headerIconButtonClass}
+            className={cx(headerIconButtonClass, "hidden sm:inline-flex")}
             aria-label="GitHub"
             title="GitHub"
           >
             <IconGithub className="h-4 w-4" />
           </a>
-          {isAdmin && (
+          {isAdmin ? (
             <Link
               href="/admin"
               prefetch={false}
-              className={headerIconButtonClass}
+              className={cx(headerIconButtonClass, "hidden sm:inline-flex")}
               aria-label="管理"
               title="管理"
+              onClick={closeMobileNav}
             >
               <IconSettings className="h-4 w-4" />
             </Link>
-          )}
+          ) : null}
           {isAdmin ? (
             <button
-              aria-label="登出"
-              className="inline-flex items-center justify-center w-8 h-8 rounded-sm text-[var(--text-3)] hover:text-[var(--danger-ink)] hover:bg-[var(--danger-surface)] transition disabled:cursor-not-allowed disabled:opacity-55"
-              disabled={isPending}
-              onClick={logout}
               type="button"
+              onClick={logout}
+              disabled={isPending}
+              aria-label="登出"
+              title="登出"
+              className={cx(
+                headerIconButtonClass,
+                "hidden text-[var(--text-3)] hover:bg-[var(--danger-surface)] hover:text-[var(--danger-ink)] disabled:cursor-not-allowed disabled:opacity-55 sm:inline-flex",
+              )}
             >
               <IconLogout className="h-4 w-4" />
             </button>
           ) : (
             <button
-              aria-label="登录"
-              className="inline-flex items-center justify-center w-8 h-8 rounded-sm text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--accent-soft)] transition"
-              onClick={goToLogin}
               type="button"
+              aria-label="登录"
+              title="登录"
+              className={cx(
+                headerIconButtonClass,
+                "hidden hover:bg-[var(--accent-soft)] hover:text-[var(--accent)] sm:inline-flex",
+              )}
+              onClick={goToLogin}
             >
               <IconLock className="h-4 w-4" />
             </button>
           )}
+          <button
+            type="button"
+            className={cx(headerIconButtonClass, "lg:hidden")}
+            aria-label={mobileNavOpen ? "关闭导航菜单" : "打开导航菜单"}
+            aria-expanded={mobileNavOpen}
+            aria-controls={mobileNavPanelId}
+            title={mobileNavOpen ? "关闭导航菜单" : "打开导航菜单"}
+            onClick={() => setMobileNavOpen((current) => !current)}
+          >
+            {mobileNavOpen ? <IconClose className="h-4 w-4" /> : <IconMenu className="h-4 w-4" />}
+          </button>
         </div>
       </div>
+
+      {mobileNavOpen ? (
+        <div className="border-t border-[color:var(--line)] bg-[var(--surface)] lg:hidden">
+          <div
+            className="fixed inset-0 z-40 bg-black/35"
+            aria-hidden="true"
+            onClick={closeMobileNav}
+          />
+          <div
+            id={mobileNavPanelId}
+            className="relative z-50 mx-auto w-full max-w-7xl px-4 py-3 sm:px-6"
+          >
+            <nav aria-label="移动主导航" className="space-y-1">
+              {navItems.map((item) => {
+                const isActive = item.key === activeNav;
+
+                return (
+                  <Link
+                    key={item.href}
+                    aria-current={isActive ? "page" : undefined}
+                    className={mobileNavLinkClassName(isActive)}
+                    href={item.href}
+                    onClick={item.key === "home" ? handleHomeClick : closeMobileNav}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+              {customLinks.map((link) => (
+                <a
+                  key={link.id}
+                  className={mobileNavLinkClassName(false)}
+                  href={link.url}
+                  target={link.openInNewTab ? "_blank" : undefined}
+                  rel={link.openInNewTab ? link.rel : undefined}
+                  onClick={closeMobileNav}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+
+            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[color:var(--line)] pt-3 sm:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  openRss();
+                  closeMobileNav();
+                }}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-[color:var(--line)] px-3 text-sm text-[var(--text-2)] transition hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]"
+              >
+                <IconRss className="h-4 w-4" />
+                RSS
+              </button>
+              <a
+                href="https://github.com/shawnxie94/infinitum"
+                target="_blank"
+                rel="noreferrer"
+                onClick={closeMobileNav}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-[color:var(--line)] px-3 text-sm text-[var(--text-2)] transition hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]"
+              >
+                <IconGithub className="h-4 w-4" />
+                GitHub
+              </a>
+              {isAdmin ? (
+                <>
+                  <Link
+                    href="/admin"
+                    prefetch={false}
+                    onClick={closeMobileNav}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-[color:var(--line)] px-3 text-sm text-[var(--text-2)] transition hover:bg-[var(--bg-muted)] hover:text-[var(--text-1)]"
+                  >
+                    <IconSettings className="h-4 w-4" />
+                    管理
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={logout}
+                    disabled={isPending}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-[color:var(--line)] px-3 text-sm text-[var(--danger-ink)] transition hover:bg-[var(--danger-surface)] disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    <IconLogout className="h-4 w-4" />
+                    登出
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={goToLogin}
+                  className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-[color:var(--line)] px-3 text-sm text-[var(--accent)] transition hover:bg-[var(--accent-soft)]"
+                >
+                  <IconLock className="h-4 w-4" />
+                  登录
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </header>
   );
 }

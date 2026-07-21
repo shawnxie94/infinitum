@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -35,6 +35,7 @@ describe("GlobalHeader", () => {
     expect(screen.getByRole("navigation", { name: "主导航" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "主页" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "打开导航菜单" })).toBeInTheDocument();
   });
 
   it("uses the widened shared header container width", () => {
@@ -128,5 +129,37 @@ describe("GlobalHeader", () => {
     await user.click(screen.getByRole("button", { name: "RSS 订阅" }));
 
     expect(openMock).toHaveBeenCalledWith("/api/daily/rss", "_blank", "noopener,noreferrer");
+  });
+
+  it("exposes a mobile navigation menu for primary routes", async () => {
+    const user = userEvent.setup();
+
+    render(<GlobalHeader activeNav="events" isAdmin={false} />);
+
+    expect(screen.queryByRole("navigation", { name: "移动主导航" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "打开导航菜单" }));
+
+    const mobileNav = screen.getByRole("navigation", { name: "移动主导航" });
+    expect(mobileNav).toBeInTheDocument();
+    expect(within(mobileNav).getByRole("link", { name: "主页" })).toHaveAttribute("href", "/");
+    expect(within(mobileNav).getByRole("link", { name: "速览" })).toHaveAttribute("href", "/events");
+    expect(within(mobileNav).getByRole("link", { name: "日报" })).toHaveAttribute("href", "/daily");
+    expect(within(mobileNav).getByRole("link", { name: "速览" })).toHaveAttribute("aria-current", "page");
+
+    await user.click(screen.getByRole("button", { name: "关闭导航菜单" }));
+    expect(screen.queryByRole("navigation", { name: "移动主导航" })).not.toBeInTheDocument();
+  });
+
+  it("moves secondary header actions into the mobile menu on small screens", async () => {
+    const user = userEvent.setup();
+
+    render(<GlobalHeader activeNav="home" isAdmin={false} />);
+
+    await user.click(screen.getByRole("button", { name: "打开导航菜单" }));
+
+    expect(screen.getByRole("button", { name: "RSS" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "GitHub" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "登录" }).length).toBeGreaterThan(0);
   });
 });

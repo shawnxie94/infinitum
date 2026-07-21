@@ -68,6 +68,7 @@ import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { FilterInput } from "@/components/ui/filter-input";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { FilterSelectInline } from "@/components/ui/filter-select-inline";
+import { FilterControl } from "@/components/ui/filter-control";
 import { FilterSummary } from "@/components/ui/filter-summary";
 import { FormField } from "@/components/ui/form-field";
 import { IconFilter, IconPlus, IconTrash } from "@/components/ui/icons";
@@ -620,7 +621,17 @@ export function FeedPanel({
     [endDate, publishedEndDate, publishedStartDate, range, sort, startDate],
   );
   const activeFilterSummary = useMemo(() => {
-    const filters = [`创建时间：${summary.rangeLabel}`, `排序：${summary.sortLabel}`];
+    const filters: string[] = [];
+    const hasCustomCreatedRange = Boolean(startDate || endDate);
+    const hasNonDefaultRange = hasCustomCreatedRange || range !== "today";
+
+    if (hasNonDefaultRange) {
+      filters.push(`创建时间：${summary.rangeLabel}`);
+    }
+
+    if (sort !== "time_desc") {
+      filters.push(`排序：${summary.sortLabel}`);
+    }
 
     if (summary.publishedRangeLabel) {
       filters.push(`发表时间：${summary.publishedRangeLabel}`);
@@ -650,10 +661,14 @@ export function FeedPanel({
   }, [
     availableGroups,
     availableSources,
+    endDate,
     entryKeys.length,
     groupId,
     popularTags,
+    range,
+    sort,
     sourceId,
+    startDate,
     summary.publishedRangeLabel,
     summary.rangeLabel,
     summary.sortLabel,
@@ -860,10 +875,22 @@ export function FeedPanel({
     setCreatedRangeExplicit(true);
     setStartDate(null);
     setEndDate(null);
+    loadFeed(
+      buildQuery({
+        range: nextRange,
+        createdRangeExplicit: true,
+        startDate: null,
+        endDate: null,
+      }),
+      1,
+      pageSize,
+      { scrollToTop: true },
+    );
   };
 
   const changeSort = (nextSort: FeedSort) => {
     setSort(nextSort);
+    loadFeed(buildQuery({ sort: nextSort }), 1, pageSize, { scrollToTop: true });
   };
 
   const changeGroup = (nextGroupId: string) => {
@@ -881,6 +908,7 @@ export function FeedPanel({
   const changeSource = (nextSourceId: string) => {
     const normalizedSourceId = normalizeOptionalId(nextSourceId);
     setSourceId(normalizedSourceId);
+    loadFeed(buildQuery({ sourceId: normalizedSourceId }), 1, pageSize, { scrollToTop: true });
   };
 
   const changeDateRange = (nextRange: DateRangeValue) => {
@@ -903,9 +931,23 @@ export function FeedPanel({
   };
 
   const clearFilters = () => {
-    setRange("today");
+    const nextQuery = buildQuery({
+      range: "today",
+      createdRangeExplicit: false,
+      sort: "time_desc",
+      startDate: null,
+      endDate: null,
+      publishedStartDate: null,
+      publishedEndDate: null,
+      groupId: null,
+      sourceId: null,
+      title: null,
+      tag: null,
+      entryKeys: [],
+    });
+    setRange(nextQuery.range);
     setCreatedRangeExplicit(false);
-    setSort("time_desc");
+    setSort(nextQuery.sort);
     setStartDate(null);
     setEndDate(null);
     setPublishedStartDate(null);
@@ -916,6 +958,8 @@ export function FeedPanel({
     setTitleFilter(null);
     setTag(null);
     setEntryKeys([]);
+    setAdvancedFiltersOpen(false);
+    loadFeed(nextQuery, 1, pageSize, { scrollToTop: true });
   };
 
   const toggleTag = (nextTag: string) => {
@@ -1790,7 +1834,7 @@ export function FeedPanel({
           <section
             role="region"
             aria-label="热门标签"
-            className="w-full min-w-0"
+            className="hidden w-full min-w-0 lg:block"
           >
             <div className="relative w-full min-w-0">
               <div
@@ -1865,15 +1909,48 @@ export function FeedPanel({
         <section
           role="region"
           aria-label="信息流筛选"
-          className="panel-raised w-full min-w-0 overflow-hidden rounded-sm border border-[color:var(--line)] px-4 py-3 sm:px-6 sm:py-4"
+          className="w-full min-w-0 border-b border-[color:var(--line)] pb-3"
         >
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 flex-wrap items-center gap-2 lg:flex-1 lg:flex-nowrap">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="min-w-0 flex-1 lg:hidden">
+                  <FilterSelectInline
+                    label="分组"
+                    ariaLabel="移动端分组筛选"
+                    value={groupId ?? ""}
+                    onChange={changeGroup}
+                    options={[
+                      { value: "", label: formatGroupOptionLabel("全部内容", groupTotalCount) },
+                      ...groups.map((group) => ({
+                        value: group.id,
+                        label: formatGroupOptionLabel(group.name, group.count),
+                      })),
+                    ]}
+                    showSearch={false}
+                    className="w-full"
+                    selectClassName="w-full"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <FilterSelectInline
+                    label="创建时间"
+                    ariaLabel="创建时间"
+                    value={range}
+                    onChange={(value) => updateRange(value as FeedRange)}
+                    options={RANGE_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                    showSearch={false}
+                    className="w-full"
+                    selectClassName="w-full"
+                  />
+                </div>
                 <button
                   aria-expanded={advancedFiltersOpen}
                   className={cx(
-                    "lumina-home-action-button inline-flex whitespace-nowrap px-4 py-1 text-sm rounded-sm transition",
+                    "lumina-home-action-button inline-flex shrink-0 whitespace-nowrap px-3 py-1 text-sm rounded-sm transition",
                     advancedFiltersOpen
                       ? "lumina-home-action-button--active bg-[var(--accent-soft)] text-[var(--accent-strong)]"
                       : "bg-[var(--bg-muted)] text-[var(--text-2)] hover:bg-[var(--surface)]",
@@ -1886,83 +1963,53 @@ export function FeedPanel({
                     <span>高级筛选</span>
                   </span>
                 </button>
-                {isAdmin ? (
-                  <button
-                    type="button"
-                    onClick={refresh}
-                    disabled={isRefreshDisabled}
-                    className="lumina-home-action-button lumina-home-action-button--primary inline-flex items-center justify-center whitespace-nowrap rounded-sm bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <RefreshIcon />
-                      <span>立即更新</span>
+              </div>
+
+              {isAdmin || latestRunTime ? (
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={refresh}
+                      disabled={isRefreshDisabled}
+                      className="lumina-home-action-button lumina-home-action-button--primary inline-flex items-center justify-center whitespace-nowrap rounded-sm bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <RefreshIcon />
+                        <span>立即更新</span>
+                      </span>
+                    </button>
+                  ) : null}
+                  {isAdmin ? (
+                    <span className="min-w-0 text-xs text-[var(--text-3)] sm:text-sm sm:text-[var(--text-2)]">
+                      {latestRunSummary}
                     </span>
-                  </button>
-                ) : null}
-                {isAdmin ? (
-                  <span className="min-w-0 text-sm text-[var(--text-2)] lg:truncate">
-                    {latestRunSummary}
-                  </span>
-                ) : latestRunTime ? (
-                  <span className="min-w-0 text-sm text-[var(--text-2)] lg:truncate">
-                    更新时间：{latestRunTime}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="flex items-center gap-2 lg:flex-nowrap lg:justify-end lg:pl-4">
-                <FilterSelectInline
-                  label="创建时间："
-                  ariaLabel="创建时间"
-                  value={range}
-                  onChange={(value) => updateRange(value as FeedRange)}
-                  options={RANGE_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  }))}
-                  showSearch={false}
-                />
-
-                <FilterSelectInline
-                  label="排序："
-                  ariaLabel="排序方式"
-                  value={sort}
-                  onChange={(value) => changeSort(value as FeedSort)}
-                  options={SORT_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  }))}
-                  showSearch={false}
-                />
-              </div>
-            </div>
-
-            <div className="lg:hidden">
-              <div className="rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-sm)]">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="text-sm font-medium text-[var(--foreground)]">分组筛选</span>
-                  <FilterSelectInline
-                    label="分组："
-                    ariaLabel="移动端分组筛选"
-                    value={groupId ?? ""}
-                    onChange={changeGroup}
-                    options={[
-                      { value: "", label: formatGroupOptionLabel("全部内容", groupTotalCount) },
-                      ...groups.map((group) => ({
-                        value: group.id,
-                        label: formatGroupOptionLabel(group.name, group.count),
-                      })),
-                    ]}
-                    showSearch={false}
-                  />
+                  ) : latestRunTime ? (
+                    <span className="min-w-0 text-xs text-[var(--text-3)] sm:text-sm sm:text-[var(--text-2)]">
+                      更新时间：{latestRunTime}
+                    </span>
+                  ) : null}
                 </div>
-              </div>
+              ) : null}
             </div>
 
             {advancedFiltersOpen ? (
-              <div className="border-t border-[color:var(--line)] pt-3">
+              <div className="rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 py-3 sm:px-4">
                 <div className="grid gap-3">
                   <div className="grid gap-3 sm:grid-cols-2">
+                    <FilterSelect
+                      id="feed-sort-filter"
+                      label="排序"
+                      ariaLabel="排序方式"
+                      value={sort}
+                      onChange={(value) => changeSort(value as FeedSort)}
+                      showSearch={false}
+                      options={SORT_OPTIONS.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                      }))}
+                    />
+
                     <FilterInput
                       id="feed-title-filter"
                       label="全文搜索"
@@ -1973,7 +2020,9 @@ export function FeedPanel({
                       }}
                       placeholder="输入搜索关键词"
                     />
+                  </div>
 
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <FilterSelect
                       id="feed-source-filter"
                       label="信息源"
@@ -1989,51 +2038,56 @@ export function FeedPanel({
                         })),
                       ]}
                     />
-                  </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <FormField label="创建时间" htmlFor="feed-created-date-range">
+                    <FilterControl label="自定义创建时间" htmlFor="feed-created-date-range" layout="stack">
                       <DateRangePicker
                         id="feed-created-date-range"
                         value={toDayjsRange(startDate, endDate)}
                         onChange={changeDateRange}
                         className="w-full"
                       />
-                    </FormField>
+                    </FilterControl>
+                  </div>
 
-                    <FormField label="发表时间" htmlFor="feed-published-date-range">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FilterControl label="发表时间" htmlFor="feed-published-date-range" layout="stack">
                       <DateRangePicker
                         id="feed-published-date-range"
                         value={toDayjsRange(publishedStartDate, publishedEndDate)}
                         onChange={changePublishedDateRange}
                         className="w-full"
                       />
-                    </FormField>
+                    </FilterControl>
                   </div>
                 </div>
               </div>
             ) : null}
 
-            <FilterSummary
-              items={activeFilterSummary}
-              onClear={clearFilters}
-              canClear={hasClearableFilters && !isPending}
-              actions={
-                <button
-                  type="button"
-                  onClick={applyFilters}
-                  disabled={isPending}
-                  className="lumina-home-action-button lumina-home-action-button--primary inline-flex items-center justify-center rounded-sm bg-[var(--accent)] px-3 py-1 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <SearchIcon />
-                    <span>查询</span>
-                  </span>
-                </button>
-              }
-              details={null}
-              className="pt-3"
-            />
+            {advancedFiltersOpen || hasClearableFilters ? (
+              <FilterSummary
+                items={activeFilterSummary}
+                onClear={clearFilters}
+                canClear={hasClearableFilters && !isPending}
+                emptyLabel="可设置更多筛选条件"
+                actions={
+                  advancedFiltersOpen ? (
+                    <button
+                      type="button"
+                      onClick={applyFilters}
+                      disabled={isPending}
+                      className="lumina-home-action-button lumina-home-action-button--primary inline-flex items-center justify-center rounded-sm bg-[var(--accent)] px-3 py-1 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <SearchIcon />
+                        <span>查询</span>
+                      </span>
+                    </button>
+                  ) : null
+                }
+                details={null}
+                className="border-0 pt-1"
+              />
+            ) : null}
 
             {/* 批量操作工具栏 */}
             {isAdmin && selectedItems.size > 0 && (

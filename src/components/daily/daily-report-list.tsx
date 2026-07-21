@@ -276,23 +276,41 @@ export function DailyReportList({
         </aside>
 
         <section className="grid w-full min-w-0 flex-1 gap-4">
-          <section className="panel-raised min-h-[110px] w-full rounded-sm border border-[color:var(--line)] p-4 sm:p-6">
-            <div className="flex h-full min-h-[62px] w-full items-center justify-between gap-6">
+          <section className="w-full border-b border-[color:var(--line)] pb-3">
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl font-semibold text-[var(--foreground)]">AI 日报</h1>
                 <p className="mt-1 text-sm text-[var(--text-2)]">完全使用AI生成每日总结，可能存在错误，需谨慎甄别。</p>
               </div>
-              <div className="ml-auto flex shrink-0 items-center justify-end gap-3">
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:flex-row sm:items-center sm:justify-end">
+                <div className="w-full min-w-0 lg:hidden">
+                  <FilterSelectInline
+                    label="周"
+                    ariaLabel="移动端周筛选"
+                    value={selectedWeek ?? ""}
+                    onChange={(value) => updateQuery({ week: value || null })}
+                    options={[
+                      { value: "", label: `全部周 (${totalWeekCount})` },
+                      ...weeks.map((week) => ({
+                        value: week.key,
+                        label: `${week.label} (${week.count})`,
+                      })),
+                    ]}
+                    showSearch={false}
+                    className="w-full"
+                    selectClassName="w-full"
+                  />
+                </div>
                 {isAdmin ? (
                   <>
-                    <Button variant="primary" onClick={openGenerateDialog} disabled={isPending}>
+                    <Button variant="primary" onClick={openGenerateDialog} disabled={isPending} className="w-full sm:w-auto">
                       <span className="inline-flex items-center gap-2">
                         <IconRefresh className="h-4 w-4" />
                         <span>生成日报</span>
                       </span>
                     </Button>
                     <FilterSelectInline
-                      label="状态："
+                      label="状态"
                       ariaLabel="日报状态"
                       value={selectedStatus}
                       onChange={(value) => updateQuery({ status: value })}
@@ -307,7 +325,7 @@ export function DailyReportList({
                 ) : null}
               </div>
             </div>
-            {feedback ? <div className="mt-4 rounded-sm bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">{feedback}</div> : null}
+            {feedback ? <div className="mt-3 rounded-sm bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">{feedback}</div> : null}
           </section>
 
           {reports.length === 0 ? (

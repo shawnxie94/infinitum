@@ -1,3 +1,4 @@
+import { FilterControl } from "@/components/ui/filter-control";
 import { SelectField } from "@/components/ui/select-field";
 
 type FilterSelectInlineOption = {
@@ -13,13 +14,10 @@ type FilterSelectInlineProps = {
   placeholder?: string;
   id?: string;
   className?: string;
+  selectClassName?: string;
   showSearch?: boolean;
   ariaLabel?: string;
 };
-
-function normalizeLabelText(label: string) {
-  return label.replace(/[：:]$/, "");
-}
 
 export function FilterSelectInline({
   label,
@@ -29,26 +27,24 @@ export function FilterSelectInline({
   placeholder,
   id,
   className = "",
+  selectClassName = "w-28",
   showSearch,
   ariaLabel,
 }: FilterSelectInlineProps) {
   const selectId = id || `filter-select-inline-${label}`;
 
   return (
-    <div className={`flex items-center gap-2 ${className}`.trim()}>
-      <label htmlFor={selectId} className="whitespace-nowrap text-sm text-[var(--text-2)]">
-        {label}
-      </label>
+    <FilterControl label={label} htmlFor={selectId} layout="inline" className={className} controlClassName={selectClassName}>
       <SelectField
         id={selectId}
-        aria-label={ariaLabel ?? normalizeLabelText(label)}
+        aria-label={ariaLabel ?? label.replace(/[：:]\s*$/, "").trim()}
         value={value}
         onChange={(nextValue) => onChange(String(nextValue ?? ""))}
         options={options}
         placeholder={placeholder}
         showSearch={showSearch}
-        className="w-28"
+        className="w-full"
       />
-    </div>
+    </FilterControl>
   );
 }

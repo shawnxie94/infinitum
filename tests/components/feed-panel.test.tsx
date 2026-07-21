@@ -268,10 +268,12 @@ describe("FeedPanel", () => {
     expect(getSelectRoot("创建时间")).toHaveTextContent("7天");
     expect(within(filterRegion).getByRole("button", { name: "高级筛选" })).toHaveAttribute("aria-expanded", "false");
     expect(within(filterRegion).queryByLabelText("全文搜索")).not.toBeInTheDocument();
+    expect(within(filterRegion).queryByRole("combobox", { name: "排序方式" })).not.toBeInTheDocument();
     expect(within(filterRegion).getByText("创建时间：7天")).toBeInTheDocument();
-    expect(within(filterRegion).getByText("排序：按时间倒序")).toBeInTheDocument();
+    expect(within(filterRegion).queryByText("排序：按时间倒序")).not.toBeInTheDocument();
     expect(within(filterRegion).queryByText("最近抓取：尚未执行")).not.toBeInTheDocument();
     expect(within(filterRegion).getByRole("button", { name: "清除筛选" })).toBeInTheDocument();
+    expect(within(filterRegion).queryByRole("button", { name: "查询" })).not.toBeInTheDocument();
     expect(screen.getByText("高质量 90")).toBeInTheDocument();
     expect(screen.getAllByText(/Example Feed/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "信息流控制台" })).not.toBeInTheDocument();
@@ -289,9 +291,6 @@ describe("FeedPanel", () => {
     expect(within(overviewRegion).queryByText("1 个来源")).not.toBeInTheDocument();
 
     await selectFilterOption(user, "创建时间", "1月");
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    await user.click(within(filterRegion).getByRole("button", { name: "查询" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=1m&sort=time_desc");
@@ -580,16 +579,15 @@ describe("FeedPanel", () => {
       expect(screen.getByRole("button", { name: "高级筛选" })).toHaveAttribute("aria-expanded", "true");
     });
 
-    expect(screen.getAllByText("创建时间").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/创建时间/).length).toBeGreaterThan(0);
     expect(screen.getAllByPlaceholderText("开始日期")).toHaveLength(2);
     expect(screen.getAllByPlaceholderText("结束日期")).toHaveLength(2);
     expect(screen.queryByRole("combobox", { name: "分组" })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("全文搜索"), "Agent");
-    await selectFilterOption(user, "排序方式", "按评分倒序");
-
     expect(fetchMock).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "查询" }));
+
+    await selectFilterOption(user, "排序方式", "按评分倒序");
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=score_desc&title=Agent");
@@ -635,9 +633,6 @@ describe("FeedPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "高级筛选" }));
     await selectFilterOption(user, "信息源", "AI Source");
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "查询" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=today&sort=time_desc&sourceId=source-ai");
@@ -812,11 +807,14 @@ describe("FeedPanel", () => {
     );
 
     const tagButtons = screen.getAllByRole("button", { name: /筛选标签：/ });
+    const popularRegion = screen.getByRole("region", { name: "热门标签" });
 
     expect(tagButtons).toHaveLength(32);
     expect(screen.getByRole("button", { name: "筛选标签：Tag 32，69 条" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "筛选标签：Tag 33，68 条" })).not.toBeInTheDocument();
     expect(tagButtons[0]?.parentElement).not.toHaveClass("lg:justify-between");
+    expect(popularRegion.className).toContain("hidden");
+    expect(popularRegion.className).toContain("lg:block");
   });
 
   it("distributes a popular tag row when the next actual tag does not fit", async () => {
@@ -931,11 +929,14 @@ describe("FeedPanel", () => {
     );
 
     await selectFilterOption(user, "创建时间", "3天");
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=3d&sort=time_desc");
+    });
+
+    fetchMock.mockClear();
     await user.click(screen.getByRole("button", { name: "高级筛选" }));
     await selectFilterOption(user, "信息源", "AI Source");
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "查询" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=3d&sort=time_desc&sourceId=source-ai");
@@ -985,7 +986,7 @@ describe("FeedPanel", () => {
     expect(getSelectRoot("创建时间")).toHaveTextContent("当天");
   });
 
-  it("keeps title and sort edits local until query is clicked", async () => {
+  it("applies sort immediately while keeping title edits local until query is clicked", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
       new Response(
         JSON.stringify({
@@ -1039,14 +1040,9 @@ describe("FeedPanel", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "排序方式" }), { target: { value: "score_desc" } });
 
-    await act(async () => {
-      await Promise.resolve();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=score_desc&title=Agent");
     });
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole("button", { name: "查询" }));
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=score_desc&title=Agent");
     expect(screen.getByText("搜索：Agent")).toBeInTheDocument();
   });
 
@@ -1133,18 +1129,16 @@ describe("FeedPanel", () => {
     const advancedToggle = screen.getByRole("button", { name: "高级筛选" });
     const refreshButton = screen.queryByRole("button", { name: "立即更新" });
     const rangeSelect = getSelectRoot("创建时间");
-    const sortSelect = getSelectRoot("排序方式");
     const clearButton = screen.getByRole("button", { name: "清除筛选" });
     const title = screen.getByRole("heading", { name: "OpenAI Agent 发布" });
 
     expect(advancedToggle.className).toContain("text-sm");
-    expect(advancedToggle.className).toContain("px-4");
+    expect(advancedToggle.className).toContain("px-3");
     expect(advancedToggle.className).toContain("py-1");
     expect(refreshButton).toBeNull();
     expect(rangeSelect?.className).toContain("select-modern-antd");
     expect(rangeSelect?.className).toContain("h-9");
-    expect(sortSelect?.className).toContain("select-modern-antd");
-    expect(sortSelect?.className).toContain("h-9");
+    expect(screen.queryByRole("combobox", { name: "排序方式" })).not.toBeInTheDocument();
     expect(clearButton.className).toContain("ml-auto");
     expect(clearButton.className).toContain("px-3");
     expect(clearButton.className).toContain("py-1");
@@ -1185,6 +1179,8 @@ describe("FeedPanel", () => {
 
     expect(advancedToggle.className).toContain("bg-[var(--accent-soft)]");
     expect(advancedToggle.className).toContain("text-[var(--accent-strong)]");
+    expect(screen.getByRole("button", { name: "查询" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "排序方式" })).toBeInTheDocument();
   });
 
   it("keeps the clear filters button enabled when the summary shows non-default filter chips", () => {
@@ -1204,7 +1200,7 @@ describe("FeedPanel", () => {
     const clearButton = screen.getByRole("button", { name: "清除筛选" });
 
     expect(screen.getByText("创建时间：7天")).toBeInTheDocument();
-    expect(screen.getByText("排序：按时间倒序")).toBeInTheDocument();
+    expect(screen.queryByText("排序：按时间倒序")).not.toBeInTheDocument();
     expect(clearButton).toBeEnabled();
     expect(clearButton.className).toContain("lumina-home-action-button--clear");
   });
@@ -2690,9 +2686,6 @@ describe("FeedPanel", () => {
     fetchMock.mockClear();
     await selectFilterOption(user, "信息源", "Feed Two");
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "查询" }));
-
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/feed?range=7d&sort=score_desc&start=2026-04-01&end=2026-04-10&groupId=group-1&sourceId=source-2",
@@ -2700,7 +2693,7 @@ describe("FeedPanel", () => {
     });
   });
 
-  it("clears active filters without reloading until query is clicked", async () => {
+  it("clears active filters and reloads the default feed", async () => {
     const user = userEvent.setup();
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -2743,20 +2736,16 @@ describe("FeedPanel", () => {
     expect(screen.getByRole("button", { name: "高级筛选" })).toHaveAttribute("aria-expanded", "true");
     await user.click(screen.getByRole("button", { name: "清除筛选" }));
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=today&sort=time_desc");
+    });
     expect(screen.getByText("OpenAI Agent 发布")).toBeInTheDocument();
     expect(getSelectRoot("创建时间")).toHaveTextContent("当天");
-    expect(screen.getByRole("button", { name: "高级筛选" })).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByLabelText("全文搜索")).toHaveValue("");
-    expect(screen.getByText("创建时间：当天")).toBeInTheDocument();
-    expect(screen.getByText("排序：按时间倒序")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "高级筛选" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("全文搜索")).not.toBeInTheDocument();
+    expect(screen.queryByText("创建时间：当天")).not.toBeInTheDocument();
+    expect(screen.queryByText("排序：按时间倒序")).not.toBeInTheDocument();
     expect(screen.queryByText("搜索：Agent")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "查询" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith("/api/feed?range=today&sort=time_desc");
-    });
   });
 
   it("renders Lumina-like pagination controls when the feed has another page", () => {

@@ -155,8 +155,9 @@ describe("EventBriefingList", () => {
     expect(screen.queryByRole("link", { name: "下一天" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "今天" })).not.toBeInTheDocument();
     expect(screen.queryByText("共 96 个重点事件，85 个新增，11 个有新动态。")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("选择日期")).toHaveAttribute("name", "date");
-    expect(screen.getByRole("button", { name: "查看" })).toBeInTheDocument();
+    expect(screen.getByLabelText("选择日期")).toHaveAttribute("type", "date");
+    expect(screen.getByText("日期：")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "观点实践 24" })).toHaveAttribute(
       "href",
@@ -384,7 +385,6 @@ describe("EventBriefingList", () => {
       },
     }));
 
-    expect(container.querySelector('input[name="size"]')).toHaveAttribute("value", "50");
     expect(screen.getByRole("combobox", { name: "每页显示" })).toHaveValue("50");
     expect(screen.getByRole("spinbutton", { name: "跳转页码" })).toHaveValue(2);
     fireEvent.click(screen.getByRole("button", { name: "上一页" }));
@@ -394,6 +394,14 @@ describe("EventBriefingList", () => {
     expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-30&channel=important&size=50");
   });
 
+
+  it("changes date immediately via the labeled date control", () => {
+    renderEventBriefingList(buildBriefing());
+
+    fireEvent.change(screen.getByLabelText("选择日期"), { target: { value: "2026-07-01" } });
+
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-07-01&channel=important");
+  });
   it("preserves active channel in date search and pagination", () => {
     const { container } = renderEventBriefingList(buildBriefing({
       pagination: {
@@ -408,7 +416,7 @@ describe("EventBriefingList", () => {
       "href",
       "/events?date=2026-06-30&channel=important&size=50",
     );
-    expect(container.querySelector('input[name="channel"]')).toHaveAttribute("value", "important");
+    expect(screen.getByLabelText("选择日期")).toHaveValue("2026-06-30");
     expect(container.querySelector('input[name="view"]')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "下一页" }));

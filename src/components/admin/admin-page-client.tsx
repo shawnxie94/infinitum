@@ -680,7 +680,10 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
     <>
       <GlobalHeader activeNav="admin" isAdmin={true} customLinks={headerLinks} />
       <div className="flex min-h-screen flex-col bg-[var(--background)]">
-        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-6">
+        <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8">
+          <div className="mb-3 rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm leading-6 text-[var(--text-2)] lg:hidden">
+            管理后台优先适配桌面端。移动端主要用于内容查看；复杂配置与批量操作建议在电脑上完成。
+          </div>
           <div className="flex gap-1 border-b border-[color:var(--line)]">
             <SelectableButton
               onClick={() => {

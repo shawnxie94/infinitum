@@ -1,4 +1,4 @@
-import { FormField } from "@/components/ui/form-field";
+import { FilterControl } from "@/components/ui/filter-control";
 import { SelectField } from "@/components/ui/select-field";
 
 type FilterSelectOption = {
@@ -15,6 +15,9 @@ type FilterSelectProps = {
   id?: string;
   showSearch?: boolean;
   ariaLabel?: string;
+  layout?: "inline" | "stack";
+  className?: string;
+  selectClassName?: string;
 };
 
 export function FilterSelect({
@@ -26,14 +29,17 @@ export function FilterSelect({
   id,
   showSearch,
   ariaLabel,
+  layout = "stack",
+  className,
+  selectClassName = "w-full",
 }: FilterSelectProps) {
   const selectId = id || `filter-select-${label}`;
 
   return (
-    <FormField label={label} htmlFor={selectId}>
+    <FilterControl label={label} htmlFor={selectId} layout={layout} className={className} controlClassName={selectClassName}>
       <SelectField
         id={selectId}
-        aria-label={ariaLabel ?? label}
+        aria-label={ariaLabel ?? label.replace(/[：:]\s*$/, "").trim()}
         value={value}
         onChange={(nextValue) => onChange(String(nextValue ?? ""))}
         options={options}
@@ -41,6 +47,6 @@ export function FilterSelect({
         showSearch={showSearch}
         className="w-full"
       />
-    </FormField>
+    </FilterControl>
   );
 }

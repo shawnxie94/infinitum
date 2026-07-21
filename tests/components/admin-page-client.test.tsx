@@ -280,6 +280,16 @@ describe("AdminPageClient", () => {
     expect(screen.getByRole("button", { name: "待办事项" })).toBeInTheDocument();
   });
 
+  it("shows a desktop-first notice for mobile admin browsing", () => {
+    searchParamsState.value = "tab=monitoring";
+
+    renderAdminPageClient();
+
+    expect(
+      screen.getByText("管理后台优先适配桌面端。移动端主要用于内容查看；复杂配置与批量操作建议在电脑上完成。"),
+    ).toBeInTheDocument();
+  });
+
   it("restores tag management as a monitoring content sub tab", async () => {
     searchParamsState.value = "tab=monitoring&section=content&view=tags";
 

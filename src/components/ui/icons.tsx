@@ -410,3 +410,22 @@ export function IconSplit(props: IconProps) {
     </IconBase>
   );
 }
+
+export function IconMenu(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </IconBase>
+  );
+}
+
+export function IconClose(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M18 6 6 18" />
+      <path d="M6 6l12 12" />
+    </IconBase>
+  );
+}

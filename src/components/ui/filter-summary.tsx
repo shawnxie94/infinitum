@@ -24,7 +24,7 @@ export function FilterSummary({
   className,
 }: FilterSummaryProps) {
   return (
-    <div className={cx("border-t border-[color:var(--line)] pt-4", className)}>
+    <div className={cx("border-t border-[color:var(--line)] pt-2.5", className)}>
       <div className="flex flex-wrap items-center gap-2">
         {items.length === 0 ? (
           <span className="text-sm text-[var(--text-3)]">{emptyLabel}</span>
