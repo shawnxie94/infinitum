@@ -156,8 +156,9 @@ describe("EventBriefingList", () => {
     expect(screen.queryByRole("link", { name: "今天" })).not.toBeInTheDocument();
     expect(screen.queryByText("共 96 个重点事件，85 个新增，11 个有新动态。")).not.toBeInTheDocument();
     expect(screen.getByLabelText("选择日期")).toHaveAttribute("type", "date");
-    expect(screen.getByText("日期：")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "查看" })).not.toBeInTheDocument();
+    expect(screen.queryByText("日期：")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看" })).toBeInTheDocument();
+    expect(screen.getByRole("banner").className).toContain("panel-raised");
     expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "观点实践 24" })).toHaveAttribute(
       "href",
@@ -395,12 +396,18 @@ describe("EventBriefingList", () => {
   });
 
 
-  it("changes date immediately via the labeled date control", () => {
-    renderEventBriefingList(buildBriefing());
+  it("keeps the date form action for searching a selected day", () => {
+    const { container } = renderEventBriefingList(buildBriefing());
+    const form = container.querySelector('form[action="/events"]');
+    const sizeInput = form?.querySelector('input[name="size"]');
+    const channelInput = form?.querySelector('input[name="channel"]');
 
-    fireEvent.change(screen.getByLabelText("选择日期"), { target: { value: "2026-07-01" } });
-
-    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-07-01&channel=important");
+    expect(form).not.toBeNull();
+    expect(form?.querySelector('input[name="date"]')).toHaveAttribute("type", "date");
+    expect(sizeInput).toBeTruthy();
+    expect(sizeInput).toHaveAttribute("type", "hidden");
+    expect(channelInput).toHaveAttribute("value", "important");
+    expect(screen.getByRole("button", { name: "查看" })).toHaveAttribute("type", "submit");
   });
   it("preserves active channel in date search and pagination", () => {
     const { container } = renderEventBriefingList(buildBriefing({

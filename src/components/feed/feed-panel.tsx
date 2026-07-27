@@ -65,12 +65,13 @@ import { BackToTopButton } from "@/components/ui/back-to-top-button";
 import { ChevronIcon } from "@/components/ui/chevron-icon";
 import { StatusBanner } from "@/components/ui/status-banner";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
+import { FilterControl } from "@/components/ui/filter-control";
 import { FilterInput } from "@/components/ui/filter-input";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { FilterSelectInline } from "@/components/ui/filter-select-inline";
-import { FilterControl } from "@/components/ui/filter-control";
 import { FilterSummary } from "@/components/ui/filter-summary";
 import { FormField } from "@/components/ui/form-field";
+import { useMinWidth } from "@/components/ui/use-min-width";
 import { IconFilter, IconPlus, IconTrash } from "@/components/ui/icons";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -537,6 +538,7 @@ export function FeedPanel({
   const [status, setStatus] = useState<FetchRunSnapshot | null>(initialStatus);
   const [groups, setGroups] = useState<FeedGroupOption[]>(availableGroups);
   const [popularTags, setPopularTags] = useState<FeedTagOption[]>(initialPopularTags);
+  const isLgUp = useMinWidth("(min-width: 1024px)", true);
   const [groupTotalCount, setGroupTotalCount] = useState<number>(
     initialGroupTotalCount ?? fallbackInitialPagination.total,
   );
@@ -622,15 +624,18 @@ export function FeedPanel({
   );
   const activeFilterSummary = useMemo(() => {
     const filters: string[] = [];
-    const hasCustomCreatedRange = Boolean(startDate || endDate);
-    const hasNonDefaultRange = hasCustomCreatedRange || range !== "today";
 
-    if (hasNonDefaultRange) {
-      filters.push(`创建时间：${summary.rangeLabel}`);
-    }
-
-    if (sort !== "time_desc") {
-      filters.push(`排序：${summary.sortLabel}`);
+    if (isLgUp) {
+      filters.push(`创建时间：${summary.rangeLabel}`, `排序：${summary.sortLabel}`);
+    } else {
+      const hasCustomCreatedRange = Boolean(startDate || endDate);
+      const hasNonDefaultRange = hasCustomCreatedRange || range !== "today";
+      if (hasNonDefaultRange) {
+        filters.push(`创建时间：${summary.rangeLabel}`);
+      }
+      if (sort !== "time_desc") {
+        filters.push(`排序：${summary.sortLabel}`);
+      }
     }
 
     if (summary.publishedRangeLabel) {
@@ -664,6 +669,7 @@ export function FeedPanel({
     endDate,
     entryKeys.length,
     groupId,
+    isLgUp,
     popularTags,
     range,
     sort,
@@ -1906,7 +1912,237 @@ export function FeedPanel({
           </section>
         ) : null}
 
-        <section
+        {isLgUp ? (
+<section
+          role="region"
+          aria-label="信息流筛选"
+          className="panel-raised w-full min-w-0 overflow-hidden rounded-sm border border-[color:var(--line)] px-4 py-3 sm:px-6 sm:py-4"
+        >
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 lg:flex-1 lg:flex-nowrap">
+                <button
+                  aria-expanded={advancedFiltersOpen}
+                  className={cx(
+                    "lumina-home-action-button inline-flex whitespace-nowrap px-4 py-1 text-sm rounded-sm transition",
+                    advancedFiltersOpen
+                      ? "lumina-home-action-button--active bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+                      : "bg-[var(--bg-muted)] text-[var(--text-2)] hover:bg-[var(--surface)]",
+                  )}
+                  type="button"
+                  onClick={() => setAdvancedFiltersOpen((current) => !current)}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <SearchIcon />
+                    <span>高级筛选</span>
+                  </span>
+                </button>
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    onClick={refresh}
+                    disabled={isRefreshDisabled}
+                    className="lumina-home-action-button lumina-home-action-button--primary inline-flex items-center justify-center whitespace-nowrap rounded-sm bg-[var(--accent)] px-3 py-1.5 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <RefreshIcon />
+                      <span>立即更新</span>
+                    </span>
+                  </button>
+                ) : null}
+                {isAdmin ? (
+                  <span className="min-w-0 text-sm text-[var(--text-2)] lg:truncate">
+                    {latestRunSummary}
+                  </span>
+                ) : latestRunTime ? (
+                  <span className="min-w-0 text-sm text-[var(--text-2)] lg:truncate">
+                    更新时间：{latestRunTime}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex items-center gap-2 lg:flex-nowrap lg:justify-end lg:pl-4">
+                <FilterSelectInline
+                  label="创建时间："
+                  ariaLabel="创建时间"
+                  value={range}
+                  onChange={(value) => updateRange(value as FeedRange)}
+                  options={RANGE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  showSearch={false}
+                />
+
+                <FilterSelectInline
+                  label="排序："
+                  ariaLabel="排序方式"
+                  value={sort}
+                  onChange={(value) => changeSort(value as FeedSort)}
+                  options={SORT_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                  showSearch={false}
+                />
+              </div>
+            </div>
+
+            <div className="lg:hidden">
+              <div className="rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-sm)]">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-sm font-medium text-[var(--foreground)]">分组筛选</span>
+                  <FilterSelectInline
+                    label="分组："
+                    ariaLabel="移动端分组筛选"
+                    value={groupId ?? ""}
+                    onChange={changeGroup}
+                    options={[
+                      { value: "", label: formatGroupOptionLabel("全部内容", groupTotalCount) },
+                      ...groups.map((group) => ({
+                        value: group.id,
+                        label: formatGroupOptionLabel(group.name, group.count),
+                      })),
+                    ]}
+                    showSearch={false}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {advancedFiltersOpen ? (
+              <div className="border-t border-[color:var(--line)] pt-3">
+                <div className="grid gap-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FilterInput
+                      id="feed-title-filter-wide"
+                      label="全文搜索"
+                      value={titleInput}
+                      onChange={(value) => {
+                        setTitleInput(value);
+                        setTitleFilter(normalizeSearchText(value));
+                      }}
+                      placeholder="输入搜索关键词"
+                    />
+
+                    <FilterSelect
+                      id="feed-source-filter-wide"
+                      label="信息源"
+                      ariaLabel="信息源"
+                      value={sourceId ?? ""}
+                      onChange={changeSource}
+                      showSearch
+                      options={[
+                        { value: "", label: "全部信息源" },
+                        ...visibleSources.map((source) => ({
+                          value: source.id,
+                          label: source.name,
+                        })),
+                      ]}
+                    />
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <FormField label="创建时间" htmlFor="feed-created-date-range-wide">
+                      <DateRangePicker
+                        id="feed-created-date-range-wide"
+                        value={toDayjsRange(startDate, endDate)}
+                        onChange={changeDateRange}
+                        className="w-full"
+                      />
+                    </FormField>
+
+                    <FormField label="发表时间" htmlFor="feed-published-date-range-wide">
+                      <DateRangePicker
+                        id="feed-published-date-range-wide"
+                        value={toDayjsRange(publishedStartDate, publishedEndDate)}
+                        onChange={changePublishedDateRange}
+                        className="w-full"
+                      />
+                    </FormField>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <FilterSummary
+              items={activeFilterSummary}
+              onClear={clearFilters}
+              canClear={hasClearableFilters && !isPending}
+              actions={
+                <button
+                  type="button"
+                  onClick={applyFilters}
+                  disabled={isPending}
+                  className="lumina-home-action-button lumina-home-action-button--primary inline-flex items-center justify-center rounded-sm bg-[var(--accent)] px-3 py-1 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <SearchIcon />
+                    <span>查询</span>
+                  </span>
+                </button>
+              }
+              details={null}
+              className="pt-3"
+            />
+
+            {/* 批量操作工具栏 */}
+            {isAdmin && selectedItems.size > 0 && (
+              <div className="border-t border-[color:var(--line)] pt-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-[var(--text-2)]">
+                      已选 {selectedItems.size} 条
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleClearSelection}
+                      className="text-sm text-[var(--muted)] hover:text-[var(--text-1)] transition"
+                    >
+                      清空选择
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={openBatchRegenerateDialog}
+                      disabled={isPending}
+                      className="inline-flex items-center gap-1 rounded-sm bg-[var(--bg-muted)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      重新生成
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openBatchMergeDialog}
+                      disabled={isPending || selectedItems.size < 2}
+                      className="inline-flex items-center gap-1 rounded-sm bg-[var(--bg-muted)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      批量合并
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openBatchFilterDialog}
+                      disabled={isPending}
+                      className="inline-flex items-center gap-1 rounded-sm bg-[var(--bg-muted)] px-3 py-1.5 text-sm font-medium text-[var(--text-2)] transition hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      批量过滤
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openBatchDeleteDialog}
+                      disabled={isPending}
+                      className="inline-flex items-center gap-1 rounded-sm bg-[var(--danger-surface)] px-3 py-1.5 text-sm font-medium text-[var(--danger-ink)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      批量删除
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+        ) : (
+<section
           role="region"
           aria-label="信息流筛选"
           className="w-full min-w-0 border-b border-[color:var(--line)] pb-3"
@@ -1998,7 +2234,7 @@ export function FeedPanel({
                 <div className="grid gap-3">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <FilterSelect
-                      id="feed-sort-filter"
+                      id="feed-sort-filter-narrow"
                       label="排序"
                       ariaLabel="排序方式"
                       value={sort}
@@ -2011,7 +2247,7 @@ export function FeedPanel({
                     />
 
                     <FilterInput
-                      id="feed-title-filter"
+                      id="feed-title-filter-narrow"
                       label="全文搜索"
                       value={titleInput}
                       onChange={(value) => {
@@ -2024,7 +2260,7 @@ export function FeedPanel({
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <FilterSelect
-                      id="feed-source-filter"
+                      id="feed-source-filter-narrow"
                       label="信息源"
                       ariaLabel="信息源"
                       value={sourceId ?? ""}
@@ -2039,9 +2275,9 @@ export function FeedPanel({
                       ]}
                     />
 
-                    <FilterControl label="自定义创建时间" htmlFor="feed-created-date-range" layout="stack">
+                    <FilterControl label="自定义创建时间" htmlFor="feed-created-date-range-narrow" layout="stack">
                       <DateRangePicker
-                        id="feed-created-date-range"
+                        id="feed-created-date-range-narrow"
                         value={toDayjsRange(startDate, endDate)}
                         onChange={changeDateRange}
                         className="w-full"
@@ -2050,9 +2286,9 @@ export function FeedPanel({
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FilterControl label="发表时间" htmlFor="feed-published-date-range" layout="stack">
+                    <FilterControl label="发表时间" htmlFor="feed-published-date-range-narrow" layout="stack">
                       <DateRangePicker
-                        id="feed-published-date-range"
+                        id="feed-published-date-range-narrow"
                         value={toDayjsRange(publishedStartDate, publishedEndDate)}
                         onChange={changePublishedDateRange}
                         className="w-full"
@@ -2144,6 +2380,7 @@ export function FeedPanel({
             )}
           </div>
         </section>
+        )}
 
         {refreshFeedback ? (
           <StatusBanner className="rounded-[1.1rem]" tone={refreshFeedback.tone}>

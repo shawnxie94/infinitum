@@ -268,12 +268,12 @@ describe("FeedPanel", () => {
     expect(getSelectRoot("创建时间")).toHaveTextContent("7天");
     expect(within(filterRegion).getByRole("button", { name: "高级筛选" })).toHaveAttribute("aria-expanded", "false");
     expect(within(filterRegion).queryByLabelText("全文搜索")).not.toBeInTheDocument();
-    expect(within(filterRegion).queryByRole("combobox", { name: "排序方式" })).not.toBeInTheDocument();
+    expect(within(filterRegion).getByRole("combobox", { name: "排序方式" })).toBeInTheDocument();
     expect(within(filterRegion).getByText("创建时间：7天")).toBeInTheDocument();
-    expect(within(filterRegion).queryByText("排序：按时间倒序")).not.toBeInTheDocument();
+    expect(within(filterRegion).getByText("排序：按时间倒序")).toBeInTheDocument();
     expect(within(filterRegion).queryByText("最近抓取：尚未执行")).not.toBeInTheDocument();
     expect(within(filterRegion).getByRole("button", { name: "清除筛选" })).toBeInTheDocument();
-    expect(within(filterRegion).queryByRole("button", { name: "查询" })).not.toBeInTheDocument();
+    expect(within(filterRegion).getByRole("button", { name: "查询" })).toBeInTheDocument();
     expect(screen.getByText("高质量 90")).toBeInTheDocument();
     expect(screen.getAllByText(/Example Feed/).length).toBeGreaterThan(0);
     expect(screen.queryByRole("heading", { name: "信息流控制台" })).not.toBeInTheDocument();
@@ -1133,12 +1133,13 @@ describe("FeedPanel", () => {
     const title = screen.getByRole("heading", { name: "OpenAI Agent 发布" });
 
     expect(advancedToggle.className).toContain("text-sm");
-    expect(advancedToggle.className).toContain("px-3");
+    expect(advancedToggle.className).toContain("px-4");
     expect(advancedToggle.className).toContain("py-1");
     expect(refreshButton).toBeNull();
     expect(rangeSelect?.className).toContain("select-modern-antd");
     expect(rangeSelect?.className).toContain("h-9");
-    expect(screen.queryByRole("combobox", { name: "排序方式" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "排序方式" })).toBeInTheDocument();
+    expect(getSelectRoot("排序方式")?.className).toContain("select-modern-antd");
     expect(clearButton.className).toContain("ml-auto");
     expect(clearButton.className).toContain("px-3");
     expect(clearButton.className).toContain("py-1");
@@ -1181,6 +1182,7 @@ describe("FeedPanel", () => {
     expect(advancedToggle.className).toContain("text-[var(--accent-strong)]");
     expect(screen.getByRole("button", { name: "查询" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "排序方式" })).toBeInTheDocument();
+    expect(screen.getByLabelText("全文搜索")).toBeInTheDocument();
   });
 
   it("keeps the clear filters button enabled when the summary shows non-default filter chips", () => {
@@ -1200,7 +1202,7 @@ describe("FeedPanel", () => {
     const clearButton = screen.getByRole("button", { name: "清除筛选" });
 
     expect(screen.getByText("创建时间：7天")).toBeInTheDocument();
-    expect(screen.queryByText("排序：按时间倒序")).not.toBeInTheDocument();
+    expect(screen.getByText("排序：按时间倒序")).toBeInTheDocument();
     expect(clearButton).toBeEnabled();
     expect(clearButton.className).toContain("lumina-home-action-button--clear");
   });
@@ -1301,6 +1303,10 @@ describe("FeedPanel", () => {
       />,
     );
 
+    const filterRegion = screen.getByRole("region", { name: "信息流筛选" });
+    expect(filterRegion.className).toContain("panel-raised");
+    expect(filterRegion.className).toContain("rounded-sm");
+    expect(filterRegion.className).toContain("border");
     expect(container.querySelector(".panel-raised")).not.toBeNull();
     expect(container.querySelector(".select-modern-antd")).not.toBeNull();
     expect(container.querySelector(".filter-chip")).not.toBeNull();
@@ -2743,8 +2749,8 @@ describe("FeedPanel", () => {
     expect(getSelectRoot("创建时间")).toHaveTextContent("当天");
     expect(screen.getByRole("button", { name: "高级筛选" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByLabelText("全文搜索")).not.toBeInTheDocument();
-    expect(screen.queryByText("创建时间：当天")).not.toBeInTheDocument();
-    expect(screen.queryByText("排序：按时间倒序")).not.toBeInTheDocument();
+    expect(screen.getByText("创建时间：当天")).toBeInTheDocument();
+    expect(screen.getByText("排序：按时间倒序")).toBeInTheDocument();
     expect(screen.queryByText("搜索：Agent")).not.toBeInTheDocument();
   });
 

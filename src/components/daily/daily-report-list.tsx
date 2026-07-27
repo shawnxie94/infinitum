@@ -1,5 +1,7 @@
 "use client";
 
+import { useMinWidth } from "@/components/ui/use-min-width";
+
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { MouseEvent } from "react";
@@ -68,6 +70,7 @@ export function DailyReportList({
   page: initialPage,
   pageSize: initialPageSize,
 }: DailyReportListProps) {
+  const isLgUp = useMinWidth("(min-width: 1024px)", true);
   const router = useRouter();
   const searchParams = useSearchParams();
   const isAdmin = useClientAdminSession(initialIsAdmin, hydrateAdminClient);
@@ -276,7 +279,42 @@ export function DailyReportList({
         </aside>
 
         <section className="grid w-full min-w-0 flex-1 gap-4">
-          <section className="w-full border-b border-[color:var(--line)] pb-3">
+          {isLgUp ? (
+<section className="panel-raised min-h-[110px] w-full rounded-sm border border-[color:var(--line)] p-4 sm:p-6">
+            <div className="flex h-full min-h-[62px] w-full items-center justify-between gap-6">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-xl font-semibold text-[var(--foreground)]">AI 日报</h1>
+                <p className="mt-1 text-sm text-[var(--text-2)]">完全使用AI生成每日总结，可能存在错误，需谨慎甄别。</p>
+              </div>
+              <div className="ml-auto flex shrink-0 items-center justify-end gap-3">
+                {isAdmin ? (
+                  <>
+                    <Button variant="primary" onClick={openGenerateDialog} disabled={isPending}>
+                      <span className="inline-flex items-center gap-2">
+                        <IconRefresh className="h-4 w-4" />
+                        <span>生成日报</span>
+                      </span>
+                    </Button>
+                    <FilterSelectInline
+                      label="状态："
+                      ariaLabel="日报状态"
+                      value={selectedStatus}
+                      onChange={(value) => updateQuery({ status: value })}
+                      options={[
+                        { value: "all", label: "全部" },
+                        { value: "published", label: "已发布" },
+                        { value: "draft", label: "草稿" },
+                      ]}
+                      showSearch={false}
+                    />
+                  </>
+                ) : null}
+              </div>
+            </div>
+            {feedback ? <div className="mt-4 rounded-sm bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">{feedback}</div> : null}
+          </section>
+          ) : (
+<section className="w-full border-b border-[color:var(--line)] pb-3">
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl font-semibold text-[var(--foreground)]">AI 日报</h1>
@@ -327,6 +365,7 @@ export function DailyReportList({
             </div>
             {feedback ? <div className="mt-3 rounded-sm bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">{feedback}</div> : null}
           </section>
+          )}
 
           {reports.length === 0 ? (
             <div className="rounded-[1.15rem] border border-dashed border-[color:var(--line-strong)] bg-[color-mix(in_srgb,var(--surface)_80%,transparent)] px-5 py-8 text-sm leading-7 text-[var(--muted)] shadow-[var(--shadow-sm)]">

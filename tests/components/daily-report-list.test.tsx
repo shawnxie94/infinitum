@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -12,7 +12,17 @@ vi.mock("next/navigation", () => ({
 import { DailyReportList } from "@/components/daily/daily-report-list";
 
 describe("DailyReportList", () => {
-  it("keeps a mobile week filter when the desktop sidebar is hidden", () => {
+  it("keeps a mobile week filter when the desktop sidebar is hidden", async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
     render(
       <DailyReportList
         reports={[]}
@@ -29,8 +39,10 @@ describe("DailyReportList", () => {
       />,
     );
 
+    await waitFor(() => {
+      expect(screen.getByLabelText("移动端周筛选")).toBeInTheDocument();
+    });
     const mobileWeekFilter = screen.getByLabelText("移动端周筛选");
-    expect(mobileWeekFilter).toBeInTheDocument();
     expect(mobileWeekFilter).toHaveValue("2026-07-14");
     expect(screen.getByRole("heading", { name: "时间筛选" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /全部周/ })).toBeInTheDocument();

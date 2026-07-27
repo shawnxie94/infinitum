@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useMinWidth } from "@/components/ui/use-min-width";
+
 import { recordCuratorBehaviorClient } from "@/components/curator-behavior/record";
 import { EventBriefingCard } from "@/components/events/event-briefing-card";
 import { EventBriefingDetailModal } from "@/components/events/event-briefing-detail-modal";
@@ -39,6 +41,7 @@ export function EventBriefingList({
   initialIsAdmin = false,
   hydrateAdminClient = false,
 }: EventBriefingListProps) {
+  const isLgUp = useMinWidth("(min-width: 1024px)", true);
   const router = useRouter();
   const isAdmin = useClientAdminSession(initialIsAdmin, hydrateAdminClient);
   const { showToast } = useToast();
@@ -94,7 +97,58 @@ export function EventBriefingList({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      <header className="border-b border-[color:var(--line)] pb-3">
+      {isLgUp ? (
+<header className="panel-raised rounded-sm border border-[color:var(--line)] px-3 py-3 sm:px-4">
+        <h1 className="sr-only">事件速览</h1>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col">
+            <nav aria-label="速览频道" className="flex flex-wrap items-center gap-1.5">
+              {briefing.channels.map((channel) => {
+                const isActive = briefing.channel.id === channel.id;
+
+                return (
+                  <Link
+                    key={channel.id}
+                    aria-current={isActive ? "page" : undefined}
+                    className={cx(
+                      "inline-flex h-7 items-center rounded-sm border px-2 text-xs font-medium transition",
+                      isActive
+                        ? "border-[var(--accent)] bg-[rgba(59,130,246,0.10)] text-[var(--accent)]"
+                        : "border-[color:var(--line)] bg-[var(--surface)] text-[var(--text-3)] hover:border-[var(--accent)] hover:text-[var(--accent)]",
+                    )}
+                    href={buildEventsHref({
+                      date: briefing.date,
+                      pageSize,
+                      channelId: channel.id,
+                    })}
+                  >
+                    {channel.name} {channel.count}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+          <form action="/events" className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            <input
+              aria-label="选择日期"
+              className="h-8 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-2.5 text-sm text-[var(--text-1)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[rgba(59,130,246,0.18)]"
+              name="date"
+              type="date"
+              defaultValue={briefing.date}
+            />
+            <input name="size" type="hidden" value={pageSize} />
+            <input name="channel" type="hidden" value={briefing.channel.id} />
+            <button
+              className="lumina-home-action-button lumina-home-action-button--primary inline-flex h-8 items-center justify-center rounded-sm bg-[var(--accent)] px-3 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
+              type="submit"
+            >
+              查看
+            </button>
+          </form>
+        </div>
+      </header>
+      ) : (
+<header className="border-b border-[color:var(--line)] pb-3">
         <h1 className="sr-only">事件速览</h1>
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-col">
@@ -150,6 +204,7 @@ export function EventBriefingList({
           </div>
         </div>
       </header>
+      )}
 
       <section
         aria-label={`速览列表，共 ${total} 条`}
