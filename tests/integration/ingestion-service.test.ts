@@ -1282,9 +1282,20 @@ describe("runIngestion", () => {
     });
 
     expect(storedItem.clusterId).not.toBe("existing-cluster-1");
+    expect(storedItem.clusterId).toBeTruthy();
+
+    const pendingCluster = await prisma.contentCluster.findUniqueOrThrow({
+      where: { id: storedItem.clusterId! },
+    });
+    expect(pendingCluster.fingerprint).toBe(`pending-${storedItem.id}`);
+    expect(pendingCluster.eventFingerprint).toBeNull();
+    expect(pendingCluster.eventBucket).toBeNull();
 
     const clusterCount = await prisma.contentCluster.count();
     expect(clusterCount).toBe(2);
+
+    expect(storedItem.nextProcessingRetryAt).not.toBeNull();
+    expect(storedItem.lastProcessingError).toContain("incomplete_signature");
   });
 
   it("uses cheap ranking to directly match the strongest cluster without ai", async () => {

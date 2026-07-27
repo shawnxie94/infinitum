@@ -74,6 +74,10 @@ function makeSqliteSchemaIdempotent(sql) {
     .replace(/^CREATE INDEX "content_clusters_status_displayQualityScore_idx".*;\n?/gm, "")
     .replace(/^CREATE INDEX "content_clusters_dominantGroupId_status_latestCreatedAt_idx".*;\n?/gm, "")
     .replace(/^CREATE INDEX "content_clusters_eventFingerprint_eventBucket_idx".*;\n?/gm, "")
+    // These indexes depend on additive item columns. Create them only after
+    // applyAdditiveSchemaUpgrades() ensures the columns exist on older volumes.
+    .replace(/^CREATE INDEX "items_nextProcessingRetryAt_status_moderationStatus_idx".*;\n?/gm, "")
+    .replace(/^CREATE INDEX "items_aggregationParseStatus_nextProcessingRetryAt_idx".*;\n?/gm, "")
     .replace(/^CREATE TABLE /gm, "CREATE TABLE IF NOT EXISTS ")
     .replace(/^CREATE UNIQUE INDEX /gm, "CREATE UNIQUE INDEX IF NOT EXISTS ")
     .replace(/^CREATE INDEX /gm, "CREATE INDEX IF NOT EXISTS ");
@@ -435,6 +439,17 @@ function applyClusterFeedStatsBackfill() {
 }
 
 function applyAdditiveSchemaUpgrades() {
+  // Repair///bootstrap item processing recovery columns before any items rebuilds.
+  runSqlite([dbPath], {
+    input: `
+      DROP INDEX IF EXISTS "items_nextProcessingRetryAt_status_moderationStatus_idx";
+      DROP INDEX IF EXISTS "items_aggregationParseStatus_nextProcessingRetryAt_idx";
+    `,
+  });
+  addColumnIfMissing("items", "processingAttemptCount", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing("items", "nextProcessingRetryAt", "DATETIME");
+  addColumnIfMissing("items", "lastProcessingError", "TEXT");
+
   dropColumnIfPresent("items", "dedupeSignature", {
     dropIndexes: ["items_dedupeSignature_key", "items_dedupeSignature_idx"],
   });
@@ -541,6 +556,13 @@ function applyAdditiveSchemaUpgrades() {
   dropColumnIfPresent("event_briefing_configs", "includeSingleItems");
   dropColumnIfPresent("items", "understandingInputHash");
   dropColumnIfPresent("items", "understandingVersion");
+  runSqlite([dbPath], {
+    input: `
+      CREATE INDEX IF NOT EXISTS "items_nextProcessingRetryAt_status_moderationStatus_idx" ON "items"("nextProcessingRetryAt", "status", "moderationStatus");
+      CREATE INDEX IF NOT EXISTS "items_aggregationParseStatus_nextProcessingRetryAt_idx" ON "items"("aggregationParseStatus", "nextProcessingRetryAt");
+    `,
+  });
+
   addColumnIfMissing("event_briefing_configs", "briefingChannelsJson", "TEXT NOT NULL DEFAULT '[]'");
 
   if (!ftsTableExists("briefing_preference_configs")) {
@@ -668,6 +690,14 @@ try {
     rmSync(dbPath, { force: true });
     rmSync(`${dbPath}-shm`, { force: true });
     rmSync(`${dbPath}-wal`, { force: true });
+  }
+
+  // For existing volumes, ensure recovery columns exist before any schema SQL
+  // that might reference them indirectly after partial upgrades.
+  if (existsSync(dbPath)) {
+    addColumnIfMissing("items", "processingAttemptCount", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing("items", "nextProcessingRetryAt", "DATETIME");
+    addColumnIfMissing("items", "lastProcessingError", "TEXT");
   }
 
   const sql = `${sqliteRuntimePragmas}\n${makeSqliteSchemaIdempotent(loadSchemaSql())}\n${sqliteRuntimePragmas}\n`;

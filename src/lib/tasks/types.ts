@@ -15,6 +15,7 @@ export type BackgroundTaskRunKind =
   | "item_regenerate_translation"
   | "item_regenerate_summary"
   | "item_reanalyze"
+  | "item_processing_recovery"
   | "cluster_regenerate_summary"
   | "cluster_merge_precompute_clean_pairs"
   | "daily_report_generate"

@@ -299,6 +299,7 @@ export async function assignItemToCluster(
     aiProvider?: AiProvider;
     coordinator?: ClusterAssignmentCoordinator;
     aggregationEnabled?: boolean;
+    allowIncompleteSignaturePending?: boolean;
   },
 ) {
   const item = await prisma.item.findUnique({
@@ -382,13 +383,20 @@ export async function assignItemToCluster(
         eventSignature: resolvedEventSignature,
         titleFallback: clusterTitle,
       });
+    const shouldKeepPendingSingleton =
+      Boolean(options.allowIncompleteSignaturePending) || skippedIncompleteSignature;
+    // Incomplete signatures must not create "confident new events" that later collide in merge.
+    // Prefer a pending singleton cluster for display, and let recovery re-enrich later.
     const createdNewCluster = !matchedCluster;
     const cluster =
       matchedCluster ??
       (await createContentCluster({
-        fingerprint: fingerprint || `single-${item.id}`,
-        eventFingerprint: eventIdentity?.eventFingerprint ?? null,
-        eventBucket: eventIdentity?.eventBucket ?? null,
+        fingerprint: shouldKeepPendingSingleton
+          ? `pending-${item.id}`
+          : fingerprint || `single-${item.id}`,
+        // Pending incomplete-signature clusters stay out of identity/merge anchors.
+        eventFingerprint: shouldKeepPendingSingleton ? null : (eventIdentity?.eventFingerprint ?? null),
+        eventBucket: shouldKeepPendingSingleton ? null : (eventIdentity?.eventBucket ?? null),
         title: clusterTitle,
         summary: buildItemSummary(item),
         score: item.qualityScore,
@@ -421,7 +429,10 @@ export async function assignItemToCluster(
       pairKey: buildClusterMergeEdgeKey(item.id, cluster.id),
       inputHash: `${item.updatedAt.getTime()}:${cluster.id}`,
       confidence: eventIdentity?.identityConfidence ?? null,
-      reasonCode: matchSource ?? (createdNewCluster ? "new_cluster" : "cluster_assignment"),
+      reasonCode: matchSource
+        ?? (createdNewCluster
+          ? (shouldKeepPendingSingleton ? "pending_incomplete_signature" : "new_cluster")
+          : "cluster_assignment"),
     });
     // Note: Cluster summary recomputation is now handled at batch level in executeIngestion
 

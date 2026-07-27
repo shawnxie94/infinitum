@@ -161,6 +161,7 @@ function normalizeTaskKindFilter(value: string | null): TaskRunSnapshot["kind"] 
     value === "item_regenerate_translation" ||
     value === "item_regenerate_summary" ||
     value === "item_reanalyze" ||
+    value === "item_processing_recovery" ||
     value === "cluster_regenerate_summary" ||
     value === "cluster_merge_precompute_clean_pairs" ||
     value === "daily_report_generate" ||

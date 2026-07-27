@@ -16,6 +16,13 @@ import { shouldSkipJinaForUrl } from "@/lib/ingestion/article";
 import { buildDedupeKeys, shouldFetchFullText } from "@/lib/ingestion/dedupe";
 import { evaluateRuleFilter } from "@/lib/ingestion/filtering";
 import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
+import {
+  classifyItemProcessingRecoveryReasons,
+  clearItemProcessingRetryState,
+  degradeExhaustedAggregationItem,
+  scheduleItemProcessingRetry,
+} from "@/lib/items/processing-state";
+import { ITEM_PROCESSING_RECOVERY_MAX_ATTEMPTS } from "@/config/constants";
 import { replaceItemTags } from "@/lib/tags/service";
 import type {
   ParsedFeedItem,
@@ -405,13 +412,11 @@ export async function processFeedItem({
     newCluster: 0,
   };
   let hasClusterAssignmentMetrics = false;
-  // A detected or failed aggregation parse must force another unified
-  // understanding call. Preserve the prior aggregation flag until a valid new
-  // aggregation result is available, so a transient model failure cannot expose
-  // the parent as a regular feed item while its existing children are still live.
-  let isAggregation =
-    (existing?.isAggregation ?? false) ||
-    (aggregationDetectionEnabled && hasRetriableAggregationParse(existing));
+  // Retriable aggregation parse must force another unified understanding call.
+  // Only preserve isAggregation=true when the item was already treated as an
+  // aggregation parent; a plain failed parse should remain visible as a regular
+  // item while recovery retries in the background.
+  let isAggregation = existing?.isAggregation ?? false;
   let aggregationCheckedAt: Date | null = existing?.aggregationCheckedAt ?? null;
   let aggregationParseStatus: string | null = existing?.aggregationParseStatus ?? null;
   let storedItemId = existing?.id ?? null;
@@ -827,6 +832,7 @@ export async function processFeedItem({
       aiProvider,
       coordinator: clusterAssignmentCoordinator,
       aggregationEnabled,
+      allowIncompleteSignaturePending: true,
     });
     addElapsed(timings, "clusterAssignmentMs", clusterAssignmentStartedAt);
 
@@ -840,6 +846,65 @@ export async function processFeedItem({
     if (clusterAssignment.clusterId && (isNew || existing?.clusterId !== clusterAssignment.clusterId)) {
       affectedClusterId = clusterAssignment.clusterId;
     }
+  }
+
+
+  // Schedule automatic recovery outside RSS top-N reuse, or clear retry state on success.
+  try {
+    const retryItem = await prisma.item.findUnique({
+      where: { id: stored.id },
+      include: {
+        source: {
+          select: {
+            aiParsingEnabled: true,
+            aggregationDetectionEnabled: true,
+          },
+        },
+      },
+    });
+    if (retryItem) {
+      const reasons = classifyItemProcessingRecoveryReasons(retryItem);
+      if (reasons.length === 0) {
+        if (retryItem.nextProcessingRetryAt || retryItem.lastProcessingError) {
+          await clearItemProcessingRetryState(retryItem.id);
+        }
+      } else if (
+        reasons.includes("aggregation_retriable") &&
+        (retryItem.processingAttemptCount + 1) >= ITEM_PROCESSING_RECOVERY_MAX_ATTEMPTS
+      ) {
+        const degrade = await degradeExhaustedAggregationItem(
+          retryItem.id,
+          `aggregation recovery exhausted during ingestion: ${reasons.join(",")}`,
+        );
+        if (degrade.degradedToRegular) {
+          // Parent becomes visible as a regular item; assign a pending/regular cluster.
+          const assignment = await assignItemToCluster(retryItem.id, {
+            eventSignature,
+            aiProvider,
+            coordinator: clusterAssignmentCoordinator,
+            aggregationEnabled,
+            allowIncompleteSignaturePending: true,
+          });
+          if (assignment.clusterId) {
+            affectedClusterId = assignment.clusterId;
+          }
+          // Reload stored snapshot fields used by metrics/status.
+          const degraded = await prisma.item.findUnique({ where: { id: retryItem.id } });
+          if (degraded) {
+            // no-op: process return uses local variables; feed will pick DB state.
+          }
+        }
+      } else {
+        await scheduleItemProcessingRetry({
+          itemId: retryItem.id,
+          reasons,
+          attemptCount: retryItem.processingAttemptCount,
+          now,
+        });
+      }
+    }
+  } catch (retryError) {
+    appendIssue(issues, retryError, "Failed to schedule item processing recovery");
   }
 
   return {

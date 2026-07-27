@@ -170,3 +170,26 @@ export const FEED_SEARCH_DEBOUNCE_MS = 320;
 
 /** 管理端聚合搜索防抖延迟: 500ms */
 export const ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS = 500;
+
+
+// =============================================================================
+// Item processing recovery
+// =============================================================================
+
+/** 抓取失败补偿每批处理上限 */
+export const ITEM_PROCESSING_RECOVERY_BATCH_SIZE = 30;
+
+/** 单次补偿任务最多自动续跑轮数（含首轮） */
+export const ITEM_PROCESSING_RECOVERY_MAX_ROUNDS = 3;
+
+/** 失败条目最大自动重试次数；达到后停止自动补救并走降级策略 */
+export const ITEM_PROCESSING_RECOVERY_MAX_ATTEMPTS = 3;
+
+/** 自动补救基础退避时间 */
+export const ITEM_PROCESSING_RECOVERY_BASE_DELAY_MS = 15 * MINUTE_MS;
+
+/** 自动补救最大退避时间 */
+export const ITEM_PROCESSING_RECOVERY_MAX_DELAY_MS = 6 * HOUR_MS;
+
+/** 自动补救默认扫描窗口：优先处理近 N 天内更新的残缺条目 */
+export const ITEM_PROCESSING_RECOVERY_LOOKBACK_MS = 14 * DAY_MS;

@@ -20,6 +20,11 @@ import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
 import { normalizeStoredEventType } from "@/lib/clusters/normalization";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { replaceItemTags } from "@/lib/tags/service";
+import {
+  classifyItemProcessingRecoveryReasons,
+  clearItemProcessingRetryState,
+  scheduleItemProcessingRetry,
+} from "@/lib/items/processing-state";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 import {
   enqueueTaskRun,
@@ -498,7 +503,37 @@ type ItemReanalyzeOutcome = {
   failedFields: Array<"summary" | "analysis" | "aggregation">;
 };
 
-async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Promise<ItemReanalyzeOutcome> {
+
+async function syncItemProcessingRetryState(itemId: string) {
+  const item = await prisma.item.findUnique({
+    where: { id: itemId },
+    include: {
+      source: {
+        select: {
+          aiParsingEnabled: true,
+          aggregationDetectionEnabled: true,
+        },
+      },
+    },
+  });
+  if (!item) {
+    return;
+  }
+
+  const reasons = classifyItemProcessingRecoveryReasons(item);
+  if (reasons.length === 0) {
+    await clearItemProcessingRetryState(itemId);
+    return;
+  }
+
+  await scheduleItemProcessingRetry({
+    itemId,
+    reasons,
+    attemptCount: item.processingAttemptCount,
+  });
+}
+
+export async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Promise<ItemReanalyzeOutcome> {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
     include: { source: true },
@@ -570,6 +605,7 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
       await recomputeCluster(previousClusterId, aiProvider);
     }
     invalidateFeedCache();
+    await syncItemProcessingRetryState(item.id);
 
     return { item: updated, failedFields };
   }
@@ -632,6 +668,7 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
         where: { id: item.id },
         include: { source: true },
       });
+      await syncItemProcessingRetryState(item.id);
       return { item: updated, failedFields };
     }
 
@@ -642,6 +679,7 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
         where: { id: item.id },
         include: { source: true },
       });
+      await syncItemProcessingRetryState(item.id);
       return { item: updated, failedFields: [...failedFields, "aggregation"] };
     }
 
@@ -728,6 +766,7 @@ async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Pro
     where: { id: updated.id },
     include: { source: true },
   });
+  await syncItemProcessingRetryState(result.id);
   return { item: result, failedFields };
 }
 

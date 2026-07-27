@@ -60,6 +60,7 @@ const taskKindLabels = {
   ingestion: "抓取任务",
   precompute: "预计算",
   item_reanalyze: "内容重分析",
+  item_processing_recovery: "抓取失败补偿",
   item_regenerate_summary: "摘要重生成",
   item_regenerate_translation: "译文重生成",
   item_cleanup: "文章自动清理",

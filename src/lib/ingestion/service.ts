@@ -24,6 +24,7 @@ import {
   updateFetchRunProgress,
 } from "@/lib/feed/repository";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { enqueueItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
 import { scheduleDefaultFeedCacheWarm } from "@/lib/feed/warmup";
 import { enqueuePrecomputeTask } from "@/lib/precompute/service";
 import { createConfiguredArticleFetcher, fetchArticleContent } from "@/lib/ingestion/article";
@@ -326,6 +327,20 @@ function dedupePreparedLookupsByDedupeKey<T extends { lookup: PreparedFeedItemLo
   }
 
   return deduped;
+}
+
+function shouldEnqueueProcessingRecoveryFromIngestion(input: {
+  summaryFailed: number;
+  analysisFailed: number;
+  aggregationParseFailed: number;
+  skippedIncompleteSignature: number;
+}) {
+  return (
+    input.summaryFailed > 0 ||
+    input.analysisFailed > 0 ||
+    input.aggregationParseFailed > 0 ||
+    input.skippedIncompleteSignature > 0
+  );
 }
 
 async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
@@ -899,6 +914,21 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
       modelNames: taskTimelineModelNames,
     }),
   });
+
+  if (
+    shouldEnqueueProcessingRecoveryFromIngestion({
+      summaryFailed: timelineCounters.itemSummary.failed,
+      analysisFailed: timelineCounters.itemAnalysis.failed,
+      aggregationParseFailed: timelineCounters.aggregationParsing.failed,
+      skippedIncompleteSignature: timelineCounters.clusterAssignment.skippedIncompleteSignature,
+    })
+  ) {
+    await enqueueItemProcessingRecoveryTask({
+      triggerType: options.onProgress ? "manual" : "scheduled",
+      // Ingestion already observed bad rows; skip another full candidate scan.
+      force: true,
+    }).catch(() => null);
+  }
 
   return completedRun;
 }

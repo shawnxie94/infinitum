@@ -55,6 +55,7 @@ enum BackgroundTaskKind {
   item_regenerate_translation
   item_regenerate_summary
   item_reanalyze
+  item_processing_recovery
   cluster_regenerate_summary
   cluster_merge_precompute_clean_pairs
   daily_report_generate
@@ -194,6 +195,9 @@ model Item {
   isAggregation            Boolean                    @default(false)
   aggregationCheckedAt     DateTime?
   aggregationParseStatus   String?
+  processingAttemptCount   Int                        @default(0)
+  nextProcessingRetryAt    DateTime?
+  lastProcessingError      String?
   parentItemId             String?
   errorMessage             String?
   createdAt                DateTime                   @default(now())
@@ -218,6 +222,8 @@ model Item {
   @@index([clusterId, status, moderationStatus, updatedAt])
   @@index([qualityScore, publishedAt])
   @@index([parentItemId])
+  @@index([nextProcessingRetryAt, status, moderationStatus])
+  @@index([aggregationParseStatus, nextProcessingRetryAt])
   @@map("items")
 }
 
