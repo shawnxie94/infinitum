@@ -88,7 +88,7 @@ import type {
   FeedPagination,
   FeedRange,
   FeedSort,
-  FeedTagOption,
+  FeedEntityOption,
   FetchRunSnapshot,
 } from "@/lib/feed/types";
 import { DEFAULT_FEED_PAGE_SIZE, FEED_PAGE_SIZE_OPTIONS } from "@/lib/feed/types";
@@ -180,7 +180,7 @@ function GroupBadge({ group }: { group: FeedGroupBadge | null | undefined }) {
   );
 }
 
-const TAG_TONES = [
+const ENTITY_TONES = [
   { bg: "#ecfeff", border: "#06b6d4", text: "#0e7490", active: "#0891b2" },
   { bg: "#f0fdf4", border: "#22c55e", text: "#15803d", active: "#16a34a" },
   { bg: "#fff7ed", border: "#f97316", text: "#c2410c", active: "#ea580c" },
@@ -202,56 +202,56 @@ const TAG_TONES = [
   { bg: "#fdf2f8", border: "#ec4899", text: "#be185d", active: "#db2777" },
   { bg: "#f4f4f5", border: "#71717a", text: "#3f3f46", active: "#52525b" },
 ];
-const POPULAR_TAG_DISPLAY_LIMIT = 32;
-type TagButtonStyle = CSSProperties & {
-  "--tag-accent": string;
-  "--tag-bg": string;
-  "--tag-bg-hover": string;
-  "--tag-border": string;
-  "--tag-border-hover": string;
-  "--tag-text": string;
-  "--tag-active-bg": string;
-  "--tag-active-border": string;
-  "--tag-active-text": string;
+const POPULAR_ENTITY_DISPLAY_LIMIT = 32;
+type EntityButtonStyle = CSSProperties & {
+  "--entity-accent": string;
+  "--entity-bg": string;
+  "--entity-bg-hover": string;
+  "--entity-border": string;
+  "--entity-border-hover": string;
+  "--entity-text": string;
+  "--entity-active-bg": string;
+  "--entity-active-border": string;
+  "--entity-active-text": string;
 };
 
-function getTagToneKey(value: string) {
+function getEntityToneKey(value: string) {
   let hash = 2166136261;
   for (const char of value) {
     hash ^= char.charCodeAt(0);
     hash = Math.imul(hash, 16777619);
   }
-  return Math.abs(hash) % TAG_TONES.length;
+  return Math.abs(hash) % ENTITY_TONES.length;
 }
 
-function getTagButtonStyle(option: FeedTagOption, index: number): TagButtonStyle {
-  const tone = TAG_TONES[(getTagToneKey(option.normalized) + index * 7) % TAG_TONES.length] ?? TAG_TONES[0];
+function getEntityButtonStyle(option: FeedEntityOption, index: number): EntityButtonStyle {
+  const tone = ENTITY_TONES[(getEntityToneKey(option.normalized) + index * 7) % ENTITY_TONES.length] ?? ENTITY_TONES[0];
 
   return {
-    "--tag-accent": tone.border,
-    "--tag-bg": tone.bg,
-    "--tag-bg-hover": `color-mix(in srgb, ${tone.border} 14%, #ffffff)`,
-    "--tag-border": `${tone.border}66`,
-    "--tag-border-hover": `${tone.border}99`,
-    "--tag-text": tone.text,
-    "--tag-active-bg": tone.active,
-    "--tag-active-border": tone.active,
-    "--tag-active-text": "#ffffff",
+    "--entity-accent": tone.border,
+    "--entity-bg": tone.bg,
+    "--entity-bg-hover": `color-mix(in srgb, ${tone.border} 14%, #ffffff)`,
+    "--entity-border": `${tone.border}66`,
+    "--entity-border-hover": `${tone.border}99`,
+    "--entity-text": tone.text,
+    "--entity-active-bg": tone.active,
+    "--entity-active-border": tone.active,
+    "--entity-active-text": "#ffffff",
   };
 }
 
-function PopularTagButton({
+function PopularEntityButton({
   option,
   toneIndex,
   isActive,
   disabled,
   onSelect,
 }: {
-  option: FeedTagOption;
+  option: FeedEntityOption;
   toneIndex: number;
   isActive: boolean;
   disabled: boolean;
-  onSelect: (tag: string) => void;
+  onSelect: (entity: string) => void;
 }) {
   return (
     <button
@@ -259,11 +259,11 @@ function PopularTagButton({
       onClick={() => onSelect(option.normalized)}
       disabled={disabled}
       aria-pressed={isActive}
-      aria-label={`筛选标签：${option.name}，${option.count} 条`}
+      aria-label={`筛选实体：${option.name}，${option.count} 条`}
       title={`${option.name} ${option.count}`}
-      style={getTagButtonStyle(option, toneIndex)}
+      style={getEntityButtonStyle(option, toneIndex)}
       className={cx(
-        "popular-tag-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold transition",
+        "popular-entity-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold transition",
         "hover:shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
         "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none",
         isActive ? "shadow-[var(--shadow-sm)]" : "",
@@ -286,7 +286,7 @@ type ReadingProgress = {
   updatedAt: string;
 };
 
-type PopularTagLayoutRow = {
+type PopularEntityLayoutRow = {
   keys: string[];
   shouldDistribute: boolean;
 };
@@ -302,7 +302,7 @@ function buildReadingProgressFilterKey(query: FeedQueryState) {
     groupId: query.groupId ?? "",
     sourceId: query.sourceId ?? "",
     title: query.title ?? "",
-    tag: query.tag ?? "",
+    entity: query.entity ?? "",
     entryKeys: query.entryKeys,
   });
 }
@@ -311,7 +311,7 @@ function hasAdvancedQueryFilter(query: FeedQueryState) {
   return Boolean(
     query.sourceId ||
       query.title ||
-      query.tag ||
+      query.entity ||
       query.entryKeys.length > 0 ||
       query.publishedStartDate ||
       query.publishedEndDate,
@@ -343,7 +343,7 @@ function buildHomeFeedQuery(): FeedQueryState {
     groupId: null,
     sourceId: null,
     title: null,
-    tag: null,
+    entity: null,
     entryKeys: [],
     createdRangeExplicit: false,
   };
@@ -508,12 +508,12 @@ export function FeedPanel({
   initialGroupId = null,
   initialSourceId = null,
   initialTitle = null,
-  initialTag = null,
+  initialEntity = null,
   initialEntryKeys = [],
   availableGroups = [],
   initialGroupTotalCount,
   availableSources = [],
-  popularTags: initialPopularTags = [],
+  popularEntities: initialPopularEntities = [],
   initialHeaderLinks = [],
 }: FeedPanelProps) {
   const router = useRouter();
@@ -533,11 +533,13 @@ export function FeedPanel({
   const [sourceId, setSourceId] = useState<string | null>(normalizeOptionalId(initialSourceId));
   const [titleInput, setTitleInput] = useState<string>(normalizeSearchText(initialTitle) ?? "");
   const [titleFilter, setTitleFilter] = useState<string | null>(normalizeSearchText(initialTitle));
-  const [tag, setTag] = useState<string | null>(normalizeOptionalId(initialTag));
+  const [entity, setEntity] = useState<string | null>(normalizeOptionalId(initialEntity));
   const [entryKeys, setEntryKeys] = useState<FeedEntryKey[]>(initialEntryKeys);
   const [status, setStatus] = useState<FetchRunSnapshot | null>(initialStatus);
   const [groups, setGroups] = useState<FeedGroupOption[]>(availableGroups);
-  const [popularTags, setPopularTags] = useState<FeedTagOption[]>(initialPopularTags);
+  const [popularEntities, setPopularEntities] = useState<FeedEntityOption[]>(
+    initialPopularEntities,
+  );
   const isLgUp = useMinWidth("(min-width: 1024px)", true);
   const [groupTotalCount, setGroupTotalCount] = useState<number>(
     initialGroupTotalCount ?? fallbackInitialPagination.total,
@@ -563,14 +565,14 @@ export function FeedPanel({
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(
     Boolean(initialStartDate || initialEndDate || initialPublishedStartDate || initialPublishedEndDate || initialSourceId || initialTitle),
   );
-  const [popularTagLayoutRows, setPopularTagLayoutRows] = useState<PopularTagLayoutRow[]>([]);
+  const [popularEntityLayoutRows, setPopularEntityLayoutRows] = useState<PopularEntityLayoutRow[]>([]);
   const [readingProgress, setReadingProgress] = useState<ReadingProgress | null>(null);
   const [isReadingProgressHidden, setIsReadingProgressHidden] = useState(false);
   const [pendingRestoreEntryId, setPendingRestoreEntryId] = useState<string | null>(null);
   const progressWriteTimerRef = useRef<number | null>(null);
   const lastSavedProgressRef = useRef<string | null>(null);
   const pendingScrollToTopRef = useRef(false);
-  const popularTagListRef = useRef<HTMLDivElement | null>(null);
+  const popularEntityListRef = useRef<HTMLDivElement | null>(null);
   const initialQuery: FeedQueryState = {
     range: initialRange,
     sort: initialSort,
@@ -581,7 +583,7 @@ export function FeedPanel({
     groupId: normalizeOptionalId(initialGroupId),
     sourceId: normalizeOptionalId(initialSourceId),
     title: normalizeSearchText(initialTitle),
-    tag: normalizeOptionalId(initialTag),
+    entity: normalizeOptionalId(initialEntity),
     entryKeys: initialEntryKeys,
     createdRangeExplicit: initialCreatedRangeExplicit,
   };
@@ -607,7 +609,7 @@ export function FeedPanel({
       groupId: appliedQuery.groupId,
       sourceId: appliedQuery.sourceId,
       title: appliedQuery.title,
-      tag: appliedQuery.tag,
+      entity: appliedQuery.entity,
       entryKeys: appliedQuery.entryKeys,
     }),
     [appliedQuery],
@@ -654,8 +656,8 @@ export function FeedPanel({
       filters.push(`信息源：${availableSources.find((source) => source.id === sourceId)?.name ?? sourceId}`);
     }
 
-    if (tag) {
-      filters.push(`标签：${popularTags.find((option) => option.normalized === tag)?.name ?? tag}`);
+    if (entity) {
+      filters.push(`实体：${popularEntities.find((option) => option.normalized === entity)?.name ?? entity}`);
     }
 
     if (entryKeys.length > 0) {
@@ -670,7 +672,7 @@ export function FeedPanel({
     entryKeys.length,
     groupId,
     isLgUp,
-    popularTags,
+    popularEntities,
     range,
     sort,
     sourceId,
@@ -678,18 +680,18 @@ export function FeedPanel({
     summary.publishedRangeLabel,
     summary.rangeLabel,
     summary.sortLabel,
-    tag,
+    entity,
     titleFilter,
   ]);
-  const visiblePopularTags = useMemo(() => {
-    return popularTags.slice(0, POPULAR_TAG_DISPLAY_LIMIT);
-  }, [popularTags]);
+  const visiblePopularEntities = useMemo(() => {
+    return popularEntities.slice(0, POPULAR_ENTITY_DISPLAY_LIMIT);
+  }, [popularEntities]);
 
   useEffect(() => {
-    const element = popularTagListRef.current;
+    const element = popularEntityListRef.current;
 
-    if (!element || visiblePopularTags.length === 0) {
-      setPopularTagLayoutRows([]);
+    if (!element || visiblePopularEntities.length === 0) {
+      setPopularEntityLayoutRows([]);
       return;
     }
 
@@ -698,7 +700,7 @@ export function FeedPanel({
         (child): child is HTMLElement => child instanceof HTMLElement,
       );
       if (element.clientWidth <= 0 || children.length === 0) {
-        setPopularTagLayoutRows([]);
+        setPopularEntityLayoutRows([]);
         return;
       }
 
@@ -707,19 +709,19 @@ export function FeedPanel({
       const visibleRowTops = [...new Set(children.map((child) => child.offsetTop))].sort((left, right) => left - right).slice(0, 2);
       const visibleRows = visibleRowTops.map((rowTop) => children.filter((child) => child.offsetTop === rowTop));
       const nextRows = visibleRows.map((row) => {
-        const keys = row.map((child) => child.dataset.tagKey).filter((key): key is string => Boolean(key));
+        const keys = row.map((child) => child.dataset.entityKey).filter((key): key is string => Boolean(key));
         const rowWidth = row.reduce((sum, child) => sum + child.offsetWidth, 0)
           + Math.max(0, row.length - 1) * gap;
         const remainingWidth = element.clientWidth - rowWidth;
         const lastChild = row.at(-1);
         const nextChild = lastChild ? children[children.indexOf(lastChild) + 1] : undefined;
-        const nextTagFitWidth = nextChild ? nextChild.offsetWidth + gap : 0;
-        const shouldDistribute = keys.length > 1 && nextTagFitWidth > 0 && remainingWidth < nextTagFitWidth;
+        const nextEntityFitWidth = nextChild ? nextChild.offsetWidth + gap : 0;
+        const shouldDistribute = keys.length > 1 && nextEntityFitWidth > 0 && remainingWidth < nextEntityFitWidth;
 
         return { keys, shouldDistribute };
       });
 
-      setPopularTagLayoutRows((current) => JSON.stringify(current) === JSON.stringify(nextRows) ? current : nextRows);
+      setPopularEntityLayoutRows((current) => JSON.stringify(current) === JSON.stringify(nextRows) ? current : nextRows);
     };
 
     measure();
@@ -732,22 +734,22 @@ export function FeedPanel({
       resizeObserver?.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [visiblePopularTags]);
-  const visiblePopularTagRows = useMemo(() => {
-    if (popularTagLayoutRows.length === 0) {
+  }, [visiblePopularEntities]);
+  const visiblePopularEntityRows = useMemo(() => {
+    if (popularEntityLayoutRows.length === 0) {
       return [];
     }
 
-    const optionByKey = new Map(visiblePopularTags.map((option) => [option.normalized, option]));
-    const rows = popularTagLayoutRows
+    const optionByKey = new Map(visiblePopularEntities.map((option) => [option.normalized, option]));
+    const rows = popularEntityLayoutRows
       .map((row) => ({
-        options: row.keys.map((key) => optionByKey.get(key)).filter((option): option is FeedTagOption => Boolean(option)),
+        options: row.keys.map((key) => optionByKey.get(key)).filter((option): option is FeedEntityOption => Boolean(option)),
         shouldDistribute: row.shouldDistribute,
       }))
       .filter((row) => row.options.length > 0);
 
     return rows;
-  }, [popularTagLayoutRows, visiblePopularTags]);
+  }, [popularEntityLayoutRows, visiblePopularEntities]);
   const visibleClusterOptions = useMemo(() => {
     return clusterOptions.filter((cluster) => {
       if (cluster.status !== "active") {
@@ -791,7 +793,7 @@ export function FeedPanel({
     size = pageSize,
     options?: {
       scrollToTop?: boolean;
-      includePopularTags?: boolean;
+      includePopularEntities?: boolean;
       replaceUrl?: string;
     },
   ) => {
@@ -817,12 +819,12 @@ export function FeedPanel({
       const payload = await requestFeed(normalizedQuery, {
         page,
         size,
-        includePopularTags: options?.includePopularTags,
+        includePopularEntities: options?.includePopularEntities,
       });
       replaceFeedData(payload.items, payload.pagination);
       setGroups(payload.groups ?? availableGroups);
-      if (payload.popularTags) {
-        setPopularTags(payload.popularTags);
+      if (payload.popularEntities) {
+        setPopularEntities(payload.popularEntities);
       }
       setGroupTotalCount(payload.groupTotalCount ?? payload.pagination.total);
       setRefreshFeedback(null);
@@ -848,14 +850,14 @@ export function FeedPanel({
     setSourceId(homeQuery.sourceId);
     setTitleInput("");
     setTitleFilter(homeQuery.title);
-    setTag(homeQuery.tag);
+    setEntity(homeQuery.entity);
     setEntryKeys(homeQuery.entryKeys);
     setAdvancedFiltersOpen(false);
     setSelectedItems(new Set());
 
     loadFeed(homeQuery, 1, DEFAULT_FEED_PAGE_SIZE, {
       scrollToTop: true,
-      includePopularTags: true,
+      includePopularEntities: true,
       replaceUrl: "/",
     });
   }, [loadFeed]);
@@ -870,7 +872,7 @@ export function FeedPanel({
     groupId,
     sourceId,
     title: titleFilter,
-    tag,
+    entity,
     entryKeys,
     createdRangeExplicit,
     ...overrides,
@@ -948,7 +950,7 @@ export function FeedPanel({
       groupId: null,
       sourceId: null,
       title: null,
-      tag: null,
+      entity: null,
       entryKeys: [],
     });
     setRange(nextQuery.range);
@@ -962,17 +964,17 @@ export function FeedPanel({
     setSourceId(null);
     setTitleInput("");
     setTitleFilter(null);
-    setTag(null);
+    setEntity(null);
     setEntryKeys([]);
     setAdvancedFiltersOpen(false);
     loadFeed(nextQuery, 1, pageSize, { scrollToTop: true });
   };
 
-  const toggleTag = (nextTag: string) => {
-    const normalizedTag = normalizeOptionalId(nextTag);
-    const selectedTag = normalizedTag && normalizedTag !== tag ? normalizedTag : null;
-    setTag(selectedTag);
-    loadFeed(buildQuery({ tag: selectedTag }), 1, pageSize, { scrollToTop: true });
+  const toggleEntity = (nextEntity: string) => {
+    const normalizedEntity = normalizeOptionalId(nextEntity);
+    const selectedEntity = normalizedEntity && normalizedEntity !== entity ? normalizedEntity : null;
+    setEntity(selectedEntity);
+    loadFeed(buildQuery({ entity: selectedEntity }), 1, pageSize, { scrollToTop: true });
   };
 
   const refresh = () => {
@@ -1011,12 +1013,12 @@ export function FeedPanel({
       const payload = await requestFeed(latestQueryRef.current, {
         page: currentPage,
         size: pageSize,
-        includePopularTags: currentPage === 1,
+        includePopularEntities: currentPage === 1,
       });
       replaceFeedData(payload.items, payload.pagination);
       setGroups(payload.groups ?? availableGroups);
-      if (payload.popularTags) {
-        setPopularTags(payload.popularTags);
+      if (payload.popularEntities) {
+        setPopularEntities(payload.popularEntities);
       }
       setGroupTotalCount(payload.groupTotalCount ?? payload.pagination.total);
     });
@@ -1709,8 +1711,8 @@ export function FeedPanel({
         setItems(feedPayload.items);
         setPagination(feedPayload.pagination);
         setGroups(feedPayload.groups ?? availableGroups);
-        if (feedPayload.popularTags) {
-          setPopularTags(feedPayload.popularTags);
+        if (feedPayload.popularEntities) {
+          setPopularEntities(feedPayload.popularEntities);
         }
         setGroupTotalCount(feedPayload.groupTotalCount ?? feedPayload.pagination.total);
         resetExpandedClusterState();
@@ -1738,7 +1740,7 @@ export function FeedPanel({
     if (!FEED_PAGE_SIZE_OPTIONS.includes(nextSize as (typeof FEED_PAGE_SIZE_OPTIONS)[number])) {
       return;
     }
-    loadFeed(latestQueryRef.current, 1, nextSize, { scrollToTop: true, includePopularTags: false });
+    loadFeed(latestQueryRef.current, 1, nextSize, { scrollToTop: true, includePopularEntities: false });
   };
 
   const handleJumpToPage = () => {
@@ -1754,7 +1756,7 @@ export function FeedPanel({
       return;
     }
 
-    loadFeed(latestQueryRef.current, normalizedPage, pageSize, { scrollToTop: true, includePopularTags: false });
+    loadFeed(latestQueryRef.current, normalizedPage, pageSize, { scrollToTop: true, includePopularEntities: false });
   };
 
   const resumeReadingProgress = () => {
@@ -1779,7 +1781,7 @@ export function FeedPanel({
       }
     }
 
-    loadFeed(latestQueryRef.current, restoredPage, readingProgress.size, { includePopularTags: false });
+    loadFeed(latestQueryRef.current, restoredPage, readingProgress.size, { includePopularEntities: false });
   };
 
   const neutralBadgeClassName =
@@ -1836,25 +1838,25 @@ export function FeedPanel({
       }
     >
       <section className="grid w-full min-w-0 gap-4">
-        {visiblePopularTags.length > 0 ? (
+        {visiblePopularEntities.length > 0 ? (
           <section
             role="region"
-            aria-label="热门标签"
+            aria-label="热门实体"
             className="hidden w-full min-w-0 lg:block"
           >
             <div className="relative w-full min-w-0">
               <div
-                ref={popularTagListRef}
+                ref={popularEntityListRef}
                 aria-hidden="true"
                 className="pointer-events-none invisible absolute inset-x-0 top-0 flex w-full min-w-0 flex-wrap items-center justify-start gap-1.5 overflow-visible"
               >
-                {visiblePopularTags.map((option, index) => {
+                {visiblePopularEntities.map((option, index) => {
                   return (
                     <span
                       key={option.normalized}
-                      data-tag-key={option.normalized}
-                      style={getTagButtonStyle(option, index)}
-                      className="popular-tag-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold"
+                      data-entity-key={option.normalized}
+                      style={getEntityButtonStyle(option, index)}
+                      className="popular-entity-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold"
                     >
                       <span>{option.name}</span>
                       <span className="shrink-0 text-[11px] font-bold opacity-75">{option.count}</span>
@@ -1862,45 +1864,45 @@ export function FeedPanel({
                   );
                 })}
               </div>
-              {visiblePopularTagRows.length === 0 ? (
+              {visiblePopularEntityRows.length === 0 ? (
                 <div className="flex max-h-[4.375rem] w-full min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
-                  {visiblePopularTags.map((option, index) => {
-                    const isActive = option.normalized === tag;
+                  {visiblePopularEntities.map((option, index) => {
+                    const isActive = option.normalized === entity;
 
                     return (
-                      <PopularTagButton
+                      <PopularEntityButton
                         key={option.normalized}
                         option={option}
                         toneIndex={index}
                         isActive={isActive}
                         disabled={isPending}
-                        onSelect={toggleTag}
+                        onSelect={toggleEntity}
                       />
                     );
                   })}
                 </div>
               ) : (
                 <div className="grid max-h-[4.375rem] w-full min-w-0 gap-1.5 overflow-hidden">
-                  {visiblePopularTagRows.map((row, rowIndex) => (
+                  {visiblePopularEntityRows.map((row, rowIndex) => (
                     <div
-                      key={`popular-tag-row-${rowIndex}`}
+                      key={`popular-entity-row-${rowIndex}`}
                       className={cx(
                         "flex h-8 w-full min-w-0 items-center gap-1.5 overflow-hidden",
                         row.shouldDistribute ? "lg:justify-between" : "justify-start",
                       )}
                     >
                       {row.options.map((option, index) => {
-                        const isActive = option.normalized === tag;
-                        const toneIndex = visiblePopularTags.findIndex((tagOption) => tagOption.normalized === option.normalized);
+                        const isActive = option.normalized === entity;
+                        const toneIndex = visiblePopularEntities.findIndex((entityOption) => entityOption.normalized === option.normalized);
 
                         return (
-                          <PopularTagButton
+                          <PopularEntityButton
                             key={option.normalized}
                             option={option}
                             toneIndex={toneIndex >= 0 ? toneIndex : index}
                             isActive={isActive}
                             disabled={isPending}
-                            onSelect={toggleTag}
+                            onSelect={toggleEntity}
                           />
                         );
                       })}
@@ -2717,7 +2719,7 @@ export function FeedPanel({
             onPageChange={(nextPage) =>
               loadFeed(latestQueryRef.current, nextPage, pageSize, {
                 scrollToTop: true,
-                includePopularTags: false,
+                includePopularEntities: false,
               })}
             onPageSizeChange={handlePageSizeChange}
             disabled={isPending}

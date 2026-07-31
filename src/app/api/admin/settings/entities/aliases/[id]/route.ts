@@ -1,6 +1,6 @@
 import { adminErrorResponse } from "@/lib/admin/http";
 import { requireAdmin } from "@/lib/admin/session";
-import { deleteTagAlias } from "@/lib/tags/service";
+import { deleteEntityAlias } from "@/lib/entities/service";
 
 export async function DELETE(
   _request: Request,
@@ -9,7 +9,7 @@ export async function DELETE(
   try {
     await requireAdmin();
     const { id } = await context.params;
-    await deleteTagAlias(id);
+    await deleteEntityAlias(id);
 
     return Response.json({ ok: true });
   } catch (error) {

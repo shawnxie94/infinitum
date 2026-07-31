@@ -14,7 +14,7 @@ describe("feed request parsing", () => {
 
     expect(resolveFeedRequest({ title: "Agent" }, now).filters.range).toBe("all");
     expect(resolveFeedRequest({ sourceId: "source-1" }, now).filters.range).toBe("all");
-    expect(resolveFeedRequest({ tag: "openai" }, now).filters.range).toBe("all");
+    expect(resolveFeedRequest({ entity: "openai" }, now).filters.range).toBe("all");
     expect(resolveFeedRequest({ publishedStart: "2026-04-01" }, now).filters.range).toBe("all");
     expect(resolveFeedRequest({ entryKeys: "single:item-a,cluster:cluster-a" }, now).filters.range).toBe("all");
   });
@@ -25,11 +25,11 @@ describe("feed request parsing", () => {
     expect(resolveFeedRequest({ range: "7d", title: "Agent" }, now).filters.range).toBe("7d");
   });
 
-  it("normalizes tag filters", () => {
+  it("normalizes entity filters", () => {
     const now = new Date("2026-04-10T16:45:00.000Z");
 
-    expect(resolveFeedRequest({ tag: " openai " }, now).filters.tag).toBe("openai");
-    expect(resolveFeedRequest({ tag: " " }, now).filters.tag).toBeNull();
+    expect(resolveFeedRequest({ entity: " openai " }, now).filters.entity).toBe("openai");
+    expect(resolveFeedRequest({ entity: " " }, now).filters.entity).toBeNull();
   });
 
   it("normalizes multi-entry filters", () => {
@@ -39,10 +39,10 @@ describe("feed request parsing", () => {
       .toEqual(["single:item-a", "cluster:cluster-a"]);
   });
 
-  it("allows callers to skip popular tag calculation", () => {
+  it("allows callers to skip popular entity calculation", () => {
     const now = new Date("2026-04-10T16:45:00.000Z");
 
-    expect(resolveFeedRequest({ includeTags: "false" }, now).pagination.includePopularTags).toBe(false);
-    expect(resolveFeedRequest({}, now).pagination.includePopularTags).toBe(true);
+    expect(resolveFeedRequest({ includeEntities: "false" }, now).pagination.includePopularEntities).toBe(false);
+    expect(resolveFeedRequest({}, now).pagination.includePopularEntities).toBe(true);
   });
 });

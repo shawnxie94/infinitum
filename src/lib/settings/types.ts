@@ -83,7 +83,7 @@ export type AdminBriefingPreferenceConfig = {
   updatedAt: string;
 };
 
-export type AdminBriefingWeightRuleType = "tag" | "keyword" | "source_group" | "event_type";
+export type AdminBriefingWeightRuleType = "entity" | "keyword" | "source_group" | "event_type";
 
 export type AdminBriefingWeightRule = {
   type: AdminBriefingWeightRuleType;

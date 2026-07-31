@@ -16,14 +16,14 @@ type ResolvedFeedRequest = {
   pagination: {
     page: number;
     size: number;
-    includePopularTags: boolean;
+    includePopularEntities: boolean;
   };
 };
 
 const ADVANCED_FILTER_KEYS = [
   "sourceId",
   "title",
-  "tag",
+  "entity",
   "publishedStart",
   "publishedEnd",
   "entryId",
@@ -32,7 +32,7 @@ const ADVANCED_FILTER_KEYS = [
 ] as const;
 const CREATED_TIME_FILTER_KEYS = ["range", "start", "end"] as const;
 
-function getSearchParamValue(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size" | "includeTags") {
+function getSearchParamValue(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size" | "includeEntities") {
   if (searchParams instanceof URLSearchParams) {
     return searchParams.get(key) ?? undefined;
   }
@@ -41,7 +41,7 @@ function getSearchParamValue(searchParams: SearchParamSource, key: keyof FeedFil
   return Array.isArray(value) ? value[0] : value;
 }
 
-function getSearchParamValues(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size" | "includeTags") {
+function getSearchParamValues(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size" | "includeEntities") {
   if (searchParams instanceof URLSearchParams) {
     return searchParams.getAll(key);
   }
@@ -81,7 +81,7 @@ export function resolveFeedRequest(searchParams: SearchParamSource, now = new Da
   const groupIdParam = getSearchParamValue(searchParams, "groupId");
   const sourceIdParam = getSearchParamValue(searchParams, "sourceId");
   const titleParam = getSearchParamValue(searchParams, "title");
-  const tagParam = getSearchParamValue(searchParams, "tag");
+  const entityParam = getSearchParamValue(searchParams, "entity");
   const entryIdParam = getSearchParamValue(searchParams, "entryId");
   const entryTypeParam = getSearchParamValue(searchParams, "entryType");
   const entryKeysParam = getSearchParamValues(searchParams, "entryKeys");
@@ -98,7 +98,7 @@ export function resolveFeedRequest(searchParams: SearchParamSource, now = new Da
         groupId: normalizeFeedFilterId(groupIdParam),
         sourceId: normalizeFeedFilterId(sourceIdParam),
         title: titleParam?.trim() ? titleParam.trim() : null,
-        tag: normalizeFeedFilterId(tagParam),
+        entity: normalizeFeedFilterId(entityParam),
         entryId: normalizeFeedFilterId(entryIdParam),
         entryType: entryTypeParam === "single" || entryTypeParam === "cluster" ? entryTypeParam : null,
         entryKeys: normalizeFeedEntryKeys(entryKeysParam),
@@ -108,7 +108,7 @@ export function resolveFeedRequest(searchParams: SearchParamSource, now = new Da
     pagination: {
       page: parsePage(getSearchParamValue(searchParams, "page")),
       size: parsePageSize(getSearchParamValue(searchParams, "size")),
-      includePopularTags: getSearchParamValue(searchParams, "includeTags") !== "false",
+      includePopularEntities: getSearchParamValue(searchParams, "includeEntities") !== "false",
     },
   };
 }

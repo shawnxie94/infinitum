@@ -1,7 +1,11 @@
 import crypto from "node:crypto";
 
 import type { AiEventSignature } from "@/lib/ai/provider";
-import { normalizeEventSignatureForStorage } from "@/lib/clusters/normalization";
+import {
+  getEventDatePrecision,
+  normalizeEventDateForStorage,
+  normalizeEventSignatureForStorage,
+} from "@/lib/clusters/normalization";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -27,9 +31,16 @@ export function buildEventBucket(input: {
   eventDate?: string | null;
   publishedAt: Date;
 }) {
-  const eventDate = input.eventDate?.trim();
-  if (eventDate && /^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+  const eventDate = normalizeEventDateForStorage(input.eventDate);
+  const eventDatePrecision = getEventDatePrecision(eventDate);
+  if (eventDate && eventDatePrecision === "day") {
     return `date:${eventDate}`;
+  }
+  if (eventDate && eventDatePrecision === "month") {
+    return `month:${eventDate}`;
+  }
+  if (eventDate && eventDatePrecision === "year") {
+    return `year:${eventDate}`;
   }
 
   return `week:${toUtcDateKey(startOfUtcWeek(input.publishedAt))}`;
@@ -73,12 +84,13 @@ export function buildEventIdentity(input: {
     eventDate: normalized?.eventDate,
     publishedAt: input.publishedAt,
   });
-  const hasExplicitDate = Boolean(normalized?.eventDate && /^\d{4}-\d{2}-\d{2}$/.test(normalized.eventDate));
+  const datePrecision = getEventDatePrecision(normalized?.eventDate);
+  const dateConfidence = datePrecision === "day" ? 20 : datePrecision === "month" ? 10 : datePrecision === "year" ? 5 : 0;
   const identityConfidence =
     65 +
     (normalized?.eventType ? 5 : 0) +
     (normalized?.eventAction ? 10 : 0) +
-    (hasExplicitDate ? 20 : 0);
+    dateConfidence;
 
   return {
     eventFingerprint,

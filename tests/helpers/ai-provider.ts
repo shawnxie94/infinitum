@@ -41,7 +41,6 @@ export function buildAiProviderMock(
     qualityScore: 80,
     qualityRationale: "高质量",
     eventSignature: buildEventSignature(),
-    tags: [],
   });
   const callSummary = summaryFixture as unknown as (
     inputText: string,
@@ -58,7 +57,6 @@ export function buildAiProviderMock(
     qualityScore: number;
     qualityRationale: string;
     eventSignature: ReturnType<typeof buildEventSignature>;
-    tags?: string[];
   }>;
   const callAggregation = aggregationFixture as unknown as (
     inputText: string,
@@ -92,7 +90,6 @@ export function buildAiProviderMock(
         }
         return {
           ...analysis,
-          tags: analysis.tags ?? [],
           summary: summary.summary,
           aggregation,
           diagnostics: {

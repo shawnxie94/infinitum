@@ -30,7 +30,7 @@ export type SaveBriefingPreferenceConfigInput = {
 };
 
 const BRIEFING_WEIGHT_RULE_TYPES = new Set<AdminBriefingWeightRuleType>([
-  "tag",
+  "entity",
   "keyword",
   "source_group",
   "event_type",

@@ -64,16 +64,13 @@ export function parseDailyReportContent(rawContent: string, maxSourceId: number)
       return undefined;
     }
     const notes: DailyReportItemNote[] = [];
-    value.forEach((rawNote, index) => {
+    value.forEach((rawNote) => {
       if (!rawNote || typeof rawNote !== "object") {
-        errors.push(`${path}.notes[${index}] 不是对象`);
         return;
       }
       const note = rawNote as Record<string, unknown>;
       const label = safeText(note.label);
       const text = stripDailyReportGeneratedLabel(note.text);
-      if (!label) errors.push(`${path}.notes[${index}].label 不能为空`);
-      if (!text) errors.push(`${path}.notes[${index}].text 不能为空`);
       if (label && text) notes.push({ label, text });
     });
     return notes.length > 0 ? notes : undefined;

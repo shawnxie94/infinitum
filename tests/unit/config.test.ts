@@ -24,7 +24,7 @@ describe("runtime config defaults", () => {
     expect(defaults.prompts.itemUnderstanding).not.toContain("restored");
     expect(defaults.prompts.itemUnderstanding).toContain('"mainEvent"');
     expect(defaults.prompts.itemUnderstanding).toContain('"events"');
-    expect(defaults.prompts.itemUnderstanding).toContain('"tags"');
+    expect(defaults.prompts.itemUnderstanding).toContain("自动生成实体关联");
     expect(defaults.prompts.clusterSummary.length).toBeGreaterThan(0);
     expect(defaults.prompts.clusterSummary).toContain("聚合展示编辑");
     expect(defaults.prompts.clusterSummary).toContain("固定输出格式");

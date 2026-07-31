@@ -75,7 +75,7 @@ type HeaderLinkPayload = {
   link?: NonNullable<AdminSettingsSnapshot["headerLinks"]>[number];
 };
 
-export type AdminTagAlias = {
+export type AdminEntityAlias = {
   id: string;
   aliasName: string;
   aliasNormalized: string;
@@ -83,63 +83,63 @@ export type AdminTagAlias = {
   createdAt: string;
 };
 
-export type AdminTag = {
+export type AdminEntity = {
   id: string;
   name: string;
   normalized: string;
   itemCount: number;
   aliasCount: number;
-  aliases: AdminTagAlias[];
+  aliases: AdminEntityAlias[];
   createdAt: string;
   updatedAt: string;
 };
 
-export type AdminTagListPayload = {
+export type AdminEntityListPayload = {
   error?: string;
-  tags: AdminTag[];
+  entities: AdminEntity[];
   totalCount: number;
   page: number;
   pageSize: number;
 };
 
-export type AdminTagSort = "usage_desc" | "updated_desc" | "name_asc" | "alias_desc";
+export type AdminEntitySort = "usage_desc" | "updated_desc" | "name_asc" | "alias_desc";
 
-export type AdminTagSuggestion = {
+export type AdminEntitySuggestion = {
   id: string;
-  sourceTag: Pick<AdminTag, "id" | "name" | "normalized" | "itemCount" | "aliasCount">;
-  targetTag: Pick<AdminTag, "id" | "name" | "normalized" | "itemCount" | "aliasCount">;
+  sourceEntity: Pick<AdminEntity, "id" | "name" | "normalized" | "itemCount" | "aliasCount">;
+  targetEntity: Pick<AdminEntity, "id" | "name" | "normalized" | "itemCount" | "aliasCount">;
   confidence: number;
   reasons: string[];
   affectedItemCount: number;
 };
 
-export type AdminTagSuggestionListPayload = {
+export type AdminEntitySuggestionListPayload = {
   error?: string;
-  suggestions: AdminTagSuggestion[];
+  suggestions: AdminEntitySuggestion[];
   totalCount: number;
   page: number;
   pageSize: number;
 };
 
-export type AdminTagSuggestionSort = "confidence_desc" | "affected_desc";
+export type AdminEntitySuggestionSort = "confidence_desc" | "affected_desc";
 
-type TagAliasPayload = {
+type EntityAliasPayload = {
   error?: string;
-  alias?: AdminTagAlias;
+  alias?: AdminEntityAlias;
 };
 
-type TagMergePayload = {
+type EntityMergePayload = {
   error?: string;
   mergedCount: number;
   affectedClusterCount: number;
 };
 
-type TagSuggestionDecisionPayload = {
+type EntitySuggestionDecisionPayload = {
   error?: string;
   ok: boolean;
 };
 
-type TagSuggestionAutoMergePayload = {
+type EntitySuggestionAutoMergePayload = {
   error?: string;
   scannedCount: number;
   mergedCount: number;
@@ -148,9 +148,9 @@ type TagSuggestionAutoMergePayload = {
   failedCount: number;
 };
 
-type TagSuggestionPrecomputePayload = {
+type EntitySuggestionPrecomputePayload = {
   error?: string;
-  tagCount: number;
+  entityCount: number;
   scannedPairs: number;
   candidateCount: number;
   storedCandidates: number;
@@ -452,9 +452,9 @@ export async function reorderHeaderLinks(linkIds: string[]) {
   return payload.links;
 }
 
-export async function listAdminTags(input: {
+export async function listAdminEntities(input: {
   search?: string;
-  sort?: AdminTagSort;
+  sort?: AdminEntitySort;
   page?: number;
   pageSize?: number;
 }) {
@@ -472,22 +472,22 @@ export async function listAdminTags(input: {
     search.set("pageSize", String(input.pageSize));
   }
   const queryString = search.toString();
-  const payload = await requestAdminSettingsJson<AdminTagListPayload>(
-    `/api/admin/settings/tags${queryString ? `?${queryString}` : ""}`,
+  const payload = await requestAdminSettingsJson<AdminEntityListPayload>(
+    `/api/admin/settings/entities${queryString ? `?${queryString}` : ""}`,
     "GET",
     undefined,
-    "标签列表加载失败。",
+    "实体列表加载失败。",
   );
 
   return payload;
 }
 
-export async function addAdminTagAlias(input: {
-  tagId: string;
+export async function addAdminEntityAlias(input: {
+  entityId: string;
   aliasName: string;
 }) {
-  const payload = await requestAdminSettingsJson<TagAliasPayload>(
-    "/api/admin/settings/tags/aliases",
+  const payload = await requestAdminSettingsJson<EntityAliasPayload>(
+    "/api/admin/settings/entities/aliases",
     "POST",
     input,
     "别名添加失败。",
@@ -500,33 +500,33 @@ export async function addAdminTagAlias(input: {
   return payload.alias;
 }
 
-export async function deleteAdminTagAlias(aliasId: string) {
+export async function deleteAdminEntityAlias(aliasId: string) {
   await requestAdminSettingsJson<{ error?: string }>(
-    `/api/admin/settings/tags/aliases/${encodeURIComponent(aliasId)}`,
+    `/api/admin/settings/entities/aliases/${encodeURIComponent(aliasId)}`,
     "DELETE",
     {},
     "别名删除失败。",
   );
 }
 
-export async function mergeAdminTags(input: {
-  targetTagId: string;
-  sourceTagIds: string[];
+export async function mergeAdminEntities(input: {
+  targetEntityId: string;
+  sourceEntityIds: string[];
 }) {
-  return requestAdminSettingsJson<TagMergePayload>(
-    "/api/admin/settings/tags/merge",
+  return requestAdminSettingsJson<EntityMergePayload>(
+    "/api/admin/settings/entities/merge",
     "POST",
     input,
-    "标签合并失败。",
+    "实体合并失败。",
   );
 }
 
-export async function listAdminTagSuggestions(input?: {
+export async function listAdminEntitySuggestions(input?: {
   search?: string;
   page?: number;
   pageSize?: number;
   limit?: number;
-  sort?: AdminTagSuggestionSort;
+  sort?: AdminEntitySuggestionSort;
 }) {
   const search = new URLSearchParams();
   if (input?.search?.trim()) {
@@ -546,48 +546,48 @@ export async function listAdminTagSuggestions(input?: {
   }
   const queryString = search.toString();
 
-  return requestAdminSettingsJson<AdminTagSuggestionListPayload>(
-    `/api/admin/settings/tags/suggestions${queryString ? `?${queryString}` : ""}`,
+  return requestAdminSettingsJson<AdminEntitySuggestionListPayload>(
+    `/api/admin/settings/entities/suggestions${queryString ? `?${queryString}` : ""}`,
     "GET",
     undefined,
-    "标签治理建议加载失败。",
+    "实体治理建议加载失败。",
   );
 }
 
-export async function dismissAdminTagSuggestion(input: {
-  sourceTagId: string;
-  targetTagId: string;
+export async function dismissAdminEntitySuggestion(input: {
+  sourceEntityId: string;
+  targetEntityId: string;
   decision: "ignored" | "kept";
 }) {
-  return requestAdminSettingsJson<TagSuggestionDecisionPayload>(
-    "/api/admin/settings/tags/suggestions",
+  return requestAdminSettingsJson<EntitySuggestionDecisionPayload>(
+    "/api/admin/settings/entities/suggestions",
     "POST",
     input,
-    "标签治理建议处理失败。",
+    "实体治理建议处理失败。",
   );
 }
 
-export async function autoMergeHighConfidenceAdminTagSuggestions(input?: {
+export async function autoMergeHighConfidenceAdminEntitySuggestions(input?: {
   limit?: number;
 }) {
-  return requestAdminSettingsJson<TagSuggestionAutoMergePayload>(
-    "/api/admin/settings/tags/suggestions",
+  return requestAdminSettingsJson<EntitySuggestionAutoMergePayload>(
+    "/api/admin/settings/entities/suggestions",
     "POST",
     {
       action: "auto_merge_high_confidence",
       limit: input?.limit,
     },
-    "高置信标签自动合并失败。",
+    "高置信实体自动合并失败。",
   );
 }
 
-export async function precomputeAdminTagSuggestions() {
-  return requestAdminSettingsJson<TagSuggestionPrecomputePayload>(
-    "/api/admin/settings/tags/suggestions",
+export async function precomputeAdminEntitySuggestions() {
+  return requestAdminSettingsJson<EntitySuggestionPrecomputePayload>(
+    "/api/admin/settings/entities/suggestions",
     "POST",
     {
       action: "precompute",
     },
-    "标签治理建议预计算失败。",
+    "实体治理建议预计算失败。",
   );
 }

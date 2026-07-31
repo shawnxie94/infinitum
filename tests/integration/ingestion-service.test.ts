@@ -12,7 +12,7 @@ describe("runIngestion", () => {
   beforeEach(async () => {
     await prisma.itemDedupeHistory.deleteMany();
     await prisma.item.deleteMany();
-    await prisma.tag.deleteMany();
+    await prisma.entity.deleteMany();
     await prisma.fetchRun.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();
     await prisma.promptConfig.deleteMany();
@@ -188,7 +188,7 @@ describe("runIngestion", () => {
     ]);
   });
 
-  it("persists normalized AI tags for processed items", async () => {
+  it("derives entity relations from the structured event signature", async () => {
     const parser = {
       parseURL: vi.fn().mockResolvedValue({
         items: [
@@ -216,7 +216,7 @@ describe("runIngestion", () => {
           eventAction: "发布",
           eventObject: "Codex 云端智能体",
         }),
-        tags: ["OpenAI", "Codex", "新闻", "openai", "AI 编程", "开发者工具", "额外标签"],
+        entities: ["OpenAI", "Codex", "新闻", "openai", "AI 编程", "开发者工具", "额外标签"],
       }),
     });
 
@@ -239,9 +239,9 @@ describe("runIngestion", () => {
 
     const storedItem = await prisma.item.findFirstOrThrow({
       include: {
-        tags: {
+        entities: {
           include: {
-            tag: true,
+            entity: true,
           },
           orderBy: { createdAt: "asc" },
         },
@@ -249,19 +249,13 @@ describe("runIngestion", () => {
     });
 
     expect(storedItem.status).toBe("processed");
-    expect(storedItem.tags.map((entry) => entry.tag.name)).toEqual([
+    expect(storedItem.entities.map((entry) => entry.entity.name)).toEqual([
       "OpenAI",
-      "Codex",
-      "AI 编程",
-      "开发者工具",
-      "额外标签",
+      "Codex 云端智能体",
     ]);
-    expect(storedItem.tags.map((entry) => entry.tag.normalized)).toEqual([
+    expect(storedItem.entities.map((entry) => entry.entity.normalized)).toEqual([
       "openai",
-      "codex",
-      "ai 编程",
-      "开发者工具",
-      "额外标签",
+      "codex 云端智能体",
     ]);
   });
 
@@ -535,6 +529,178 @@ describe("runIngestion", () => {
     ]));
     expect(storedItems).toHaveLength(1);
     expect(storedItems[0]?.originalUrl).toBe("https://example.com/posts/fresh");
+  });
+
+  it("filters the processing window before applying the per-source item limit", async () => {
+    const parser = {
+      parseURL: vi.fn().mockResolvedValue({
+        items: [
+          {
+            title: "Old article before configured processing start",
+            link: "https://example.com/posts/old-before-limit",
+            isoDate: "2026-04-10T08:00:00.000Z",
+            contentSnippet: "Old summary",
+          },
+          {
+            title: "Fresh article after configured processing start",
+            link: "https://example.com/posts/fresh-after-limit",
+            isoDate: "2026-04-10T10:00:00.000Z",
+            contentSnippet: "Fresh summary",
+          },
+        ],
+      }),
+    };
+
+    await runIngestion({
+      parser,
+      articleFetcher: vi.fn(),
+      aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{
+        name: "Example Feed",
+        rssUrl: "https://example.com/feed.xml",
+        siteUrl: "https://example.com",
+        enabled: true,
+        aiParsingEnabled: false,
+      }],
+      blacklist: [],
+      processingStartAt: new Date("2026-04-10T09:00:00.000Z"),
+      perSourceItemLimit: 1,
+      now: new Date("2026-04-10T10:30:00.000Z"),
+    });
+
+    const storedItems = await prisma.item.findMany({ orderBy: { createdAt: "asc" } });
+    expect(storedItems).toHaveLength(1);
+    expect(storedItems[0]?.originalUrl).toBe("https://example.com/posts/fresh-after-limit");
+  });
+
+  it("applies an independent feed scan cap before the per-source processing limit", async () => {
+    const parser = {
+      parseURL: vi.fn().mockResolvedValue({
+        items: [
+          {
+            title: "Newest article",
+            link: "https://example.com/posts/newest",
+            isoDate: "2026-04-10T12:00:00.000Z",
+            contentSnippet: "Newest summary",
+          },
+          {
+            title: "Second newest article",
+            link: "https://example.com/posts/second-newest",
+            isoDate: "2026-04-10T11:00:00.000Z",
+            contentSnippet: "Second newest summary",
+          },
+          {
+            title: "Third newest article",
+            link: "https://example.com/posts/third-newest",
+            isoDate: "2026-04-10T10:00:00.000Z",
+            contentSnippet: "Third newest summary",
+          },
+        ],
+      }),
+    };
+
+    await runIngestion({
+      parser,
+      articleFetcher: vi.fn(),
+      aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{
+        name: "Example Feed",
+        rssUrl: "https://example.com/feed.xml",
+        siteUrl: "https://example.com",
+        enabled: true,
+        aiParsingEnabled: false,
+      }],
+      blacklist: [],
+      maxFeedItemsToScan: 2,
+      perSourceItemLimit: 10,
+      now: new Date("2026-04-10T12:30:00.000Z"),
+    });
+
+    const storedItems = await prisma.item.findMany({
+      orderBy: { publishedAt: "desc" },
+    });
+    expect(storedItems.map((item) => item.originalUrl)).toEqual([
+      "https://example.com/posts/newest",
+      "https://example.com/posts/second-newest",
+    ]);
+  });
+
+  it("marks items without a feed publication timestamp as unknown", async () => {
+    await runIngestion({
+      parser: {
+        parseURL: vi.fn().mockResolvedValue({
+          items: [{
+            title: "Article without publication date",
+            link: "https://example.com/posts/unknown-date",
+            contentSnippet: "Unknown date summary",
+          }],
+        }),
+      },
+      articleFetcher: vi.fn(),
+      aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{
+        name: "Example Feed",
+        rssUrl: "https://example.com/feed.xml",
+        siteUrl: "https://example.com",
+        enabled: true,
+        aiParsingEnabled: false,
+      }],
+      blacklist: [],
+      now: new Date("2026-04-10T10:30:00.000Z"),
+    });
+
+    const storedItem = await prisma.item.findFirstOrThrow();
+    expect(storedItem.publishedAt.toISOString()).toBe("2026-04-10T10:30:00.000Z");
+    expect(storedItem.publishedAtKnown).toBe(false);
+  });
+
+  it("preserves a trusted publication timestamp when a later RSS refresh omits it", async () => {
+    const sourceConfigs = [{
+      name: "Example Feed",
+      rssUrl: "https://example.com/feed.xml",
+      siteUrl: "https://example.com",
+      enabled: true,
+      aiParsingEnabled: false,
+    }];
+
+    await runIngestion({
+      parser: {
+        parseURL: vi.fn().mockResolvedValue({
+          items: [{
+            title: "Stable publication date",
+            link: "https://example.com/posts/stable-date",
+            isoDate: "2026-04-09T10:00:00.000Z",
+            contentSnippet: "Initial RSS entry",
+          }],
+        }),
+      },
+      articleFetcher: vi.fn(),
+      aiProvider: buildAiProviderMock(),
+      sourceConfigs,
+      blacklist: [],
+      now: new Date("2026-04-10T10:30:00.000Z"),
+    });
+
+    await runIngestion({
+      parser: {
+        parseURL: vi.fn().mockResolvedValue({
+          items: [{
+            title: "Stable publication date",
+            link: "https://example.com/posts/stable-date",
+            contentSnippet: "Refreshed RSS entry without a publication date",
+          }],
+        }),
+      },
+      articleFetcher: vi.fn(),
+      aiProvider: buildAiProviderMock(),
+      sourceConfigs,
+      blacklist: [],
+      now: new Date("2026-04-10T12:30:00.000Z"),
+    });
+
+    const storedItem = await prisma.item.findFirstOrThrow();
+    expect(storedItem.publishedAt.toISOString()).toBe("2026-04-09T10:00:00.000Z");
+    expect(storedItem.publishedAtKnown).toBe(true);
   });
 
   it("normalizes structured RSS authors before storing items", async () => {
@@ -1728,7 +1894,7 @@ describe("runIngestion", () => {
         eventAction: "publishes",
         eventObject: "research update",
       }),
-      tags: [],
+      entities: [],
     });
     const aiProvider = buildAiProviderMock({
       summaryFixture: vi.fn().mockRejectedValue(new Error("Invalid item summary response: expected JSON")),
@@ -1795,7 +1961,7 @@ describe("runIngestion", () => {
             eventAction: "发布",
             eventObject: "模型更新",
           }),
-          tags: ["OpenAI"],
+          entities: ["OpenAI"],
           aggregation: { isAggregation: false, mainEvent: null, events: [] },
           diagnostics: { summaryValid: false, analysisValid: true, aggregationValid: true },
         }),

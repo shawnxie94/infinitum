@@ -88,7 +88,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 const RULE_TYPE_LABELS: Record<AdminBriefingWeightRuleType, string> = {
-  tag: "标签",
+  entity: "实体",
   keyword: "关键词",
   source_group: "来源组",
   event_type: "事件类型",
@@ -112,7 +112,9 @@ const KEYWORD_STOPWORDS = new Set([
 
 function normalizeRuleValue(type: AdminBriefingWeightRuleType, value: string) {
   const trimmed = value.trim();
-  return type === "keyword" || type === "event_type" || type === "tag" ? trimmed.toLowerCase() : trimmed;
+  return type === "keyword" || type === "event_type" || type === "entity"
+    ? trimmed.toLowerCase()
+    : trimmed;
 }
 
 function serializeSuggestion(row: {
@@ -173,7 +175,7 @@ function uniqueDimensions(dimensions: BehaviorDimension[]) {
   return result;
 }
 
-function parseClusterTags(raw: string | null | undefined): BehaviorDimension[] {
+function parseClusterEntities(raw: string | null | undefined): BehaviorDimension[] {
   try {
     const parsed = raw ? JSON.parse(raw) : null;
     if (!Array.isArray(parsed)) {
@@ -191,7 +193,7 @@ function parseClusterTags(raw: string | null | undefined): BehaviorDimension[] {
           ? entry.normalized.trim()
           : name.toLowerCase();
 
-        return normalized ? { ruleType: "tag", value: normalized, label: name || normalized } : null;
+        return normalized ? { ruleType: "entity", value: normalized, label: name || normalized } : null;
       })
       .filter((entry): entry is BehaviorDimension => Boolean(entry));
   } catch {
@@ -264,9 +266,9 @@ async function resolveItemDimensions(itemId: string): Promise<BehaviorDimension[
           },
         },
       },
-      tags: {
+      entities: {
         select: {
-          tag: {
+          entity: {
             select: {
               name: true,
               normalized: true,
@@ -289,10 +291,10 @@ async function resolveItemDimensions(itemId: string): Promise<BehaviorDimension[
         label: item.source.group?.name ?? item.source.groupId,
       }]
       : []),
-    ...item.tags.map(({ tag }) => ({
-      ruleType: "tag" as const,
-      value: tag.normalized,
-      label: tag.name,
+    ...item.entities.map(({ entity }) => ({
+      ruleType: "entity" as const,
+      value: entity.normalized,
+      label: entity.name,
     })),
     ...(item.eventType
       ? [{
@@ -319,7 +321,7 @@ async function resolveClusterDimensions(clusterId: string): Promise<BehaviorDime
       eventSubject: true,
       eventAction: true,
       eventObject: true,
-      feedTagsJson: true,
+      feedEntitiesJson: true,
       dominantGroupId: true,
       dominantGroup: {
         select: { name: true },
@@ -339,9 +341,9 @@ async function resolveClusterDimensions(clusterId: string): Promise<BehaviorDime
               },
             },
           },
-          tags: {
+          entities: {
             select: {
-              tag: {
+              entity: {
                 select: {
                   name: true,
                   normalized: true,
@@ -374,11 +376,11 @@ async function resolveClusterDimensions(clusterId: string): Promise<BehaviorDime
         label: item.source.group?.name ?? item.source.groupId,
       }]
       : []),
-    ...parseClusterTags(cluster.feedTagsJson),
-    ...cluster.items.flatMap((item) => item.tags.map(({ tag }) => ({
-      ruleType: "tag" as const,
-      value: tag.normalized,
-      label: tag.name,
+    ...parseClusterEntities(cluster.feedEntitiesJson),
+    ...cluster.items.flatMap((item) => item.entities.map(({ entity }) => ({
+      ruleType: "entity" as const,
+      value: entity.normalized,
+      label: entity.name,
     }))),
     ...(cluster.eventType
       ? [{

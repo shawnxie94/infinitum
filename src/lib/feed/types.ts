@@ -15,7 +15,7 @@ export type FeedFilters = {
   groupId: string | null;
   sourceId: string | null;
   title: string | null;
-  tag: string | null;
+  entity: string | null;
   entryId: string | null;
   entryType: FeedEntryType | null;
   entryKeys: FeedEntryKey[];
@@ -224,7 +224,7 @@ export type FeedSourceOption = {
   groupId: string | null;
 };
 
-export type FeedTagOption = {
+export type FeedEntityOption = {
   name: string;
   normalized: string;
   count: number;

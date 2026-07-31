@@ -48,12 +48,90 @@ function calculateEvidenceScore(candidate: EventBriefingCandidate) {
   return Math.min(15, sourceScore + itemScore);
 }
 
-function calculateBaseRankScore(candidate: EventBriefingCandidate) {
-  const qualityComponent = Math.round(candidate.qualityScore * 0.7);
-  const evidenceScore = calculateEvidenceScore(candidate);
-  const momentumScore = candidate.isFollowUp ? 8 : 3;
+function calculateSameDaySourceScore(candidate: EventBriefingCandidate) {
+  return Math.min(6, candidate.newSourceCountOnDate * 2);
+}
 
-  return clamp(qualityComponent + evidenceScore + momentumScore, 0, 100);
+function calculateSameDayItemScore(candidate: EventBriefingCandidate) {
+  return Math.min(3, candidate.newItemCountOnDate);
+}
+
+function getLatestCreatedItem(candidate: EventBriefingCandidate) {
+  return candidate.items.reduce<(typeof candidate.items)[number] | null>(
+    (latest, item) => (!latest || item.createdAt.getTime() > latest.createdAt.getTime() ? item : latest),
+    null,
+  );
+}
+
+function calculateFreshnessScore(
+  candidate: EventBriefingCandidate,
+  range: ReturnType<typeof getEventBriefingDateRange>,
+) {
+  const rangeDuration = range.end.getTime() - range.start.getTime();
+  if (rangeDuration <= 0) return 0;
+
+  const latestCreatedItem = getLatestCreatedItem(candidate);
+  if (latestCreatedItem && !latestCreatedItem.publishedAtKnown) {
+    return 0;
+  }
+
+  const progress = clamp(
+    (candidate.latestCreatedAt.getTime() - range.start.getTime()) / rangeDuration,
+    0,
+    1,
+  );
+  return Math.round(progress * 2);
+}
+
+const PUBLISHED_AT_DELAY_GRACE_HOURS = 12;
+const PUBLISHED_AT_DELAY_STEP_HOURS = 12;
+const MAX_PUBLISHED_AT_DELAY_PENALTY = 8;
+
+function calculatePublishedAtDelayPenalty(candidate: EventBriefingCandidate) {
+  const latestCreatedItem = getLatestCreatedItem(candidate);
+  const createdAt = latestCreatedItem?.createdAt ?? candidate.latestCreatedAt;
+  const publishedAt = latestCreatedItem?.publishedAt ?? candidate.latestPublishedAt;
+  if (latestCreatedItem && !latestCreatedItem.publishedAtKnown) {
+    return 0;
+  }
+  const delayHours = Math.max(
+    0,
+    (createdAt.getTime() - publishedAt.getTime()) / (60 * 60 * 1000),
+  );
+  if (delayHours <= PUBLISHED_AT_DELAY_GRACE_HOURS) {
+    return 0;
+  }
+
+  return Math.min(
+    MAX_PUBLISHED_AT_DELAY_PENALTY,
+    Math.ceil((delayHours - PUBLISHED_AT_DELAY_GRACE_HOURS) / PUBLISHED_AT_DELAY_STEP_HOURS),
+  );
+}
+
+export function calculateEventBriefingBaseRankScore(
+  candidate: EventBriefingCandidate,
+  range: ReturnType<typeof getEventBriefingDateRange>,
+) {
+  const qualityComponent = Math.round(candidate.qualityScore * 0.65);
+  const evidenceScore = calculateEvidenceScore(candidate);
+  const sameDaySourceScore = calculateSameDaySourceScore(candidate);
+  const sameDayItemScore = calculateSameDayItemScore(candidate);
+  const freshnessScore = calculateFreshnessScore(candidate, range);
+  const publishedAtDelayPenalty = calculatePublishedAtDelayPenalty(candidate);
+  const hasNewFacts = candidate.newItemCountOnDate > 0 || candidate.newSourceCountOnDate > 0;
+  const momentumScore = candidate.isFollowUp ? (hasNewFacts ? 6 : 0) : 3;
+
+  return clamp(
+    qualityComponent +
+      evidenceScore +
+      sameDaySourceScore +
+      sameDayItemScore +
+      freshnessScore +
+      momentumScore -
+      publishedAtDelayPenalty,
+    0,
+    100,
+  );
 }
 
 function formatTime(value: Date) {
@@ -66,9 +144,10 @@ function formatTime(value: Date) {
 
 function toEntryDTO(input: {
   candidate: EventBriefingCandidate;
+  range: ReturnType<typeof getEventBriefingDateRange>;
   preference: BriefingPreferenceForRuntime;
 }): EventBriefingEntryDTO {
-  const baseRankScore = calculateBaseRankScore(input.candidate);
+  const baseRankScore = calculateEventBriefingBaseRankScore(input.candidate, input.range);
   const curator = calculateCuratorPreference(input.candidate, input.preference);
   const rankScore = clamp(baseRankScore + curator.curatorBoost - curator.curatorPenalty, 0, 100);
 
@@ -102,6 +181,7 @@ function toEntryDTO(input: {
       sourceName: item.sourceName,
       originalUrl: item.originalUrl,
       publishedAt: item.publishedAt.toISOString(),
+      publishedAtKnown: item.publishedAtKnown,
       createdAt: item.createdAt.toISOString(),
       qualityScore: item.qualityScore,
     })),
@@ -187,6 +267,7 @@ async function loadEntriesForChannel(input: {
   return candidateResult.candidates
     .map((candidate) => toEntryDTO({
       candidate,
+      range: input.range,
       preference: input.preference,
     }))
     .filter((entry) => entry.rankScore >= input.minRankScore)
@@ -276,7 +357,6 @@ export async function getEventBriefing(options: EventBriefingOptions = {}) {
 
 export async function listEventBriefingEntriesForDailyReport(options: {
   date: string;
-  limit: number;
   channelIds?: string[];
 }) {
   const ranked = await withEventBriefingCache(
@@ -286,9 +366,10 @@ export async function listEventBriefingEntriesForDailyReport(options: {
     })}`,
     () => loadDailyReportRankedEntries(options),
   );
-  const limit = normalizePositiveInteger(options.limit, ranked.length);
 
-  return ranked.slice(0, limit);
+  // Daily reports apply duplicate filtering after the shared ranking. Return
+  // the full ranked set so lower-ranked candidates can fill removed slots.
+  return ranked;
 }
 
 function resolveSelectedChannelIds(

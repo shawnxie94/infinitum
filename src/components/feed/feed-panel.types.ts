@@ -9,7 +9,7 @@ import type {
   FeedRange,
   FeedSort,
   FeedSourceOption,
-  FeedTagOption,
+  FeedEntityOption,
   FetchRunSnapshot,
 } from "@/lib/feed/types";
 import type { AdminHeaderLink } from "@/lib/settings/types";
@@ -31,12 +31,12 @@ export type FeedPanelProps = {
   initialGroupId?: string | null;
   initialSourceId?: string | null;
   initialTitle?: string | null;
-  initialTag?: string | null;
+  initialEntity?: string | null;
   initialEntryKeys?: FeedEntryKey[];
   availableGroups?: FeedGroupOption[];
   initialGroupTotalCount?: number;
   availableSources?: FeedSourceOption[];
-  popularTags?: FeedTagOption[];
+  popularEntities?: FeedEntityOption[];
   initialHeaderLinks?: AdminHeaderLink[];
 };
 
@@ -50,7 +50,7 @@ export type FeedQueryState = {
   groupId: string | null;
   sourceId: string | null;
   title: string | null;
-  tag: string | null;
+  entity: string | null;
   entryKeys: FeedEntryKey[];
   createdRangeExplicit?: boolean;
 };

@@ -185,19 +185,35 @@ function CandidateReviewModal({
         ) : null
       }
     >
-      <div className="grid grid-cols-3 gap-2 rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] p-2 text-center text-xs text-[var(--text-2)]">
-        <div>
-          <div className="text-lg font-semibold text-[var(--foreground)]">{review.candidateCount}</div>
-          <div>候选</div>
+      <div className="rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] p-3 text-center text-xs text-[var(--text-2)] sm:p-4">
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <div className="text-lg font-semibold text-[var(--foreground)]">{review.candidateCount}</div>
+            <div>候选</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-[var(--foreground)]">{review.selectedCount}</div>
+            <div>入选</div>
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-[var(--foreground)]">{review.excludedRecentDuplicates.length}</div>
+            <div>近期重复</div>
+          </div>
         </div>
-        <div>
-          <div className="text-lg font-semibold text-[var(--foreground)]">{review.selectedCount}</div>
-          <div>入选</div>
-        </div>
-        <div>
-          <div className="text-lg font-semibold text-[var(--foreground)]">{review.excludedRecentDuplicates.length}</div>
-          <div>近期重复</div>
-        </div>
+
+        {review.candidateCoverage ? (
+          <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t border-[color:var(--line)]/70 pt-3 text-[var(--text-3)]">
+            <span>高排名 {review.candidateCoverage.selectedTopRankCount}/{review.candidateCoverage.topRankPoolCount}</span>
+            <span>当日新增 {review.candidateCoverage.selectedSameDayCount}/{review.candidateCoverage.sameDayCandidateCount}</span>
+            <span>低排名入选 {review.candidateCoverage.lowRankSelectedCount}</span>
+          </div>
+        ) : null}
+
+        {review.candidateCoverage?.warnings.length ? (
+          <div className="mt-3 rounded-sm bg-amber-50 px-2 py-1.5 text-left leading-5 text-amber-800">
+            覆盖告警：{review.candidateCoverage.warnings.join("、")}
+          </div>
+        ) : null}
       </div>
 
       <div className="inline-flex rounded-sm border border-[color:var(--line)] bg-[var(--surface)] p-1">

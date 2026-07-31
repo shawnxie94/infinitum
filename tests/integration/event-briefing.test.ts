@@ -14,8 +14,8 @@ describe("event briefing service", () => {
     await prisma.briefingPreferenceSuggestion.deleteMany();
     await prisma.curatorBehaviorDimension.deleteMany();
     await prisma.curatorBehaviorEvent.deleteMany();
-    await prisma.itemTag.deleteMany();
-    await prisma.tag.deleteMany();
+    await prisma.itemEntity.deleteMany();
+    await prisma.entity.deleteMany();
     await prisma.item.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.source.deleteMany();
@@ -37,8 +37,8 @@ describe("event briefing service", () => {
         groupId: group.id,
       },
     });
-    const tag = await prisma.tag.create({
-      data: { id: "tag-ai-behavior", name: "AI Coding", normalized: "ai-coding" },
+    const entity = await prisma.entity.create({
+      data: { id: "entity-ai-behavior", name: "AI Coding", normalized: "ai-coding" },
     });
     await prisma.item.create({
       data: {
@@ -60,8 +60,8 @@ describe("event briefing service", () => {
         createdAt: new Date("2026-06-30T08:00:00.000Z"),
       },
     });
-    await prisma.itemTag.create({
-      data: { itemId: "item-ai-behavior", tagId: tag.id },
+    await prisma.itemEntity.create({
+      data: { itemId: "item-ai-behavior", entityId: entity.id },
     });
 
     await recordCuratorBehavior({
@@ -86,21 +86,21 @@ describe("event briefing service", () => {
     const suggestions = await generateBriefingPreferenceSuggestions({
       now: new Date("2026-07-02T00:00:00.000Z"),
     });
-    const tagSuggestion = suggestions.find((suggestion) => (
-      suggestion.ruleType === "tag" && suggestion.value === "ai-coding"
+    const entitySuggestion = suggestions.find((suggestion) => (
+      suggestion.ruleType === "entity" && suggestion.value === "ai-coding"
     ));
 
-    expect(tagSuggestion).toMatchObject({
+    expect(entitySuggestion).toMatchObject({
       suggestedWeight: 3,
       positiveScore: 8,
       negativeScore: 0,
       sampleCount: 3,
     });
 
-    const result = await acceptBriefingPreferenceSuggestion(tagSuggestion!.id);
+    const result = await acceptBriefingPreferenceSuggestion(entitySuggestion!.id);
 
     expect(result.preference.weightedRules).toContainEqual({
-      type: "tag",
+      type: "entity",
       value: "ai-coding",
       weight: 3,
     });
@@ -129,8 +129,8 @@ describe("event briefing service", () => {
         siteUrl: "https://media.example.com",
       },
     });
-    const tag = await prisma.tag.create({
-      data: { id: "tag-ai-coding", name: "AI Coding", normalized: "ai-coding" },
+    const entity = await prisma.entity.create({
+      data: { id: "entity-ai-coding", name: "AI Coding", normalized: "ai-coding" },
     });
 
     await prisma.contentCluster.create({
@@ -148,7 +148,7 @@ describe("event briefing service", () => {
         displayAverageScore: 84,
         earliestCreatedAt: new Date("2026-06-29T08:00:00.000Z"),
         latestCreatedAt: new Date("2026-06-30T08:20:00.000Z"),
-        feedTagsJson: JSON.stringify([{ name: "AI Coding", normalized: "ai-coding" }]),
+        feedEntitiesJson: JSON.stringify([{ name: "AI Coding", normalized: "ai-coding" }]),
       },
     });
 
@@ -234,8 +234,8 @@ describe("event briefing service", () => {
         },
       ],
     });
-    await prisma.itemTag.create({
-      data: { itemId: "item-openai-new-a", tagId: tag.id },
+    await prisma.itemEntity.create({
+      data: { itemId: "item-openai-new-a", entityId: entity.id },
     });
 
     await updateEventBriefingConfig({
@@ -259,7 +259,7 @@ describe("event briefing service", () => {
     });
     await updateBriefingPreferenceConfig({
       weightedRules: [
-        { type: "tag", value: "AI Coding", weight: 6 },
+        { type: "entity", value: "AI Coding", weight: 6 },
         { type: "source_group", value: group.id, weight: 5 },
         { type: "keyword", value: "OpenAI", weight: 5 },
         { type: "event_type", value: "launch", weight: 4 },

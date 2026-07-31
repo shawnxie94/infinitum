@@ -6,7 +6,7 @@ import type {
   FeedPagination,
   FeedRange,
   FeedSort,
-  FeedTagOption,
+  FeedEntityOption,
   FetchRunSnapshot,
 } from "@/lib/feed/types";
 import { DEFAULT_FEED_PAGE_SIZE } from "@/lib/feed/types";
@@ -16,7 +16,7 @@ import { buildFeedSearch } from "@/components/feed/feed-panel.utils";
 type FeedPayload = {
   items: FeedEntryDTO[];
   groups?: FeedGroupOption[];
-  popularTags?: FeedTagOption[];
+  popularEntities?: FeedEntityOption[];
   groupTotalCount?: number;
   nextCursor?: string | null;
   pagination?: FeedPagination;
@@ -29,7 +29,7 @@ type FeedPayload = {
   groupId: string | null;
   sourceId: string | null;
   title: string | null;
-  tag: string | null;
+  entity: string | null;
   entryId: string | null;
   entryType: "single" | "cluster" | null;
   entryKeys: string[];
@@ -83,7 +83,7 @@ export async function requestFeed(
   pagination?: {
     page?: number;
     size?: number;
-    includePopularTags?: boolean;
+    includePopularEntities?: boolean;
   },
 ) {
   const requestedPage = pagination?.page ?? 1;

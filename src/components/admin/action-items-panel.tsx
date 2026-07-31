@@ -24,7 +24,7 @@ const categoryOrder: Record<ActionableMonitorItem["category"], number> = {
   split: 2,
   cluster: 3,
   content: 4,
-  tag: 5,
+  entity: 5,
   preference: 6,
 };
 
@@ -86,13 +86,13 @@ function buildDefaultActionItems(rangeDays: ActionableMonitorRangeDays): Actiona
       details: [],
     },
     {
-      id: "tags",
-      category: "tag",
+      id: "entities",
+      category: "entity",
       severity: "info",
-      title: "标签治理建议",
-      description: "当前没有待处理的标签治理建议。",
+      title: "实体治理建议",
+      description: "当前没有待处理的实体治理建议。",
       count: 0,
-      href: "/admin?tab=monitoring&section=content&view=tags&suggestions=open",
+      href: "/admin?tab=monitoring&section=content&view=entities&suggestions=open",
       actionLabel: "查看",
       details: [],
     },

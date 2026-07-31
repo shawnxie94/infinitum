@@ -17,7 +17,8 @@ export function calculateCuratorPreference(
   candidate: EventBriefingCandidate,
   preference: BriefingPreferenceForRuntime,
 ): CuratorPreferenceResult {
-  const tagValues = candidate.tags.flatMap((tag) => [tag.name, tag.normalized].map(normalizeMatchValue));
+  const entityValues = candidate.entities
+    .flatMap((entity) => [entity.name, entity.normalized].map(normalizeMatchValue));
   const groupIds = candidate.sources.map((source) => source.groupId).filter((groupId): groupId is string => Boolean(groupId));
   const eventType = normalizeMatchValue(candidate.eventType ?? "");
   let curatorBoost = 0;
@@ -29,8 +30,8 @@ export function calculateCuratorPreference(
       continue;
     }
 
-    const matched = rule.type === "tag"
-      ? buildSet(tagValues).has(value)
+    const matched = rule.type === "entity"
+      ? buildSet(entityValues).has(value)
       : rule.type === "source_group"
         ? groupIds.includes(rule.value)
         : rule.type === "keyword"

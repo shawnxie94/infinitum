@@ -170,6 +170,7 @@ model Item {
   translatedTitle          String?
   author                   String?
   publishedAt              DateTime
+  publishedAtKnown         Boolean                    @default(true)
   rssExcerpt               String?
   rssContent               String?
   fullText                 String?
@@ -209,7 +210,7 @@ model Item {
   aggregationSplitParents  AggregationSplitLink[]     @relation("AggregationSplitChild")
   aggregationSplitChildren AggregationSplitLink[]     @relation("AggregationSplitParent")
   dailyReportSources       DailyReportSource[]
-  tags                     ItemTag[]
+  entities                     ItemEntity[]
 
   @@index([sourceId, publishedAt])
   @@index([sourceId, status, moderationStatus, isAggregation, createdAt])
@@ -295,7 +296,7 @@ model ContentCluster {
   latestCreatedAt          DateTime?
   dominantGroupId          String?
   feedSearchText           String?
-  feedTagsJson             String                           @default("[]")
+  feedEntitiesJson             String                           @default("[]")
   feedStatsUpdatedAt       DateTime?
   createdAt                DateTime                         @default(now())
   updatedAt                DateTime                         @updatedAt
@@ -639,57 +640,57 @@ model DailyReportSource {
   @@map("daily_report_sources")
 }
 
-model Tag {
+model Entity {
   id                         String                   @id @default(cuid())
   name                       String
   normalized                 String                   @unique
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
-  items                      ItemTag[]
-  aliases                    TagAlias[]
-  sourceSuggestionCandidates TagSuggestionCandidate[] @relation("TagSuggestionCandidateSource")
-  targetSuggestionCandidates TagSuggestionCandidate[] @relation("TagSuggestionCandidateTarget")
+  items                      ItemEntity[]
+  aliases                    EntityAlias[]
+  sourceSuggestionCandidates EntitySuggestionCandidate[] @relation("EntitySuggestionCandidateSource")
+  targetSuggestionCandidates EntitySuggestionCandidate[] @relation("EntitySuggestionCandidateTarget")
 
   @@index([name])
-  @@map("tags")
+  @@map("entities")
 }
 
-model TagAlias {
+model EntityAlias {
   id              String   @id @default(cuid())
-  tagId           String
+  entityId           String
   aliasName       String
   aliasNormalized String   @unique
   createdBy       String   @default("admin")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  tag             Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  entity             Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
-  @@index([tagId])
+  @@index([entityId])
   @@index([aliasName])
-  @@map("tag_aliases")
+  @@map("entity_aliases")
 }
 
-model TagSuggestionDecision {
+model EntitySuggestionDecision {
   id                  String   @id @default(cuid())
-  sourceTagNormalized String
-  targetTagNormalized String
+  sourceEntityNormalized String
+  targetEntityNormalized String
   decision            String
   decidedBy           String   @default("admin")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  @@unique([sourceTagNormalized, targetTagNormalized])
+  @@unique([sourceEntityNormalized, targetEntityNormalized])
   @@index([decision])
-  @@map("tag_suggestion_decisions")
+  @@map("entity_suggestion_decisions")
 }
 
-model TagSuggestionCandidate {
+model EntitySuggestionCandidate {
   id                  String   @id @default(cuid())
   pairKey             String   @unique
-  sourceTagId         String
-  targetTagId         String
-  sourceTagNormalized String
-  targetTagNormalized String
+  sourceEntityId         String
+  targetEntityId         String
+  sourceEntityNormalized String
+  targetEntityNormalized String
   confidence          Float
   affectedItemCount   Int
   sharedItemCount     Int      @default(0)
@@ -698,30 +699,30 @@ model TagSuggestionCandidate {
   expiresAt           DateTime
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-  sourceTag           Tag      @relation("TagSuggestionCandidateSource", fields: [sourceTagId], references: [id], onDelete: Cascade)
-  targetTag           Tag      @relation("TagSuggestionCandidateTarget", fields: [targetTagId], references: [id], onDelete: Cascade)
+  sourceEntity           Entity      @relation("EntitySuggestionCandidateSource", fields: [sourceEntityId], references: [id], onDelete: Cascade)
+  targetEntity           Entity      @relation("EntitySuggestionCandidateTarget", fields: [targetEntityId], references: [id], onDelete: Cascade)
 
-  @@unique([sourceTagNormalized, targetTagNormalized])
+  @@unique([sourceEntityNormalized, targetEntityNormalized])
   @@index([status, confidence])
   @@index([status, affectedItemCount])
   @@index([expiresAt])
-  @@index([sourceTagId])
-  @@index([targetTagId])
-  @@map("tag_suggestion_candidates")
+  @@index([sourceEntityId])
+  @@index([targetEntityId])
+  @@map("entity_suggestion_candidates")
 }
 
-model ItemTag {
+model ItemEntity {
   id        String   @id @default(cuid())
   itemId    String
-  tagId     String
+  entityId     String
   createdAt DateTime @default(now())
   item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  entity       Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
-  @@unique([itemId, tagId])
-  @@index([tagId])
+  @@unique([itemId, entityId])
+  @@index([entityId])
   @@index([itemId])
-  @@map("item_tags")
+  @@map("item_entities")
 }
 
 model SourceGroup {

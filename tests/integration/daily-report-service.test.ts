@@ -115,6 +115,18 @@ function getLastGeneratedDailyReportInput() {
       candidateScore: number;
       sourceCount: number;
       itemCount: number;
+      isFollowUp?: boolean;
+      newItemCountOnDate?: number;
+      newSourceCountOnDate?: number;
+      evidenceItems?: Array<{
+        title: string;
+        sourceName: string;
+        summary: string;
+        url: string;
+        publishedAt: string;
+        createdAt: string;
+        qualityScore: number;
+      }>;
     }>;
     recentTopics: Array<{
       date: string;
@@ -790,6 +802,10 @@ describe("daily report service", () => {
       candidateCount: 4,
       selectedCount: 2,
       excludedRecentDuplicates: [],
+      candidateCoverage: {
+        candidateCount: 4,
+        selectedCount: 2,
+      },
     });
   });
 
@@ -803,7 +819,7 @@ describe("daily report service", () => {
     });
     const detail = await getDailyReportByDate(REPORT_DATE, true);
 
-    expect(rows).toBe(3);
+    expect(rows).toBe(2);
     expect(detail?.sourceCount).toBe(2);
   });
 
@@ -849,8 +865,8 @@ describe("daily report service", () => {
     });
     const detail = await getDailyReportByDate(REPORT_DATE, true);
 
-    expect(rows).toBe(6);
-    expect(detail?.sourceCount).toBe(3);
+    expect(rows).toBe(4);
+    expect(detail?.sourceCount).toBe(4);
   });
 
   it("ranks daily report candidates by daily composite score and collapses clustered items", async () => {
@@ -1006,6 +1022,238 @@ describe("daily report service", () => {
     expect(snapshot.candidates?.map((candidate) => candidate.title)).toEqual([
       "安全事件需要优先进入日报",
       "高质量但未偏好内容",
+    ]);
+  });
+
+  it("fills the daily report limit after removing recent duplicates", async () => {
+    await createReportCandidates();
+    const topItem = await prisma.item.findFirstOrThrow({
+      where: { originalUrl: "https://example.com/a" },
+    });
+    await createHistoricalDailyReportSource({
+      date: "2026-04-20",
+      itemId: topItem.id,
+      sourceKey: `item:${topItem.id}`,
+      title: "OpenAI 发布新模型",
+    });
+    const schedule = await createDailyReportSchedule({ autoPublish: false });
+    await prisma.taskSchedule.update({
+      where: { id: schedule.id },
+      data: { dailyReportCandidateLimit: 2 },
+    });
+    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+
+    await generateDailyReport({ date: REPORT_DATE, force: true });
+
+    expect(getLastGeneratedDailyReportArticles().map((article) => article.title)).toEqual([
+      "开发者工具更新",
+      "开发者社区发布插件规范",
+    ]);
+  });
+
+  it("removes the same candidate from later report sections deterministically", async () => {
+    await createReportCandidates();
+    await createDailyReportSchedule({ autoPublish: false });
+    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+      headline: "同一候选只保留一次",
+      blocks: [
+        {
+          type: "text",
+          title: "摘要",
+          body: "今天的日报候选经过跨栏目去重后，同一篇内容只保留在首次出现的栏目中，避免重复总结同一事件。",
+        },
+        {
+          type: "section",
+          title: "今日大事",
+          items: [{
+            title: "OpenAI 发布新模型",
+            body: "OpenAI 发布新模型，带来新的能力变化。",
+            sourceIds: [1],
+          }],
+        },
+        {
+          type: "section",
+          title: "变更与实践",
+          items: [{
+            title: "同一候选的补充说明",
+            body: "同一候选不应在后续栏目重复出现，但本栏目仍保留另一条独立内容。",
+            sourceIds: [1, 2],
+          }],
+        },
+      ],
+    }));
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const sources = await prisma.dailyReportSource.findMany({
+      where: { dailyReportId: result.report?.id },
+      orderBy: { sourceNumber: "asc" },
+    });
+    const summary = JSON.parse(result.report?.summaryJson ?? "{}") as {
+      blocks: Array<{ type: string; items?: Array<{ sourceIds: number[] }> }>;
+    };
+
+    expect(sources.map((source) => source.sourceNumber)).toEqual([1, 2]);
+    expect(summary.blocks.filter((block) => block.type === "section").flatMap((block) => block.items ?? []).map((item) => item.sourceIds)).toEqual([
+      [1],
+      [2],
+    ]);
+  });
+
+  it("refills only a section emptied by duplicate removal", async () => {
+    await createReportCandidates();
+    await createDailyReportSchedule({ autoPublish: false });
+    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+      headline: "空栏目确定性补位",
+      blocks: [
+        {
+          type: "section",
+          title: "今日大事",
+          items: [{
+            title: "OpenAI 发布新模型",
+            body: "OpenAI 发布新模型，带来新的能力变化。",
+            sourceIds: [1],
+          }],
+        },
+        {
+          type: "section",
+          title: "变更与实践",
+          items: [{
+            title: "同一候选的补充说明",
+            body: "这一条内容在去重后会变为空栏目，并使用下一个未使用候选补位。",
+            sourceIds: [1],
+          }],
+        },
+      ],
+    }));
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const summary = JSON.parse(result.report?.summaryJson ?? "{}") as {
+      blocks: Array<{ type: string; title: string; items?: Array<{ title: string; sourceIds: number[] }> }>;
+    };
+    const snapshot = JSON.parse(result.report?.candidateSnapshot ?? "{}") as {
+      emptySectionsAfterDeduplication?: string[];
+      refilledEmptySections?: string[];
+      removedEmptySections?: string[];
+    };
+
+    expect(summary.blocks.filter((block) => block.type === "section").map((block) => ({
+      title: block.title,
+      items: block.items?.map((item) => ({ title: item.title, sourceIds: item.sourceIds })),
+    }))).toEqual([
+      {
+        title: "今日大事",
+        items: [{ title: "OpenAI 发布新模型", sourceIds: [1] }],
+      },
+      {
+        title: "变更与实践",
+        items: [{ title: "开发者工具更新", sourceIds: [2] }],
+      },
+    ]);
+    expect(snapshot).toMatchObject({
+      emptySectionsAfterDeduplication: ["变更与实践"],
+      refilledEmptySections: ["变更与实践"],
+      removedEmptySections: [],
+    });
+  });
+
+  it("removes an empty section when duplicate removal leaves no unused candidate", async () => {
+    await createReportCandidates();
+    await createDailyReportSchedule({ autoPublish: false });
+    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+      headline: "空栏目删除",
+      blocks: [
+        {
+          type: "section",
+          title: "今日大事",
+          items: [{
+            title: "多条内容汇总",
+            body: "这一栏目已经使用候选池中的全部内容，因此后续空栏目没有可补位候选。",
+            sourceIds: [1, 2, 3, 4],
+          }],
+        },
+        {
+          type: "section",
+          title: "变更与实践",
+          items: [{
+            title: "重复内容",
+            body: "这一栏目会在去重后变为空栏目，并被安全删除。",
+            sourceIds: [1],
+          }],
+        },
+      ],
+    }));
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const summary = JSON.parse(result.report?.summaryJson ?? "{}") as {
+      blocks: Array<{ type: string; title: string }>;
+    };
+    const snapshot = JSON.parse(result.report?.candidateSnapshot ?? "{}") as {
+      emptySectionsAfterDeduplication?: string[];
+      refilledEmptySections?: string[];
+      removedEmptySections?: string[];
+    };
+
+    expect(summary.blocks.filter((block) => block.type === "section").map((block) => block.title)).toEqual(["今日大事"]);
+    expect(snapshot).toMatchObject({
+      emptySectionsAfterDeduplication: ["变更与实践"],
+      refilledEmptySections: [],
+      removedEmptySections: ["变更与实践"],
+    });
+  });
+
+  it("keeps a same-cluster follow-up when the current day adds new cluster items", async () => {
+    const { cluster } = await createClusteredReportCandidates();
+    const existingItem = await prisma.item.findFirstOrThrow({
+      where: { clusterId: cluster.id },
+    });
+    await prisma.item.create({
+      data: {
+        sourceId: existingItem.sourceId,
+        clusterId: cluster.id,
+        originalUrl: "https://source-a.example.com/model-launch-history",
+        canonicalUrl: "https://source-a.example.com/model-launch-history",
+        urlHash: "clustered-item-history",
+        originalTitle: "模型发布历史报道",
+        publishedAt: new Date("2026-04-20T03:00:00.000Z"),
+        createdAt: new Date("2026-04-20T03:00:00.000Z"),
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryText: "历史聚合来源摘要",
+        qualityScore: 82,
+      },
+    });
+    await createHistoricalDailyReportSource({
+      date: "2026-04-20",
+      clusterId: cluster.id,
+      sourceKey: `cluster:${cluster.id}`,
+      title: "多来源确认的模型发布",
+    });
+    await createDailyReportSchedule({ autoPublish: false });
+    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+
+    await generateDailyReport({ date: REPORT_DATE, force: true });
+
+    const clusterArticle = getLastGeneratedDailyReportArticles().find((article) => article.clusterId === cluster.id);
+    expect(clusterArticle).toMatchObject({
+      isFollowUp: true,
+      newItemCountOnDate: 3,
+      newSourceCountOnDate: 3,
+    });
+  });
+
+  it("passes current multi-source evidence into daily report candidates", async () => {
+    const { cluster } = await createClusteredReportCandidates();
+    await createDailyReportSchedule({ autoPublish: false });
+    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+
+    await generateDailyReport({ date: REPORT_DATE, force: true });
+
+    const clusterArticle = getLastGeneratedDailyReportArticles().find((article) => article.clusterId === cluster.id);
+    expect(clusterArticle?.evidenceItems).toHaveLength(3);
+    expect(clusterArticle?.evidenceItems?.map((item) => item.title)).toEqual([
+      "模型发布 来源 C",
+      "模型发布 来源 B",
+      "模型发布 来源 A",
     ]);
   });
 

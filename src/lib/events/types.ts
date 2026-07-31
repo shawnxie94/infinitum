@@ -63,6 +63,7 @@ export type EventBriefingItemDTO = {
   sourceName: string;
   originalUrl: string;
   publishedAt: string;
+  publishedAtKnown?: boolean;
   createdAt: string;
   qualityScore: number;
 };
@@ -81,7 +82,7 @@ export type EventBriefingDTO = {
 export type EventBriefingConfigForRuntime = AdminEventBriefingConfig;
 export type BriefingPreferenceForRuntime = AdminBriefingPreferenceConfig;
 
-export type EventCandidateTag = {
+export type EventCandidateEntity = {
   name: string;
   normalized: string;
 };
@@ -99,6 +100,7 @@ export type EventCandidateItem = {
   sourceName: string;
   originalUrl: string;
   publishedAt: Date;
+  publishedAtKnown: boolean;
   createdAt: Date;
   qualityScore: number;
 };
@@ -123,7 +125,7 @@ export type EventBriefingCandidate = {
   eventObject: string | null;
   eventDate: string | null;
   isFollowUp: boolean;
-  tags: EventCandidateTag[];
+  entities: EventCandidateEntity[];
   sources: EventCandidateSource[];
   items: EventCandidateItem[];
   searchText: string;

@@ -23,7 +23,7 @@ import {
   scheduleItemProcessingRetry,
 } from "@/lib/items/processing-state";
 import { ITEM_PROCESSING_RECOVERY_MAX_ATTEMPTS } from "@/config/constants";
-import { replaceItemTags } from "@/lib/tags/service";
+import { getItemEntityNamesFromEvent, replaceItemEntities } from "@/lib/entities/service";
 import type {
   ParsedFeedItem,
   ProcessedItemRecord,
@@ -45,6 +45,7 @@ export type PreparedFeedItemLookup = {
   originalTitle: string;
   originalUrl: string;
   publishedAt: Date;
+  publishedAtKnown: boolean;
   rssContent: string | null;
   rssExcerpt: string | null;
   canonicalUrl: string;
@@ -100,15 +101,33 @@ function getFeedItemAuthor(item: ParsedFeedItem): string | null {
   return normalizeFeedAuthor(item.creator) ?? normalizeFeedAuthor(item.author);
 }
 
-function parsePublishedAt(item: ParsedFeedItem, fallback: Date): Date {
+export function parsePublishedAt(item: ParsedFeedItem, fallback: Date): { value: Date; known: boolean } {
   const raw = item.isoDate || item.pubDate;
   const parsed = raw ? new Date(raw) : null;
 
   if (!parsed || Number.isNaN(parsed.getTime())) {
-    return fallback;
+    return { value: fallback, known: false };
   }
 
-  return parsed;
+  return { value: parsed, known: true };
+}
+
+function resolvePublishedAt(input: {
+  existing?: Pick<Item, "publishedAt" | "publishedAtKnown"> | null;
+  incoming: Date;
+  incomingKnown: boolean;
+}) {
+  if (input.existing?.publishedAtKnown && !input.incomingKnown) {
+    return {
+      value: input.existing.publishedAt,
+      known: true,
+    };
+  }
+
+  return {
+    value: input.incoming,
+    known: Boolean(input.existing?.publishedAtKnown || input.incomingKnown),
+  };
 }
 
 function normalizeUrl(url: string): string {
@@ -126,11 +145,11 @@ function appendIssue(issues: string[], error: unknown, fallbackMessage: string) 
   issues.push(error instanceof Error ? error.message : fallbackMessage);
 }
 
-async function replaceItemTagsSafely(itemId: string, tags: unknown, issues: string[]) {
+async function replaceItemEntitiesSafely(itemId: string, entities: unknown, issues: string[]) {
   try {
-    await replaceItemTags(itemId, tags);
+    await replaceItemEntities(itemId, entities);
   } catch (error) {
-    appendIssue(issues, error, "Unknown item tag persistence error");
+    appendIssue(issues, error, "Unknown item entity persistence error");
   }
 }
 
@@ -268,7 +287,7 @@ export function buildPreparedFeedItemLookup(preparedItem: PreparedFeedItem, now:
     return null;
   }
 
-  const publishedAt = parsePublishedAt(preparedItem.item, now);
+  const parsedPublishedAt = parsePublishedAt(preparedItem.item, now);
   const rssContent = getBestContent(preparedItem.item).trim() || null;
   const rssExcerpt = preparedItem.item.contentSnippet?.trim() || null;
   const canonicalUrl = normalizeUrl(originalUrl);
@@ -279,7 +298,8 @@ export function buildPreparedFeedItemLookup(preparedItem: PreparedFeedItem, now:
   return {
     originalTitle,
     originalUrl,
-    publishedAt,
+    publishedAt: parsedPublishedAt.value,
+    publishedAtKnown: parsedPublishedAt.known,
     rssContent,
     rssExcerpt,
     canonicalUrl,
@@ -366,6 +386,7 @@ export async function processFeedItem({
     originalTitle,
     originalUrl,
     publishedAt,
+    publishedAtKnown,
     rssContent,
     rssExcerpt,
     dedupeKeys,
@@ -376,6 +397,11 @@ export async function processFeedItem({
       : existingItem;
   const author = getFeedItemAuthor(item);
   const isNew = !existing;
+  const resolvedPublishedAt = resolvePublishedAt({
+    existing,
+    incoming: publishedAt,
+    incomingKnown: publishedAtKnown,
+  });
 
   let fullText = existing?.fullText ?? null;
   let translatedTitle = existing?.translatedTitle ?? null;
@@ -394,7 +420,7 @@ export async function processFeedItem({
   let qualityScore = existing?.qualityScore ?? 50;
   let qualityRationale = existing?.qualityRationale ?? "AI analysis unavailable";
   let eventSignature: AiEventSignature | null = readStoredEventSignature(existing);
-  let itemTags: string[] = [];
+  let itemEntities: string[] = [];
   let fullTextFetched = false;
   let summaryCompleted = false;
   let summaryFailed = false;
@@ -456,7 +482,8 @@ export async function processFeedItem({
         originalTitle,
         translatedTitle,
         author,
-        publishedAt,
+        publishedAt: resolvedPublishedAt.value,
+        publishedAtKnown: resolvedPublishedAt.known,
         rssExcerpt,
         rssContent,
         fullText,
@@ -486,7 +513,7 @@ export async function processFeedItem({
       },
     );
     addElapsed(timings, "dbWriteMs", dbWriteStartedAt);
-    await replaceItemTagsSafely(stored.id, [], issues);
+    await replaceItemEntitiesSafely(stored.id, [], issues);
 
     return {
       id: stored.id,
@@ -603,7 +630,7 @@ export async function processFeedItem({
         qualityScore = understanding.qualityScore;
         qualityRationale = understanding.qualityRationale;
         eventSignature = understanding.eventSignature;
-        itemTags = understanding.tags;
+        itemEntities = getItemEntityNamesFromEvent(understanding.eventSignature);
       }
       analysisStatus = understanding.diagnostics.analysisValid ? "succeeded" : "failed";
       analysisCompleted = understanding.diagnostics.analysisValid;
@@ -638,7 +665,8 @@ export async function processFeedItem({
             originalTitle,
             translatedTitle,
             author,
-            publishedAt,
+            publishedAt: resolvedPublishedAt.value,
+            publishedAtKnown: resolvedPublishedAt.known,
             rssExcerpt,
             rssContent,
             fullText,
@@ -675,7 +703,8 @@ export async function processFeedItem({
         const { childItemIds } = await persistAggregationChildItems({
           sourceId,
           parent: preUpsert,
-          publishedAt,
+          publishedAt: resolvedPublishedAt.value,
+          publishedAtKnown: resolvedPublishedAt.known,
           events,
         });
         addElapsed(timings, "dbWriteMs", childPersistStartedAt);
@@ -740,7 +769,7 @@ export async function processFeedItem({
     qualityScore = 50;
     qualityRationale = "AI parsing disabled for this source";
     eventSignature = null;
-    itemTags = [];
+    itemEntities = [];
     status = "processed";
   }
 
@@ -758,7 +787,8 @@ export async function processFeedItem({
       originalTitle,
       translatedTitle,
       author,
-      publishedAt,
+      publishedAt: resolvedPublishedAt.value,
+      publishedAtKnown: resolvedPublishedAt.known,
       rssExcerpt,
       rssContent,
       fullText,
@@ -790,9 +820,9 @@ export async function processFeedItem({
   addElapsed(timings, "dbWriteMs", dbWriteStartedAt);
 
   if (!isAggregation) {
-    await replaceItemTagsSafely(
+    await replaceItemEntitiesSafely(
       stored.id,
-      status === "processed" && analysisStatus === "succeeded" ? itemTags : [],
+      status === "processed" && analysisStatus === "succeeded" ? itemEntities : [],
       issues,
     );
   }

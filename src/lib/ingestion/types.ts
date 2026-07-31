@@ -106,6 +106,8 @@ export type RunIngestionOptions = {
   fullTextFetchThreshold: number;
   contentExtraction: import("@/config/runtime").RuntimeConfig["contentExtraction"];
   perSourceItemLimit: number;
+  /** Safety cap applied after time ordering and window filtering, before per-source processing limit. */
+  maxFeedItemsToScan?: number;
   processingStartAt?: Date | null;
   now?: Date;
   onProgress?: (snapshot: {

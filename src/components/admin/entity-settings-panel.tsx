@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import {
-  addAdminTagAlias,
-  autoMergeHighConfidenceAdminTagSuggestions,
-  deleteAdminTagAlias,
-  dismissAdminTagSuggestion,
-  type AdminTag,
-  type AdminTagSort,
-  type AdminTagSuggestion,
-  type AdminTagSuggestionSort,
-  listAdminTags,
-  listAdminTagSuggestions,
-  mergeAdminTags,
-  precomputeAdminTagSuggestions,
+  addAdminEntityAlias,
+  autoMergeHighConfidenceAdminEntitySuggestions,
+  deleteAdminEntityAlias,
+  dismissAdminEntitySuggestion,
+  type AdminEntity,
+  type AdminEntitySort,
+  type AdminEntitySuggestion,
+  type AdminEntitySuggestionSort,
+  listAdminEntities,
+  listAdminEntitySuggestions,
+  mergeAdminEntities,
+  precomputeAdminEntitySuggestions,
 } from "@/components/admin/admin-settings-panel.api";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -33,18 +33,18 @@ const DEFAULT_PAGE_SIZE = 10;
 const MERGE_CANDIDATE_PAGE_SIZE = 100;
 const DEFAULT_SUGGESTION_PAGE_SIZE = 10;
 const SUGGESTION_LOAD_DEBOUNCE_MS = 250;
-const TAG_SORT_OPTIONS: Array<{ value: AdminTagSort; label: string }> = [
+const ENTITY_SORT_OPTIONS: Array<{ value: AdminEntitySort; label: string }> = [
   { value: "usage_desc", label: "使用数倒序" },
   { value: "updated_desc", label: "更新时间倒序" },
   { value: "name_asc", label: "名称 A-Z" },
   { value: "alias_desc", label: "别名数倒序" },
 ];
-const SUGGESTION_SORT_OPTIONS: Array<{ value: AdminTagSuggestionSort; label: string }> = [
+const SUGGESTION_SORT_OPTIONS: Array<{ value: AdminEntitySuggestionSort; label: string }> = [
   { value: "confidence_desc", label: "置信度倒序" },
   { value: "affected_desc", label: "影响条数倒序" },
 ];
 
-function formatTagCount(count: number) {
+function formatEntityCount(count: number) {
   return `${count} 条`;
 }
 
@@ -61,28 +61,28 @@ function formatConfidence(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
-type TagSuggestionPanelProps = {
-  suggestions: AdminTagSuggestion[];
+type EntitySuggestionPanelProps = {
+  suggestions: AdminEntitySuggestion[];
   totalCount: number;
   page: number;
   pageSize: number;
   search: string;
-  sort: AdminTagSuggestionSort;
+  sort: AdminEntitySuggestionSort;
   isOpen: boolean;
   isBusy: boolean;
   error: string | null;
   onClose: () => void;
   onSearchChange: (value: string) => void;
-  onSortChange: (value: AdminTagSuggestionSort) => void;
+  onSortChange: (value: AdminEntitySuggestionSort) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
-  onOpenMergeChoice: (suggestion: AdminTagSuggestion) => void;
-  onOpenDismissChoice: (suggestion: AdminTagSuggestion) => void;
+  onOpenMergeChoice: (suggestion: AdminEntitySuggestion) => void;
+  onOpenDismissChoice: (suggestion: AdminEntitySuggestion) => void;
   onAutoMergeHighConfidence: () => void;
   onRefresh: () => void;
 };
 
-function TagSuggestionModal({
+function EntitySuggestionModal({
   suggestions,
   totalCount,
   page,
@@ -101,7 +101,7 @@ function TagSuggestionModal({
   onOpenDismissChoice,
   onAutoMergeHighConfidence,
   onRefresh,
-}: TagSuggestionPanelProps) {
+}: EntitySuggestionPanelProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
@@ -133,19 +133,19 @@ function TagSuggestionModal({
       <div className="space-y-4">
         <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-2">
           <FilterInput
-            id="tag-suggestion-keyword"
-            label="筛选标签"
-            ariaLabel="治理建议标签筛选"
-            placeholder="搜索来源或目标标签"
+            id="entity-suggestion-keyword"
+            label="筛选实体"
+            ariaLabel="治理建议实体筛选"
+            placeholder="搜索来源或目标实体"
             value={search}
             onChange={onSearchChange}
           />
           <FilterSelect
-            id="tag-suggestion-sort"
+            id="entity-suggestion-sort"
             label="排序"
             ariaLabel="治理建议排序"
             value={sort}
-            onChange={(value) => onSortChange(value as AdminTagSuggestionSort)}
+            onChange={(value) => onSortChange(value as AdminEntitySuggestionSort)}
             options={SUGGESTION_SORT_OPTIONS}
             showSearch={false}
           />
@@ -162,8 +162,8 @@ function TagSuggestionModal({
             <table className="w-full table-auto text-sm">
               <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
                 <tr>
-                  <th className="w-[22%] px-3 py-2 text-left">来源标签</th>
-                  <th className="w-[22%] px-3 py-2 text-left">目标标签</th>
+                  <th className="w-[22%] px-3 py-2 text-left">来源实体</th>
+                  <th className="w-[22%] px-3 py-2 text-left">目标实体</th>
                   <th className="w-[10%] whitespace-nowrap px-3 py-2 text-left">置信度</th>
                   <th className="w-[12%] whitespace-nowrap px-3 py-2 text-left">影响</th>
                   <th className="w-[22%] px-3 py-2 text-left">原因</th>
@@ -174,22 +174,22 @@ function TagSuggestionModal({
                 {suggestions.map((suggestion) => (
                   <tr key={suggestion.id} className="align-top transition-colors hover:bg-[var(--bg-muted)]">
                     <td className="px-3 py-3">
-                      <div className="font-medium text-[var(--foreground)]">{suggestion.sourceTag.name}</div>
+                      <div className="font-medium text-[var(--foreground)]">{suggestion.sourceEntity.name}</div>
                       <div className="mt-1 text-xs text-[var(--muted)]">
-                        {formatTagCount(suggestion.sourceTag.itemCount)}
+                        {formatEntityCount(suggestion.sourceEntity.itemCount)}
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <div className="font-medium text-[var(--foreground)]">{suggestion.targetTag.name}</div>
+                      <div className="font-medium text-[var(--foreground)]">{suggestion.targetEntity.name}</div>
                       <div className="mt-1 text-xs text-[var(--muted)]">
-                        {formatTagCount(suggestion.targetTag.itemCount)}
+                        {formatEntityCount(suggestion.targetEntity.itemCount)}
                       </div>
                     </td>
                     <td className="px-3 py-3 font-medium text-[var(--accent-strong)]">
                       {formatConfidence(suggestion.confidence)}
                     </td>
                     <td className="px-3 py-3 text-[var(--text-2)]">
-                      {formatTagCount(suggestion.affectedItemCount)}
+                      {formatEntityCount(suggestion.affectedItemCount)}
                     </td>
                     <td className="px-3 py-3 text-xs leading-5 text-[var(--text-2)]">
                       {suggestion.reasons.join("；")}
@@ -197,7 +197,7 @@ function TagSuggestionModal({
                     <td className="px-3 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <IconButton
-                          aria-label={`选择合并方向：${suggestion.sourceTag.name}`}
+                          aria-label={`选择合并方向：${suggestion.sourceEntity.name}`}
                           title="选择合并方向"
                           size="sm"
                           variant="ghost"
@@ -207,7 +207,7 @@ function TagSuggestionModal({
                           <IconMerge className="h-4 w-4" />
                         </IconButton>
                         <IconButton
-                          aria-label={`处理治理建议：${suggestion.sourceTag.name}`}
+                          aria-label={`处理治理建议：${suggestion.sourceEntity.name}`}
                           title="处理治理建议"
                           size="sm"
                           variant="ghost"
@@ -242,7 +242,7 @@ function TagSuggestionModal({
 }
 
 type SuggestionChoiceModalProps = {
-  suggestion: AdminTagSuggestion | null;
+  suggestion: AdminEntitySuggestion | null;
   isOpen: boolean;
   isBusy: boolean;
   onClose: () => void;
@@ -285,27 +285,27 @@ function SuggestionMergeChoiceModal({
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-[color:var(--line)] p-3">
-          <div className="text-xs text-[var(--text-3)]">来源标签</div>
+          <div className="text-xs text-[var(--text-3)]">来源实体</div>
           <div className="mt-1 text-sm font-medium text-[var(--foreground)]">
-            {suggestion?.sourceTag.name ?? "-"}
+            {suggestion?.sourceEntity.name ?? "-"}
           </div>
         </div>
         <div className="rounded-lg border border-[color:var(--accent-soft)] bg-[var(--accent-soft)]/30 p-3">
-          <div className="text-xs text-[var(--text-3)]">目标标签</div>
+          <div className="text-xs text-[var(--text-3)]">目标实体</div>
           <div className="mt-1 text-sm font-medium text-[var(--foreground)]">
-            {suggestion?.targetTag.name ?? "-"}
+            {suggestion?.targetEntity.name ?? "-"}
           </div>
         </div>
       </div>
       <p className="text-sm leading-6 text-[var(--muted)]">
-        “合并到目标”会保留目标标签；“合并到来源”会保留来源标签，并把目标标签合并过去。
+        “合并到目标”会保留目标实体；“合并到来源”会保留来源实体，并把目标实体合并过去。
       </p>
     </ModalShell>
   );
 }
 
 type SuggestionDismissChoiceModalProps = {
-  suggestion: AdminTagSuggestion | null;
+  suggestion: AdminEntitySuggestion | null;
   isOpen: boolean;
   isBusy: boolean;
   onClose: () => void;
@@ -347,17 +347,17 @@ function SuggestionDismissChoiceModal({
       }
     >
       <div className="rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-3 text-sm text-[var(--text-2)]">
-        {suggestion ? `${suggestion.sourceTag.name} / ${suggestion.targetTag.name}` : "标签建议"}
+        {suggestion ? `${suggestion.sourceEntity.name} / ${suggestion.targetEntity.name}` : "实体建议"}
       </div>
       <p className="text-sm leading-6 text-[var(--muted)]">
-        “不合并”表示确认两者都应保留为规范标签；“临时忽略”表示暂不处理这条建议。两种操作都会隐藏当前建议对。
+        “不合并”表示确认两者都应保留为规范实体；“临时忽略”表示暂不处理这条建议。两种操作都会隐藏当前建议对。
       </p>
     </ModalShell>
   );
 }
 
-type TagManageModalProps = {
-  tag: AdminTag | null;
+type EntityManageModalProps = {
+  entity: AdminEntity | null;
   isOpen: boolean;
   isBusy: boolean;
   onClose: () => void;
@@ -366,20 +366,20 @@ type TagManageModalProps = {
   onOpenAlias: () => void;
 };
 
-function TagManageModal({
-  tag,
+function EntityManageModal({
+  entity,
   isOpen,
   isBusy,
   onClose,
   onDeleteAlias,
   onOpenMerge,
   onOpenAlias,
-}: TagManageModalProps) {
+}: EntityManageModalProps) {
   return (
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
-      title="标签详情"
+      title="实体详情"
       widthClassName="max-w-3xl"
       headerClassName="border-b border-[color:var(--line)] p-6"
       bodyClassName="space-y-4 p-6 max-h-[70vh] overflow-y-auto"
@@ -392,7 +392,7 @@ function TagManageModal({
           </Button>
           <Button className="gap-2" onClick={onOpenMerge} variant="secondary" disabled={isBusy}>
             <IconMerge className="h-4 w-4" />
-            合并标签
+            合并实体
           </Button>
           <Button onClick={onClose} variant="secondary" disabled={isBusy}>
             关闭
@@ -405,16 +405,16 @@ function TagManageModal({
           <h4 className="text-sm font-semibold text-[var(--text-1)]">基本信息</h4>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
             <div>
-              <div className="text-xs text-[var(--text-3)]">标签名称</div>
-              <div className="mt-1 truncate text-sm font-medium text-[var(--foreground)]">{tag?.name ?? "-"}</div>
+              <div className="text-xs text-[var(--text-3)]">实体名称</div>
+              <div className="mt-1 truncate text-sm font-medium text-[var(--foreground)]">{entity?.name ?? "-"}</div>
             </div>
             <div>
               <div className="text-xs text-[var(--text-3)]">关联内容</div>
-              <div className="mt-1 text-sm text-[var(--text-2)]">{formatTagCount(tag?.itemCount ?? 0)}</div>
+              <div className="mt-1 text-sm text-[var(--text-2)]">{formatEntityCount(entity?.itemCount ?? 0)}</div>
             </div>
             <div>
               <div className="text-xs text-[var(--text-3)]">关联别名</div>
-              <div className="mt-1 text-sm text-[var(--text-2)]">{tag?.aliasCount ?? 0} 个</div>
+              <div className="mt-1 text-sm text-[var(--text-2)]">{entity?.aliasCount ?? 0} 个</div>
             </div>
           </div>
         </section>
@@ -423,9 +423,9 @@ function TagManageModal({
           <div className="border-b border-[color:var(--line)] bg-[var(--bg-muted)] px-4 py-3 text-sm font-semibold text-[var(--text-1)]">
             已有关联别名
           </div>
-          {tag?.aliases.length ? (
+          {entity?.aliases.length ? (
             <div className="divide-y divide-[color:var(--line)]">
-              {tag.aliases.map((alias) => (
+              {entity.aliases.map((alias) => (
                 <div key={alias.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-[var(--text-1)]">{alias.aliasName}</div>
@@ -455,18 +455,18 @@ function TagManageModal({
   );
 }
 
-type TagMergeModalProps = {
-  targetTag: AdminTag | null;
+type EntityMergeModalProps = {
+  targetEntity: AdminEntity | null;
   isOpen: boolean;
   isBusy: boolean;
   onClose: () => void;
-  onMerge: (sourceTagIds: string[]) => void;
+  onMerge: (sourceEntityIds: string[]) => void;
 };
 
-function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMergeModalProps) {
+function EntityMergeModal({ targetEntity, isOpen, isBusy, onClose, onMerge }: EntityMergeModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [candidateTags, setCandidateTags] = useState<AdminTag[]>([]);
-  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const [candidateEntities, setCandidateEntities] = useState<AdminEntity[]>([]);
+  const [selectedEntityIds, setSelectedEntityIds] = useState<Set<string>>(new Set());
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
 
   useEffect(() => {
@@ -476,11 +476,11 @@ function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMerge
 
     const timeoutId = window.setTimeout(() => {
       setSearchQuery("");
-      setSelectedTagIds(new Set());
+      setSelectedEntityIds(new Set());
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [isOpen, targetTag?.id]);
+  }, [isOpen, targetEntity?.id]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -491,7 +491,7 @@ function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMerge
     const timeoutId = window.setTimeout(async () => {
       setIsLoadingCandidates(true);
       try {
-        const result = await listAdminTags({
+        const result = await listAdminEntities({
           search: searchQuery,
           page: 1,
           pageSize: MERGE_CANDIDATE_PAGE_SIZE,
@@ -499,7 +499,7 @@ function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMerge
         if (cancelled) {
           return;
         }
-        setCandidateTags(result.tags.filter((tag) => tag.id !== targetTag?.id));
+        setCandidateEntities(result.entities.filter((entity) => entity.id !== targetEntity?.id));
       } finally {
         if (!cancelled) {
           setIsLoadingCandidates(false);
@@ -511,33 +511,33 @@ function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMerge
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [isOpen, searchQuery, targetTag?.id]);
+  }, [isOpen, searchQuery, targetEntity?.id]);
 
-  function toggleTag(tagId: string) {
-    setSelectedTagIds((current) => {
+  function toggleEntity(entityId: string) {
+    setSelectedEntityIds((current) => {
       const next = new Set(current);
-      if (next.has(tagId)) {
-        next.delete(tagId);
+      if (next.has(entityId)) {
+        next.delete(entityId);
       } else {
-        next.add(tagId);
+        next.add(entityId);
       }
       return next;
     });
   }
 
   function handleMerge() {
-    if (selectedTagIds.size === 0) {
+    if (selectedEntityIds.size === 0) {
       return;
     }
 
-    onMerge([...selectedTagIds]);
+    onMerge([...selectedEntityIds]);
   }
 
   return (
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
-      title="合并标签"
+      title="合并实体"
       widthClassName="max-w-3xl"
       headerClassName="border-b border-[color:var(--line)] p-4"
       bodyClassName="p-4 space-y-4"
@@ -551,10 +551,10 @@ function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMerge
             className="gap-2"
             onClick={handleMerge}
             variant="primary"
-            disabled={isBusy || selectedTagIds.size === 0}
+            disabled={isBusy || selectedEntityIds.size === 0}
           >
             {isBusy ? <IconRotateCw className="h-4 w-4 animate-spin" /> : <IconMerge className="h-4 w-4" />}
-            确认合并 ({selectedTagIds.size} 个)
+            确认合并 ({selectedEntityIds.size} 个)
           </Button>
         </div>
       }
@@ -563,65 +563,65 @@ function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMerge
         <div className="rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4">
           <h4 className="mb-2 text-sm font-semibold text-[var(--text-1)]">操作说明</h4>
           <ul className="list-inside list-disc space-y-1 text-sm text-[var(--text-2)]">
-            <li>选中的来源标签会合并到当前目标标签</li>
-            <li>合并后，来源标签的内容会归属到目标标签</li>
-            <li>来源标签名称和已有别名会自动保存为目标标签的别名</li>
+            <li>选中的来源实体会合并到当前目标实体</li>
+            <li>合并后，来源实体的内容会归属到目标实体</li>
+            <li>来源实体名称和已有别名会自动保存为目标实体的别名</li>
           </ul>
         </div>
 
         <div className="space-y-2">
-          <h4 className="text-sm font-semibold text-[var(--text-1)]">目标标签（当前）</h4>
+          <h4 className="text-sm font-semibold text-[var(--text-1)]">目标实体（当前）</h4>
           <div className="rounded-lg border border-[color:var(--accent-soft)] bg-[var(--accent-soft)]/30 p-3">
-            <div className="text-sm font-medium text-[var(--foreground)]">{targetTag?.name ?? "加载中..."}</div>
+            <div className="text-sm font-medium text-[var(--foreground)]">{targetEntity?.name ?? "加载中..."}</div>
             <div className="mt-1 text-xs text-[var(--muted)]">
-              {targetTag ? `${formatTagCount(targetTag.itemCount)} · ${targetTag.aliasCount} 个别名` : ""}
+              {targetEntity ? `${formatEntityCount(targetEntity.itemCount)} · ${targetEntity.aliasCount} 个别名` : ""}
             </div>
           </div>
         </div>
 
         <div className="space-y-2">
           <h4 className="text-sm font-semibold text-[var(--text-1)]">
-            选择要合并的标签
-            {selectedTagIds.size > 0 ? (
+            选择要合并的实体
+            {selectedEntityIds.size > 0 ? (
               <span className="ml-2 text-xs font-normal text-[var(--accent-strong)]">
-                已选择 {selectedTagIds.size} 个
+                已选择 {selectedEntityIds.size} 个
               </span>
             ) : null}
           </h4>
           <TextInput
-            aria-label="搜索要合并的标签"
+            aria-label="搜索要合并的实体"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="搜索标签名称或别名..."
+            placeholder="搜索实体名称或别名..."
           />
           <div className="max-h-[280px] space-y-1 overflow-y-auto rounded-lg border border-[color:var(--line)] p-2">
             {isLoadingCandidates ? (
-              <p className="py-4 text-center text-sm text-[var(--muted)]">正在搜索标签...</p>
-            ) : candidateTags.length === 0 ? (
+              <p className="py-4 text-center text-sm text-[var(--muted)]">正在搜索实体...</p>
+            ) : candidateEntities.length === 0 ? (
               <p className="py-4 text-center text-sm text-[var(--muted)]">
-                {searchQuery.trim() ? "未找到匹配的标签" : "暂无可合并的标签"}
+                {searchQuery.trim() ? "未找到匹配的实体" : "暂无可合并的实体"}
               </p>
             ) : (
-              candidateTags.map((tag) => (
+              candidateEntities.map((entity) => (
                 <label
-                  key={tag.id}
+                  key={entity.id}
                   className={cx(
                     "flex cursor-pointer items-center gap-3 rounded-lg border p-2 transition-colors",
-                    selectedTagIds.has(tag.id)
+                    selectedEntityIds.has(entity.id)
                       ? "border-[color:var(--accent)] bg-[var(--accent-soft)]"
                       : "border-transparent hover:bg-[var(--surface)]",
                   )}
                 >
                   <input
                     type="checkbox"
-                    checked={selectedTagIds.has(tag.id)}
-                    onChange={() => toggleTag(tag.id)}
+                    checked={selectedEntityIds.has(entity.id)}
+                    onChange={() => toggleEntity(entity.id)}
                     className="h-4 w-4 rounded text-[var(--accent)]"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-[var(--foreground)]">{tag.name}</div>
+                    <div className="truncate text-sm font-medium text-[var(--foreground)]">{entity.name}</div>
                     <div className="text-xs text-[var(--muted)]">
-                      {formatTagCount(tag.itemCount)} · {tag.aliasCount} 个别名
+                      {formatEntityCount(entity.itemCount)} · {entity.aliasCount} 个别名
                     </div>
                   </div>
                 </label>
@@ -635,14 +635,14 @@ function TagMergeModal({ targetTag, isOpen, isBusy, onClose, onMerge }: TagMerge
 }
 
 type AddAliasModalProps = {
-  tag: AdminTag | null;
+  entity: AdminEntity | null;
   isOpen: boolean;
   isBusy: boolean;
   onClose: () => void;
   onAddAlias: (aliasName: string) => void;
 };
 
-function AddAliasModal({ tag, isOpen, isBusy, onClose, onAddAlias }: AddAliasModalProps) {
+function AddAliasModal({ entity, isOpen, isBusy, onClose, onAddAlias }: AddAliasModalProps) {
   const [aliasName, setAliasName] = useState("");
 
   useEffect(() => {
@@ -655,7 +655,7 @@ function AddAliasModal({ tag, isOpen, isBusy, onClose, onAddAlias }: AddAliasMod
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [isOpen, tag?.id]);
+  }, [isOpen, entity?.id]);
 
   function handleSubmit() {
     if (!aliasName.trim()) {
@@ -688,15 +688,15 @@ function AddAliasModal({ tag, isOpen, isBusy, onClose, onAddAlias }: AddAliasMod
       }
     >
       <div className="rounded-lg border border-[color:var(--accent-soft)] bg-[var(--accent-soft)]/30 p-3">
-        <div className="text-sm font-medium text-[var(--foreground)]">{tag?.name ?? "标签"}</div>
-        <div className="mt-1 text-xs text-[var(--muted)]">新内容命中别名后会自动写入该标签</div>
+        <div className="text-sm font-medium text-[var(--foreground)]">{entity?.name ?? "实体"}</div>
+        <div className="mt-1 text-xs text-[var(--muted)]">新内容命中别名后会自动写入该实体</div>
       </div>
       <div className="space-y-1">
-        <label className="text-sm text-[var(--text-2)]" htmlFor="tag-alias-name">
+        <label className="text-sm text-[var(--text-2)]" htmlFor="entity-alias-name">
           别名
         </label>
         <TextInput
-          id="tag-alias-name"
+          id="entity-alias-name"
           value={aliasName}
           onChange={(event) => setAliasName(event.target.value)}
           onKeyDown={(event) => {
@@ -711,63 +711,63 @@ function AddAliasModal({ tag, isOpen, isBusy, onClose, onAddAlias }: AddAliasMod
   );
 }
 
-export function TagSettingsPanel({
+export function EntitySettingsPanel({
   initialOpenSuggestions = false,
 }: {
   initialOpenSuggestions?: boolean;
 } = {}) {
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [tags, setTags] = useState<AdminTag[]>([]);
-  const [suggestions, setSuggestions] = useState<AdminTagSuggestion[]>([]);
+  const [entities, setEntities] = useState<AdminEntity[]>([]);
+  const [suggestions, setSuggestions] = useState<AdminEntitySuggestion[]>([]);
   const [suggestionTotalCount, setSuggestionTotalCount] = useState(0);
   const [suggestionSearch, setSuggestionSearch] = useState("");
-  const [suggestionSort, setSuggestionSort] = useState<AdminTagSuggestionSort>("affected_desc");
+  const [suggestionSort, setSuggestionSort] = useState<AdminEntitySuggestionSort>("affected_desc");
   const [suggestionPage, setSuggestionPage] = useState(1);
   const [suggestionPageSize, setSuggestionPageSize] = useState(DEFAULT_SUGGESTION_PAGE_SIZE);
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<AdminTagSort>("usage_desc");
+  const [sort, setSort] = useState<AdminEntitySort>("usage_desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [managingTagId, setManagingTagId] = useState<string | null>(null);
+  const [managingEntityId, setManagingEntityId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isAliasModalOpen, setIsAliasModalOpen] = useState(false);
   const [isSuggestionModalOpen, setIsSuggestionModalOpen] = useState(initialOpenSuggestions);
-  const [mergeChoiceSuggestion, setMergeChoiceSuggestion] = useState<AdminTagSuggestion | null>(null);
-  const [dismissChoiceSuggestion, setDismissChoiceSuggestion] = useState<AdminTagSuggestion | null>(null);
+  const [mergeChoiceSuggestion, setMergeChoiceSuggestion] = useState<AdminEntitySuggestion | null>(null);
+  const [dismissChoiceSuggestion, setDismissChoiceSuggestion] = useState<AdminEntitySuggestion | null>(null);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  const managingTag = useMemo(
-    () => tags.find((tag) => tag.id === managingTagId) ?? null,
-    [managingTagId, tags],
+  const managingEntity = useMemo(
+    () => entities.find((entity) => entity.id === managingEntityId) ?? null,
+    [managingEntityId, entities],
   );
   const hasSearch = Boolean(search);
   const hasFilters = hasSearch || sort !== "usage_desc";
 
-  const loadTags = useCallback(async () => {
+  const loadEntities = useCallback(async () => {
     try {
-      const payload = await listAdminTags({ search, sort, page, pageSize });
+      const payload = await listAdminEntities({ search, sort, page, pageSize });
       setError(null);
-      setTags(payload.tags);
+      setEntities(payload.entities);
       setTotalCount(payload.totalCount);
-      if (managingTagId && !payload.tags.some((tag) => tag.id === managingTagId)) {
-        setManagingTagId(null);
+      if (managingEntityId && !payload.entities.some((entity) => entity.id === managingEntityId)) {
+        setManagingEntityId(null);
         setIsDetailModalOpen(false);
         setIsMergeModalOpen(false);
         setIsAliasModalOpen(false);
       }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "标签列表加载失败。");
+      setError(loadError instanceof Error ? loadError.message : "实体列表加载失败。");
     }
-  }, [managingTagId, page, pageSize, search, sort]);
+  }, [managingEntityId, page, pageSize, search, sort]);
 
   const loadSuggestions = useCallback(async () => {
     try {
-      const payload = await listAdminTagSuggestions({
+      const payload = await listAdminEntitySuggestions({
         search: suggestionSearch,
         sort: suggestionSort,
         page: suggestionPage,
@@ -777,17 +777,17 @@ export function TagSettingsPanel({
       setSuggestions(payload.suggestions);
       setSuggestionTotalCount(payload.totalCount);
     } catch (loadError) {
-      setSuggestionError(loadError instanceof Error ? loadError.message : "标签治理建议加载失败。");
+      setSuggestionError(loadError instanceof Error ? loadError.message : "实体治理建议加载失败。");
     }
   }, [suggestionPage, suggestionPageSize, suggestionSearch, suggestionSort]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      void loadTags();
+      void loadEntities();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [loadTags]);
+  }, [loadEntities]);
 
   useEffect(() => {
     if (!isSuggestionModalOpen) {
@@ -810,86 +810,86 @@ export function TagSettingsPanel({
   function handleRefresh() {
     startTransition(async () => {
       await Promise.all([
-        loadTags(),
+        loadEntities(),
         isSuggestionModalOpen ? loadSuggestions() : Promise.resolve(),
       ]);
     });
   }
 
-  async function reloadAfterTagMutation() {
+  async function reloadAfterEntityMutation() {
     await Promise.all([
-      loadTags(),
+      loadEntities(),
       isSuggestionModalOpen ? loadSuggestions() : Promise.resolve(),
     ]);
   }
 
   async function handleAddAlias(aliasName: string) {
-    if (!managingTag) {
+    if (!managingEntity) {
       return;
     }
 
-    await addAdminTagAlias({
-      tagId: managingTag.id,
+    await addAdminEntityAlias({
+      entityId: managingEntity.id,
       aliasName,
     });
     showToast("别名已添加。");
     setIsAliasModalOpen(false);
-    await reloadAfterTagMutation();
+    await reloadAfterEntityMutation();
   }
 
   async function handleDeleteAlias(aliasId: string) {
-    await deleteAdminTagAlias(aliasId);
+    await deleteAdminEntityAlias(aliasId);
     showToast("别名已删除。");
-    await reloadAfterTagMutation();
+    await reloadAfterEntityMutation();
   }
 
-  async function handleMerge(sourceTagIds: string[]) {
-    if (!managingTag) {
+  async function handleMerge(sourceEntityIds: string[]) {
+    if (!managingEntity) {
       return;
     }
 
-    const result = await mergeAdminTags({
-      targetTagId: managingTag.id,
-      sourceTagIds,
+    const result = await mergeAdminEntities({
+      targetEntityId: managingEntity.id,
+      sourceEntityIds,
     });
-    showToast(`已合并 ${result.mergedCount} 个标签。`);
+    showToast(`已合并 ${result.mergedCount} 个实体。`);
     setIsMergeModalOpen(false);
-    await reloadAfterTagMutation();
+    await reloadAfterEntityMutation();
   }
 
-  async function handleSuggestionMerge(suggestion: AdminTagSuggestion, direction: "target" | "source") {
-    const targetTagId = direction === "target" ? suggestion.targetTag.id : suggestion.sourceTag.id;
-    const sourceTagIds = [direction === "target" ? suggestion.sourceTag.id : suggestion.targetTag.id];
-    const result = await mergeAdminTags({
-      targetTagId,
-      sourceTagIds,
+  async function handleSuggestionMerge(suggestion: AdminEntitySuggestion, direction: "target" | "source") {
+    const targetEntityId = direction === "target" ? suggestion.targetEntity.id : suggestion.sourceEntity.id;
+    const sourceEntityIds = [direction === "target" ? suggestion.sourceEntity.id : suggestion.targetEntity.id];
+    const result = await mergeAdminEntities({
+      targetEntityId,
+      sourceEntityIds,
     });
-    showToast(`已合并 ${result.mergedCount} 个标签。`);
+    showToast(`已合并 ${result.mergedCount} 个实体。`);
     setMergeChoiceSuggestion(null);
-    await reloadAfterTagMutation();
+    await reloadAfterEntityMutation();
   }
 
-  async function handleSuggestionDismiss(suggestion: AdminTagSuggestion, decision: "ignored" | "kept") {
-    await dismissAdminTagSuggestion({
-      sourceTagId: suggestion.sourceTag.id,
-      targetTagId: suggestion.targetTag.id,
+  async function handleSuggestionDismiss(suggestion: AdminEntitySuggestion, decision: "ignored" | "kept") {
+    await dismissAdminEntitySuggestion({
+      sourceEntityId: suggestion.sourceEntity.id,
+      targetEntityId: suggestion.targetEntity.id,
       decision,
     });
-    showToast(decision === "kept" ? "已保留为规范标签。" : "已忽略该建议。");
+    showToast(decision === "kept" ? "已保留为规范实体。" : "已忽略该建议。");
     setDismissChoiceSuggestion(null);
     await loadSuggestions();
   }
 
   async function handleAutoMergeHighConfidenceSuggestions() {
-    const result = await autoMergeHighConfidenceAdminTagSuggestions();
+    const result = await autoMergeHighConfidenceAdminEntitySuggestions();
     const failedText = result.failedCount > 0 ? `，${result.failedCount} 条失败` : "";
     const skippedText = result.skippedCount > 0 ? `，${result.skippedCount} 条已跳过` : "";
-    showToast(`已自动合并 ${result.mergedCount} 个高置信标签${skippedText}${failedText}。`);
-    await reloadAfterTagMutation();
+    showToast(`已自动合并 ${result.mergedCount} 个高置信实体${skippedText}${failedText}。`);
+    await reloadAfterEntityMutation();
   }
 
   async function handleRefreshSuggestions() {
-    const result = await precomputeAdminTagSuggestions();
+    const result = await precomputeAdminEntitySuggestions();
     showToast(`已刷新 ${result.storedCandidates} 条治理建议。`);
     await loadSuggestions();
   }
@@ -904,22 +904,22 @@ export function TagSettingsPanel({
     });
   }
 
-  function openTagDetail(tagId: string) {
-    setManagingTagId(tagId);
+  function openEntityDetail(entityId: string) {
+    setManagingEntityId(entityId);
     setIsDetailModalOpen(true);
     setIsMergeModalOpen(false);
     setIsAliasModalOpen(false);
   }
 
-  function openTagAlias(tagId: string) {
-    setManagingTagId(tagId);
+  function openEntityAlias(entityId: string) {
+    setManagingEntityId(entityId);
     setIsDetailModalOpen(false);
     setIsMergeModalOpen(false);
     setIsAliasModalOpen(true);
   }
 
-  function openTagMerge(tagId: string) {
-    setManagingTagId(tagId);
+  function openEntityMerge(entityId: string) {
+    setManagingEntityId(entityId);
     setIsDetailModalOpen(false);
     setIsAliasModalOpen(false);
     setIsMergeModalOpen(true);
@@ -940,9 +940,9 @@ export function TagSettingsPanel({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold text-[var(--foreground)]">标签管理</h2>
+          <h2 className="text-lg font-semibold text-[var(--foreground)]">实体管理</h2>
           <p className="text-sm text-[var(--muted)]">
-            管理规范标签、同义别名和历史标签合并
+            管理规范实体、同义别名和历史实体合并
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -960,10 +960,10 @@ export function TagSettingsPanel({
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <FilterInput
-          id="tag-management-keyword"
+          id="entity-management-keyword"
           label="关键词"
-          ariaLabel="标签关键词"
-          placeholder="搜索标签名或别名"
+          ariaLabel="实体关键词"
+          placeholder="搜索实体名或别名"
           value={search}
           onChange={(value) => {
             setSearch(value);
@@ -971,31 +971,31 @@ export function TagSettingsPanel({
           }}
         />
         <FilterSelect
-          id="tag-management-sort"
+          id="entity-management-sort"
           label="排序"
-          ariaLabel="标签排序"
+          ariaLabel="实体排序"
           value={sort}
           onChange={(value) => {
-            setSort(value as AdminTagSort);
+            setSort(value as AdminEntitySort);
             setPage(1);
           }}
-          options={TAG_SORT_OPTIONS}
+          options={ENTITY_SORT_OPTIONS}
           showSearch={false}
         />
       </div>
 
       {error ? <StatusBanner tone="error">{error}</StatusBanner> : null}
 
-      {isPending && tags.length === 0 ? (
+      {isPending && entities.length === 0 ? (
         <EmptyState>加载中...</EmptyState>
-      ) : tags.length === 0 ? (
-        <EmptyState>{hasSearch ? "暂无匹配标签" : "暂无标签"}</EmptyState>
+      ) : entities.length === 0 ? (
+        <EmptyState>{hasSearch ? "暂无匹配实体" : "暂无实体"}</EmptyState>
       ) : (
         <div className="w-full overflow-x-auto">
           <table className="w-full table-auto text-sm">
             <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
               <tr>
-                <th className="w-[36%] px-4 py-3 text-left">标签</th>
+                <th className="w-[36%] px-4 py-3 text-left">实体</th>
                 <th className="w-[16%] whitespace-nowrap px-4 py-3 text-left">使用数</th>
                 <th className="w-[16%] whitespace-nowrap px-4 py-3 text-left">别名数</th>
                 <th className="w-[16%] whitespace-nowrap px-4 py-3 text-left">更新时间</th>
@@ -1003,25 +1003,25 @@ export function TagSettingsPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-[color:var(--line)]">
-              {tags.map((tag) => (
-                <tr key={tag.id} className="transition-colors hover:bg-[var(--bg-muted)]">
+              {entities.map((entity) => (
+                <tr key={entity.id} className="transition-colors hover:bg-[var(--bg-muted)]">
                   <td className="max-w-0 px-4 py-3">
                     <button
                       type="button"
-                      onClick={() => openTagDetail(tag.id)}
+                      onClick={() => openEntityDetail(entity.id)}
                       className="w-full truncate text-left font-medium text-[var(--foreground)] transition-colors hover:text-[var(--accent)]"
                     >
-                      {tag.name}
+                      {entity.name}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-[var(--text-2)]">{formatTagCount(tag.itemCount)}</td>
-                  <td className="px-4 py-3 text-[var(--text-2)]">{tag.aliasCount} 个</td>
-                  <td className="px-4 py-3 text-xs text-[var(--text-3)]">{formatDateTime(tag.updatedAt)}</td>
+                  <td className="px-4 py-3 text-[var(--text-2)]">{formatEntityCount(entity.itemCount)}</td>
+                  <td className="px-4 py-3 text-[var(--text-2)]">{entity.aliasCount} 个</td>
+                  <td className="px-4 py-3 text-xs text-[var(--text-3)]">{formatDateTime(entity.updatedAt)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <IconButton
-                        aria-label={`新增别名：${tag.name}`}
-                        onClick={() => openTagAlias(tag.id)}
+                        aria-label={`新增别名：${entity.name}`}
+                        onClick={() => openEntityAlias(entity.id)}
                         size="sm"
                         title="新增别名"
                         variant="ghost"
@@ -1029,10 +1029,10 @@ export function TagSettingsPanel({
                         <IconPlus className="h-4 w-4" />
                       </IconButton>
                       <IconButton
-                        aria-label={`合并标签：${tag.name}`}
-                        onClick={() => openTagMerge(tag.id)}
+                        aria-label={`合并实体：${entity.name}`}
+                        onClick={() => openEntityMerge(entity.id)}
                         size="sm"
-                        title="合并标签"
+                        title="合并实体"
                         variant="ghost"
                       >
                         <IconMerge className="h-4 w-4" />
@@ -1061,7 +1061,7 @@ export function TagSettingsPanel({
         />
       ) : null}
 
-      <TagSuggestionModal
+      <EntitySuggestionModal
         suggestions={suggestions}
         totalCount={suggestionTotalCount}
         page={suggestionPage}
@@ -1125,13 +1125,13 @@ export function TagSettingsPanel({
         }}
       />
 
-      <TagManageModal
-        tag={managingTag}
-        isOpen={Boolean(managingTag) && isDetailModalOpen}
+      <EntityManageModal
+        entity={managingEntity}
+        isOpen={Boolean(managingEntity) && isDetailModalOpen}
         isBusy={isPending}
         onClose={() => {
           setIsDetailModalOpen(false);
-          setManagingTagId(null);
+          setManagingEntityId(null);
           setIsMergeModalOpen(false);
           setIsAliasModalOpen(false);
         }}
@@ -1140,17 +1140,17 @@ export function TagSettingsPanel({
         onOpenAlias={() => setIsAliasModalOpen(true)}
       />
 
-      <TagMergeModal
-        targetTag={managingTag}
-        isOpen={Boolean(managingTag) && isMergeModalOpen}
+      <EntityMergeModal
+        targetEntity={managingEntity}
+        isOpen={Boolean(managingEntity) && isMergeModalOpen}
         isBusy={isPending}
         onClose={() => setIsMergeModalOpen(false)}
-        onMerge={(sourceTagIds) => runModalAction(() => handleMerge(sourceTagIds))}
+        onMerge={(sourceEntityIds) => runModalAction(() => handleMerge(sourceEntityIds))}
       />
 
       <AddAliasModal
-        tag={managingTag}
-        isOpen={Boolean(managingTag) && isAliasModalOpen}
+        entity={managingEntity}
+        isOpen={Boolean(managingEntity) && isAliasModalOpen}
         isBusy={isPending}
         onClose={() => setIsAliasModalOpen(false)}
         onAddAlias={(aliasName) => runModalAction(() => handleAddAlias(aliasName))}

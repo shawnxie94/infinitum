@@ -19,7 +19,7 @@ import { shouldTranslateTitle } from "@/lib/feed/presentation";
 import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
 import { normalizeStoredEventType } from "@/lib/clusters/normalization";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
-import { replaceItemTags } from "@/lib/tags/service";
+import { getItemEntityNamesFromEvent, replaceItemEntities } from "@/lib/entities/service";
 import {
   classifyItemProcessingRecoveryReasons,
   clearItemProcessingRetryState,
@@ -48,6 +48,7 @@ type AggregationReparseCandidate = {
   originalUrl: string;
   clusterId: string | null;
   publishedAt: Date;
+  publishedAtKnown: boolean;
   fullText: string | null;
   rssContent: string | null;
   rssExcerpt: string | null;
@@ -87,11 +88,11 @@ async function buildItemReanalyzeCompletionLabel(item: Item) {
   return "已完成重新 AI 判定（非聚合 · 处理成功）";
 }
 
-async function replaceItemTagsSafely(itemId: string, tags: unknown) {
+async function replaceItemEntitiesSafely(itemId: string, entities: unknown) {
   try {
-    await replaceItemTags(itemId, tags);
+    await replaceItemEntities(itemId, entities);
   } catch (error) {
-    console.error("[Items] Failed to persist item tags:", error);
+    console.error("[Items] Failed to persist item entities:", error);
   }
 }
 
@@ -564,6 +565,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     originalUrl: item.originalUrl,
     clusterId: item.clusterId,
     publishedAt: item.publishedAt,
+    publishedAtKnown: item.publishedAtKnown,
     fullText: item.fullText,
     rssContent: item.rssContent,
     rssExcerpt: item.rssExcerpt,
@@ -646,7 +648,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
         errorMessage: null,
       },
     });
-    await replaceItemTagsSafely(item.id, []);
+    await replaceItemEntitiesSafely(item.id, []);
 
     const reparseResult = await reparseAggregationCandidate(candidate, {
       aiProvider,
@@ -727,9 +729,11 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     },
     include: { source: true },
   });
-  await replaceItemTagsSafely(
+  await replaceItemEntitiesSafely(
     updated.id,
-    nextStatus === "processed" && analysisStatus === "succeeded" ? understanding.tags : [],
+    nextStatus === "processed" && analysisStatus === "succeeded"
+      ? getItemEntityNamesFromEvent(understanding.eventSignature)
+      : [],
   );
 
   if (aggregationDetectionEnabled || item.isAggregation) {
@@ -1107,6 +1111,7 @@ async function reparseAggregationCandidate(
         originalTitle: candidate.originalTitle,
       },
       publishedAt: candidate.publishedAt,
+      publishedAtKnown: candidate.publishedAtKnown,
       events: parsedAggregation.events.map((event) => ({
         eventType: event.eventType,
         eventSubject: event.eventSubject,
@@ -1117,7 +1122,6 @@ async function reparseAggregationCandidate(
         oneLiner: event.oneLiner,
         qualityScore: event.qualityScore,
         sourceUrl: event.sourceUrl,
-        tags: event.tags,
       })),
     });
 
@@ -1243,6 +1247,7 @@ export async function executeItemReparseAggregationsTask(
       originalUrl: true,
       clusterId: true,
       publishedAt: true,
+      publishedAtKnown: true,
       fullText: true,
       rssContent: true,
       rssExcerpt: true,

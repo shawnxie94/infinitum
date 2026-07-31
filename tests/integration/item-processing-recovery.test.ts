@@ -30,7 +30,7 @@ function buildUnderstandingProvider(overrides: {
         eventObject: "Toolkit",
         eventDate: "2026-04-10",
       }),
-      tags: ["OpenAI"],
+      entities: ["OpenAI"],
       summary: overrides.summary,
       aggregation: {
         isAggregation: Boolean(overrides.isAggregation),
@@ -48,7 +48,7 @@ function buildUnderstandingProvider(overrides: {
 
 describe("item processing recovery task", () => {
   beforeEach(async () => {
-    await prisma.itemTag.deleteMany();
+    await prisma.itemEntity.deleteMany();
     await prisma.item.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();

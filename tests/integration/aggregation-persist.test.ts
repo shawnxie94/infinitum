@@ -10,9 +10,9 @@ import { getAggregationSplitParent } from "@/lib/feed/repository";
 describe("aggregation child persistence", () => {
   beforeEach(async () => {
     await prisma.aggregationSplitLink.deleteMany();
-    await prisma.itemTag.deleteMany();
+    await prisma.itemEntity.deleteMany();
     await prisma.item.deleteMany();
-    await prisma.tag.deleteMany();
+    await prisma.entity.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.source.deleteMany();
   });
@@ -102,6 +102,8 @@ describe("aggregation child persistence", () => {
       where: { id: first.childItemIds[0] },
     });
     expect(sharedChild.status).toBe("processed");
+    expect(sharedChild.publishedAt.toISOString()).toBe("2026-04-11T08:00:00.000Z");
+    expect(sharedChild.publishedAtKnown).toBe(true);
     expect(sharedChild.parentItemId).toBe(secondParent.id);
     expect(
       await prisma.aggregationSplitLink.count({
@@ -115,7 +117,7 @@ describe("aggregation child persistence", () => {
     ).toBe(1);
   });
 
-  it("persists normalized tags for aggregation child items", async () => {
+  it("persists entities derived from aggregation child event fields", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Tagged Roundup",
@@ -158,7 +160,6 @@ describe("aggregation child persistence", () => {
           oneLiner: "OpenAI 发布 Agent SDK。",
           qualityScore: 92,
           sourceUrl: null,
-          tags: ["OpenAI", "Agent SDK", "新闻", "openai", "AI Agent", "开发者工具", "额外标签"],
         },
       ],
     });
@@ -166,24 +167,21 @@ describe("aggregation child persistence", () => {
     const child = await prisma.item.findUniqueOrThrow({
       where: { id: result.childItemIds[0] },
       include: {
-        tags: {
-          include: { tag: true },
+        entities: {
+          include: { entity: true },
         },
       },
     });
 
-    const tagNames = child.tags.map((entry) => entry.tag.name);
-    expect(tagNames).toHaveLength(5);
-    expect(tagNames).toEqual(expect.arrayContaining([
+    const entityNames = child.entities.map((entry) => entry.entity.name);
+    expect(entityNames).toHaveLength(2);
+    expect(entityNames).toEqual(expect.arrayContaining([
       "OpenAI",
       "Agent SDK",
-      "AI Agent",
-      "开发者工具",
-      "额外标签",
     ]));
   });
 
-  it("auto-canonicalizes new tag variants across one aggregation batch", async () => {
+  it("auto-canonicalizes new entity variants across one aggregation batch", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Variant Tagged Roundup",
@@ -226,7 +224,6 @@ describe("aggregation child persistence", () => {
           oneLiner: "OpenAI 发布新模型。",
           qualityScore: 92,
           sourceUrl: "https://news.example.com/openai-model",
-          tags: ["OpenAI"],
         },
         {
           eventType: "launch",
@@ -238,22 +235,21 @@ describe("aggregation child persistence", () => {
           oneLiner: "Open AI 发布新工具。",
           qualityScore: 88,
           sourceUrl: "https://news.example.com/open-ai-tool",
-          tags: ["Open AI"],
         },
       ],
     });
 
-    const tags = await prisma.tag.findMany({
+    const entities = await prisma.entity.findMany({
       include: {
         aliases: true,
         items: true,
       },
     });
 
-    expect(tags).toHaveLength(1);
-    expect(tags[0]?.normalized).toBe("openai");
-    expect(tags[0]?.items).toHaveLength(2);
-    expect(tags[0]?.aliases.map((alias) => alias.aliasNormalized)).toEqual(["open ai"]);
+    expect(entities).toHaveLength(1);
+    expect(entities[0]?.normalized).toBe("openai");
+    expect(entities[0]?.items).toHaveLength(2);
+    expect(entities[0]?.aliases.map((alias) => alias.aliasNormalized)).toEqual(["open ai"]);
   });
 
   it("allows one parent to link events with the same semantic fingerprint when source urls differ", async () => {

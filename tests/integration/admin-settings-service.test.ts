@@ -93,7 +93,7 @@ describe("admin settings service", () => {
       isDefault: true,
     });
     expect(settings.promptConfigs.find((config) => config.type === "item_understanding")?.systemPrompt).toContain(
-      '"tags"',
+      "自动生成实体关联",
     );
     expect(settings.promptConfigs.find((config) => config.type === "cluster_summary")).toMatchObject({
       temperature: 0.2,

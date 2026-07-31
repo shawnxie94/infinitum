@@ -101,8 +101,8 @@ function repairXmlTag(chunk: string): string {
 
   const selfClosing = chunk.endsWith("/>");
   const body = chunk.slice(1, selfClosing ? -2 : -1);
-  const [tagName, attrs] = splitLeadingToken(body);
-  return `<${tagName}${repairAttributeList(attrs)}${selfClosing ? "/>" : ">"}`;
+  const [entityName, attrs] = splitLeadingToken(body);
+  return `<${entityName}${repairAttributeList(attrs)}${selfClosing ? "/>" : ">"}`;
 }
 
 function repairUnquotedAttributeValues(xml: string): string {

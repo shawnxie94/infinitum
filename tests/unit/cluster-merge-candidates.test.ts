@@ -8,8 +8,10 @@ import {
   buildClusterMergeInput,
   filterClusterMergeSourcesByAllowedEdges,
   hasClusterMergeCandidateEdge,
+  rankClusterCandidates,
   type ClusterMergeCandidate,
 } from "@/lib/clusters/helpers";
+import type { ClusterAssignmentCandidate } from "@/lib/clusters/repository";
 
 function createCandidate(overrides: Partial<ClusterMergeCandidate>): ClusterMergeCandidate {
   return {
@@ -29,7 +31,84 @@ function createCandidate(overrides: Partial<ClusterMergeCandidate>): ClusterMerg
   };
 }
 
+function createAssignmentCandidate(overrides: Partial<ClusterAssignmentCandidate>): ClusterAssignmentCandidate {
+  return {
+    id: "assignment-candidate",
+    title: "聚合标题",
+    summary: "聚合摘要",
+    fingerprint: "fingerprint",
+    eventFingerprint: null,
+    eventBucket: null,
+    eventType: null,
+    eventSubject: null,
+    eventAction: null,
+    eventObject: null,
+    eventDate: null,
+    latestPublishedAt: new Date("2026-04-20T09:00:00.000Z"),
+    itemCount: 1,
+    ...overrides,
+  };
+}
+
 describe("buildClusterMergeCandidates", () => {
+  it("uses the same canonical date compatibility rule for initial assignment", () => {
+    const item = {
+      originalTitle: "Acme 发布 Widget",
+      translatedTitle: null,
+      summaryText: "Acme 发布 Widget。",
+      rssExcerpt: null,
+      fullText: null,
+      rssContent: null,
+      publishedAt: new Date("2026-04-10T10:00:00.000Z"),
+    } as unknown as Parameters<typeof rankClusterCandidates>[0];
+    const eventSignature = {
+      eventType: "launch" as const,
+      eventSubject: "Acme",
+      eventAction: "发布",
+      eventObject: "Widget",
+      eventDate: "2026年4月",
+    };
+
+    const compatible = rankClusterCandidates(item, eventSignature, [
+      createAssignmentCandidate({
+        id: "compatible",
+        eventType: "launch",
+        eventSubject: "Acme 公司",
+        eventAction: "正式发布",
+        eventObject: "新版 Widget 服务",
+        eventDate: "2026-04-10",
+      }),
+    ]);
+    const conflicting = rankClusterCandidates(item, { ...eventSignature, eventDate: "2026年5月" }, [
+      createAssignmentCandidate({
+        id: "conflicting",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026-04-10",
+      }),
+    ]);
+
+    expect(compatible[0]?.strongMatch).toBe(true);
+    expect(conflicting[0]?.dateCompatible).toBe(false);
+    expect(conflicting[0]?.strongMatch).toBe(false);
+
+    const objectConflict = rankClusterCandidates(item, eventSignature, [
+      createAssignmentCandidate({
+        id: "object-conflict",
+        title: "Acme 发布 Pricing",
+        summary: "Acme 发布 Pricing。",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Pricing",
+        eventDate: "2026-04-10",
+      }),
+    ]);
+    expect(objectConflict[0]?.hardConflict).toBe(true);
+  });
+
   it("does not keep existing multi-item clusters when no merge anchor is found", () => {
     const candidates = buildClusterMergeCandidates([
       createCandidate({
@@ -226,6 +305,70 @@ describe("buildClusterMergeCandidates", () => {
     ]);
 
     expect(candidates).toEqual([]);
+  });
+
+  it("accepts equivalent and lower-precision dates after canonicalization", () => {
+    const candidates = buildClusterMergeCandidates([
+      createCandidate({
+        id: "acme-date-format-a",
+        title: "Acme 发布 Widget",
+        summary: "Acme 发布 Widget。",
+        eventType: "launch",
+        eventSubject: "Acme 公司",
+        eventAction: "正式发布",
+        eventObject: "新版 Widget 服务",
+        eventDate: "2026/4/10",
+      }),
+      createCandidate({
+        id: "acme-date-format-b",
+        title: "Acme 发布 Widget",
+        summary: "Acme 发布 Widget。",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026-04-10",
+        latestPublishedAt: new Date("2026-04-10T10:00:00.000Z"),
+      }),
+    ]);
+
+    expect(candidates.map((candidate) => candidate.id).sort()).toEqual([
+      "acme-date-format-a",
+      "acme-date-format-b",
+    ]);
+
+    const monthCandidates = buildClusterMergeCandidates([
+      createCandidate({
+        id: "acme-month-date",
+        title: "Acme 发布 Widget",
+        summary: "Acme 发布 Widget。",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026年4月",
+      }),
+      createCandidate({
+        id: "acme-day-date",
+        title: "Acme 发布 Widget",
+        summary: "Acme 发布 Widget。",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026-04-10",
+        latestPublishedAt: new Date("2026-04-10T10:00:00.000Z"),
+      }),
+    ]);
+
+    expect(monthCandidates.map((candidate) => candidate.id).sort()).toEqual([
+      "acme-day-date",
+      "acme-month-date",
+    ]);
+
+    expect(
+      buildClusterMergeCandidateInputHash(createCandidate({ eventDate: "2026/4/10" })),
+    ).toBe(buildClusterMergeCandidateInputHash(createCandidate({ eventDate: "2026-04-10" })));
   });
 
   it("rejects multi-subject bridge pairs when overlap is only generic wording", () => {

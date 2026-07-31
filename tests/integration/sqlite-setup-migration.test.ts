@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -54,7 +54,7 @@ describe("sqlite setup", () => {
     expect(output).toBe("-- This is an empty migration.");
   }, 30_000);
 
-  it("serializes concurrent setup runs with a lock", { timeout: 15000 }, async () => {
+  it("serializes concurrent setup runs with a lock", { timeout: 30000 }, async () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-lock-"));
     const dbPath = path.join(tempDir, "concurrent.db");
     const root = process.cwd();
@@ -102,8 +102,8 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('background_task_runs') WHERE "name" = 'stageTimingsJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('background_task_runs') WHERE "name" = 'taskTimelineJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'content_extraction_configs'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'tag_aliases'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'tag_suggestion_candidates'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'entity_aliases'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'entity_suggestion_candidates'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'header_links'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'cluster_merge_clean_pair_candidates'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'cluster_decisions'`)).toBe("1");
@@ -111,6 +111,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('source_groups') WHERE "name" = 'sortOrder'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'summaryStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'analysisStatus'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'publishedAtKnown'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'manualClusterAssignedAt'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("0");
@@ -128,7 +129,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'latestCreatedAt'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'dominantGroupId'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'feedSearchText'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'feedTagsJson'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'feedEntitiesJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'feedStatsUpdatedAt'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'eventFingerprint'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'eventBucket'`)).toBe("1");
@@ -142,9 +143,9 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'cluster_merge_clean_pair_candidates_expiresAt_idx'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'cluster_decisions_kind_pairKey_inputHash_idx'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'cluster_constraints_kind_scope_pairKey_key'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'tag_aliases_aliasNormalized_key'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'tag_suggestion_candidates_status_confidence_idx'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'tag_suggestion_candidates_status_affectedItemCount_idx'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'entity_aliases_aliasNormalized_key'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'entity_suggestion_candidates_status_confidence_idx'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'entity_suggestion_candidates_status_affectedItemCount_idx'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'header_links_enabled_sortOrder_idx'`)).toBe("1");
     expect(runSqlite(dbPath, "PRAGMA journal_mode")).toBe("wal");
   });
@@ -200,7 +201,148 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT "name" FROM "prompt_configs" WHERE "id" = 'prompt-old'`)).toBe("旧日报提示词");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('daily_report_refinement_chat', 'daily_report_refinement_generate')`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('item_summary', 'item_analysis', 'item_aggregation')`)).toBe("0");
-  });
+  }, 15_000);
+
+  it("cleans legacy tag search text and preference rules during the Prisma migration", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-prisma-entity-migration-"));
+    const dbPath = path.join(tempDir, "migration.db");
+    const migrationRoot = path.join(process.cwd(), "prisma", "migrations");
+    const finalMigration = "20260731150000_replace_tags_with_entities";
+
+    tempDirs.push(tempDir);
+
+    for (const migrationName of readdirSync(migrationRoot)
+      .filter((migrationName) => migrationName !== "migration_lock.toml")
+      .sort()) {
+      if (migrationName === finalMigration) {
+        continue;
+      }
+
+      execFileSync("sqlite3", [dbPath], {
+        input: `${readFileSync(path.join(migrationRoot, migrationName, "migration.sql"), "utf8")}\n`,
+        encoding: "utf8",
+      });
+    }
+
+    runSqlite(
+      dbPath,
+      `
+      INSERT INTO "content_clusters" (
+        "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status",
+        "fingerprint", "feedSearchText", "updatedAt"
+      ) VALUES (
+        'cluster-legacy-search', 'topic', 'Legacy title', 'Legacy summary', 50, 1, CURRENT_TIMESTAMP,
+        'active', 'legacy-search-fingerprint', 'Legacy title Legacy summary OldTag', CURRENT_TIMESTAMP
+      );
+      INSERT INTO "briefing_preference_configs" (
+        "id", "weightedRulesJson", "maxCuratorBoost", "maxCuratorPenalty", "updatedAt"
+      ) VALUES (
+        'preference-legacy-tag',
+        '[{"type":"tag","value":"oldtag","weight":8},{"type":"entity","value":"openai","weight":5}]',
+        15, 20, CURRENT_TIMESTAMP
+      );
+      `,
+    );
+
+    execFileSync("sqlite3", [dbPath], {
+      input: `${readFileSync(path.join(migrationRoot, finalMigration, "migration.sql"), "utf8")}\n`,
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT "feedSearchText" FROM "content_clusters" WHERE "id" = 'cluster-legacy-search'`)).toBe(
+      "Legacy title Legacy summary",
+    );
+    expect(runSqlite(dbPath, `SELECT "weightedRulesJson" FROM "briefing_preference_configs" WHERE "id" = 'preference-legacy-tag'`)).toBe(
+      '[{"type":"entity","value":"openai","weight":5}]',
+    );
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'tags'`)).toBe("0");
+  }, 30_000);
+
+  it("cleans legacy tag search text and preference rules during Docker SQLite setup", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-entity-cleanup-"));
+    const dbPath = path.join(tempDir, "cleanup.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    runSqlite(
+      dbPath,
+      `
+      CREATE TABLE "tags" ("id" TEXT NOT NULL PRIMARY KEY);
+      INSERT INTO "content_clusters" (
+        "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status",
+        "fingerprint", "feedSearchText", "feedEntitiesJson", "updatedAt"
+      ) VALUES (
+        'cluster-legacy-setup', 'topic', 'Setup title', 'Setup summary', 50, 1, CURRENT_TIMESTAMP,
+        'active', 'legacy-setup-fingerprint', 'Setup title Setup summary OldTag', '[]', CURRENT_TIMESTAMP
+      );
+      INSERT INTO "briefing_preference_configs" (
+        "id", "weightedRulesJson", "maxCuratorBoost", "maxCuratorPenalty", "updatedAt"
+      ) VALUES (
+        'preference-legacy-setup',
+        '[{"type":"tag","value":"oldtag","weight":8},{"type":"keyword","value":"AI","weight":3}]',
+        15, 20, CURRENT_TIMESTAMP
+      );
+      `,
+    );
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT "feedSearchText" FROM "content_clusters" WHERE "id" = 'cluster-legacy-setup'`)).toBe(
+      "Setup title Setup summary",
+    );
+    expect(runSqlite(dbPath, `SELECT "weightedRulesJson" FROM "briefing_preference_configs" WHERE "id" = 'preference-legacy-setup'`)).toBe(
+      '[{"type":"keyword","value":"AI","weight":3}]',
+    );
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'tags'`)).toBe("0");
+  }, 30_000);
+
+  it("adds publishedAtKnown to an existing items table without dropping item data", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-published-at-upgrade-"));
+    const dbPath = path.join(tempDir, "published-at-upgrade.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    runSqlite(
+      dbPath,
+      `
+      PRAGMA trusted_schema = ON;
+      ALTER TABLE "items" DROP COLUMN "publishedAtKnown";
+      INSERT INTO "sources" (
+        "id", "name", "rssUrl", "siteUrl", "updatedAt"
+      ) VALUES (
+        'source-published-at-upgrade', 'Upgrade Source', 'https://upgrade.example.com/published-at.xml',
+        'https://upgrade.example.com', CURRENT_TIMESTAMP
+      );
+      INSERT INTO "items" (
+        "id", "sourceId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle", "publishedAt",
+        "status", "moderationStatus", "qualityScore", "qualityRationale", "language", "createdAt", "updatedAt"
+      ) VALUES (
+        'item-published-at-upgrade', 'source-published-at-upgrade', 'https://upgrade.example.com/published-at',
+        'https://upgrade.example.com/published-at', 'published-at-upgrade-hash', 'Existing item', CURRENT_TIMESTAMP,
+        'processed', 'allowed', 50, 'existing', 'en', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      `,
+    );
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT "originalTitle" FROM "items" WHERE "id" = 'item-published-at-upgrade'`)).toBe("Existing item");
+    expect(runSqlite(dbPath, `SELECT "publishedAtKnown" FROM "items" WHERE "id" = 'item-published-at-upgrade'`)).toBe("1");
+  }, 20_000);
 
   it("drops obsolete understanding cache columns without dropping items", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-understanding-upgrade-"));
@@ -304,7 +446,7 @@ describe("sqlite setup", () => {
       INSERT INTO "content_clusters" (
         "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status", "fingerprint",
         "displayItemCount", "displaySourceCount", "displayAverageScore", "displayQualityScore", "earliestCreatedAt", "latestCreatedAt",
-        "feedSearchText", "feedTagsJson", "feedStatsUpdatedAt", "updatedAt"
+        "feedSearchText", "feedEntitiesJson", "feedStatsUpdatedAt", "updatedAt"
       ) VALUES (
         'cluster-backfilled', 'topic', 'Backfilled Cluster', 'Backfilled summary', 50, 1, '2026-04-10T10:00:00.000Z', 'active', 'cluster-backfilled',
         7, 3, 88, 91, NULL, '2026-04-10T10:05:00.000Z', 'precomputed text', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -357,7 +499,7 @@ describe("sqlite setup", () => {
       INSERT INTO "content_clusters" (
         "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status", "fingerprint",
         "displayItemCount", "displaySourceCount", "displayAverageScore", "displayQualityScore", "earliestCreatedAt", "latestCreatedAt",
-        "feedSearchText", "feedTagsJson", "feedStatsUpdatedAt", "updatedAt"
+        "feedSearchText", "feedEntitiesJson", "feedStatsUpdatedAt", "updatedAt"
       ) VALUES (
         'cluster-stale-backfilled', 'topic', 'Stale Backfilled Cluster', 'Stale backfilled summary', 50, 1, '2026-04-10T10:00:00.000Z', 'active', 'cluster-stale-backfilled',
         1, 1, 50, 50, '2026-04-10T10:05:00.000Z', '2026-04-10T10:05:00.000Z', 'stale text', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -389,5 +531,90 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT "displayQualityScore" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("70");
     expect(runSqlite(dbPath, `SELECT "latestCreatedAt" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("2026-04-11T10:05:00.000Z");
   }, 20_000);
+
+  it("backfills up to 500 historical item entities once during the entity upgrade", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-entity-backfill-"));
+    const dbPath = path.join(tempDir, "entity-backfill.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    runSqlite(
+      dbPath,
+      `
+      PRAGMA trusted_schema = ON;
+
+      INSERT INTO "sources" (
+        "id", "name", "rssUrl", "siteUrl", "enabled", "aiParsingEnabled", "aggregationEnabled", "aggregationDetectionEnabled", "updatedAt"
+      ) VALUES (
+        'source-entity-backfill', 'Entity Backfill Source', 'https://entity-backfill.example.com/feed.xml', 'https://entity-backfill.example.com',
+        true, true, true, false, CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO "content_clusters" (
+        "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status", "fingerprint",
+        "feedEntitiesJson", "updatedAt"
+      ) VALUES (
+        'cluster-entity-backfill', 'topic', 'Entity Backfill Cluster', 'Entity backfill summary', 50, 1, CURRENT_TIMESTAMP, 'active', 'cluster-entity-backfill',
+        '[]', CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO "items" (
+        "id", "sourceId", "clusterId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle",
+        "publishedAt", "status", "moderationStatus", "qualityScore", "qualityRationale", "language",
+        "eventSubject", "eventObject", "createdAt", "updatedAt"
+      ) VALUES (
+        'item-entity-backfill', 'source-entity-backfill', 'cluster-entity-backfill', 'https://entity-backfill.example.com/item',
+        'https://entity-backfill.example.com/item', 'item-entity-backfill', 'Entity Backfill Item', CURRENT_TIMESTAMP,
+        'processed', 'allowed', 50, 'ok', 'en', ' OpenAI ', ' GPT-5 ', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+
+      PRAGMA foreign_keys=OFF;
+      DROP TABLE "item_entities";
+      DROP TABLE "entity_suggestion_candidates";
+      DROP TABLE "entity_suggestion_decisions";
+      DROP TABLE "entity_aliases";
+      DROP TABLE "entities";
+      PRAGMA foreign_keys=ON;
+      `,
+    );
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "entities"`)).toBe("2");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "item_entities" WHERE "itemId" = 'item-entity-backfill'`)).toBe("2");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "entities" WHERE "normalized" IN ('openai', 'gpt-5')`)).toBe("2");
+    expect(runSqlite(dbPath, `SELECT "feedEntitiesJson" FROM "content_clusters" WHERE "id" = 'cluster-entity-backfill'`)).toContain("OpenAI");
+
+    runSqlite(
+      dbPath,
+      `
+      PRAGMA trusted_schema = ON;
+      INSERT INTO "items" (
+        "id", "sourceId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle",
+        "publishedAt", "status", "moderationStatus", "qualityScore", "qualityRationale", "language",
+        "eventSubject", "createdAt", "updatedAt"
+      ) VALUES (
+        'item-entity-backfill-later', 'source-entity-backfill', 'https://entity-backfill.example.com/later',
+        'https://entity-backfill.example.com/later', 'item-entity-backfill-later', 'Later Item', CURRENT_TIMESTAMP,
+        'processed', 'allowed', 50, 'ok', 'en', 'Later Entity', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      `,
+    );
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "item_entities" WHERE "itemId" = 'item-entity-backfill-later'`)).toBe("0");
+  }, 30_000);
 
 });

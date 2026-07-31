@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "db:setup": "node scripts/setup-sqlite.mjs prisma/dev.db && npm run prisma:generate && tsx scripts/seed-defaults.ts",
     "db:test:setup": "node scripts/setup-sqlite.mjs prisma/test.db --reset && npm run prisma:generate && DATABASE_URL=\"file:./prisma/test.db\" tsx scripts/seed-defaults.ts",
+    "entities:backfill": "tsx scripts/backfill-item-entities.ts",
     "test": "npm run prisma:generate && npm run db:test:setup && vitest run --coverage",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",

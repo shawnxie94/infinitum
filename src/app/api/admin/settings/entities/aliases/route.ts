@@ -2,20 +2,20 @@ import { z } from "zod";
 
 import { adminErrorResponse } from "@/lib/admin/http";
 import { requireAdmin } from "@/lib/admin/session";
-import { addTagAlias } from "@/lib/tags/service";
+import { addEntityAlias } from "@/lib/entities/service";
 
-const tagAliasSchema = z.object({
-  tagId: z.string().min(1),
+const entityAliasSchema = z.object({
+  entityId: z.string().min(1),
   aliasName: z.string().min(1),
 });
 
 export async function POST(request: Request) {
   try {
     await requireAdmin();
-    const body = tagAliasSchema.parse(await request.json());
+    const body = entityAliasSchema.parse(await request.json());
 
     return Response.json({
-      alias: await addTagAlias(body),
+      alias: await addEntityAlias(body),
     });
   } catch (error) {
     return adminErrorResponse(error);

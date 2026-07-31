@@ -140,21 +140,21 @@ export function buildFeedSearch(
     groupId,
     sourceId,
     title,
-    tag,
+    entity,
     entryKeys,
     createdRangeExplicit = true,
   }: FeedQueryState,
   pagination?: {
     page?: number;
     size?: number;
-    includePopularTags?: boolean;
+    includePopularEntities?: boolean;
   },
 ): string {
   const search = new URLSearchParams();
   const normalizedGroupId = normalizeOptionalId(groupId);
   const normalizedSourceId = normalizeOptionalId(sourceId);
   const normalizedTitle = normalizeSearchText(title);
-  const normalizedTag = normalizeOptionalId(tag);
+  const normalizedEntity = normalizeOptionalId(entity);
   const page = pagination?.page ?? 1;
   const size = pagination?.size ?? DEFAULT_FEED_PAGE_SIZE;
   const hasCreatedDateRange = Boolean(startDate || endDate);
@@ -193,8 +193,8 @@ export function buildFeedSearch(
     search.set("title", normalizedTitle);
   }
 
-  if (normalizedTag) {
-    search.set("tag", normalizedTag);
+  if (normalizedEntity) {
+    search.set("entity", normalizedEntity);
   }
 
   if (entryKeys.length > 0) {
@@ -209,8 +209,8 @@ export function buildFeedSearch(
     search.set("size", String(size));
   }
 
-  if (pagination?.includePopularTags === false) {
-    search.set("includeTags", "false");
+  if (pagination?.includePopularEntities === false) {
+    search.set("includeEntities", "false");
   }
 
   return search.toString();

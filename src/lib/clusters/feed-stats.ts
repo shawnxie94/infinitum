@@ -16,9 +16,9 @@ type RefreshableCluster = Prisma.ContentClusterGetPayload<{
             groupId: true;
           };
         };
-        tags: {
+        entities: {
           include: {
-            tag: true;
+            entity: true;
           };
         };
       };
@@ -33,12 +33,12 @@ function uniqueClusterIds(clusterIds: string[]) {
 function buildFeedSearchText(input: {
   title: string;
   summary: string;
-  tags: Array<{ name: string; normalized: string }>;
+  entities: Array<{ name: string; normalized: string }>;
 }) {
   return [
     input.title,
     input.summary,
-    ...input.tags.flatMap((tag) => (tag.name === tag.normalized ? [tag.name] : [tag.name, tag.normalized])),
+    ...input.entities.flatMap((entity) => (entity.name === entity.normalized ? [entity.name] : [entity.name, entity.normalized])),
   ]
     .map((part) => part.trim())
     .filter(Boolean)
@@ -82,24 +82,24 @@ function selectDominantGroupId(
   })[0]?.[0] ?? null;
 }
 
-function aggregateTags(items: RefreshableCluster["items"]) {
-  const tagsByNormalized = new Map<string, { name: string; normalized: string }>();
+function aggregateEntities(items: RefreshableCluster["items"]) {
+  const entitiesByNormalized = new Map<string, { name: string; normalized: string }>();
 
   for (const item of items) {
-    for (const itemTag of item.tags) {
-      const normalized = itemTag.tag.normalized.trim();
-      if (!normalized || tagsByNormalized.has(normalized)) {
+    for (const itemEntity of item.entities) {
+      const normalized = itemEntity.entity.normalized.trim();
+      if (!normalized || entitiesByNormalized.has(normalized)) {
         continue;
       }
 
-      tagsByNormalized.set(normalized, {
-        name: itemTag.tag.name,
+      entitiesByNormalized.set(normalized, {
+        name: itemEntity.entity.name,
         normalized,
       });
     }
   }
 
-  return [...tagsByNormalized.values()].sort((left, right) => {
+  return [...entitiesByNormalized.values()].sort((left, right) => {
     const nameCompare = left.name.localeCompare(right.name);
     return nameCompare !== 0 ? nameCompare : left.normalized.localeCompare(right.normalized);
   });
@@ -130,8 +130,8 @@ async function refreshCluster(cluster: RefreshableCluster) {
         earliestCreatedAt: null,
         latestCreatedAt: null,
         dominantGroupId: null,
-        feedSearchText: buildFeedSearchText({ title: cluster.title, summary: cluster.summary, tags: [] }),
-        feedTagsJson: "[]",
+        feedSearchText: buildFeedSearchText({ title: cluster.title, summary: cluster.summary, entities: [] }),
+        feedEntitiesJson: "[]",
         feedStatsUpdatedAt: now,
       },
     });
@@ -151,7 +151,7 @@ async function refreshCluster(cluster: RefreshableCluster) {
   const latestPublishedAt = items.reduce((latest, item) =>
     item.publishedAt.getTime() > latest.getTime() ? item.publishedAt : latest,
   items[0]!.publishedAt);
-  const tags = aggregateTags(items);
+  const entities = aggregateEntities(items);
 
   await prisma.contentCluster.update({
     where: { id: cluster.id },
@@ -164,8 +164,8 @@ async function refreshCluster(cluster: RefreshableCluster) {
       latestCreatedAt,
       latestPublishedAt,
       dominantGroupId: selectDominantGroupId(items),
-      feedSearchText: buildFeedSearchText({ title: cluster.title, summary: cluster.summary, tags }),
-      feedTagsJson: JSON.stringify(tags),
+      feedSearchText: buildFeedSearchText({ title: cluster.title, summary: cluster.summary, entities }),
+      feedEntitiesJson: JSON.stringify(entities),
       feedStatsUpdatedAt: now,
     },
   });
@@ -188,9 +188,9 @@ export async function refreshClusterFeedStats(clusterIds: string[]): Promise<voi
               groupId: true,
             },
           },
-          tags: {
+          entities: {
             include: {
-              tag: true,
+              entity: true,
             },
           },
         },

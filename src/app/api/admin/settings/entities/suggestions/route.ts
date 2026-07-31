@@ -3,13 +3,13 @@ import { z } from "zod";
 import { adminErrorResponse } from "@/lib/admin/http";
 import { requireAdmin } from "@/lib/admin/session";
 import {
-  autoMergeHighConfidenceTagSuggestions,
-  dismissTagSuggestion,
-  listAdminTagSuggestions,
-  precomputeTagSuggestionCandidates,
-} from "@/lib/tags/service";
+  autoMergeHighConfidenceEntitySuggestions,
+  dismissEntitySuggestion,
+  listAdminEntitySuggestions,
+  precomputeEntitySuggestionCandidates,
+} from "@/lib/entities/service";
 
-const tagSuggestionQuerySchema = z.object({
+const entitySuggestionQuerySchema = z.object({
   search: z.string().nullable().optional(),
   page: z.coerce.number().int().positive().optional(),
   pageSize: z.coerce.number().int().positive().optional(),
@@ -17,14 +17,14 @@ const tagSuggestionQuerySchema = z.object({
   sort: z.enum(["confidence_desc", "affected_desc"]).nullable().optional(),
 });
 
-const tagSuggestionDecisionSchema = z.object({
-  sourceTagId: z.string().min(1),
-  targetTagId: z.string().min(1),
+const entitySuggestionDecisionSchema = z.object({
+  sourceEntityId: z.string().min(1),
+  targetEntityId: z.string().min(1),
   decision: z.enum(["ignored", "kept"]),
 });
 
-const tagSuggestionPostSchema = z.union([
-  tagSuggestionDecisionSchema,
+const entitySuggestionPostSchema = z.union([
+  entitySuggestionDecisionSchema,
   z.object({
     action: z.literal("auto_merge_high_confidence"),
     limit: z.number().int().positive().optional(),
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   try {
     await requireAdmin();
     const searchParams = new URL(request.url).searchParams;
-    const query = tagSuggestionQuerySchema.parse({
+    const query = entitySuggestionQuerySchema.parse({
       search: searchParams.get("search"),
       page: searchParams.get("page") ?? undefined,
       pageSize: searchParams.get("pageSize") ?? undefined,
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       sort: searchParams.get("sort"),
     });
 
-    return Response.json(await listAdminTagSuggestions(query));
+    return Response.json(await listAdminEntitySuggestions(query));
   } catch (error) {
     return adminErrorResponse(error);
   }
@@ -55,17 +55,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await requireAdmin();
-    const body = tagSuggestionPostSchema.parse(await request.json());
+    const body = entitySuggestionPostSchema.parse(await request.json());
 
-    if ("sourceTagId" in body) {
-      return Response.json(await dismissTagSuggestion(body));
+    if ("sourceEntityId" in body) {
+      return Response.json(await dismissEntitySuggestion(body));
     }
 
     if (body.action === "precompute") {
-      return Response.json(await precomputeTagSuggestionCandidates());
+      return Response.json(await precomputeEntitySuggestionCandidates());
     }
 
-    return Response.json(await autoMergeHighConfidenceTagSuggestions({ limit: body.limit }));
+    return Response.json(await autoMergeHighConfidenceEntitySuggestions({ limit: body.limit }));
   } catch (error) {
     return adminErrorResponse(error);
   }

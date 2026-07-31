@@ -141,8 +141,10 @@ describe("ingestion metrics service - AI usage aggregation", () => {
   }
 
   it("aggregates AI call counts across ingestion, item, cluster and daily report task kinds", async () => {
-    const today = new Date("2026-06-16T10:00:00.000Z");
-    const yesterday = new Date("2026-06-15T10:00:00.000Z");
+    const today = new Date();
+    today.setUTCHours(10, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
 
     // ingestion task with one unified item understanding + cluster merge
     await makeTaskRun({

@@ -46,13 +46,13 @@ function buildActionableSnapshot(): ActionableMonitorSnapshot {
         details: ["Broken RSS：被过滤内容（信息密度不足）"],
       },
       {
-        id: "tags",
-        category: "tag",
+        id: "entities",
+        category: "entity",
         severity: "warning",
-        title: "标签治理建议",
-        description: "当前有 3 条标签建议，其中 1 条可优先合并。",
+        title: "实体治理建议",
+        description: "当前有 3 条实体建议，其中 1 条可优先合并。",
         count: 3,
-        href: "/admin?tab=monitoring&section=content&view=tags&suggestions=open",
+        href: "/admin?tab=monitoring&section=content&view=entities&suggestions=open",
         actionLabel: "查看",
         details: ["AI Agents → AI Agent，影响 4 条，置信 99%"],
       },
@@ -125,7 +125,7 @@ describe("ActionItemsPanel", () => {
     expect(screen.getByRole("button", { name: "3天" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
       "过滤内容复核",
-      "标签治理建议",
+      "实体治理建议",
       "异常信息源",
       "偏好建议",
       "聚合拆分复核",
@@ -153,11 +153,11 @@ describe("ActionItemsPanel", () => {
     expect(screen.queryByText("处理方式")).not.toBeInTheDocument();
     expect(screen.queryByText("任务")).not.toBeInTheDocument();
     expect(screen.queryByText("Broken RSS：被过滤内容（信息密度不足）")).not.toBeInTheDocument();
-    const tagCard = screen.getByRole("heading", { name: "标签治理建议" }).closest("article");
+    const tagCard = screen.getByRole("heading", { name: "实体治理建议" }).closest("article");
     expect(tagCard).not.toBeNull();
     expect(within(tagCard!).getByRole("link", { name: "查看" })).toHaveAttribute(
       "href",
-      "/admin?tab=monitoring&section=content&view=tags&suggestions=open",
+      "/admin?tab=monitoring&section=content&view=entities&suggestions=open",
     );
     const preferenceCard = screen.getByRole("heading", { name: "偏好建议" }).closest("article");
     expect(preferenceCard).not.toBeNull();
@@ -195,10 +195,10 @@ describe("ActionItemsPanel", () => {
     renderWithProviders();
 
     expect(await screen.findByRole("heading", { name: "异常信息源" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "标签治理建议" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "实体治理建议" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "偏好建议" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "过滤内容复核" })).toBeInTheDocument();
-    expect(screen.getByText("当前没有待处理的标签治理建议。")).toBeInTheDocument();
+    expect(screen.getByText("当前没有待处理的实体治理建议。")).toBeInTheDocument();
     expect(screen.getByText("当前没有待处理的事件偏好建议。")).toBeInTheDocument();
     expect(screen.getAllByText("0")).toHaveLength(7);
     expect(screen.queryByText("当前没有待处理事项")).not.toBeInTheDocument();

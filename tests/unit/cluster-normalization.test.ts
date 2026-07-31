@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  areEventDatesCompatible,
+  areEventDatesExactlyEqual,
+  getEventDatePrecision,
   normalizeEventActionForStorage,
+  normalizeEventDateForStorage,
   normalizeEventObjectForStorage,
   normalizeEventSignatureForStorage,
   normalizeEventSubjectForStorage,
@@ -44,5 +48,24 @@ describe("cluster normalization helpers", () => {
       eventObject: "Agents SDK",
       eventDate: "2026-04-10",
     });
+  });
+
+  it("canonicalizes full, month-only, and year-only event dates", () => {
+    expect(normalizeEventDateForStorage("2026/4/10")).toBe("2026-04-10");
+    expect(normalizeEventDateForStorage("2026年4月10日")).toBe("2026-04-10");
+    expect(normalizeEventDateForStorage("2026-4")).toBe("2026-04");
+    expect(normalizeEventDateForStorage("2026年")).toBe("2026");
+    expect(normalizeEventDateForStorage("2026-02-30")).toBe("2026-02-30");
+    expect(getEventDatePrecision("2026/4/10")).toBe("day");
+    expect(getEventDatePrecision("2026-4")).toBe("month");
+    expect(getEventDatePrecision("2026年")).toBe("year");
+  });
+
+  it("treats lower-precision dates as compatible without making them exactly equal", () => {
+    expect(areEventDatesExactlyEqual("2026/4/10", "2026-04-10")).toBe(true);
+    expect(areEventDatesCompatible("2026-04", "2026-04-10")).toBe(true);
+    expect(areEventDatesCompatible("2026", "2026-04-10")).toBe(true);
+    expect(areEventDatesCompatible("2026-04-10", "2026-04-11")).toBe(false);
+    expect(areEventDatesCompatible("2026-04", "2026-05-01")).toBe(false);
   });
 });

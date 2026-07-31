@@ -8,6 +8,155 @@ import {
 } from "@/config/prompts";
 
 describe("ai provider", () => {
+  it("disables MiniMax-M3 thinking and never falls back to reasoning content", async () => {
+    const create = vi.fn()
+      .mockResolvedValueOnce({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: null,
+            reasoning_content: "<think>内部思考不应作为 JSON 返回</think>",
+          },
+        }],
+      })
+      .mockResolvedValueOnce({
+        choices: [{
+          finish_reason: "stop",
+          message: { content: '{"headline":"今日重点","blocks":[]}' },
+        }],
+      });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://api.minimaxi.com/v1", model: "MiniMax-M3" },
+      {
+        dailyReport: {
+          systemPrompt: "生成日报。",
+          promptTemplate: "{{articlesJson}}",
+          maxTokens: 20480,
+        },
+      },
+      { chat: { completions: { create } } },
+    );
+
+    await provider.generateDailyReport({
+      date: "2026-04-24",
+      timezone: "Asia/Shanghai",
+      articles: [{ id: 1, title: "今日候选" }],
+    });
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[0]?.[0]?.thinking).toEqual({ type: "disabled" });
+    expect(create.mock.calls[1]?.[0]?.thinking).toEqual({ type: "disabled" });
+    expect(create.mock.calls[1]?.[0]?.messages?.[1]?.content).toContain("未返回最终 JSON 内容");
+  });
+
+  it("omits MiniMax-only thinking parameters for non-MiniMax models", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: "{}" } }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      {
+        dailyReport: {
+          systemPrompt: "生成日报。",
+          promptTemplate: "{{articlesJson}}",
+        },
+      },
+      { chat: { completions: { create } } },
+    );
+
+    await provider.generateDailyReport({
+      date: "2026-04-24",
+      timezone: "Asia/Shanghai",
+      articles: [{ id: 1, title: "今日候选" }],
+    });
+
+    expect(create.mock.calls[0]?.[0]).not.toHaveProperty("thinking");
+  });
+
+  it("compacts daily report candidates and evidence before sending them to the model", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: "{}" } }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      {
+        dailyReport: {
+          systemPrompt: "生成日报。",
+          promptTemplate: "{{articlesJson}}",
+        },
+      },
+      { chat: { completions: { create } } },
+    );
+
+    await provider.generateDailyReport({
+      date: "2026-04-24",
+      timezone: "Asia/Shanghai",
+      articles: [{
+        id: 1,
+        sourceKey: "cluster:internal",
+        itemId: "item-internal",
+        clusterId: "cluster-internal",
+        title: "事件标题",
+        itemTitle: "原始文章标题",
+        sourceName: "代表来源",
+        url: "https://internal.example/article",
+        summary: "候选摘要",
+        qualityScore: 90,
+        candidateScore: 88,
+        sourceCount: 2,
+        itemCount: 2,
+        createdAt: "2026-04-24T08:00:00.000Z",
+        publishedAt: "2026-04-24T07:00:00.000Z",
+        publishedAtKnown: true,
+        eventType: "release",
+        eventSubject: "主体",
+        eventAction: "发布",
+        eventObject: "对象",
+        eventDate: "2026-04-24",
+        isFollowUp: true,
+        newItemCountOnDate: 1,
+        newSourceCountOnDate: 1,
+        evidenceItems: [{
+          title: "证据标题",
+          sourceName: "证据来源",
+          summary: "不应发送的证据摘要",
+          url: "https://internal.example/evidence",
+          publishedAt: "2026-04-24T07:30:00.000Z",
+          createdAt: "2026-04-24T08:30:00.000Z",
+          qualityScore: 85,
+        }],
+      }],
+    });
+
+    const userContent = create.mock.calls[0]?.[0]?.messages?.[1]?.content as string;
+    expect(JSON.parse(userContent.split("\n", 1)[0] ?? "")).toEqual([{
+      id: 1,
+      title: "事件标题",
+      summary: "候选摘要",
+      sourceName: "代表来源",
+      qualityScore: 90,
+      candidateScore: 88,
+      sourceCount: 2,
+      itemCount: 2,
+      createdAt: "2026-04-24T08:00:00.000Z",
+      publishedAt: "2026-04-24T07:00:00.000Z",
+      publishedAtKnown: true,
+      eventType: "release",
+      eventSubject: "主体",
+      eventAction: "发布",
+      eventObject: "对象",
+      eventDate: "2026-04-24",
+      isFollowUp: true,
+      newItemCountOnDate: 1,
+      newSourceCountOnDate: 1,
+      evidenceItems: [{
+        title: "证据标题",
+        sourceName: "证据来源",
+        publishedAt: "2026-04-24T07:30:00.000Z",
+      }],
+    }]);
+  });
+
   it("understands a regular item in one structured call", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
@@ -27,7 +176,6 @@ describe("ai provider", () => {
               eventObject: "Agent 工具",
               eventDate: "2026-07-11",
             },
-            tags: ["OpenAI", "AI Agent"],
             aggregation: { isAggregation: false, mainEvent: null, events: [] },
           }),
         },
@@ -72,7 +220,6 @@ describe("ai provider", () => {
         eventObject: "Agent 工具",
         eventDate: "2026-07-11",
       },
-      tags: ["OpenAI", "AI Agent"],
       aggregation: { isAggregation: false, mainEvent: null, events: [] },
     });
     const malformedResponse = validResponse.replace(
@@ -116,7 +263,6 @@ describe("ai provider", () => {
             qualityScore: 80,
             qualityRationale: "事实密度较高。",
             eventSignature: null,
-            tags: ["AI"],
             aggregation: {
               isAggregation: true,
               mainEvent: null,
@@ -131,7 +277,6 @@ describe("ai provider", () => {
                   oneLiner: "OpenAI 发布新的 Agent SDK。",
                   qualityScore: 90,
                   sourceUrl: "https://example.com/openai",
-                  tags: ["OpenAI"],
                 },
                 {
                   eventType: "launch",
@@ -143,7 +288,6 @@ describe("ai provider", () => {
                   oneLiner: "Anthropic 上线新的开发者 Console。",
                   qualityScore: 85,
                   sourceUrl: null,
-                  tags: ["Anthropic"],
                 },
               ],
             },
@@ -189,7 +333,6 @@ describe("ai provider", () => {
               eventObject: "Agent 工具",
               eventDate: null,
             },
-            tags: ["OpenAI"],
             aggregation: { isAggregation: true, mainEvent: null, events: [] },
           }),
         },
@@ -520,7 +663,7 @@ describe("ai provider", () => {
         choices: [{ message: { content: null, reasoning_content: "分析候选内容后继续撰写标题" } }],
       })
       .mockResolvedValueOnce({
-        choices: [{ message: { content: null, reasoning_content: JSON.stringify(validPresentation) } }],
+        choices: [{ message: { content: JSON.stringify(validPresentation) } }],
       });
     const provider = createAiProvider(
       { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },

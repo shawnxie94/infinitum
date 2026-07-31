@@ -9,6 +9,10 @@ import {
 import { buildDailyReportDetailMarkdown, buildDailyReportExportMarkdown } from "@/lib/daily-report/export";
 import { normalizeDailyReportContent } from "@/lib/daily-report/content";
 import { renderDailyReportMarkdown } from "@/lib/daily-report/renderer";
+import {
+  buildDailyReportCandidateCoverage,
+  deduplicateDailyReportContentByCandidate,
+} from "@/lib/daily-report/service";
 import type { DailyReportCandidate, DailyReportContent, DailyReportDetailDTO } from "@/lib/daily-report/types";
 import { parseDailyReportContent } from "@/lib/daily-report/validator";
 
@@ -281,6 +285,34 @@ describe("daily report utilities", () => {
     expect(parsed.blocks[2]).toMatchObject({ type: "text", body: expect.not.stringMatching(/^趋势观察：/) });
   });
 
+  it("drops malformed optional notes without failing the whole report", () => {
+    const parsed = parseDailyReportContent(JSON.stringify({
+      ...content,
+      blocks: content.blocks.map((block) => (
+        block.type === "section" && block.title === "热点事件"
+          ? {
+              ...block,
+              items: [{
+                ...block.items[0],
+                notes: [
+                  { label: "", text: "缺少标签的补充内容" },
+                  { label: "重点", text: "有效的重点内容" },
+                  { label: "影响", text: "" },
+                  null,
+                ],
+              }],
+            }
+          : block
+      )),
+    }), 2);
+
+    const section = parsed.blocks.find((block) => block.type === "section" && block.title === "热点事件");
+    expect(section?.type).toBe("section");
+    if (section?.type === "section") {
+      expect(section.items[0]?.notes).toEqual([{ label: "重点", text: "有效的重点内容" }]);
+    }
+  });
+
   it("allows duplicate item titles across section blocks", () => {
     const parsed = parseDailyReportContent(JSON.stringify({
       blocks: [
@@ -396,6 +428,67 @@ describe("daily report utilities", () => {
     expect(markdown).toContain(
       "[\\[相关\\]\\*特性\\*\\_汇总\\_ \\`AI\\` \\(v1\\)! #1 + A-B | <tag>](https://example.com/a)",
     );
+  });
+});
+
+describe("daily report candidate guards", () => {
+  it("deduplicates generated sections by cluster, event core, and source identity", () => {
+    const duplicateCandidates: DailyReportCandidate[] = [
+      {
+        ...candidates[0],
+        id: 1,
+        sourceKey: "cluster:cluster-a",
+        itemId: "item-a",
+        clusterId: "cluster-a",
+        eventSubject: "OpenAI",
+        eventObject: "新模型",
+      },
+      {
+        ...candidates[1],
+        id: 2,
+        sourceKey: "cluster:cluster-b",
+        itemId: "item-b",
+        clusterId: "cluster-b",
+        eventSubject: "OpenAI",
+        eventObject: "新模型",
+      },
+    ];
+    const result = deduplicateDailyReportContentByCandidate({
+      blocks: [
+        { type: "section", title: "今日大事", items: [{ title: "同一事件 A", body: "事件 A", sourceIds: [1] }] },
+        { type: "section", title: "变更与实践", items: [{ title: "同一事件 B", body: "事件 B", sourceIds: [2] }] },
+      ],
+    }, duplicateCandidates);
+
+    expect(result.content.blocks).toEqual([
+      { type: "section", title: "今日大事", items: [{ title: "同一事件 A", body: "事件 A", sourceIds: [1] }] },
+    ]);
+    expect(result.removedEmptySectionTitles).toEqual(["变更与实践"]);
+  });
+
+  it("audits high-rank and same-day candidate coverage without rewriting non-empty content", () => {
+    const coverage = buildDailyReportCandidateCoverage({
+      blocks: [
+        { type: "section", title: "今日大事", items: [{ title: "低排名内容", body: "内容", sourceIds: [2] }] },
+      ],
+    }, [
+      { ...candidates[0], id: 1, candidateScore: 95, newItemCountOnDate: 1, newSourceCountOnDate: 1 },
+      { ...candidates[1], id: 2, candidateScore: 40, newItemCountOnDate: 0, newSourceCountOnDate: 0 },
+    ]);
+
+    expect(coverage).toMatchObject({
+      candidateCount: 2,
+      selectedCount: 1,
+      topRankPoolCount: 1,
+      selectedTopRankCount: 0,
+      sameDayCandidateCount: 1,
+      selectedSameDayCount: 0,
+      lowRankSelectedCount: 1,
+      warnings: [
+        "selected_candidates_only_low_rank",
+        "selected_candidates_miss_same_day_updates",
+      ],
+    });
   });
 });
 

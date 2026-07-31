@@ -6,6 +6,7 @@ import { withDailyReportCache } from "@/lib/daily-report/cache";
 import { getDailyReportDateRange } from "@/lib/daily-report/date";
 import {
   DAILY_REPORT_TIMEZONE,
+  type DailyReportCandidateCoverageDTO,
   type DailyReportCandidateReviewDTO,
   type DailyReportCandidate,
   type DailyReportContent,
@@ -48,7 +49,7 @@ function calculateDailyReportCandidateScore(input: { qualityScore: number; sourc
   return Math.max(0, Math.min(100, Math.round(aiBaseScore + sourceBoost + itemBoost)));
 }
 
-function getDailyReportCandidatePoolLimit(limit: number) {
+export function getDailyReportCandidatePoolLimit(limit: number) {
   return Math.max(limit, Math.min(DAILY_REPORT_CANDIDATE_POOL_MAX, limit * DAILY_REPORT_CANDIDATE_POOL_MULTIPLIER));
 }
 
@@ -88,7 +89,12 @@ async function getDailyReportCacheVersion(isAdmin: boolean) {
   ].join(":");
 }
 
-export async function listDailyReportCandidates(date: string, limit = 120, groupIdsInput: string[] = []) {
+export async function listDailyReportCandidates(
+  date: string,
+  limit = 120,
+  groupIdsInput: string[] = [],
+  options: { returnPool?: boolean } = {},
+) {
   const { start, end } = getDailyReportDateRange(date);
   const groupIds = [...new Set(groupIdsInput.filter(Boolean))];
   const poolLimit = getDailyReportCandidatePoolLimit(limit);
@@ -102,7 +108,7 @@ export async function listDailyReportCandidates(date: string, limit = 120, group
   };
 
   const itemRows = await prisma.item.findMany({
-    take: poolLimit,
+    take: options.returnPool ? DAILY_REPORT_CANDIDATE_POOL_MAX : poolLimit,
     where: {
       createdAt: { gte: start, lt: end },
       status: "processed",
@@ -247,7 +253,7 @@ export async function listDailyReportCandidates(date: string, limit = 120, group
       }
       return right.representative.id.localeCompare(left.representative.id);
     })
-    .slice(0, limit);
+    .slice(0, options.returnPool ? poolLimit : limit);
 
   return ranked.map((entry, index): DailyReportCandidate => {
     const item = entry.representative;
@@ -378,12 +384,37 @@ function parseDailyReportCandidateReview(
           Boolean(candidate && typeof candidate === "object" && "title" in candidate && "itemTitle" in candidate && "excludedReason" in candidate),
         )
       : [];
+    const rawCoverage = snapshot.candidateCoverage;
+    const candidateCoverage = rawCoverage && typeof rawCoverage === "object"
+      ? rawCoverage as Record<string, unknown>
+      : null;
+    const parsedCoverage: DailyReportCandidateCoverageDTO | null = candidateCoverage &&
+        typeof candidateCoverage.candidateCount === "number" &&
+        typeof candidateCoverage.selectedCount === "number" &&
+        typeof candidateCoverage.topRankPoolCount === "number" &&
+        typeof candidateCoverage.selectedTopRankCount === "number" &&
+        typeof candidateCoverage.sameDayCandidateCount === "number" &&
+        typeof candidateCoverage.selectedSameDayCount === "number" &&
+        typeof candidateCoverage.lowRankSelectedCount === "number" &&
+        Array.isArray(candidateCoverage.warnings)
+      ? {
+          candidateCount: candidateCoverage.candidateCount,
+          selectedCount: candidateCoverage.selectedCount,
+          topRankPoolCount: candidateCoverage.topRankPoolCount,
+          selectedTopRankCount: candidateCoverage.selectedTopRankCount,
+          sameDayCandidateCount: candidateCoverage.sameDayCandidateCount,
+          selectedSameDayCount: candidateCoverage.selectedSameDayCount,
+          lowRankSelectedCount: candidateCoverage.lowRankSelectedCount,
+          warnings: candidateCoverage.warnings.filter((warning): warning is string => typeof warning === "string"),
+        }
+      : null;
 
     return {
       candidateCount: typeof snapshot.candidateCount === "number" ? snapshot.candidateCount : candidates.length,
       selectedCount,
       candidates,
       excludedRecentDuplicates,
+      candidateCoverage: parsedCoverage,
     };
   } catch {
     return null;

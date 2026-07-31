@@ -1,17 +1,17 @@
 import { listClusterReviewCandidates } from "@/lib/clusters/decisions";
 import { prisma } from "@/lib/db";
 import { getSourceMonitorSnapshot } from "@/lib/source-monitor/service";
-import { listAdminTagSuggestions } from "@/lib/tags/service";
+import { listAdminEntitySuggestions } from "@/lib/entities/service";
 import type { BackgroundTaskRunStatus } from "@/lib/tasks/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ACTIONABLE_MONITOR_RANGE_DAYS = [1, 3, 7] as const;
-const AUTO_TAG_CONFIDENCE_THRESHOLD = 0.98;
-const MIN_TAG_SUGGESTION_AFFECTED_COUNT = 3;
+const AUTO_ENTITY_CONFIDENCE_THRESHOLD = 0.98;
+const MIN_ENTITY_SUGGESTION_AFFECTED_COUNT = 3;
 
 export type ActionableMonitorRangeDays = (typeof ACTIONABLE_MONITOR_RANGE_DAYS)[number];
 export type ActionableMonitorSeverity = "critical" | "warning" | "info";
-export type ActionableMonitorCategory = "source" | "content" | "tag" | "preference" | "cluster" | "split" | "task";
+export type ActionableMonitorCategory = "source" | "content" | "entity" | "preference" | "cluster" | "split" | "task";
 
 export type ActionableMonitorItem = {
   id: string;
@@ -55,9 +55,9 @@ export async function getActionableMonitorSnapshot(
   const [
     sourceSnapshot,
     filteredItemCount,
-    tagSuggestions,
+    entitySuggestions,
     briefingPreferenceSuggestionCount,
-    autoMergeableTagCount,
+    autoMergeableEntityCount,
     clusterReview,
     aggregationSplitCounts,
     recentIssueTaskCount,
@@ -70,18 +70,18 @@ export async function getActionableMonitorSnapshot(
         updatedAt: { gte: since },
       },
     }),
-    listAdminTagSuggestions({ page: 1, pageSize: 1, sort: "affected_desc" }),
+    listAdminEntitySuggestions({ page: 1, pageSize: 1, sort: "affected_desc" }),
     prisma.briefingPreferenceSuggestion.count({
       where: { status: "pending" },
     }),
-    prisma.tagSuggestionCandidate.count({
+    prisma.entitySuggestionCandidate.count({
       where: {
         status: "active",
         confidence: {
-          gte: AUTO_TAG_CONFIDENCE_THRESHOLD,
+          gte: AUTO_ENTITY_CONFIDENCE_THRESHOLD,
         },
         affectedItemCount: {
-          gte: MIN_TAG_SUGGESTION_AFFECTED_COUNT,
+          gte: MIN_ENTITY_SUGGESTION_AFFECTED_COUNT,
         },
       },
     }),
@@ -146,18 +146,18 @@ export async function getActionableMonitorSnapshot(
     });
   }
 
-  if (tagSuggestions.totalCount > 0) {
+  if (entitySuggestions.totalCount > 0) {
     items.push({
-      id: "tags",
-      category: "tag",
-      severity: autoMergeableTagCount > 0 ? "warning" : "info",
-      title: "标签治理建议",
+      id: "entities",
+      category: "entity",
+      severity: autoMergeableEntityCount > 0 ? "warning" : "info",
+      title: "实体治理建议",
       description:
-        autoMergeableTagCount > 0
-          ? `当前有 ${tagSuggestions.totalCount} 条标签建议，其中 ${autoMergeableTagCount} 条可优先合并。`
-          : `当前有 ${tagSuggestions.totalCount} 条标签建议等待复核。`,
-      count: tagSuggestions.totalCount,
-      href: "/admin?tab=monitoring&section=content&view=tags&suggestions=open",
+        autoMergeableEntityCount > 0
+          ? `当前有 ${entitySuggestions.totalCount} 条实体建议，其中 ${autoMergeableEntityCount} 条可优先合并。`
+          : `当前有 ${entitySuggestions.totalCount} 条实体建议等待复核。`,
+      count: entitySuggestions.totalCount,
+      href: "/admin?tab=monitoring&section=content&view=entities&suggestions=open",
       actionLabel: "查看",
       details: [],
     });

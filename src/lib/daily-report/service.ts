@@ -24,6 +24,7 @@ import {
 import {
   DAILY_REPORT_TIMEZONE,
   type DailyReportCandidate,
+  type DailyReportCandidateCoverageDTO,
   type DailyReportCandidateSnapshotEntry,
   type DailyReportContent,
   type DailyReportItem,
@@ -33,7 +34,7 @@ import {
 import { parseDailyReportContent } from "@/lib/daily-report/validator";
 import { normalizeEventSignatureForStorage } from "@/lib/clusters/normalization";
 import { listEventBriefingEntriesForDailyReport, resolveDailyReportChannelSourceGroupIds } from "@/lib/events/service";
-import type { EventBriefingEntryDTO } from "@/lib/events/types";
+import type { EventBriefingEntryDTO, EventBriefingItemDTO } from "@/lib/events/types";
 import { getDisplaySummary, getDisplayTitle } from "@/lib/feed/presentation";
 import { getIngestionRuntimeConfig } from "@/lib/settings/runtime-service";
 import { DEFAULT_DAILY_REPORT_TASK_LABEL, type TaskTimelineNodeSnapshot } from "@/lib/tasks/types";
@@ -45,6 +46,7 @@ const MIN_CANDIDATE_COUNT = 2;
 const DAILY_REPORT_RECENT_SOURCE_LOOKBACK_DAYS = 7;
 const DAILY_REPORT_RECENT_TOPIC_CONTEXT_LIMIT = 120;
 const MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE = 5;
+const MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE = 3;
 const DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES = ["allowed", "restored"] as const;
 
 class DailyReportGenerationError extends Error {
@@ -93,6 +95,10 @@ function buildInputHash(
       candidateScore: candidate.candidateScore,
       sourceCount: candidate.sourceCount,
       itemCount: candidate.itemCount,
+      isFollowUp: candidate.isFollowUp ?? false,
+      newItemCountOnDate: candidate.newItemCountOnDate ?? 0,
+      newSourceCountOnDate: candidate.newSourceCountOnDate ?? 0,
+      evidenceItems: candidate.evidenceItems ?? [],
     }));
   }
   return hash.digest("hex");
@@ -110,6 +116,91 @@ function getSectionSourceIds(content: DailyReportContent) {
   }
 
   return rows;
+}
+
+export function deduplicateDailyReportContentByCandidate(
+  content: DailyReportContent,
+  candidates: DailyReportCandidate[],
+) {
+  const identityBySourceId = new Map(
+    candidates.map((candidate) => [candidate.id, buildDailyReportContentDuplicateIdentities(candidate)]),
+  );
+  const seen = new Set<string>();
+  const emptySectionTitles: string[] = [];
+  const refilledSectionTitles: string[] = [];
+  const removedEmptySectionTitles: string[] = [];
+  let changed = false;
+
+  const blocks: DailyReportContent["blocks"] = [];
+  for (const block of content.blocks) {
+    if (block.type !== "section") {
+      blocks.push(block);
+      continue;
+    }
+
+    const items: DailyReportItem[] = [];
+    for (const item of block.items) {
+      const sourceIds = item.sourceIds.filter((sourceId) => {
+        const identities = identityBySourceId.get(sourceId) ?? new Set([`source:${sourceId}`]);
+        if ([...identities].some((identity) => seen.has(identity))) {
+          changed = true;
+          return false;
+        }
+        for (const identity of identities) {
+          seen.add(identity);
+        }
+        return true;
+      });
+
+      if (sourceIds.length === 0) {
+        changed = true;
+        continue;
+      }
+
+      items.push({ ...item, sourceIds });
+    }
+
+    if (items.length === 0) {
+      emptySectionTitles.push(block.title);
+      const fallbackCandidate = candidates.find((candidate) => {
+        const identities = identityBySourceId.get(candidate.id);
+        return identities && ![...identities].some((identity) => seen.has(identity));
+      });
+
+      if (fallbackCandidate) {
+        const identities = identityBySourceId.get(fallbackCandidate.id);
+        if (identities) {
+          for (const identity of identities) {
+            seen.add(identity);
+          }
+        }
+        items.push({
+          title: fallbackCandidate.title,
+          body: fallbackCandidate.summary || fallbackCandidate.itemTitle || fallbackCandidate.title,
+          sourceIds: [fallbackCandidate.id],
+        });
+        refilledSectionTitles.push(block.title);
+      } else {
+        removedEmptySectionTitles.push(block.title);
+        changed = true;
+        continue;
+      }
+      changed = true;
+    }
+
+    blocks.push({ ...block, items });
+  }
+
+  if (blocks.every((block) => block.type !== "section" || block.items.length === 0)) {
+    throw new Error("日报去重后没有可用栏目内容。");
+  }
+
+  return {
+    content: changed ? { ...content, blocks } : content,
+    emptySectionTitles,
+    refilledSectionTitles,
+    removedEmptySectionTitles,
+  };
 }
 
 function buildDailyReportSourceKey(input: {
@@ -146,11 +237,42 @@ function compactDailyReportCandidates(candidates: DailyReportCandidate[]) {
   }));
 }
 
+function toDailyReportEvidenceItem(item: EventBriefingItemDTO) {
+  return {
+    title: item.title,
+    sourceName: item.sourceName,
+    summary: item.summary,
+    url: item.originalUrl,
+    publishedAt: item.publishedAt,
+    createdAt: item.createdAt,
+    qualityScore: item.qualityScore,
+    publishedAtKnown: item.publishedAtKnown,
+  };
+}
+
+function getDailyReportEntryItems(entry: EventBriefingEntryDTO, date: string) {
+  const { start, end } = getDailyReportDateRange(date);
+  const dailyItems = entry.items
+    .filter((item) => {
+      const createdAt = new Date(item.createdAt);
+      return !Number.isNaN(createdAt.getTime()) && createdAt >= start && createdAt < end;
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  const evidenceItems = (dailyItems.length > 0 ? dailyItems : entry.items)
+    .slice(0, MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE);
+
+  return {
+    representativeItem: evidenceItems[0] ?? entry.items[0],
+    evidenceItems,
+  };
+}
+
 function eventBriefingEntryToDailyReportCandidate(
   entry: EventBriefingEntryDTO,
   index: number,
+  date: string,
 ): DailyReportCandidate | null {
-  const representativeItem = entry.items[0];
+  const { representativeItem, evidenceItems } = getDailyReportEntryItems(entry, date);
 
   if (!representativeItem) {
     return null;
@@ -170,26 +292,134 @@ function eventBriefingEntryToDailyReportCandidate(
     candidateScore: entry.rankScore,
     sourceCount: entry.sourceCount,
     itemCount: entry.itemCount,
-    createdAt: entry.latestCreatedAt,
+    createdAt: representativeItem.createdAt,
     publishedAt: representativeItem.publishedAt,
+    publishedAtKnown: representativeItem.publishedAtKnown,
     eventType: entry.eventType,
     eventSubject: entry.eventSubject,
     eventAction: entry.eventAction,
     eventObject: entry.eventObject,
     eventDate: entry.eventDate,
+    isFollowUp: entry.isFollowUp,
+    newItemCountOnDate: entry.newItemCountOnDate,
+    newSourceCountOnDate: entry.newSourceCountOnDate,
+    evidenceItems: evidenceItems.map(toDailyReportEvidenceItem),
   };
 }
 
-async function listDailyReportEventBriefingCandidates(date: string, limit: number, channelIds: string[] = []) {
+async function listDailyReportEventBriefingCandidates(date: string, channelIds: string[] = []) {
   const entries = await listEventBriefingEntriesForDailyReport({
     date,
-    limit,
     channelIds,
   });
 
   return entries
-    .map(eventBriefingEntryToDailyReportCandidate)
+    .map((entry, index) => eventBriefingEntryToDailyReportCandidate(entry, index, date))
     .filter((candidate): candidate is DailyReportCandidate => Boolean(candidate));
+}
+
+function buildDailyReportCandidateIdentity(candidate: DailyReportCandidate) {
+  if (candidate.clusterId) {
+    return `cluster:${candidate.clusterId}`;
+  }
+
+  const event = getDailyReportEventIdentity(candidate);
+  if (event.eventSubject && event.eventObject) {
+    return [
+      "event",
+      event.eventType ?? "",
+      event.eventSubject,
+      event.eventAction ?? "",
+      event.eventObject,
+      event.eventDate ?? "",
+    ].join(":");
+  }
+
+  return candidate.itemId ? `item:${candidate.itemId}` : `url:${candidate.url.trim().toLowerCase()}`;
+}
+
+function buildDailyReportContentDuplicateIdentities(candidate: DailyReportCandidate) {
+  const identities = new Set<string>();
+  const sourceKey = normalizeOptionalDailyReportText(buildDailyReportSourceKey(candidate));
+  if (sourceKey) {
+    identities.add(`source:${sourceKey}`);
+  }
+  if (candidate.itemId) {
+    identities.add(`item:${candidate.itemId}`);
+  }
+  if (candidate.clusterId) {
+    identities.add(`cluster:${candidate.clusterId}`);
+  }
+
+  const event = getDailyReportEventIdentity(candidate);
+  if (event.eventSubject && event.eventObject) {
+    identities.add(`event:${event.eventSubject}:${event.eventObject}`);
+  }
+
+  if (identities.size === 0) {
+    identities.add(`source:${candidate.id}`);
+  }
+
+  return identities;
+}
+
+export function buildDailyReportCandidateCoverage(
+  content: DailyReportContent,
+  candidates: DailyReportCandidate[],
+): DailyReportCandidateCoverageDTO {
+  const selectedIds = new Set(getSectionSourceIds(content).map((row) => row.sourceId));
+  const rankedCandidates = [...candidates].sort((left, right) => (
+    right.candidateScore - left.candidateScore || left.id - right.id
+  ));
+  const topRankPoolCount = rankedCandidates.length > 0
+    ? Math.max(1, Math.ceil(rankedCandidates.length * 0.5))
+    : 0;
+  const topRankIds = new Set(rankedCandidates.slice(0, topRankPoolCount).map((candidate) => candidate.id));
+  const sameDayIds = new Set(
+    candidates
+      .filter((candidate) => (candidate.newItemCountOnDate ?? 0) > 0 || (candidate.newSourceCountOnDate ?? 0) > 0)
+      .map((candidate) => candidate.id),
+  );
+  const selectedCandidates = candidates.filter((candidate) => selectedIds.has(candidate.id));
+  const selectedTopRankCount = selectedCandidates.filter((candidate) => topRankIds.has(candidate.id)).length;
+  const selectedSameDayCount = selectedCandidates.filter((candidate) => sameDayIds.has(candidate.id)).length;
+  const warnings: string[] = [];
+
+  if (selectedCandidates.length > 0 && topRankPoolCount > 0 && selectedTopRankCount === 0) {
+    warnings.push("selected_candidates_only_low_rank");
+  }
+  if (sameDayIds.size > 0 && selectedSameDayCount === 0) {
+    warnings.push("selected_candidates_miss_same_day_updates");
+  }
+
+  return {
+    candidateCount: candidates.length,
+    selectedCount: selectedCandidates.length,
+    topRankPoolCount,
+    selectedTopRankCount,
+    sameDayCandidateCount: sameDayIds.size,
+    selectedSameDayCount,
+    lowRankSelectedCount: selectedCandidates.filter((candidate) => !topRankIds.has(candidate.id)).length,
+    warnings,
+  };
+}
+
+function deduplicateDailyReportCandidates(candidates: DailyReportCandidate[]) {
+  const seen = new Set<string>();
+  const unique: DailyReportCandidate[] = [];
+  const duplicates: DailyReportCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const identity = buildDailyReportCandidateIdentity(candidate);
+    if (seen.has(identity)) {
+      duplicates.push(candidate);
+      continue;
+    }
+    seen.add(identity);
+    unique.push(candidate);
+  }
+
+  return { candidates: unique, duplicates };
 }
 
 async function listDailyReportGenerationCandidates(
@@ -201,13 +431,13 @@ async function listDailyReportGenerationCandidates(
   try {
     return {
       source: "event_briefing" as const,
-      candidates: await listDailyReportEventBriefingCandidates(date, limit, channelIds),
+      candidates: await listDailyReportEventBriefingCandidates(date, channelIds),
     };
   } catch (error) {
     console.warn("[daily-report] falling back to legacy candidate query", error);
     return {
       source: "legacy_daily_report" as const,
-      candidates: await listDailyReportCandidates(date, limit, fallbackGroupIds),
+      candidates: await listDailyReportCandidates(date, limit, fallbackGroupIds, { returnPool: true }),
     };
   }
 }
@@ -381,6 +611,17 @@ function matchesRecentDailyReportSource(
   candidate: DailyReportCandidate,
   recentSource: RecentDailyReportSourceSnapshot,
 ) {
+  const sameCluster = Boolean(candidate.clusterId && recentSource.clusterId && candidate.clusterId === recentSource.clusterId);
+  const isMeaningfulFollowUp = Boolean(
+    sameCluster &&
+      candidate.isFollowUp &&
+      ((candidate.newItemCountOnDate ?? 0) > 0 || (candidate.newSourceCountOnDate ?? 0) > 0),
+  );
+
+  if (isMeaningfulFollowUp) {
+    return false;
+  }
+
   const candidateSourceKey = buildDailyReportSourceKey(candidate);
   const recentSourceKey = normalizeLegacyParsedSourceKey(recentSource.sourceKey) ?? buildDailyReportSourceKey(recentSource);
   const hasSameItemSourceKey = Boolean(
@@ -394,7 +635,7 @@ function matchesRecentDailyReportSource(
   return Boolean(
     (recentSourceKey && candidateSourceKey === recentSourceKey) ||
       hasSameItemSourceKey ||
-      (candidate.clusterId && recentSource.clusterId && candidate.clusterId === recentSource.clusterId) ||
+      sameCluster ||
       matchesRecentDailyReportEvent(candidate, recentSource) ||
       matchesRecentDailyReportSoftDuplicate(candidate, recentSource),
   );
@@ -403,14 +644,17 @@ function matchesRecentDailyReportSource(
 function filterRecentDailyReportDuplicates(
   candidates: DailyReportCandidate[],
   recentSources: RecentDailyReportSourceSnapshot[],
+  limit = candidates.length,
 ) {
+  const normalizedLimit = Number.isInteger(limit) && limit > 0 ? limit : candidates.length;
+
   if (recentSources.length === 0) {
-    return candidates;
+    return compactDailyReportCandidates(candidates.slice(0, normalizedLimit));
   }
 
   return compactDailyReportCandidates(candidates.filter(
     (candidate) => !recentSources.some((recentSource) => matchesRecentDailyReportSource(candidate, recentSource)),
-  ));
+  ).slice(0, normalizedLimit));
 }
 
 function toCandidateSnapshotEntry(candidate: DailyReportCandidate): DailyReportCandidateSnapshotEntry {
@@ -431,6 +675,10 @@ function toCandidateSnapshotEntry(candidate: DailyReportCandidate): DailyReportC
     eventAction: candidate.eventAction,
     eventObject: candidate.eventObject,
     eventDate: candidate.eventDate,
+    publishedAtKnown: candidate.publishedAtKnown ?? true,
+    isFollowUp: candidate.isFollowUp ?? false,
+    newItemCountOnDate: candidate.newItemCountOnDate ?? 0,
+    newSourceCountOnDate: candidate.newSourceCountOnDate ?? 0,
   };
 }
 
@@ -833,9 +1081,10 @@ export async function generateDailyReport(input: {
     dailyReportChannelIds,
     dailyReportSourceGroupIds,
   );
-  const rawCandidates = candidateResult.candidates;
+  const deduplicated = deduplicateDailyReportCandidates(candidateResult.candidates);
+  const rawCandidates = deduplicated.candidates;
   const excludedRecentDuplicates = buildDailyReportExcludedRecentDuplicateSnapshots(rawCandidates, recentSources);
-  const candidates = filterRecentDailyReportDuplicates(rawCandidates, recentSources);
+  const candidates = filterRecentDailyReportDuplicates(rawCandidates, recentSources, schedule.dailyReportCandidateLimit);
   await input.onCandidatesLoaded?.(candidates.length);
   const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics);
   const existing = await prisma.dailyReport.findUnique({
@@ -917,7 +1166,18 @@ export async function generateDailyReport(input: {
     eventObject: candidate.eventObject,
     eventDate: candidate.eventDate,
   })));
+  let deduplication: ReturnType<typeof deduplicateDailyReportContentByCandidate>;
+  try {
+    deduplication = deduplicateDailyReportContentByCandidate(content, candidates);
+  } catch (error) {
+    throw new DailyReportGenerationError(error, aiUsage.snapshot());
+  }
+  content = deduplication.content;
   const sourceRows = getSectionSourceIds(content);
+  const candidateCoverage = buildDailyReportCandidateCoverage(content, candidates);
+  if (candidateCoverage.warnings.length > 0) {
+    console.warn("[daily-report] candidate coverage warnings:", candidateCoverage.warnings.join(", "));
+  }
   const selectedCount = countSelectedDailyReportCandidates(content);
   const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const expandedSourcesByNumber = await buildExpandedDailyReportSourceRegistry({
@@ -935,7 +1195,15 @@ export async function generateDailyReport(input: {
   const candidateSnapshot = JSON.stringify({
     candidateSource: candidateResult.source,
     candidates: candidates.map(toCandidateSnapshotEntry),
+    excludedCurrentDuplicates: deduplicated.duplicates.map((candidate) => ({
+      ...toCandidateSnapshotEntry(candidate),
+      reason: "current_candidate_duplicate",
+    })),
     excludedRecentDuplicates,
+    emptySectionsAfterDeduplication: deduplication.emptySectionTitles,
+    refilledEmptySections: deduplication.refilledSectionTitles,
+    removedEmptySections: deduplication.removedEmptySectionTitles,
+    candidateCoverage,
     candidateCount: candidates.length,
   });
   const shouldAutoPublish = schedule.dailyReportAutoPublish;

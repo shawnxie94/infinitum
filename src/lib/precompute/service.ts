@@ -1,10 +1,10 @@
 import { precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
-import { precomputeTagSuggestionCandidates } from "@/lib/tags/service";
+import { precomputeEntitySuggestionCandidates } from "@/lib/entities/service";
 import { enqueueTaskRun, updateTaskRun } from "@/lib/tasks/service";
 
 type PrecomputeStageResult = {
-  key: "cluster_merge_clean_pairs" | "tag_suggestion_candidates";
+  key: "cluster_merge_clean_pairs" | "entity_suggestion_candidates";
   label: string;
   ok: boolean;
   summary: string;
@@ -80,15 +80,15 @@ export async function executePrecomputeTask(taskRun: { id: string }) {
     progressLabel: clusterStage.summary,
   });
 
-  const tagStage = await runPrecomputeStage(
-    "tag_suggestion_candidates",
-    "标签治理候选",
+  const entityStage = await runPrecomputeStage(
+    "entity_suggestion_candidates",
+    "实体治理候选",
     async () => {
-      const result = await precomputeTagSuggestionCandidates();
-      return `标签候选 ${result.storedCandidates} 个，扫描 ${result.scannedPairs} 对`;
+      const result = await precomputeEntitySuggestionCandidates();
+      return `实体候选 ${result.storedCandidates} 个，扫描 ${result.scannedPairs} 对`;
     },
   );
-  const stages = [clusterStage, tagStage];
+  const stages = [clusterStage, entityStage];
   const failedStages = stages.filter((stage) => !stage.ok);
   const status = failedStages.length === 0 ? "succeeded" : failedStages.length === stages.length ? "failed" : "partial";
   const progressLabel = stages.map((stage) => stage.summary).join("；");

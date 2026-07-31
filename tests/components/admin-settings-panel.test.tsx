@@ -1560,7 +1560,7 @@ describe("AdminSettingsPanel", () => {
       preference: {
         ...buildInitialSettings().eventBriefing.preference,
         weightedRules: [
-          { type: "tag", value: "AI Coding", weight: 6 },
+                  { type: "entity", value: "AI Coding", weight: 6 },
           { type: "keyword", value: "OpenAI", weight: -4 },
         ],
       },
@@ -1568,11 +1568,11 @@ describe("AdminSettingsPanel", () => {
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
 
-      if (url.startsWith("/api/admin/settings/tags")) {
+      if (url.startsWith("/api/admin/settings/entities")) {
         return new Response(JSON.stringify({
-          tags: [
+          entities: [
             {
-              id: "tag-ai-coding",
+              id: "entity-ai-coding",
               name: "AI Coding",
               normalized: "ai-coding",
               itemCount: 12,
@@ -1582,7 +1582,7 @@ describe("AdminSettingsPanel", () => {
               updatedAt: "2026-04-20T10:00:00.000Z",
             },
             {
-              id: "tag-marketing",
+              id: "entity-marketing",
               name: "Marketing",
               normalized: "marketing",
               itemCount: 3,
@@ -1687,7 +1687,7 @@ describe("AdminSettingsPanel", () => {
           },
           preference: {
             weightedRules: [
-              { type: "tag", value: "AI Coding", weight: 6 },
+              { type: "entity", value: "AI Coding", weight: 6 },
               { type: "keyword", value: "OpenAI", weight: -4 },
             ],
             maxCuratorBoost: 15,
@@ -1704,15 +1704,15 @@ describe("AdminSettingsPanel", () => {
     const updatedPreference = {
       ...buildInitialSettings().eventBriefing.preference,
       weightedRules: [
-        { type: "tag", value: "ai-coding", weight: 3 },
+        { type: "entity", value: "ai-coding", weight: 3 },
       ],
     };
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
 
-      if (url.startsWith("/api/admin/settings/tags")) {
+      if (url.startsWith("/api/admin/settings/entities")) {
         return new Response(JSON.stringify({
-          tags: [],
+          entities: [],
           totalCount: 0,
           page: 1,
           pageSize: 100,
@@ -1724,7 +1724,7 @@ describe("AdminSettingsPanel", () => {
           suggestions: [
             {
               id: "suggestion-ai-coding",
-              ruleType: "tag",
+              ruleType: "entity",
               value: "ai-coding",
               label: "AI Coding",
               suggestedWeight: 3,
@@ -1732,7 +1732,7 @@ describe("AdminSettingsPanel", () => {
               positiveScore: 8,
               negativeScore: 0,
               sampleCount: 3,
-              reason: "标签「AI Coding」近 30 天偏好更强，来自 3 次管理行为。",
+              reason: "实体「AI Coding」近 30 天偏好更强，来自 3 次管理行为。",
               status: "pending",
               createdAt: "2026-07-01T00:00:00.000Z",
               updatedAt: "2026-07-01T00:00:00.000Z",
@@ -1790,7 +1790,7 @@ describe("AdminSettingsPanel", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "接受偏好建议：AI Coding" }));
     const acceptDialog = screen.getByRole("dialog", { name: "接受偏好建议" });
-    expect(within(acceptDialog).getByText("标签：AI Coding +3")).toBeInTheDocument();
+    expect(within(acceptDialog).getByText("实体：AI Coding +3")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith(
       "/api/admin/settings/event-briefing/suggestions/suggestion-ai-coding/accept",
       expect.anything(),

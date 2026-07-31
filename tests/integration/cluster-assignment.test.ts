@@ -134,6 +134,84 @@ describe("cluster assignment", () => {
     await expect(prisma.contentCluster.count()).resolves.toBe(2);
   });
 
+  it("does not use title fallback across incompatible event dates", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Date Guard Feed",
+        rssUrl: "https://date-guard.example.com/feed.xml",
+        siteUrl: "https://date-guard.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    const baseItemData = {
+      originalTitle: "Acme 发布 Widget",
+      translatedTitle: "Acme 发布 Widget",
+      author: null,
+      publishedAt: new Date("2026-04-20T08:00:00.000Z"),
+      rssExcerpt: "Acme 发布 Widget",
+      rssContent: "Acme 发布 Widget",
+      fullText: null,
+      summaryText: "Acme 发布 Widget",
+      language: "zh",
+      status: "processed" as const,
+      summaryStatus: "succeeded" as const,
+      analysisStatus: "succeeded" as const,
+      moderationStatus: "allowed" as const,
+      qualityScore: 80,
+      qualityRationale: "relevant",
+      eventType: "launch",
+      eventSubject: "Acme",
+      eventAction: "发布",
+      eventObject: "Widget",
+    };
+
+    const firstItem = await prisma.item.create({
+      data: {
+        ...baseItemData,
+        sourceId: source.id,
+        eventDate: "2026-04-10",
+        originalUrl: "https://date-guard.example.com/acme-widget-april",
+        canonicalUrl: "https://date-guard.example.com/acme-widget-april",
+        urlHash: "date-guard-april",
+      },
+    });
+    const firstAssignment = await assignItemToCluster(firstItem.id, {
+      eventSignature: {
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026-04-10",
+      },
+    });
+
+    const secondItem = await prisma.item.create({
+      data: {
+        ...baseItemData,
+        sourceId: source.id,
+        eventDate: "2026-05-10",
+        originalUrl: "https://date-guard.example.com/acme-widget-may",
+        canonicalUrl: "https://date-guard.example.com/acme-widget-may",
+        urlHash: "date-guard-may",
+      },
+    });
+    const secondAssignment = await assignItemToCluster(secondItem.id, {
+      eventSignature: {
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026-05-10",
+      },
+    });
+
+    expect(firstAssignment.clusterId).not.toBeNull();
+    expect(secondAssignment.createdNewCluster).toBe(true);
+    expect(secondAssignment.clusterId).not.toBe(firstAssignment.clusterId);
+  });
+
   it("allows aggregation split children from disabled sources to join clusters", async () => {
     const source = await prisma.source.create({
       data: {

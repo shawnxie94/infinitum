@@ -1,21 +1,21 @@
-export type TagSimilarityReason =
+export type EntitySimilarityReason =
   | "compact_match"
   | "singular_match"
   | "punctuation_match"
   | "token_overlap"
   | "edit_distance";
 
-export type TagSimilarityResult = {
+export type EntitySimilarityResult = {
   confidence: number;
-  reason: TagSimilarityReason;
+  reason: EntitySimilarityReason;
 };
 
-export function normalizeTagSimilarityText(value: string) {
+export function normalizeEntitySimilarityText(value: string) {
   return value.normalize("NFKC").toLocaleLowerCase().trim();
 }
 
 function normalizeToken(value: string) {
-  const normalized = normalizeTagSimilarityText(value);
+  const normalized = normalizeEntitySimilarityText(value);
 
   if (normalized.endsWith("ies") && normalized.length > 4) {
     return `${normalized.slice(0, -3)}y`;
@@ -33,19 +33,19 @@ function normalizeToken(value: string) {
   return normalized;
 }
 
-export function tokenizeTagSimilarityText(value: string) {
-  return normalizeTagSimilarityText(value)
+export function tokenizeEntitySimilarityText(value: string) {
+  return normalizeEntitySimilarityText(value)
     .split(/[^\p{L}\p{N}]+/u)
     .map(normalizeToken)
     .filter(Boolean);
 }
 
-export function compactTagSimilarityText(value: string) {
-  return tokenizeTagSimilarityText(value).join("");
+export function compactEntitySimilarityText(value: string) {
+  return tokenizeEntitySimilarityText(value).join("");
 }
 
-export function sortedTagSimilarityTokenKey(value: string) {
-  return tokenizeTagSimilarityText(value).sort().join(" ");
+export function sortedEntitySimilarityTokenKey(value: string) {
+  return tokenizeEntitySimilarityText(value).sort().join(" ");
 }
 
 function levenshteinDistance(left: string, right: string) {
@@ -105,16 +105,16 @@ function tokenOverlap(left: string[], right: string[]) {
   return overlap / Math.min(left.length, right.length);
 }
 
-export function calculateTagSimilarity(left: string, right: string): TagSimilarityResult | null {
-  const normalizedLeft = normalizeTagSimilarityText(left);
-  const normalizedRight = normalizeTagSimilarityText(right);
+export function calculateEntitySimilarity(left: string, right: string): EntitySimilarityResult | null {
+  const normalizedLeft = normalizeEntitySimilarityText(left);
+  const normalizedRight = normalizeEntitySimilarityText(right);
 
   if (!normalizedLeft || !normalizedRight || normalizedLeft === normalizedRight) {
     return null;
   }
 
-  const leftTokens = tokenizeTagSimilarityText(normalizedLeft);
-  const rightTokens = tokenizeTagSimilarityText(normalizedRight);
+  const leftTokens = tokenizeEntitySimilarityText(normalizedLeft);
+  const rightTokens = tokenizeEntitySimilarityText(normalizedRight);
   const leftCompact = leftTokens.join("");
   const rightCompact = rightTokens.join("");
 
@@ -131,7 +131,7 @@ export function calculateTagSimilarity(left: string, right: string): TagSimilari
     };
   }
 
-  if (sortedTagSimilarityTokenKey(normalizedLeft) === sortedTagSimilarityTokenKey(normalizedRight)) {
+  if (sortedEntitySimilarityTokenKey(normalizedLeft) === sortedEntitySimilarityTokenKey(normalizedRight)) {
     return {
       confidence: 0.96,
       reason: "singular_match",
@@ -146,7 +146,7 @@ export function calculateTagSimilarity(left: string, right: string): TagSimilari
     };
   }
 
-  const editScore = editSimilarity(compactTagSimilarityText(normalizedLeft), compactTagSimilarityText(normalizedRight));
+  const editScore = editSimilarity(compactEntitySimilarityText(normalizedLeft), compactEntitySimilarityText(normalizedRight));
   if (editScore >= 0.82 && Math.max(leftCompact.length, rightCompact.length) >= 5) {
     return {
       confidence: Math.min(0.94, Math.max(0.82, editScore)),

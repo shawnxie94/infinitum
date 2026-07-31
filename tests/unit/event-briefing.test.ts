@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { getEventBriefingDateRange } from "@/lib/events/date";
 import { compressBehaviorNetScore, getCuratorBehaviorScore } from "@/lib/curator-behavior/service";
+import { calculateEventBriefingBaseRankScore } from "@/lib/events/service";
 import { calculateCuratorPreference } from "@/lib/events/preferences";
 import type { EventBriefingCandidate } from "@/lib/events/types";
 
@@ -26,7 +27,7 @@ function buildCandidate(overrides: Partial<EventBriefingCandidate> = {}): EventB
     eventObject: "Agent tools",
     eventDate: "2026-06-30",
     isFollowUp: true,
-    tags: [{ name: "AI Coding", normalized: "ai-coding" }],
+    entities: [{ name: "AI Coding", normalized: "ai-coding" }],
     sources: [
       { id: "source-1", name: "OpenAI Blog", groupId: "group-1" },
       { id: "source-2", name: "Tech Media", groupId: null },
@@ -39,6 +40,7 @@ function buildCandidate(overrides: Partial<EventBriefingCandidate> = {}): EventB
         sourceName: "OpenAI Blog",
         originalUrl: "https://example.com/openai-agent",
         publishedAt: new Date("2026-06-30T07:50:00.000Z"),
+        publishedAtKnown: true,
         createdAt: new Date("2026-06-30T08:00:00.000Z"),
         qualityScore: 80,
       },
@@ -57,11 +59,83 @@ describe("event briefing helpers", () => {
     expect(range.end.toISOString()).toBe("2026-06-30T16:00:00.000Z");
   });
 
+  it("gives bounded priority to same-day evidence and freshness", () => {
+    const range = getEventBriefingDateRange("2026-06-30");
+    const baseline = buildCandidate({
+      newItemCountOnDate: 1,
+      newSourceCountOnDate: 1,
+      latestCreatedAt: new Date("2026-06-29T16:30:00.000Z"),
+    });
+    const fresher = buildCandidate({
+      newItemCountOnDate: 3,
+      newSourceCountOnDate: 3,
+      latestCreatedAt: new Date("2026-06-30T15:30:00.000Z"),
+    });
+
+    expect(calculateEventBriefingBaseRankScore(fresher, range)).toBeGreaterThan(
+      calculateEventBriefingBaseRankScore(baseline, range),
+    );
+    expect(
+      calculateEventBriefingBaseRankScore(fresher, range) - calculateEventBriefingBaseRankScore(baseline, range),
+    ).toBeLessThanOrEqual(8);
+  });
+
+  it("penalizes delayed publication without changing the createdAt inclusion boundary", () => {
+    const range = getEventBriefingDateRange("2026-06-30");
+    const baseItem = buildCandidate().items[0]!;
+    const onTime = buildCandidate({
+      latestCreatedAt: new Date("2026-06-30T08:00:00.000Z"),
+      latestPublishedAt: new Date("2026-06-30T00:00:00.000Z"),
+      items: [{ ...baseItem, createdAt: new Date("2026-06-30T08:00:00.000Z"), publishedAt: new Date("2026-06-30T00:00:00.000Z") }],
+    });
+    const delayed = buildCandidate({
+      latestCreatedAt: new Date("2026-06-30T08:00:00.000Z"),
+      latestPublishedAt: new Date("2026-06-28T08:00:00.000Z"),
+      items: [{ ...baseItem, createdAt: new Date("2026-06-30T08:00:00.000Z"), publishedAt: new Date("2026-06-28T08:00:00.000Z") }],
+    });
+    const futurePublished = buildCandidate({
+      latestCreatedAt: new Date("2026-06-30T08:00:00.000Z"),
+      latestPublishedAt: new Date("2026-06-30T12:00:00.000Z"),
+      items: [{ ...baseItem, createdAt: new Date("2026-06-30T08:00:00.000Z"), publishedAt: new Date("2026-06-30T12:00:00.000Z") }],
+    });
+
+    expect(calculateEventBriefingBaseRankScore(delayed, range)).toBeLessThan(
+      calculateEventBriefingBaseRankScore(onTime, range),
+    );
+    expect(calculateEventBriefingBaseRankScore(futurePublished, range)).toBe(
+      calculateEventBriefingBaseRankScore(onTime, range),
+    );
+  });
+
+  it("does not grant unknown publication timestamps a freshness bonus", () => {
+    const range = getEventBriefingDateRange("2026-06-30");
+    const known = buildCandidate({
+      latestCreatedAt: new Date("2026-06-30T15:30:00.000Z"),
+      items: [{
+        ...buildCandidate().items[0]!,
+        createdAt: new Date("2026-06-30T15:30:00.000Z"),
+        publishedAtKnown: true,
+      }],
+    });
+    const unknown = buildCandidate({
+      latestCreatedAt: new Date("2026-06-30T15:30:00.000Z"),
+      items: [{
+        ...buildCandidate().items[0]!,
+        createdAt: new Date("2026-06-30T15:30:00.000Z"),
+        publishedAtKnown: false,
+      }],
+    });
+
+    expect(calculateEventBriefingBaseRankScore(unknown, range)).toBeLessThan(
+      calculateEventBriefingBaseRankScore(known, range),
+    );
+  });
+
   it("adds capped site-level curator boosts and penalties without hard filtering", () => {
     const result = calculateCuratorPreference(buildCandidate(), {
       id: "preference",
       weightedRules: [
-        { type: "tag", value: "AI Coding", weight: 6 },
+        { type: "entity", value: "AI Coding", weight: 6 },
         { type: "source_group", value: "group-1", weight: 5 },
         { type: "keyword", value: "OpenAI", weight: 5 },
         { type: "event_type", value: "launch", weight: 9 },

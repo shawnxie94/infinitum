@@ -32,6 +32,7 @@ import {
   deriveSourceConcurrency,
   buildPreparedFeedItemLookup,
   estimatePreparedItemAiWork,
+  parsePublishedAt,
   type PreparedFeedItem,
   type PreparedFeedItemLookup,
   processFeedItem,
@@ -66,6 +67,8 @@ import {
   updateTaskRun,
 } from "@/lib/tasks/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
+
+export const DEFAULT_MAX_FEED_ITEMS_TO_SCAN = 500;
 
 type ResolvedRunOptions = RunIngestionOptions & {
   now: Date;
@@ -201,6 +204,7 @@ async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promis
       },
     perSourceItemLimit:
       options?.perSourceItemLimit ?? runtimeConfig?.ingestion.perSourceItemLimit ?? 20,
+    maxFeedItemsToScan: options?.maxFeedItemsToScan ?? DEFAULT_MAX_FEED_ITEMS_TO_SCAN,
     processingStartAt:
       options?.processingStartAt ?? runtimeConfig?.ingestion.processingStartAt ?? null,
     now,
@@ -355,6 +359,7 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
     fullTextFetchThreshold,
     contentExtraction,
     perSourceItemLimit,
+    maxFeedItemsToScan = DEFAULT_MAX_FEED_ITEMS_TO_SCAN,
     processingStartAt,
     now,
     taskTimelineModelNames,
@@ -449,8 +454,8 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
             return;
           }
 
-          const items = (feed.items ?? []).slice(0, perSourceItemLimit);
-          const feedContentHash = buildFeedContentHash(items);
+          const allItems = feed.items ?? [];
+          const feedContentHash = buildFeedContentHash(allItems);
 
           if (source.feedContentHash && source.feedContentHash === feedContentHash) {
             await updateSourceMetadataIfChanged(source.id, {
@@ -479,6 +484,23 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
             healthMessage: null,
             healthCheckedAt: now,
           });
+
+          const items = allItems
+            .map((item) => ({ item, publishedAt: parsePublishedAt(item, now) }))
+            .sort((left, right) => {
+              if (left.publishedAt.known !== right.publishedAt.known) {
+                return left.publishedAt.known ? -1 : 1;
+              }
+              return right.publishedAt.value.getTime() - left.publishedAt.value.getTime();
+            })
+            .filter(({ publishedAt }) => (
+              !processingStartAt ||
+              !publishedAt.known ||
+              publishedAt.value >= processingStartAt
+            ))
+            .slice(0, maxFeedItemsToScan)
+            .slice(0, perSourceItemLimit)
+            .map(({ item }) => item);
 
           for (const item of items) {
             preparedItems.push({
@@ -517,7 +539,12 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
       preparedItem,
       lookup: buildPreparedFeedItemLookup(preparedItem, now),
     }))
-    .filter((entry) => !entry.lookup || !processingStartAt || entry.lookup.publishedAt >= processingStartAt));
+    .filter((entry) => (
+      !entry.lookup ||
+      !processingStartAt ||
+      !entry.lookup.publishedAtKnown ||
+      entry.lookup.publishedAt >= processingStartAt
+    )));
   const dedupeKeyInputs = preparedLookupEntries
     .map((entry) => entry.lookup)
     .filter((lookup): lookup is PreparedFeedItemLookup => Boolean(lookup))

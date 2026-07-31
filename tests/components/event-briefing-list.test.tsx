@@ -377,7 +377,7 @@ describe("EventBriefingList", () => {
   });
 
   it("uses the shared pagination style and preserves non-default page size", () => {
-    const { container } = renderEventBriefingList(buildBriefing({
+    renderEventBriefingList(buildBriefing({
       pagination: {
         page: 2,
         pageSize: 50,

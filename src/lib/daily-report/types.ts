@@ -26,11 +26,27 @@ export type DailyReportCandidate = {
   itemCount: number;
   createdAt: string;
   publishedAt: string;
+  publishedAtKnown?: boolean;
   eventType: string | null;
   eventSubject: string | null;
   eventAction: string | null;
   eventObject: string | null;
   eventDate: string | null;
+  isFollowUp?: boolean;
+  newItemCountOnDate?: number;
+  newSourceCountOnDate?: number;
+  evidenceItems?: DailyReportCandidateEvidenceItem[];
+};
+
+export type DailyReportCandidateEvidenceItem = {
+  title: string;
+  sourceName: string;
+  summary: string;
+  url: string;
+  publishedAt: string;
+  createdAt: string;
+  qualityScore: number;
+  publishedAtKnown?: boolean;
 };
 
 export type RecentDailyReportTopic = {
@@ -132,6 +148,10 @@ export type DailyReportCandidateSnapshotEntry = Pick<
   | "eventAction"
   | "eventObject"
   | "eventDate"
+  | "isFollowUp"
+  | "newItemCountOnDate"
+  | "newSourceCountOnDate"
+  | "publishedAtKnown"
 >;
 
 export type DailyReportExcludedCandidateSnapshotEntry = DailyReportCandidateSnapshotEntry & {
@@ -140,11 +160,23 @@ export type DailyReportExcludedCandidateSnapshotEntry = DailyReportCandidateSnap
   matchedRecentTitle: string | null;
 };
 
+export type DailyReportCandidateCoverageDTO = {
+  candidateCount: number;
+  selectedCount: number;
+  topRankPoolCount: number;
+  selectedTopRankCount: number;
+  sameDayCandidateCount: number;
+  selectedSameDayCount: number;
+  lowRankSelectedCount: number;
+  warnings: string[];
+};
+
 export type DailyReportCandidateReviewDTO = {
   candidateCount: number;
   selectedCount: number;
   candidates: DailyReportCandidateSnapshotEntry[];
   excludedRecentDuplicates: DailyReportExcludedCandidateSnapshotEntry[];
+  candidateCoverage?: DailyReportCandidateCoverageDTO | null;
 };
 
 export type DailyReportListItemDTO = {

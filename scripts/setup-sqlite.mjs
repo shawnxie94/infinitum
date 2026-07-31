@@ -18,6 +18,7 @@ const lockTimeoutMs = Number.parseInt(process.env.SQLITE_SETUP_LOCK_TIMEOUT_MS |
 const staleLockMs = Number.parseInt(process.env.SQLITE_SETUP_STALE_LOCK_MS || "120000", 10);
 const testHoldMs = Number.parseInt(process.env.SQLITE_SETUP_LOCK_HOLD_MS || "0", 10);
 const sqliteBusyTimeoutMs = Number.parseInt(process.env.SQLITE_BUSY_TIMEOUT_MS || "10000", 10);
+const entityBackfillLimit = 500;
 const sleepBuffer = new SharedArrayBuffer(4);
 const sleepView = new Int32Array(sleepBuffer);
 const itemAdminClusterIndexName = "items_clusterId_status_moderationStatus_updatedAt_idx";
@@ -382,8 +383,8 @@ function applyClusterFeedStatsBackfill() {
       WHERE rn = 1;
       CREATE INDEX "_cluster_feed_group_backfill_clusterId_idx" ON "_cluster_feed_group_backfill"("clusterId");
 
-      DROP TABLE IF EXISTS "_cluster_feed_tag_backfill";
-      CREATE TEMP TABLE "_cluster_feed_tag_backfill" AS
+      DROP TABLE IF EXISTS "_cluster_feed_entity_backfill";
+      CREATE TEMP TABLE "_cluster_feed_entity_backfill" AS
       SELECT
         i."clusterId" AS "clusterId",
         t.normalized AS normalized,
@@ -391,8 +392,8 @@ function applyClusterFeedStatsBackfill() {
       FROM "items" i
       INNER JOIN "_cluster_feed_backfill_targets" target ON target.id = i."clusterId"
       INNER JOIN "sources" s ON s.id = i."sourceId"
-      INNER JOIN "item_tags" it ON it."itemId" = i.id
-      INNER JOIN "tags" t ON t.id = it."tagId"
+      INNER JOIN "item_entities" it ON it."itemId" = i.id
+      INNER JOIN "entities" t ON t.id = it."entityId"
       WHERE i."clusterId" IS NOT NULL
         AND i.status = 'processed'
         AND i."moderationStatus" IN ('allowed', 'restored')
@@ -400,19 +401,19 @@ function applyClusterFeedStatsBackfill() {
         AND s.enabled = true
       GROUP BY i."clusterId", t.normalized;
 
-      DROP TABLE IF EXISTS "_cluster_feed_tag_json_backfill";
-      CREATE TEMP TABLE "_cluster_feed_tag_json_backfill" AS
+      DROP TABLE IF EXISTS "_cluster_feed_entity_json_backfill";
+      CREATE TEMP TABLE "_cluster_feed_entity_json_backfill" AS
       SELECT
         "clusterId",
-        json_group_array(json_object('name', name, 'normalized', normalized)) AS "feedTagsJson",
-        GROUP_CONCAT(name, ' ') AS "tagSearchText"
+        json_group_array(json_object('name', name, 'normalized', normalized)) AS "feedEntitiesJson",
+        GROUP_CONCAT(name, ' ') AS "entitySearchText"
       FROM (
         SELECT "clusterId", name, normalized
-        FROM "_cluster_feed_tag_backfill"
+        FROM "_cluster_feed_entity_backfill"
         ORDER BY name ASC, normalized ASC
       )
       GROUP BY "clusterId";
-      CREATE INDEX "_cluster_feed_tag_json_backfill_clusterId_idx" ON "_cluster_feed_tag_json_backfill"("clusterId");
+      CREATE INDEX "_cluster_feed_entity_json_backfill_clusterId_idx" ON "_cluster_feed_entity_json_backfill"("clusterId");
 
       UPDATE "content_clusters"
       SET
@@ -424,16 +425,200 @@ function applyClusterFeedStatsBackfill() {
         "latestCreatedAt" = (SELECT "latestCreatedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id),
         "latestPublishedAt" = COALESCE((SELECT "latestPublishedAt" FROM "_cluster_feed_stats_backfill" stats WHERE stats."clusterId" = "content_clusters".id), "latestPublishedAt"),
         "dominantGroupId" = (SELECT "groupId" FROM "_cluster_feed_group_backfill" groups WHERE groups."clusterId" = "content_clusters".id),
-        "feedTagsJson" = COALESCE((SELECT "feedTagsJson" FROM "_cluster_feed_tag_json_backfill" tags WHERE tags."clusterId" = "content_clusters".id), '[]'),
-        "feedSearchText" = TRIM(COALESCE(title, '') || ' ' || COALESCE(summary, '') || ' ' || COALESCE((SELECT "tagSearchText" FROM "_cluster_feed_tag_json_backfill" tags WHERE tags."clusterId" = "content_clusters".id), '')),
+        "feedEntitiesJson" = COALESCE((SELECT "feedEntitiesJson" FROM "_cluster_feed_entity_json_backfill" entities WHERE entities."clusterId" = "content_clusters".id), '[]'),
+        "feedSearchText" = TRIM(COALESCE(title, '') || ' ' || COALESCE(summary, '') || ' ' || COALESCE((SELECT "entitySearchText" FROM "_cluster_feed_entity_json_backfill" entities WHERE entities."clusterId" = "content_clusters".id), '')),
         "feedStatsUpdatedAt" = CURRENT_TIMESTAMP
       WHERE id IN (SELECT id FROM "_cluster_feed_backfill_targets");
 
       DROP TABLE IF EXISTS "_cluster_feed_backfill_targets";
       DROP TABLE IF EXISTS "_cluster_feed_stats_backfill";
       DROP TABLE IF EXISTS "_cluster_feed_group_backfill";
-      DROP TABLE IF EXISTS "_cluster_feed_tag_backfill";
-      DROP TABLE IF EXISTS "_cluster_feed_tag_json_backfill";
+      DROP TABLE IF EXISTS "_cluster_feed_entity_backfill";
+      DROP TABLE IF EXISTS "_cluster_feed_entity_json_backfill";
+    `,
+  });
+}
+
+function cleanupLegacyTagSchema() {
+  runSqlite([dbPath], {
+    input: `
+      PRAGMA foreign_keys=OFF;
+      DROP TABLE IF EXISTS "item_tags";
+      DROP TABLE IF EXISTS "tag_aliases";
+      DROP TABLE IF EXISTS "tag_suggestion_candidates";
+      DROP TABLE IF EXISTS "tag_suggestion_decisions";
+      DROP TABLE IF EXISTS "tags";
+      PRAGMA foreign_keys=ON;
+    `,
+  });
+
+  dropColumnIfPresent("content_clusters", "feedTagsJson");
+
+  runSqlite([dbPath], {
+    input: `
+      UPDATE "briefing_preference_configs"
+      SET "weightedRulesJson" = COALESCE((
+        SELECT json_group_array(json(rule."value"))
+        FROM json_each(
+          CASE
+            WHEN json_valid("briefing_preference_configs"."weightedRulesJson")
+            THEN "briefing_preference_configs"."weightedRulesJson"
+            ELSE '[]'
+          END
+        ) AS rule
+        WHERE json_extract(rule."value", '$.type') <> 'tag'
+      ), '[]')
+      WHERE json_valid("weightedRulesJson")
+        AND EXISTS (
+          SELECT 1
+          FROM json_each("briefing_preference_configs"."weightedRulesJson") AS rule
+          WHERE json_extract(rule."value", '$.type') = 'tag'
+        );
+    `,
+  });
+}
+
+function applyEntityItemBackfill() {
+  runSqlite([dbPath], {
+    input: `
+      PRAGMA foreign_keys=OFF;
+      DROP TABLE IF EXISTS "_entity_backfill_raw";
+      DROP TABLE IF EXISTS "_entity_backfill_values";
+      DROP TABLE IF EXISTS "_entity_backfill_clusters";
+      DROP TABLE IF EXISTS "_entity_backfill_cluster_entities";
+      DROP TABLE IF EXISTS "_entity_backfill_cluster_entity_json";
+
+      UPDATE "content_clusters"
+      SET "feedSearchText" = trim(
+        COALESCE("title", '') || ' ' || COALESCE("summary", '')
+      );
+
+      CREATE TEMP TABLE "_entity_backfill_raw" (
+        "itemId" TEXT NOT NULL,
+        "rawName" TEXT NOT NULL
+      );
+      INSERT INTO "_entity_backfill_raw" ("itemId", "rawName")
+      SELECT "id", "eventSubject"
+      FROM (
+        SELECT "id", "eventSubject", "eventObject"
+        FROM "items"
+        WHERE "eventSubject" IS NOT NULL OR "eventObject" IS NOT NULL
+        ORDER BY "id" ASC
+        LIMIT ${entityBackfillLimit}
+      )
+      WHERE "eventSubject" IS NOT NULL
+      UNION ALL
+      SELECT "id", "eventObject"
+      FROM (
+        SELECT "id", "eventSubject", "eventObject"
+        FROM "items"
+        WHERE "eventSubject" IS NOT NULL OR "eventObject" IS NOT NULL
+        ORDER BY "id" ASC
+        LIMIT ${entityBackfillLimit}
+      )
+      WHERE "eventObject" IS NOT NULL;
+
+      CREATE TEMP TABLE "_entity_backfill_values" (
+        "itemId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "normalized" TEXT NOT NULL,
+        UNIQUE ("itemId", "normalized")
+      );
+      INSERT OR IGNORE INTO "_entity_backfill_values" ("itemId", "name", "normalized")
+      SELECT "itemId", "name", lower("name")
+      FROM (
+        SELECT
+          "itemId",
+          trim(
+            replace(replace(replace(replace(replace(
+              trim("rawName", ' #＃"“”‘’\`.,，。:：;；!?！？、()[]{}【】<>《》'),
+              char(9), ' '), char(10), ' '), char(13), ' '),
+              '  ', ' '), '  ', ' ')
+          ) AS "name"
+        FROM "_entity_backfill_raw"
+      )
+      WHERE "name" <> ''
+        AND length("name") <= 40
+        AND lower("name") NOT IN (
+          '公司', '机构', '产品', '平台', '服务', '功能', '能力', '产品能力', '方案', '项目',
+          '工具', '模型', '版本', '政策', '漏洞', '论文', '行业', '市场', '多项更新',
+          'roundup', '新闻', '资讯', '文章', '更新', '动态', '科技', '技术', '互联网',
+          'news', 'article', 'update', 'updates', 'technology', 'tech'
+        );
+
+      INSERT OR IGNORE INTO "entities" ("id", "name", "normalized", "createdAt", "updatedAt")
+      SELECT
+        'migration-entity-' || lower(hex(randomblob(16))),
+        MIN("name"),
+        "normalized",
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      FROM "_entity_backfill_values"
+      GROUP BY "normalized";
+
+      INSERT OR IGNORE INTO "item_entities" ("id", "itemId", "entityId", "createdAt")
+      SELECT
+        'migration-item-entity-' || lower(hex(randomblob(16))),
+        backfillValues."itemId",
+        entities."id",
+        CURRENT_TIMESTAMP
+      FROM "_entity_backfill_values" AS backfillValues
+      INNER JOIN "entities" AS entities ON entities."normalized" = backfillValues."normalized";
+
+      CREATE TEMP TABLE "_entity_backfill_clusters" AS
+      SELECT DISTINCT "clusterId"
+      FROM "items"
+      INNER JOIN "_entity_backfill_values" AS backfillValues ON backfillValues."itemId" = "items"."id"
+      WHERE "clusterId" IS NOT NULL;
+
+      CREATE TEMP TABLE "_entity_backfill_cluster_entities" AS
+      SELECT
+        "items"."clusterId" AS "clusterId",
+        "entities"."name" AS "name",
+        "entities"."normalized" AS "normalized"
+      FROM "items"
+      INNER JOIN "_entity_backfill_clusters" clusters ON clusters."clusterId" = "items"."clusterId"
+      INNER JOIN "item_entities" itemEntities ON itemEntities."itemId" = "items"."id"
+      INNER JOIN "entities" entities ON entities."id" = itemEntities."entityId"
+      WHERE "items"."clusterId" IS NOT NULL
+      GROUP BY "items"."clusterId", "entities"."normalized";
+
+      CREATE TEMP TABLE "_entity_backfill_cluster_entity_json" AS
+      SELECT
+        "clusterId",
+        json_group_array(json_object('name', "name", 'normalized', "normalized")) AS "feedEntitiesJson",
+        group_concat("name", ' ') AS "entitySearchText"
+      FROM (
+        SELECT "clusterId", "name", "normalized"
+        FROM "_entity_backfill_cluster_entities"
+        ORDER BY "clusterId" ASC, "name" ASC, "normalized" ASC
+      )
+      GROUP BY "clusterId";
+
+      UPDATE "content_clusters"
+      SET
+        "feedEntitiesJson" = COALESCE((
+          SELECT "feedEntitiesJson"
+          FROM "_entity_backfill_cluster_entity_json" AS clusterEntityJson
+          WHERE clusterEntityJson."clusterId" = "content_clusters"."id"
+        ), '[]'),
+        "feedSearchText" = trim(
+          COALESCE("content_clusters"."title", '') || ' ' ||
+          COALESCE("content_clusters"."summary", '') || ' ' ||
+          COALESCE((
+            SELECT "entitySearchText"
+            FROM "_entity_backfill_cluster_entity_json" AS clusterEntityJson
+            WHERE clusterEntityJson."clusterId" = "content_clusters"."id"
+          ), '')
+        )
+      WHERE "id" IN (SELECT "clusterId" FROM "_entity_backfill_clusters");
+
+      DROP TABLE IF EXISTS "_entity_backfill_raw";
+      DROP TABLE IF EXISTS "_entity_backfill_values";
+      DROP TABLE IF EXISTS "_entity_backfill_clusters";
+      DROP TABLE IF EXISTS "_entity_backfill_cluster_entities";
+      DROP TABLE IF EXISTS "_entity_backfill_cluster_entity_json";
+      PRAGMA foreign_keys=ON;
     `,
   });
 }
@@ -449,6 +634,7 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("items", "processingAttemptCount", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing("items", "nextProcessingRetryAt", "DATETIME");
   addColumnIfMissing("items", "lastProcessingError", "TEXT");
+  addColumnIfMissing("items", "publishedAtKnown", "BOOLEAN NOT NULL DEFAULT true");
 
   dropColumnIfPresent("items", "dedupeSignature", {
     dropIndexes: ["items_dedupeSignature_key", "items_dedupeSignature_idx"],
@@ -466,56 +652,106 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("task_schedules", "dailyReportChannelIdsJson", "TEXT NOT NULL DEFAULT '[\"important\"]'");
   dropColumnIfPresent("task_schedules", "dailyReportGroupIdsJson");
 
-  if (!ftsTableExists("tags")) {
+  if (!ftsTableExists("entities")) {
     runSqlite([dbPath], {
       input: `
-        CREATE TABLE IF NOT EXISTS "tags" (
+        CREATE TABLE IF NOT EXISTS "entities" (
           "id" TEXT NOT NULL PRIMARY KEY,
           "name" TEXT NOT NULL,
           "normalized" TEXT NOT NULL,
           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "updatedAt" DATETIME NOT NULL
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "tags_normalized_key" ON "tags"("normalized");
-        CREATE INDEX IF NOT EXISTS "tags_name_idx" ON "tags"("name");
+        CREATE UNIQUE INDEX IF NOT EXISTS "entities_normalized_key" ON "entities"("normalized");
+        CREATE INDEX IF NOT EXISTS "entities_name_idx" ON "entities"("name");
       `,
     });
   }
 
-  if (!ftsTableExists("item_tags")) {
+  if (!ftsTableExists("item_entities")) {
     runSqlite([dbPath], {
       input: `
-        CREATE TABLE IF NOT EXISTS "item_tags" (
+        CREATE TABLE IF NOT EXISTS "item_entities" (
           "id" TEXT NOT NULL PRIMARY KEY,
           "itemId" TEXT NOT NULL,
-          "tagId" TEXT NOT NULL,
+          "entityId" TEXT NOT NULL,
           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT "item_tags_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "items" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-          CONSTRAINT "item_tags_tagId_fkey" FOREIGN KEY ("tagId") REFERENCES "tags" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+          CONSTRAINT "item_entities_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "items" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT "item_entities_entityId_fkey" FOREIGN KEY ("entityId") REFERENCES "entities" ("id") ON DELETE CASCADE ON UPDATE CASCADE
         );
-        CREATE INDEX IF NOT EXISTS "item_tags_tagId_idx" ON "item_tags"("tagId");
-        CREATE INDEX IF NOT EXISTS "item_tags_itemId_idx" ON "item_tags"("itemId");
-        CREATE UNIQUE INDEX IF NOT EXISTS "item_tags_itemId_tagId_key" ON "item_tags"("itemId", "tagId");
+        CREATE INDEX IF NOT EXISTS "item_entities_entityId_idx" ON "item_entities"("entityId");
+        CREATE INDEX IF NOT EXISTS "item_entities_itemId_idx" ON "item_entities"("itemId");
+        CREATE UNIQUE INDEX IF NOT EXISTS "item_entities_itemId_entityId_key" ON "item_entities"("itemId", "entityId");
       `,
     });
   }
 
-  if (!ftsTableExists("tag_aliases")) {
+  if (!ftsTableExists("entity_aliases")) {
     runSqlite([dbPath], {
       input: `
-        CREATE TABLE IF NOT EXISTS "tag_aliases" (
+        CREATE TABLE IF NOT EXISTS "entity_aliases" (
           "id" TEXT NOT NULL PRIMARY KEY,
-          "tagId" TEXT NOT NULL,
+          "entityId" TEXT NOT NULL,
           "aliasName" TEXT NOT NULL,
           "aliasNormalized" TEXT NOT NULL,
           "createdBy" TEXT NOT NULL DEFAULT 'admin',
           "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           "updatedAt" DATETIME NOT NULL,
-          CONSTRAINT "tag_aliases_tagId_fkey" FOREIGN KEY ("tagId") REFERENCES "tags" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+          CONSTRAINT "entity_aliases_entityId_fkey" FOREIGN KEY ("entityId") REFERENCES "entities" ("id") ON DELETE CASCADE ON UPDATE CASCADE
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS "tag_aliases_aliasNormalized_key" ON "tag_aliases"("aliasNormalized");
-        CREATE INDEX IF NOT EXISTS "tag_aliases_tagId_idx" ON "tag_aliases"("tagId");
-        CREATE INDEX IF NOT EXISTS "tag_aliases_aliasName_idx" ON "tag_aliases"("aliasName");
+        CREATE UNIQUE INDEX IF NOT EXISTS "entity_aliases_aliasNormalized_key" ON "entity_aliases"("aliasNormalized");
+        CREATE INDEX IF NOT EXISTS "entity_aliases_entityId_idx" ON "entity_aliases"("entityId");
+        CREATE INDEX IF NOT EXISTS "entity_aliases_aliasName_idx" ON "entity_aliases"("aliasName");
+      `,
+    });
+  }
+
+  if (!ftsTableExists("entity_suggestion_decisions")) {
+    runSqlite([dbPath], {
+      input: `
+        CREATE TABLE IF NOT EXISTS "entity_suggestion_decisions" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "sourceEntityNormalized" TEXT NOT NULL,
+          "targetEntityNormalized" TEXT NOT NULL,
+          "decision" TEXT NOT NULL,
+          "decidedBy" TEXT NOT NULL DEFAULT 'admin',
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "entity_suggestion_decisions_sourceEntityNormalized_targetEntityNormalized_key" ON "entity_suggestion_decisions"("sourceEntityNormalized", "targetEntityNormalized");
+        CREATE INDEX IF NOT EXISTS "entity_suggestion_decisions_decision_idx" ON "entity_suggestion_decisions"("decision");
+      `,
+    });
+  }
+
+  if (!ftsTableExists("entity_suggestion_candidates")) {
+    runSqlite([dbPath], {
+      input: `
+        CREATE TABLE IF NOT EXISTS "entity_suggestion_candidates" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "pairKey" TEXT NOT NULL,
+          "sourceEntityId" TEXT NOT NULL,
+          "targetEntityId" TEXT NOT NULL,
+          "sourceEntityNormalized" TEXT NOT NULL,
+          "targetEntityNormalized" TEXT NOT NULL,
+          "confidence" REAL NOT NULL,
+          "affectedItemCount" INTEGER NOT NULL,
+          "sharedItemCount" INTEGER NOT NULL DEFAULT 0,
+          "reason" TEXT NOT NULL,
+          "status" TEXT NOT NULL DEFAULT 'active',
+          "expiresAt" DATETIME NOT NULL,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL,
+          CONSTRAINT "entity_suggestion_candidates_sourceEntityId_fkey" FOREIGN KEY ("sourceEntityId") REFERENCES "entities" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT "entity_suggestion_candidates_targetEntityId_fkey" FOREIGN KEY ("targetEntityId") REFERENCES "entities" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "entity_suggestion_candidates_pairKey_key" ON "entity_suggestion_candidates"("pairKey");
+        CREATE UNIQUE INDEX IF NOT EXISTS "entity_suggestion_candidates_sourceEntityNormalized_targetEntityNormalized_key" ON "entity_suggestion_candidates"("sourceEntityNormalized", "targetEntityNormalized");
+        CREATE INDEX IF NOT EXISTS "entity_suggestion_candidates_status_confidence_idx" ON "entity_suggestion_candidates"("status", "confidence");
+        CREATE INDEX IF NOT EXISTS "entity_suggestion_candidates_status_affectedItemCount_idx" ON "entity_suggestion_candidates"("status", "affectedItemCount");
+        CREATE INDEX IF NOT EXISTS "entity_suggestion_candidates_expiresAt_idx" ON "entity_suggestion_candidates"("expiresAt");
+        CREATE INDEX IF NOT EXISTS "entity_suggestion_candidates_sourceEntityId_idx" ON "entity_suggestion_candidates"("sourceEntityId");
+        CREATE INDEX IF NOT EXISTS "entity_suggestion_candidates_targetEntityId_idx" ON "entity_suggestion_candidates"("targetEntityId");
       `,
     });
   }
@@ -591,7 +827,7 @@ function applyAdditiveSchemaUpgrades() {
     addColumnIfMissing("content_clusters", "latestCreatedAt", "DATETIME"),
     addColumnIfMissing("content_clusters", "dominantGroupId", "TEXT"),
     addColumnIfMissing("content_clusters", "feedSearchText", "TEXT"),
-    addColumnIfMissing("content_clusters", "feedTagsJson", "TEXT NOT NULL DEFAULT '[]'"),
+    addColumnIfMissing("content_clusters", "feedEntitiesJson", "TEXT NOT NULL DEFAULT '[]'"),
     addColumnIfMissing("content_clusters", "feedStatsUpdatedAt", "DATETIME"),
   ].some(Boolean);
   addColumnIfMissing("content_clusters", "earliestCreatedAt", "DATETIME");
@@ -692,6 +928,15 @@ try {
     rmSync(`${dbPath}-wal`, { force: true });
   }
 
+  const shouldBackfillEntities = existsSync(dbPath) && ftsTableExists("items") && (
+    !ftsTableExists("entities")
+    || !ftsTableExists("item_entities")
+    || ftsTableExists("tags")
+    || ftsTableExists("tag_aliases")
+    || ftsTableExists("item_tags")
+    || (ftsTableExists("content_clusters") && tableColumnExists("content_clusters", "feedTagsJson"))
+  );
+
   // For existing volumes, ensure recovery columns exist before any schema SQL
   // that might reference them indirectly after partial upgrades.
   if (existsSync(dbPath)) {
@@ -705,6 +950,11 @@ try {
     input: sql,
   });
   applyAdditiveSchemaUpgrades();
+  if (shouldBackfillEntities) {
+    applyEntityItemBackfill();
+    console.log(`Entity item backfill applied: up to ${entityBackfillLimit} items`);
+  }
+  cleanupLegacyTagSchema();
   cleanupRemovedPromptConfigTypes();
   applyRuntimeSqliteObjects();
 

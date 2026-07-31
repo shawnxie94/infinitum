@@ -25,7 +25,7 @@ import {
   deleteHeaderLink,
   dismissBriefingPreferenceSuggestion,
   listBriefingPreferenceSuggestions,
-  listAdminTags,
+  listAdminEntities,
   reorderHeaderLinks,
   reorderSourceGroups,
   resolveSourceFromRssUrl,
@@ -36,10 +36,10 @@ import {
   saveEventBriefingSettings,
   saveHeaderLink,
   submitAdminSettingsAction,
-  type AdminTag,
+  type AdminEntity,
 } from "@/components/admin/admin-settings-panel.api";
 import { AiSettingsPanel } from "@/components/admin/ai-settings-panel";
-import { TagSettingsPanel } from "@/components/admin/tag-settings-panel";
+import { EntitySettingsPanel } from "@/components/admin/entity-settings-panel";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageShell } from "@/components/ui/page-shell";
@@ -90,14 +90,14 @@ type AdminSettingsPanelProps = {
   embedMode?: boolean;
   activeSection?: AdminSettingsSection;
   initialPromptType?: PromptConfigType;
-  initialOpenTagSuggestions?: boolean;
+  initialOpenEntitySuggestions?: boolean;
   initialOpenBriefingPreferenceSuggestions?: boolean;
 };
 
 type AdminSettingsSection =
   | "ai-model-api"
   | "ai-prompt"
-  | "tags"
+  | "entities"
   | "blacklist"
   | "event-briefing"
   | "groups"
@@ -119,7 +119,7 @@ const settingsNavItems: Array<{
 }> = [
   { key: "ai-model-api", label: "模型API" },
   { key: "ai-prompt", label: "提示词" },
-  { key: "tags", label: "标签管理" },
+  { key: "entities", label: "实体管理" },
   { key: "blacklist", label: "黑名单" },
   { key: "groups", label: "分组" },
   { key: "header-links", label: "导航栏配置" },
@@ -149,13 +149,13 @@ const eventTypeOptions = [
   { value: "other", label: "其他" },
 ];
 const eventBriefingRuleTypeOptions: Array<{ value: AdminBriefingWeightRuleType; label: string }> = [
-  { value: "tag", label: "标签" },
+  { value: "entity", label: "实体" },
   { value: "keyword", label: "关键词" },
   { value: "source_group", label: "来源组" },
   { value: "event_type", label: "事件类型" },
 ];
 const eventBriefingRuleTypeLabels: Record<AdminBriefingWeightRuleType, string> = {
-  tag: "标签",
+  entity: "实体",
   keyword: "关键词",
   source_group: "来源组",
   event_type: "事件类型",
@@ -512,7 +512,7 @@ export function AdminSettingsPanel({
   embedMode,
   activeSection: externalActiveSection,
   initialPromptType,
-  initialOpenTagSuggestions = false,
+  initialOpenEntitySuggestions = false,
   initialOpenBriefingPreferenceSuggestions = false,
 }: AdminSettingsPanelProps) {
   type AdminSource = AdminSettingsSnapshot["sources"][number];
@@ -680,7 +680,7 @@ export function AdminSettingsPanel({
     type: AdminBriefingWeightRuleType;
     value: string;
     weight: string;
-  }>({ type: "tag", value: "", weight: "5" });
+  }>({ type: "entity", value: "", weight: "5" });
   const [briefingPreferenceSuggestions, setBriefingPreferenceSuggestions] = useState<AdminBriefingPreferenceSuggestion[]>([]);
   const [briefingPreferenceSuggestionsLoaded, setBriefingPreferenceSuggestionsLoaded] = useState(false);
   const [briefingPreferenceSuggestionModalOpen, setBriefingPreferenceSuggestionModalOpen] = useState(
@@ -697,18 +697,20 @@ export function AdminSettingsPanel({
     useState<AdminBriefingPreferenceSuggestion | null>(null);
   const [briefingPreferenceDismissTarget, setBriefingPreferenceDismissTarget] =
     useState<AdminBriefingPreferenceSuggestion | null>(null);
-  const [eventBriefingTags, setEventBriefingTags] = useState<AdminTag[]>([]);
-  const [eventBriefingTagsLoaded, setEventBriefingTagsLoaded] = useState(false);
+  const [eventBriefingEntities, setEventBriefingEntities] = useState<AdminEntity[]>([]);
+  const [eventBriefingEntitiesLoaded, setEventBriefingEntitiesLoaded] = useState(false);
   const normalizedBlacklistKeywords = blacklistText
     .split("\n")
     .map((keyword) => keyword.trim())
     .filter(Boolean);
-  const eventBriefingTagSelectOptions = appendMissingOptions(
-    eventBriefingTags.map((tag) => ({
-      value: tag.name,
-      label: `${tag.name} (${tag.itemCount})`,
+  const eventBriefingEntitySelectOptions = appendMissingOptions(
+    eventBriefingEntities.map((entity) => ({
+      value: entity.name,
+      label: `${entity.name} (${entity.itemCount})`,
     })),
-    eventBriefingWeightedRules.filter((rule) => rule.type === "tag").map((rule) => rule.value),
+    eventBriefingWeightedRules
+      .filter((rule) => rule.type === "entity")
+      .map((rule) => rule.value),
   );
   const eventBriefingSourceGroupSelectOptions = appendMissingOptions(
     orderedGroups.map((group) => ({
@@ -761,31 +763,31 @@ export function AdminSettingsPanel({
   }, [activeSection, sourcePage, sourcePageSize, sourceNameFilter, sourceGroupFilter, sourceEnabledFilter, sourceGroupOverrides, sourceListRefreshKey]);
 
   useEffect(() => {
-    if (activeSection !== "event-briefing" || eventBriefingTagsLoaded) {
+    if (activeSection !== "event-briefing" || eventBriefingEntitiesLoaded) {
       return;
     }
 
     let ignore = false;
 
-    listAdminTags({ sort: "usage_desc", page: 1, pageSize: 100 })
+    listAdminEntities({ sort: "usage_desc", page: 1, pageSize: 100 })
       .then((payload) => {
         if (ignore) {
           return;
         }
-        setEventBriefingTags(payload.tags);
-        setEventBriefingTagsLoaded(true);
+        setEventBriefingEntities(payload.entities);
+        setEventBriefingEntitiesLoaded(true);
       })
       .catch(() => {
         if (ignore) {
           return;
         }
-        setEventBriefingTagsLoaded(true);
+        setEventBriefingEntitiesLoaded(true);
       });
 
     return () => {
       ignore = true;
     };
-  }, [activeSection, eventBriefingTagsLoaded]);
+  }, [activeSection, eventBriefingEntitiesLoaded]);
 
   useEffect(() => {
     if (
@@ -843,8 +845,8 @@ export function AdminSettingsPanel({
 
   const safeSourcePage = Math.min(sourcePage, sourceTotalPages);
   const getEventBriefingRuleOptions = (type: AdminBriefingWeightRuleType) => {
-    if (type === "tag") {
-      return eventBriefingTagSelectOptions;
+    if (type === "entity") {
+      return eventBriefingEntitySelectOptions;
     }
     if (type === "source_group") {
       return eventBriefingSourceGroupSelectOptions;
@@ -915,7 +917,7 @@ export function AdminSettingsPanel({
     safeBriefingPreferenceSuggestionPage * briefingPreferenceSuggestionPageSize,
   );
   const openEventBriefingRuleModal = () => {
-    setEventBriefingRuleDraft({ type: "tag", value: "", weight: "5" });
+    setEventBriefingRuleDraft({ type: "entity", value: "", weight: "5" });
     setEventBriefingRuleModalOpen(true);
   };
   const openBriefingPreferenceSuggestionModal = () => {
@@ -1944,8 +1946,8 @@ export function AdminSettingsPanel({
           <AiSettingsPanel initialSettings={initialSettings} mode="prompt" initialPromptType={initialPromptType} />
         ) : null}
 
-        {activeSection === "tags" ? (
-          <TagSettingsPanel initialOpenSuggestions={initialOpenTagSuggestions} />
+        {activeSection === "entities" ? (
+          <EntitySettingsPanel initialOpenSuggestions={initialOpenEntitySuggestions} />
         ) : null}
 
         {activeSection === "blacklist" ? (
@@ -2475,7 +2477,7 @@ export function AdminSettingsPanel({
                     options={eventBriefingRuleTypeOptions}
                     showSearch={false}
                     onChange={(value) => setEventBriefingRuleDraft({
-                      type: (value as AdminBriefingWeightRuleType) || "tag",
+      type: (value as AdminBriefingWeightRuleType) || "entity",
                       value: "",
                       weight: eventBriefingRuleDraft.weight,
                     })}
@@ -2501,8 +2503,8 @@ export function AdminSettingsPanel({
                       value={eventBriefingRuleDraft.value}
                       options={getEventBriefingRuleOptions(eventBriefingRuleDraft.type)}
                       placeholder={
-                        eventBriefingRuleDraft.type === "tag" && !eventBriefingTagsLoaded
-                          ? "加载标签中"
+                        eventBriefingRuleDraft.type === "entity" && !eventBriefingEntitiesLoaded
+                          ? "加载实体中"
                           : "选择一项"
                       }
                       onChange={(value) => setEventBriefingRuleDraft((current) => ({
@@ -3933,7 +3935,7 @@ function AdminWorkspaceSidebar({
       className={cx(surfaceCardClassName, "p-3.5 xl:sticky xl:top-24")}
     >
       <div
-        aria-label="设置标签"
+                        aria-label="设置实体"
         className="space-y-1.5"
         role="tablist"
         aria-orientation="vertical"

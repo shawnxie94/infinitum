@@ -239,7 +239,8 @@ describe("/api/admin/settings", () => {
     updateBriefingPreferenceConfig.mockResolvedValue({
       id: "briefing-preference-config",
       weightedRules: [
-        { type: "tag", value: "AI Coding", weight: 6 },
+        { type: "entity", value: "OpenAI", weight: 8 },
+        { type: "entity", value: "AI Coding", weight: 6 },
         { type: "event_type", value: "security", weight: -2 },
       ],
       maxCuratorBoost: 15,
@@ -267,7 +268,8 @@ describe("/api/admin/settings", () => {
           },
           preference: {
             weightedRules: [
-              { type: "tag", value: "AI Coding", weight: 6 },
+              { type: "entity", value: "OpenAI", weight: 8 },
+              { type: "entity", value: "AI Coding", weight: 6 },
               { type: "event_type", value: "security", weight: -2 },
             ],
             maxCuratorBoost: 15,
@@ -297,7 +299,8 @@ describe("/api/admin/settings", () => {
     });
     expect(updateBriefingPreferenceConfig).toHaveBeenCalledWith({
       weightedRules: [
-        { type: "tag", value: "AI Coding", weight: 6 },
+        { type: "entity", value: "OpenAI", weight: 8 },
+        { type: "entity", value: "AI Coding", weight: 6 },
         { type: "event_type", value: "security", weight: -2 },
       ],
       maxCuratorBoost: 15,

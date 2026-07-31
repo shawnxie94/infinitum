@@ -9,16 +9,16 @@ describe("actionable monitor snapshot", () => {
     await prisma.curatorBehaviorDimension.deleteMany();
     await prisma.curatorBehaviorEvent.deleteMany();
     await prisma.clusterDecision.deleteMany();
-    await prisma.tagSuggestionCandidate.deleteMany();
-    await prisma.itemTag.deleteMany();
+    await prisma.entitySuggestionCandidate.deleteMany();
+    await prisma.itemEntity.deleteMany();
     await prisma.item.deleteMany();
-    await prisma.tag.deleteMany();
+    await prisma.entity.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();
     await prisma.source.deleteMany();
   });
 
-  it("summarizes source, tag, cluster, and task action items", async () => {
+  it("summarizes source, entity, cluster, and task action items", async () => {
     await prisma.source.create({
       data: {
         id: "source-failed",
@@ -86,25 +86,25 @@ describe("actionable monitor snapshot", () => {
         updatedAt: new Date("2026-06-29T10:00:00.000Z"),
       },
     });
-    const sourceTag = await prisma.tag.create({
+    const sourceEntity = await prisma.entity.create({
       data: {
         name: "AI Agents",
         normalized: "ai agents",
       },
     });
-    const targetTag = await prisma.tag.create({
+    const targetEntity = await prisma.entity.create({
       data: {
         name: "AI Agent",
         normalized: "ai agent",
       },
     });
-    await prisma.tagSuggestionCandidate.create({
+    await prisma.entitySuggestionCandidate.create({
       data: {
         pairKey: "ai-agents::ai-agent",
-        sourceTagId: sourceTag.id,
-        targetTagId: targetTag.id,
-        sourceTagNormalized: sourceTag.normalized,
-        targetTagNormalized: targetTag.normalized,
+        sourceEntityId: sourceEntity.id,
+        targetEntityId: targetEntity.id,
+        sourceEntityNormalized: sourceEntity.normalized,
+        targetEntityNormalized: targetEntity.normalized,
         confidence: 0.99,
         affectedItemCount: 4,
         sharedItemCount: 2,
@@ -118,8 +118,8 @@ describe("actionable monitor snapshot", () => {
     await prisma.briefingPreferenceSuggestion.createMany({
       data: [
         {
-          suggestionKey: "tag:ai-coding",
-          ruleType: "tag",
+          suggestionKey: "entity:ai-coding",
+          ruleType: "entity",
           value: "ai-coding",
           label: "AI Coding",
           suggestedWeight: 3,
@@ -127,7 +127,7 @@ describe("actionable monitor snapshot", () => {
           positiveScore: 8,
           negativeScore: 0,
           sampleCount: 3,
-          reason: "标签「AI Coding」近 30 天偏好更强，来自 3 次管理行为。",
+          reason: "实体「AI Coding」近 30 天偏好更强，来自 3 次管理行为。",
           status: "pending",
         },
         {
@@ -212,7 +212,7 @@ describe("actionable monitor snapshot", () => {
     expect(snapshot.items.map((item) => item.id)).toEqual([
       "sources",
       "filtered-content",
-      "tags",
+      "entities",
       "briefing-preferences",
       "aggregation-splits",
       "clusters",
@@ -221,7 +221,7 @@ describe("actionable monitor snapshot", () => {
     expect(snapshot.items.find((item) => item.id === "filtered-content")?.count).toBe(1);
     expect(snapshot.items.find((item) => item.id === "filtered-content")?.description).toContain("近 1 天");
     expect(snapshot.items.find((item) => item.id === "aggregation-splits")?.description).toContain("失败 1 条");
-    expect(snapshot.items.find((item) => item.id === "tags")?.description).toContain("当前有 1 条标签建议");
+    expect(snapshot.items.find((item) => item.id === "entities")?.description).toContain("当前有 1 条实体建议");
     expect(snapshot.items.find((item) => item.id === "briefing-preferences")?.description).toContain("当前有 2 条事件偏好建议");
     expect(snapshot.items.find((item) => item.id === "briefing-preferences")?.href).toBe(
       "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",

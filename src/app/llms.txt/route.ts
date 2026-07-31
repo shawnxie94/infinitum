@@ -10,7 +10,7 @@ function renderLlmsTxt() {
     "",
     "## 主要入口",
     "",
-    `- [首页资讯流](${getSiteUrl("/")}): 实时刷新的多源技术资讯流，支持按时间、分组、来源、标签、关键词筛选。`,
+    `- [首页资讯流](${getSiteUrl("/")}): 实时刷新的多源技术资讯流，支持按时间、分组、来源、实体、关键词筛选。`,
     `- [AI 日报](${getSiteUrl("/daily")}): 按日归档的 AI 日报，覆盖技术、变更、安全风险、开源工具、数据洞察等板块。`,
     `- [RSS - 资讯聚合](${getSiteUrl("/api/feed/rss")}): 实时资讯流的 RSS 输出。`,
     `- [RSS - AI 日报](${getSiteUrl("/api/daily/rss")}): AI 日报的 RSS 输出。`,

@@ -5,12 +5,12 @@ import { prisma } from "@/lib/db";
 import { refreshAllClusterFeedStats, refreshClusterFeedStats } from "@/lib/clusters/feed-stats";
 import { resolveFeedFilters } from "@/lib/feed/range";
 import { listFeedItems } from "@/lib/feed/repository";
-import { replaceItemTags } from "@/lib/tags/service";
+import { replaceItemEntities } from "@/lib/entities/service";
 
 describe("/api/feed", () => {
   beforeEach(async () => {
     await prisma.item.deleteMany();
-    await prisma.tag.deleteMany();
+    await prisma.entity.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.fetchRun.deleteMany();
     await prisma.source.deleteMany();
@@ -259,7 +259,7 @@ describe("/api/feed", () => {
 
     const { GET } = await import("@/app/api/feed/route");
     const response = await GET(
-      new Request("http://localhost/api/feed?entryKeys=cluster:cluster-b&includeTags=false"),
+      new Request("http://localhost/api/feed?entryKeys=cluster:cluster-b&includeEntities=false"),
     );
 
     const json = await response.json();
@@ -282,36 +282,37 @@ describe("/api/feed", () => {
     vi.useRealTimers();
   });
 
-  it("filters feed entries by tag and returns popular tags", async () => {
+  it("filters feed entries by entity and returns popular entities", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
-    await replaceItemTags("item-a1", ["OpenAI", "AI Agent"]);
-    await replaceItemTags("item-a2", ["OpenAI"]);
-    await replaceItemTags("item-b1", ["Robotics"]);
+    await replaceItemEntities("item-a1", ["OpenAI", "AI Agent"]);
+    await replaceItemEntities("item-a2", ["OpenAI"]);
+    await replaceItemEntities("item-b1", ["Robotics"]);
 
     const { GET } = await import("@/app/api/feed/route");
     const response = await GET(
-      new Request("http://localhost/api/feed?range=7d&tag=openai"),
+      new Request("http://localhost/api/feed?range=7d&entity=openai"),
     );
     const json = await response.json();
 
-    expect(json.tag).toBe("openai");
+    expect(json.entity).toBe("openai");
     expect(json.items).toHaveLength(1);
     expect(json.items[0]).toMatchObject({
       type: "cluster",
       id: "cluster-a",
       title: "OpenAI Agent 发布",
     });
-    expect(json.popularTags).toEqual([
+    expect(json.popularEntities).toEqual([
       { name: "AI Agent", normalized: "ai agent", count: 1 },
       { name: "OpenAI", normalized: "openai", count: 1 },
       { name: "Robotics", normalized: "robotics", count: 1 },
     ]);
+    expect(json.popularEntities).toEqual(json.popularEntities);
 
     vi.useRealTimers();
   });
 
-  it("returns the same number of popular tags as the two-row homepage display cap can render", async () => {
+  it("returns the same number of popular entities as the two-row homepage display cap can render", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
 
@@ -320,12 +321,12 @@ describe("/api/feed", () => {
       const itemNumber = String(index + 1).padStart(2, "0");
 
       return {
-        id: `popular-tag-item-${itemNumber}`,
+        id: `popular-entity-item-${itemNumber}`,
         sourceId: source.id,
-        originalUrl: `https://api.example.com/popular-tag-${itemNumber}`,
-        canonicalUrl: `https://api.example.com/popular-tag-${itemNumber}`,
-        urlHash: `popular-tag-hash-${itemNumber}`,
-        originalTitle: `Popular Tag ${itemNumber}`,
+        originalUrl: `https://api.example.com/popular-entity-${itemNumber}`,
+        canonicalUrl: `https://api.example.com/popular-entity-${itemNumber}`,
+        urlHash: `popular-entity-hash-${itemNumber}`,
+        originalTitle: `Popular Entity ${itemNumber}`,
         translatedTitle: `热门标签 ${itemNumber}`,
         author: "Author Tags",
         publishedAt: new Date("2026-04-10T07:00:00.000Z"),
@@ -343,7 +344,7 @@ describe("/api/feed", () => {
     await Promise.all(
       taggedItems.map((_, index) => {
         const itemNumber = String(index + 1).padStart(2, "0");
-        return replaceItemTags(`popular-tag-item-${itemNumber}`, [`Tag ${itemNumber}`]);
+        return replaceItemEntities(`popular-entity-item-${itemNumber}`, [`Entity ${itemNumber}`]);
       }),
     );
 
@@ -353,19 +354,20 @@ describe("/api/feed", () => {
     );
     const json = await response.json();
 
-    expect(json.popularTags).toHaveLength(32);
+    expect(json.popularEntities).toHaveLength(32);
+    expect(json.popularEntities).toEqual(json.popularEntities);
 
     vi.useRealTimers();
   });
 
-  it("filters single feed items by tag", async () => {
+  it("filters single feed items by entity", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
-    await replaceItemTags("item-b1", ["Robotics"]);
+    await replaceItemEntities("item-b1", ["Robotics"]);
 
     const { GET } = await import("@/app/api/feed/route");
     const response = await GET(
-      new Request("http://localhost/api/feed?range=7d&tag=robotics"),
+      new Request("http://localhost/api/feed?range=7d&entity=robotics"),
     );
     const json = await response.json();
 
@@ -379,19 +381,20 @@ describe("/api/feed", () => {
     vi.useRealTimers();
   });
 
-  it("skips popular tags when the feed request opts out", async () => {
+  it("skips popular entities when the feed request opts out", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
-    await replaceItemTags("item-a1", ["OpenAI", "AI Agent"]);
+    await replaceItemEntities("item-a1", ["OpenAI", "AI Agent"]);
 
     const { GET } = await import("@/app/api/feed/route");
     const response = await GET(
-      new Request("http://localhost/api/feed?range=7d&includeTags=false"),
+      new Request("http://localhost/api/feed?range=7d&includeEntities=false"),
     );
     const json = await response.json();
 
     expect(json.items.length).toBeGreaterThan(0);
-    expect(json).not.toHaveProperty("popularTags");
+    expect(json).not.toHaveProperty("popularEntities");
+    expect(json).not.toHaveProperty("popularEntities");
 
     vi.useRealTimers();
   });

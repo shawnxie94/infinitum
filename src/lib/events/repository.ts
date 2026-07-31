@@ -2,9 +2,9 @@ import { prisma } from "@/lib/db";
 import type {
   EventBriefingCandidate,
   EventBriefingDateRange,
+  EventCandidateEntity,
   EventCandidateItem,
   EventCandidateSource,
-  EventCandidateTag,
 } from "@/lib/events/types";
 import { getDisplaySummary, getDisplayTitle } from "@/lib/feed/presentation";
 
@@ -32,7 +32,7 @@ function uniqueBy<T>(values: T[], getKey: (value: T) => string) {
   return result;
 }
 
-function parseClusterTags(raw: string | null | undefined): EventCandidateTag[] {
+function parseClusterEntities(raw: string | null | undefined): EventCandidateEntity[] {
   try {
     const parsed = raw ? JSON.parse(raw) : null;
     if (!Array.isArray(parsed)) {
@@ -40,7 +40,7 @@ function parseClusterTags(raw: string | null | undefined): EventCandidateTag[] {
     }
 
     return parsed
-      .map((entry): EventCandidateTag | null => {
+      .map((entry): EventCandidateEntity | null => {
         if (!entry || typeof entry !== "object") {
           return null;
         }
@@ -52,16 +52,16 @@ function parseClusterTags(raw: string | null | undefined): EventCandidateTag[] {
 
         return name && normalized ? { name, normalized } : null;
       })
-      .filter((entry): entry is EventCandidateTag => Boolean(entry));
+      .filter((entry): entry is EventCandidateEntity => Boolean(entry));
   } catch {
     return [];
   }
 }
 
-function tagsFromItem(item: PublicItemRow): EventCandidateTag[] {
-  return item.tags.map(({ tag }) => ({
-    name: tag.name,
-    normalized: tag.normalized,
+function entitiesFromItem(item: PublicItemRow): EventCandidateEntity[] {
+  return item.entities.map(({ entity }) => ({
+    name: entity.name,
+    normalized: entity.normalized,
   }));
 }
 
@@ -77,6 +77,7 @@ function toCandidateItem(item: PublicItemRow): EventCandidateItem {
     sourceName: item.source.name,
     originalUrl: item.originalUrl,
     publishedAt: item.publishedAt,
+    publishedAtKnown: item.publishedAtKnown,
     createdAt: item.createdAt,
     qualityScore: item.qualityScore,
   };
@@ -90,7 +91,7 @@ function buildSearchText(input: {
   eventAction: string | null;
   eventObject: string | null;
   sources: EventCandidateSource[];
-  tags: EventCandidateTag[];
+  entities: EventCandidateEntity[];
 }) {
   return [
     input.title,
@@ -100,7 +101,7 @@ function buildSearchText(input: {
     input.eventAction,
     input.eventObject,
     ...input.sources.map((source) => source.name),
-    ...input.tags.flatMap((tag) => [tag.name, tag.normalized]),
+    ...input.entities.flatMap((entity) => [entity.name, entity.normalized]),
   ]
     .filter(Boolean)
     .join(" ")
@@ -154,6 +155,7 @@ async function listDailyPublicItems(range: EventBriefingDateRange, options: List
       qualityScore: true,
       createdAt: true,
       publishedAt: true,
+      publishedAtKnown: true,
       eventType: true,
       eventSubject: true,
       eventAction: true,
@@ -180,9 +182,9 @@ async function listDailyPublicItems(range: EventBriefingDateRange, options: List
           },
         },
       },
-      tags: {
+      entities: {
         select: {
-          tag: {
+          entity: {
             select: {
               name: true,
               normalized: true,
@@ -208,7 +210,7 @@ async function listDailyPublicItems(range: EventBriefingDateRange, options: List
           earliestCreatedAt: true,
           latestCreatedAt: true,
           latestPublishedAt: true,
-          feedTagsJson: true,
+          feedEntitiesJson: true,
           createdAt: true,
         },
       },
@@ -245,6 +247,7 @@ async function listClusterPublicMembers(clusterIds: string[], options: ListEvent
       qualityScore: true,
       createdAt: true,
       publishedAt: true,
+      publishedAtKnown: true,
       eventType: true,
       eventSubject: true,
       eventAction: true,
@@ -271,9 +274,9 @@ async function listClusterPublicMembers(clusterIds: string[], options: ListEvent
           },
         },
       },
-      tags: {
+      entities: {
         select: {
-          tag: {
+          entity: {
             select: {
               name: true,
               normalized: true,
@@ -299,7 +302,7 @@ async function listClusterPublicMembers(clusterIds: string[], options: ListEvent
           earliestCreatedAt: true,
           latestCreatedAt: true,
           latestPublishedAt: true,
-          feedTagsJson: true,
+          feedEntitiesJson: true,
           createdAt: true,
         },
       },
@@ -350,12 +353,12 @@ function buildClusterCandidate(
     })),
     (source) => source.id,
   );
-  const tags = uniqueBy(
+  const entities = uniqueBy(
     [
-      ...parseClusterTags(cluster.feedTagsJson),
-      ...allMembers.flatMap(tagsFromItem),
+      ...parseClusterEntities(cluster.feedEntitiesJson),
+      ...allMembers.flatMap(entitiesFromItem),
     ],
-    (tag) => tag.normalized.toLowerCase(),
+    (entity) => entity.normalized.toLowerCase(),
   );
   const latestCreatedAt = allMembers.reduce(
     (latest, item) => item.createdAt.getTime() > latest.getTime() ? item.createdAt : latest,
@@ -375,6 +378,9 @@ function buildClusterCandidate(
   const sourceCount = Math.max(cluster.displaySourceCount, sources.length);
   const itemCount = Math.max(cluster.displayItemCount, allMembers.length);
   const items = [...allMembers].sort((left, right) => {
+    if (right.publishedAtKnown !== left.publishedAtKnown) {
+      return right.publishedAtKnown ? 1 : -1;
+    }
     if (right.publishedAt.getTime() !== left.publishedAt.getTime()) {
       return right.publishedAt.getTime() - left.publishedAt.getTime();
     }
@@ -401,7 +407,7 @@ function buildClusterCandidate(
     eventObject: cluster.eventObject ?? representative.eventObject,
     eventDate: cluster.eventDate ?? representative.eventDate,
     isFollowUp: (cluster.earliestCreatedAt ?? earliestCreatedAt).getTime() < range.start.getTime(),
-    tags,
+    entities,
     sources,
     items,
     searchText: buildSearchText({
@@ -412,13 +418,13 @@ function buildClusterCandidate(
       eventAction: cluster.eventAction ?? representative.eventAction,
       eventObject: cluster.eventObject ?? representative.eventObject,
       sources,
-      tags,
+      entities,
     }),
   };
 }
 
 function buildSingleCandidate(item: PublicItemRow): EventBriefingCandidate {
-  const tags = uniqueBy(tagsFromItem(item), (tag) => tag.normalized.toLowerCase());
+  const entities = uniqueBy(entitiesFromItem(item), (entity) => entity.normalized.toLowerCase());
   const sources = [{
     id: item.source.id,
     name: item.source.name,
@@ -447,7 +453,7 @@ function buildSingleCandidate(item: PublicItemRow): EventBriefingCandidate {
     eventObject: item.eventObject,
     eventDate: item.eventDate,
     isFollowUp: false,
-    tags,
+    entities,
     sources,
     items: [toCandidateItem(item)],
     searchText: buildSearchText({
@@ -458,7 +464,7 @@ function buildSingleCandidate(item: PublicItemRow): EventBriefingCandidate {
       eventAction: item.eventAction,
       eventObject: item.eventObject,
       sources,
-      tags,
+      entities,
     }),
   };
 }

@@ -144,10 +144,14 @@ async function findClusterForItem(
   const titleFallback = options.titleFallback?.trim() ?? "";
   if (titleFallback) {
     const titleMatch = await findActiveClusterByTitle(titleFallback, since, until);
+    const titleMatchCandidate = titleMatch ? toClusterAssignmentCandidate(titleMatch) : null;
+    const titleMatchRank = titleMatchCandidate && options.eventSignature
+      ? rankClusterCandidates(item, options.eventSignature, [titleMatchCandidate])[0]
+      : null;
 
-    if (titleMatch) {
+    if (titleMatchCandidate && (!titleMatchRank || (titleMatchRank.dateCompatible && !titleMatchRank.hardConflict))) {
       return {
-        cluster: toClusterAssignmentCandidate(titleMatch),
+        cluster: titleMatchCandidate,
         fingerprint,
         matchSource: "exact_match" as const,
         skippedIncompleteSignature: false,
@@ -200,7 +204,7 @@ async function findClusterForItem(
   }
 
   const rankedCandidates = rankClusterCandidates(item, options.eventSignature!, candidates).filter(
-    (entry) => entry.score >= CLUSTER_AI_MIN_SCORE,
+    (entry) => entry.score >= CLUSTER_AI_MIN_SCORE && entry.dateCompatible && !entry.hardConflict,
   );
 
   if (rankedCandidates.length === 0) {

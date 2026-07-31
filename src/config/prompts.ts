@@ -2,13 +2,13 @@ import { compileDailyReportTemplatePrompt, DEFAULT_DAILY_REPORT_TEMPLATE } from 
 
 export const ITEM_UNDERSTANDING_JSON_SYNTAX_RULE = "所有字符串字段都必须符合 JSON 字符串语法：字符串内部双引号必须转义为 \\\", 换行必须转义为 \\n；禁止在字符串中输出未转义的控制字符，字段之间的逗号和所有括号必须完整。";
 
-const LEGACY_ITEM_UNDERSTANDING_OUTPUT_FORMAT = `{"summary":"...","translatedTitle":"...","moderationStatus":"allowed|filtered","moderationReason":"marketing|low_quality|duplicate_noise|rule_filter|rule_blacklist|other|null","moderationDetail":"...","qualityScore":0,"qualityRationale":"...","eventSignature":{"eventType":"release|launch|update|funding|acquisition|partnership|policy|research|security|other|null","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"},"tags":["..."],"aggregation":{"isAggregation":true|false,"mainEvent":{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}|null,"events":[{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null","title":"...","oneLiner":"...","qualityScore":0,"sourceUrl":"https://...|null","tags":["..."]}]}}`;
+const LEGACY_ITEM_UNDERSTANDING_OUTPUT_FORMAT = `{"summary":"...","translatedTitle":"...","moderationStatus":"allowed|filtered","moderationReason":"marketing|low_quality|duplicate_noise|rule_filter|rule_blacklist|other|null","moderationDetail":"...","qualityScore":0,"qualityRationale":"...","eventSignature":{"eventType":"release|launch|update|funding|acquisition|partnership|policy|research|security|other|null","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"},"aggregation":{"isAggregation":true|false,"mainEvent":{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}|null,"events":[{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null","title":"...","oneLiner":"...","qualityScore":0,"sourceUrl":"https://...|null"}]}}`;
 
 const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES = `非聚合内容示例（所有字段都必须保留）：
-{"summary":"示例摘要","translatedTitle":"","moderationStatus":"allowed","moderationReason":null,"moderationDetail":"示例说明","qualityScore":80,"qualityRationale":"示例理由","eventSignature":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"tags":[],"aggregation":{"isAggregation":false,"mainEvent":null,"events":[]}}
+{"summary":"示例摘要","translatedTitle":"","moderationStatus":"allowed","moderationReason":null,"moderationDetail":"示例说明","qualityScore":80,"qualityRationale":"示例理由","eventSignature":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"aggregation":{"isAggregation":false,"mainEvent":null,"events":[]}}
 
 聚合内容仅将 aggregation 改为以下结构：
-{"isAggregation":true,"mainEvent":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"events":[{"eventType":"other","eventSubject":"子事件主体","eventAction":"子事件动作","eventObject":"子事件对象","eventDate":null,"title":"子事件标题","oneLiner":"子事件摘要","qualityScore":80,"sourceUrl":null,"tags":[]}]}`;
+{"isAggregation":true,"mainEvent":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"events":[{"eventType":"other","eventSubject":"子事件主体","eventAction":"子事件动作","eventObject":"子事件对象","eventDate":null,"title":"子事件标题","oneLiner":"子事件摘要","qualityScore":80,"sourceUrl":null}]}`;
 
 export const DEFAULT_ITEM_UNDERSTANDING_PROMPT = `你是资讯内容理解助手。只基于输入标题、来源和正文，一次完成摘要、内容分析、事件识别与聚合拆分。严格输出单个 JSON 对象，不要输出 Markdown、代码块或额外解释。
 
@@ -21,12 +21,12 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 3. moderationStatus 默认 allowed，仅明显营销、低质灌水或噪声重复返回 filtered；moderationReason 只能使用固定枚举或 null。
 4. qualityScore 为 0-100 整数；qualityRationale 用一句中文说明事实密度、独特性、完整度、可信度或时效性。
 5. eventSignature 描述整篇内容最主要的具体事件；无法稳定判断的字段返回 null，不要用宽泛主题代替具体事件。
-6. tags 返回 0-5 个具体、稳定、可复用的筛选标签，禁止“新闻”“资讯”“文章”“更新”等泛词。
-7. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
-8. 非聚合内容必须返回 mainEvent:null、events:[]。
-9. 聚合内容最多返回 {{maxEvents}} 个 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。
-10. 子事件 title 为自然可读的短标题；oneLiner 为 100-200 字中文摘要；sourceUrl 仅填写正文明确给出的对应原文 http/https URL，不得猜测。
-11. aggregation.mainEvent 仅在全文存在清晰主事件时填写；它应与顶层 eventSignature 一致或更具体。
+6. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
+7. 非聚合内容必须返回 mainEvent:null、events:[]。
+8. 聚合内容最多返回 {{maxEvents}} 个 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。
+9. 子事件 title 为自然可读的短标题；oneLiner 为 100-200 字中文摘要；sourceUrl 仅填写正文明确给出的对应原文 http/https URL，不得猜测。
+10. aggregation.mainEvent 仅在全文存在清晰主事件时填写；它应与顶层 eventSignature 一致或更具体。
+11. 不要输出独立分类字段；系统会从结构化事件主体和对象自动生成实体关联。
 12. ${ITEM_UNDERSTANDING_JSON_SYNTAX_RULE}
 13. 所有文本默认中文，品牌、产品和专有名词可保留原文。最终只能输出合法 JSON。`;
 

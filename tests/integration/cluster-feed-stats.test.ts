@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { refreshClusterFeedStats } from "@/lib/clusters/feed-stats";
 import { prisma } from "@/lib/db";
-import { replaceItemTags } from "@/lib/tags/service";
+import { replaceItemEntities } from "@/lib/entities/service";
 
 describe("cluster feed stats", () => {
   beforeEach(async () => {
     await prisma.item.deleteMany();
-    await prisma.tag.deleteMany();
+    await prisma.entity.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.source.deleteMany();
     await prisma.sourceGroup.deleteMany();
@@ -148,15 +148,15 @@ describe("cluster feed stats", () => {
         },
       ],
     });
-    await replaceItemTags("stats-visible-ai", ["OpenAI", "Agents"]);
-    await replaceItemTags("stats-visible-research", ["OpenAI", "Benchmarks"]);
+    await replaceItemEntities("stats-visible-ai", ["OpenAI", "Agents"]);
+    await replaceItemEntities("stats-visible-research", ["OpenAI", "Benchmarks"]);
 
     await refreshClusterFeedStats(["stats-cluster"]);
 
     const cluster = await prisma.contentCluster.findUniqueOrThrow({
       where: { id: "stats-cluster" },
     });
-    const tags = JSON.parse(cluster.feedTagsJson) as Array<{ name: string; normalized: string }>;
+    const entities = JSON.parse(cluster.feedEntitiesJson) as Array<{ name: string; normalized: string }>;
 
     expect(cluster).toMatchObject({
       displayItemCount: 2,
@@ -168,7 +168,7 @@ describe("cluster feed stats", () => {
       dominantGroupId: researchGroup.id,
     });
     expect(cluster.displayQualityScore).toBe(70);
-    expect(tags.map((tag) => tag.normalized)).toEqual(["agents", "benchmarks", "openai"]);
+    expect(entities.map((entity) => entity.normalized)).toEqual(["agents", "benchmarks", "openai"]);
     expect(cluster.feedSearchText).toContain("OpenAI");
     expect(cluster.feedStatsUpdatedAt).toBeInstanceOf(Date);
   });

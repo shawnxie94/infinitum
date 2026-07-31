@@ -4,10 +4,11 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import {
-  prepareItemTagReplacements,
-  replacePreparedItemTagsInTransaction,
-  type PreparedItemTagAssignment,
-} from "@/lib/tags/service";
+  getItemEntityNamesFromEvent,
+  prepareEntityReplacements,
+  replacePreparedItemEntitiesInTransaction,
+  type PreparedEntityAssignment,
+} from "@/lib/entities/service";
 
 export type AggregationChildEventInput = {
   title?: string | null;
@@ -19,7 +20,6 @@ export type AggregationChildEventInput = {
   eventObject: string | null;
   eventDate: string | null;
   sourceUrl: string | null;
-  tags?: unknown;
   fingerprint?: string | null;
 };
 
@@ -66,11 +66,13 @@ function buildAggregationChildItemInput({
   sourceId,
   parent,
   publishedAt,
+  publishedAtKnown = true,
   event,
 }: {
   sourceId: string;
   parent: { id: string; originalUrl: string; originalTitle: string };
   publishedAt: Date;
+  publishedAtKnown?: boolean;
   event: AggregationChildEventInput;
 }): Prisma.ItemUncheckedCreateInput {
   const eventFingerprint = event.fingerprint ?? buildSemanticEventFingerprint(event);
@@ -107,6 +109,7 @@ function buildAggregationChildItemInput({
     sourceId,
     parentItemId: parent.id,
     publishedAt,
+    publishedAtKnown,
     originalUrl: displayUrl,
     canonicalUrl,
     urlHash,
@@ -245,6 +248,8 @@ function buildAggregationChildItemUpdateInput(
     canonicalUrl: data.canonicalUrl,
     urlHash: data.urlHash,
     originalTitle: data.originalTitle,
+    publishedAt: data.publishedAt,
+    publishedAtKnown: data.publishedAtKnown,
     summaryText: data.summaryText,
     summaryStatus: data.summaryStatus,
     analysisStatus: data.analysisStatus,
@@ -314,29 +319,32 @@ export async function persistAggregationChildItems({
   sourceId,
   parent,
   publishedAt,
+  publishedAtKnown = true,
   events,
 }: {
   sourceId: string;
   parent: { id: string; originalUrl: string; originalTitle: string };
   publishedAt: Date;
+  publishedAtKnown?: boolean;
   events: AggregationChildEventInput[];
 }): Promise<PersistAggregationResult> {
   if (events.length === 0) {
     return { childItemIds: [] };
   }
-  const preparedTagReplacements = await prepareItemTagReplacements(
-    events.map((event) => event.tags),
+  const preparedEntityReplacements = await prepareEntityReplacements(
+    events.map((event) => getItemEntityNamesFromEvent(event)),
   );
   const childItemIds: string[] = [];
   await prisma.$transaction(async (tx) => {
     const linkedUrlHashes = new Set<string>();
     const retainedEventIndexes: number[] = [];
-    const tagAssignments: PreparedItemTagAssignment[] = [];
+    const entityAssignments: PreparedEntityAssignment[] = [];
     for (const [eventIndex, event] of events.entries()) {
       const childInput = buildAggregationChildItemInput({
         sourceId,
         parent,
         publishedAt,
+        publishedAtKnown,
         event,
       });
       const urlHash = String(childInput.urlHash);
@@ -345,10 +353,10 @@ export async function persistAggregationChildItems({
       }
       linkedUrlHashes.add(urlHash);
       const child = await upsertItemInTx(tx, childInput);
-      tagAssignments.push({
+      entityAssignments.push({
         itemId: child.id,
-        replacement: preparedTagReplacements[eventIndex] ?? {
-          tags: [],
+        replacement: preparedEntityReplacements[eventIndex] ?? {
+          entities: [],
           autoCanonicalAliases: [],
         },
       });
@@ -381,7 +389,7 @@ export async function persistAggregationChildItems({
       childItemIds.push(child.id);
     }
 
-    await replacePreparedItemTagsInTransaction(tx, tagAssignments);
+    await replacePreparedItemEntitiesInTransaction(tx, entityAssignments);
 
     await tx.aggregationSplitLink.deleteMany({
       where: {

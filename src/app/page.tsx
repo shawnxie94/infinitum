@@ -60,7 +60,7 @@ function hasNonDefaultFeedFilter(filters: FeedFilters, page: number) {
       filters.groupId ||
       filters.sourceId ||
       filters.title ||
-      filters.tag ||
+      filters.entity ||
       filters.entryId ||
       filters.entryType ||
       filters.entryKeys.length > 0,
@@ -84,8 +84,8 @@ function buildFeedMetadataText(filters: FeedFilters) {
     descriptionParts.push(`当前筛选关键词为“${filters.title}”。`);
   }
 
-  if (filters.tag) {
-    descriptionParts.push(`当前筛选标签为“${filters.tag}”。`);
+  if (filters.entity) {
+    descriptionParts.push(`当前筛选实体为“${filters.entity}”。`);
   }
 
   if (filters.groupId || filters.sourceId) {
@@ -217,12 +217,12 @@ export default async function Home({ searchParams }: PageProps) {
         initialGroupId={filters.groupId}
         initialSourceId={filters.sourceId}
         initialTitle={filters.title}
-        initialTag={filters.tag}
+        initialEntity={filters.entity}
         initialEntryKeys={filters.entryKeys}
         availableGroups={feed.groups}
         initialGroupTotalCount={feed.groupTotalCount}
         availableSources={feedFilterOptions.sources}
-        popularTags={feed.popularTags}
+        popularEntities={feed.popularEntities}
         initialHeaderLinks={headerLinks}
       />
     </main>

@@ -18,7 +18,7 @@ const eventBriefingSchema = z
     }).strict(),
     preference: z.object({
       weightedRules: z.array(z.object({
-        type: z.enum(["tag", "keyword", "source_group", "event_type"]),
+        type: z.enum(["entity", "keyword", "source_group", "event_type"]),
         value: z.string(),
         weight: z.number().int(),
       }).strict()).max(100),

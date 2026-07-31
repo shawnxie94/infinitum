@@ -11,13 +11,13 @@ import {
   executeItemReparseAggregationsTask,
   regenerateItemContent,
 } from "@/lib/items/service";
-import { replaceItemTags } from "@/lib/tags/service";
+import { replaceItemEntities } from "@/lib/entities/service";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
 
 describe("regenerateItemContent", () => {
   beforeEach(async () => {
     await prisma.item.deleteMany();
-    await prisma.tag.deleteMany();
+    await prisma.entity.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.fetchRun.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();
@@ -134,11 +134,11 @@ describe("regenerateItemContent", () => {
     expect(regenerated.summaryText).toBe("新的摘要内容");
   });
 
-  it("preserves item tags when only the summary is regenerated", async () => {
+  it("preserves item entities when only the summary is regenerated", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Example Feed",
-        rssUrl: "https://example.com/feed-summary-tags.xml",
+        rssUrl: "https://example.com/feed-summary-entities.xml",
         siteUrl: "https://example.com",
         enabled: true,
         aiParsingEnabled: true,
@@ -147,9 +147,9 @@ describe("regenerateItemContent", () => {
     const item = await prisma.item.create({
       data: {
         sourceId: source.id,
-        originalUrl: "https://example.com/posts/summary-tags",
-        canonicalUrl: "https://example.com/posts/summary-tags",
-        urlHash: "hash-summary-tags",
+        originalUrl: "https://example.com/posts/summary-entities",
+        canonicalUrl: "https://example.com/posts/summary-entities",
+        urlHash: "hash-summary-entities",
         originalTitle: "OpenAI launches a benchmark",
         translatedTitle: "现有中文标题",
         summaryText: "现有摘要",
@@ -159,7 +159,7 @@ describe("regenerateItemContent", () => {
         fullText: "A full text body used for summarization",
       },
     });
-    await replaceItemTags(item.id, ["OpenAI", "Benchmark"]);
+    await replaceItemEntities(item.id, ["OpenAI", "Benchmark"]);
 
     await regenerateItemContent(item.id, "summary", {
       aiProvider: buildAiProviderMock({
@@ -169,12 +169,12 @@ describe("regenerateItemContent", () => {
       }),
     });
 
-    const storedTags = await prisma.itemTag.findMany({
+    const storedTags = await prisma.itemEntity.findMany({
       where: { itemId: item.id },
-      include: { tag: true },
+      include: { entity: true },
       orderBy: { createdAt: "asc" },
     });
-    expect(storedTags.map((entry) => entry.tag.normalized)).toEqual(["openai", "benchmark"]);
+    expect(storedTags.map((entry) => entry.entity.normalized)).toEqual(["openai", "benchmark"]);
   });
 
   it("keeps the old value and records the error when regeneration fails", async () => {
@@ -492,7 +492,7 @@ describe("regenerateItemContent", () => {
         fullText: "Target body",
       },
     });
-    await replaceItemTags("reanalyze-target", ["旧标签", "OpenAI"]);
+    await replaceItemEntities("reanalyze-target", ["旧标签", "OpenAI"]);
 
     const taskRun = await prisma.backgroundTaskRun.create({
       data: {
@@ -520,7 +520,7 @@ describe("regenerateItemContent", () => {
             eventAction: "发布",
             eventObject: "toolkit",
           }),
-          tags: ["OpenAI", "AI Agent", "新闻", "开发者工具"],
+          entities: ["OpenAI", "AI Agent", "新闻", "开发者工具"],
         }),
         summarizeCluster: vi.fn().mockResolvedValue("重算后的聚合摘要"),
         matchClusterCandidate: vi.fn().mockImplementation(async (_input, metadata: { candidates: Array<{ id: string }> }) => {
@@ -535,9 +535,9 @@ describe("regenerateItemContent", () => {
     const updatedItem = await prisma.item.findUniqueOrThrow({
       where: { id: "reanalyze-target" },
     });
-    const updatedTags = await prisma.itemTag.findMany({
+    const updatedTags = await prisma.itemEntity.findMany({
       where: { itemId: "reanalyze-target" },
-      include: { tag: true },
+      include: { entity: true },
       orderBy: { createdAt: "asc" },
     });
 
@@ -551,10 +551,9 @@ describe("regenerateItemContent", () => {
     expect(updatedItem.eventSubject).toBe("OpenAI");
     expect(updatedItem.eventAction).toBe("发布");
     expect(updatedItem.eventObject).toBe("toolkit");
-    expect(updatedTags.map((entry) => entry.tag.normalized)).toEqual([
+    expect(updatedTags.map((entry) => entry.entity.normalized)).toEqual([
       "openai",
-      "ai agent",
-      "开发者工具",
+      "toolkit",
     ]);
   });
 
@@ -624,7 +623,7 @@ describe("regenerateItemContent", () => {
         eventObject: "多项更新",
         eventDate: "2026-04-10",
       }),
-      tags: [],
+      entities: [],
     });
     const aggregationFixture = vi.fn().mockResolvedValue({
       mainEvent: {
@@ -887,7 +886,7 @@ describe("regenerateItemContent", () => {
       qualityScore: 90,
       qualityRationale: "新分析有效",
       eventSignature: buildEventSignature({ eventSubject: "AI 行业" }),
-      tags: ["AI"],
+      entities: ["AI"],
       aggregation: { isAggregation: false, mainEvent: null, events: [] },
       diagnostics: {
         summaryValid: true,
@@ -1253,7 +1252,7 @@ describe("regenerateItemContent", () => {
       qualityScore: 80,
       qualityRationale: "有效分析",
       eventSignature: buildEventSignature(),
-      tags: [],
+      entities: [],
       aggregation: { isAggregation: false, mainEvent: null, events: [] },
       diagnostics: { summaryValid: true, analysisValid: true, aggregationValid: false },
     });

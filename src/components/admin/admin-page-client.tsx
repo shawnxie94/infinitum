@@ -33,7 +33,7 @@ import type { BackgroundTaskRunStatus, TaskRunSnapshot } from "@/lib/tasks/types
 
 type PrimaryTab = "monitoring" | "settings";
 type MonitorSubSection = "action-items" | "dashboard" | "content" | "tasks";
-type ContentSubSection = "filtered" | "clusters" | "splits" | "tags";
+type ContentSubSection = "filtered" | "clusters" | "splits" | "entities";
 type SettingsSection = "groups" | "sources" | "navigation" | "ai" | "content" | "tasks";
 type AISubSection = "model-api" | "prompt";
 type ContentSettingsSubSection = "blacklist" | "event-briefing" | "content-extraction";
@@ -70,7 +70,7 @@ function normalizeMonitorSubSection(value: string | null): MonitorSubSection {
 }
 
 function normalizeContentSubSection(value: string | null): ContentSubSection {
-  if (value === "clusters" || value === "splits" || value === "tags") {
+  if (value === "clusters" || value === "splits" || value === "entities") {
     return value;
   }
 
@@ -290,7 +290,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
   const contentPage = normalizePositiveInteger(searchParams.get("contentPage"));
   const contentPageSize = normalizePositiveInteger(searchParams.get("contentPageSize"));
   const shouldOpenClusterReview = searchParams.get("review") === "pending";
-  const shouldOpenTagSuggestions = searchParams.get("suggestions") === "open";
+  const shouldOpenEntitySuggestions = searchParams.get("suggestions") === "open";
   const shouldOpenBriefingPreferenceSuggestions = searchParams.get("suggestions") === "open";
   const shouldOpenSourceAttentionSummary = searchParams.get("sourceSummary") === "open";
   const selectedPromptType = normalizePromptType(searchParams.get("promptType"));
@@ -349,7 +349,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
         if (routeState.contentSubSection === "clusters" && shouldOpenClusterReview) {
           params.set("review", "pending");
         }
-        if (routeState.contentSubSection === "tags" && shouldOpenTagSuggestions) {
+        if (routeState.contentSubSection === "entities" && shouldOpenEntitySuggestions) {
           params.set("suggestions", "open");
         }
       } else if (routeState.monitoringSubSection === "tasks") {
@@ -405,7 +405,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
     shouldOpenClusterReview,
     shouldOpenBriefingPreferenceSuggestions,
     shouldOpenSourceAttentionSummary,
-    shouldOpenTagSuggestions,
+    shouldOpenEntitySuggestions,
     taskKindFilter,
     taskPage,
     taskPageSize,
@@ -530,7 +530,7 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
 
     // Monitoring - Content Review
     if (primaryTab === "monitoring" && monitoringSubSection === "content") {
-      if (contentSubSection === "tags") {
+      if (contentSubSection === "entities") {
         if (!settings) {
           return (
             <div className="space-y-6 animate-pulse">
@@ -543,9 +543,9 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
         return (
           <AdminSettingsPanel
             initialSettings={settings}
-            activeSection="tags"
+            activeSection="entities"
             embedMode
-            initialOpenTagSuggestions={shouldOpenTagSuggestions}
+            initialOpenEntitySuggestions={shouldOpenEntitySuggestions}
           />
         );
       }
@@ -819,18 +819,18 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
                               navigateAdmin({
                                 primaryTab: "monitoring",
                                 monitoringSubSection: "content",
-                                contentSubSection: "tags",
+                                contentSubSection: "entities",
                               });
                             }}
                             active={
                               monitoringSubSection === "content" &&
-                              contentSubSection === "tags"
+                              contentSubSection === "entities"
                             }
                             variant="submenu"
                           >
                             <span className="inline-flex items-center gap-2">
                               <IconTag className="h-4 w-4" />
-                              <span>标签管理</span>
+                              <span>实体管理</span>
                             </span>
                           </SelectableButton>
                           <SelectableButton

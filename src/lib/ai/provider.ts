@@ -22,7 +22,6 @@ import type { RuntimeConfig } from "@/config/runtime";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import { buildDailyReportRuntimeFallbackInstructionLines } from "@/lib/daily-report/runtime-rules";
-import { normalizeItemTags } from "@/lib/tags/normalization";
 import { normalizeOptionalText } from "@/lib/utils/text";
 
 export type AiEventSignature = {
@@ -52,7 +51,6 @@ type AiEnrichment = {
   qualityScore: number;
   qualityRationale: string;
   eventSignature: AiEventSignature;
-  tags: string[];
 };
 
 type ParsedEventSignature = {
@@ -68,7 +66,6 @@ type ParsedEvent = ParsedEventSignature & {
   oneLiner: string;
   qualityScore: number;
   sourceUrl: string | null;
-  tags: string[];
 };
 
 export type ItemUnderstandingResult = AiEnrichment & {
@@ -316,6 +313,53 @@ function renderPromptTemplate(template: string, values: Record<string, string | 
   return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => String(values[key] ?? ""));
 }
 
+const DAILY_REPORT_MODEL_CANDIDATE_KEYS = [
+  "id",
+  "title",
+  "summary",
+  "sourceName",
+  "qualityScore",
+  "candidateScore",
+  "sourceCount",
+  "itemCount",
+  "createdAt",
+  "publishedAt",
+  "publishedAtKnown",
+  "eventType",
+  "eventSubject",
+  "eventAction",
+  "eventObject",
+  "eventDate",
+  "isFollowUp",
+  "newItemCountOnDate",
+  "newSourceCountOnDate",
+] as const;
+
+function compactDailyReportModelCandidate(article: unknown) {
+  if (!article || typeof article !== "object" || Array.isArray(article)) {
+    return article;
+  }
+
+  const input = article as Record<string, unknown>;
+  const candidate = Object.fromEntries(
+    DAILY_REPORT_MODEL_CANDIDATE_KEYS
+      .filter((key) => key in input)
+      .map((key) => [key, input[key]]),
+  ) as Record<string, unknown>;
+
+  if (Array.isArray(input.evidenceItems)) {
+    candidate.evidenceItems = input.evidenceItems
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+      .map((item) => Object.fromEntries(
+        ["title", "sourceName", "publishedAt"]
+          .filter((key) => key in item)
+          .map((key) => [key, item[key]]),
+      ));
+  }
+
+  return candidate;
+}
+
 function buildDailyReportUserPrompt(config: {
   systemPrompt: string;
   promptTemplate: string;
@@ -329,7 +373,7 @@ function buildDailyReportUserPrompt(config: {
   const rendered = renderPromptTemplate(config.promptTemplate, {
     date: input.date,
     timezone: input.timezone,
-    articlesJson: JSON.stringify(input.articles),
+    articlesJson: JSON.stringify(input.articles.map(compactDailyReportModelCandidate)),
     recentTopicsJson,
   });
   const extraInstructions = buildDailyReportRuntimeFallbackInstructionLines({
@@ -358,7 +402,6 @@ function getFallbackEnrichment(
       eventObject: null,
       eventDate: null,
     },
-    tags: [],
   };
 }
 
@@ -549,7 +592,6 @@ function normalizeParsedEvent(raw: Partial<ParsedEvent>): ParsedEvent | null {
       oneLiner,
       qualityScore: normalizeScore(raw.qualityScore, 50),
       sourceUrl: normalizeSourceUrl(raw.sourceUrl ?? null),
-      tags: normalizeItemTags(raw.tags).map((tag) => tag.name),
     };
   }
 
@@ -563,7 +605,6 @@ function normalizeParsedEvent(raw: Partial<ParsedEvent>): ParsedEvent | null {
     oneLiner,
     qualityScore: normalizeScore(raw.qualityScore, 50),
     sourceUrl: normalizeSourceUrl(raw.sourceUrl ?? null),
-    tags: normalizeItemTags(raw.tags).map((tag) => tag.name),
   };
 }
 
@@ -679,7 +720,6 @@ function buildEnrichmentFromParsed(
       eventObject?: string | null;
       eventDate?: string | null;
     } | null;
-    tags?: unknown;
   },
   fallback: AiEnrichment,
   translateTitle: boolean,
@@ -692,7 +732,6 @@ function buildEnrichmentFromParsed(
     qualityScore: normalizeScore(parsed.qualityScore, fallback.qualityScore),
     qualityRationale: parsed.qualityRationale?.trim() || fallback.qualityRationale,
     eventSignature: buildEventSignatureFromParsed(parsed, fallback.eventSignature),
-    tags: normalizeItemTags(parsed.tags).map((tag) => tag.name),
   };
 }
 
@@ -1001,7 +1040,7 @@ async function completeText(
   userContent: string,
   options?: CompletionOptions,
 ): Promise<string> {
-  const response = await client.chat.completions.create({
+  const request: Record<string, unknown> = {
     model: config.model,
     messages: [
       {
@@ -1017,7 +1056,18 @@ async function completeText(
     temperature: promptConfig.temperature ?? undefined,
     top_p: promptConfig.topP ?? undefined,
     response_format: options?.responseFormat,
-  }) as CompletionResponse;
+  };
+
+  // MiniMax exposes a provider-specific thinking switch. OpenAI's Chat
+  // Completions endpoint does not accept this field; for non-MiniMax models,
+  // omitting it is the compatible equivalent of keeping thinking disabled.
+  const normalizedBaseUrl = config.baseURL.toLowerCase();
+  const normalizedModel = config.model.toLowerCase();
+  if (normalizedBaseUrl.includes("minimax") || normalizedModel.includes("minimax")) {
+    request.thinking = { type: "disabled" };
+  }
+
+  const response = await client.chat.completions.create(request) as CompletionResponse;
 
   const choice = response.choices?.[0];
   const message = choice?.message;
@@ -1034,7 +1084,9 @@ async function completeText(
     return normalizeModelResponseText(content);
   }
 
-  return normalizeModelResponseText(reasoningContent);
+  // Thinking is disabled for every model call, so reasoning content must not
+  // be treated as the final response or leak into JSON/text persistence.
+  return "";
 }
 
 async function completeTextWithTransientRetry(
