@@ -224,7 +224,7 @@ function getEntityToneKey(value: string) {
   return Math.abs(hash) % ENTITY_TONES.length;
 }
 
-const MAX_ENTITY_DISPLAY_LENGTH = 12;
+const MAX_ENTITY_DISPLAY_LENGTH = 10;
 
 function getEntityDisplayName(value: string) {
   return value.length > MAX_ENTITY_DISPLAY_LENGTH
