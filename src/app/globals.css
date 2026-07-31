@@ -209,6 +209,23 @@ select {
   font-family: inherit;
 }
 
+.popular-entity-button {
+  background-color: var(--entity-bg);
+  border-color: var(--entity-border);
+  color: var(--entity-text);
+}
+
+.popular-entity-button:hover:not(:disabled) {
+  background-color: var(--entity-bg-hover);
+  border-color: var(--entity-border-hover);
+}
+
+.popular-entity-button[aria-pressed="true"] {
+  background-color: var(--entity-active-bg);
+  border-color: var(--entity-active-border);
+  color: var(--entity-active-text);
+}
+
 ::selection {
   background: var(--accent);
   color: #fff;

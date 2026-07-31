@@ -224,8 +224,16 @@ function getEntityToneKey(value: string) {
   return Math.abs(hash) % ENTITY_TONES.length;
 }
 
-function getEntityButtonStyle(option: FeedEntityOption, index: number): EntityButtonStyle {
-  const tone = ENTITY_TONES[(getEntityToneKey(option.normalized) + index * 7) % ENTITY_TONES.length] ?? ENTITY_TONES[0];
+const MAX_ENTITY_DISPLAY_LENGTH = 12;
+
+function getEntityDisplayName(value: string) {
+  return value.length > MAX_ENTITY_DISPLAY_LENGTH
+    ? `${value.slice(0, MAX_ENTITY_DISPLAY_LENGTH)}…`
+    : value;
+}
+
+function getEntityButtonStyle(option: FeedEntityOption): EntityButtonStyle {
+  const tone = ENTITY_TONES[getEntityToneKey(option.normalized)] ?? ENTITY_TONES[0];
 
   return {
     "--entity-accent": tone.border,
@@ -242,13 +250,11 @@ function getEntityButtonStyle(option: FeedEntityOption, index: number): EntityBu
 
 function PopularEntityButton({
   option,
-  toneIndex,
   isActive,
   disabled,
   onSelect,
 }: {
   option: FeedEntityOption;
-  toneIndex: number;
   isActive: boolean;
   disabled: boolean;
   onSelect: (entity: string) => void;
@@ -261,7 +267,7 @@ function PopularEntityButton({
       aria-pressed={isActive}
       aria-label={`筛选实体：${option.name}，${option.count} 条`}
       title={`${option.name} ${option.count}`}
-      style={getEntityButtonStyle(option, toneIndex)}
+      style={getEntityButtonStyle(option)}
       className={cx(
         "popular-entity-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold transition",
         "hover:shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
@@ -269,7 +275,7 @@ function PopularEntityButton({
         isActive ? "shadow-[var(--shadow-sm)]" : "",
       )}
     >
-      <span>{option.name}</span>
+      <span>{getEntityDisplayName(option.name)}</span>
       <span className="shrink-0 text-[11px] font-bold opacity-75">{option.count}</span>
     </button>
   );
@@ -735,21 +741,21 @@ export function FeedPanel({
       window.removeEventListener("resize", measure);
     };
   }, [visiblePopularEntities]);
+
   const visiblePopularEntityRows = useMemo(() => {
     if (popularEntityLayoutRows.length === 0) {
       return [];
     }
 
     const optionByKey = new Map(visiblePopularEntities.map((option) => [option.normalized, option]));
-    const rows = popularEntityLayoutRows
+    return popularEntityLayoutRows
       .map((row) => ({
         options: row.keys.map((key) => optionByKey.get(key)).filter((option): option is FeedEntityOption => Boolean(option)),
         shouldDistribute: row.shouldDistribute,
       }))
       .filter((row) => row.options.length > 0);
-
-    return rows;
   }, [popularEntityLayoutRows, visiblePopularEntities]);
+
   const visibleClusterOptions = useMemo(() => {
     return clusterOptions.filter((cluster) => {
       if (cluster.status !== "active") {
@@ -1850,36 +1856,29 @@ export function FeedPanel({
                 aria-hidden="true"
                 className="pointer-events-none invisible absolute inset-x-0 top-0 flex w-full min-w-0 flex-wrap items-center justify-start gap-1.5 overflow-visible"
               >
-                {visiblePopularEntities.map((option, index) => {
-                  return (
-                    <span
-                      key={option.normalized}
-                      data-entity-key={option.normalized}
-                      style={getEntityButtonStyle(option, index)}
-                      className="popular-entity-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold"
-                    >
-                      <span>{option.name}</span>
-                      <span className="shrink-0 text-[11px] font-bold opacity-75">{option.count}</span>
-                    </span>
-                  );
-                })}
+                {visiblePopularEntities.map((option) => (
+                  <span
+                    key={option.normalized}
+                    data-entity-key={option.normalized}
+                    style={getEntityButtonStyle(option)}
+                    className="popular-entity-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold"
+                  >
+                    <span>{getEntityDisplayName(option.name)}</span>
+                    <span className="shrink-0 text-[11px] font-bold opacity-75">{option.count}</span>
+                  </span>
+                ))}
               </div>
               {visiblePopularEntityRows.length === 0 ? (
                 <div className="flex max-h-[4.375rem] w-full min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
-                  {visiblePopularEntities.map((option, index) => {
-                    const isActive = option.normalized === entity;
-
-                    return (
-                      <PopularEntityButton
-                        key={option.normalized}
-                        option={option}
-                        toneIndex={index}
-                        isActive={isActive}
-                        disabled={isPending}
-                        onSelect={toggleEntity}
-                      />
-                    );
-                  })}
+                  {visiblePopularEntities.map((option) => (
+                    <PopularEntityButton
+                      key={option.normalized}
+                      option={option}
+                      isActive={option.normalized === entity}
+                      disabled={isPending}
+                      onSelect={toggleEntity}
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="grid max-h-[4.375rem] w-full min-w-0 gap-1.5 overflow-hidden">
@@ -1891,21 +1890,15 @@ export function FeedPanel({
                         row.shouldDistribute ? "lg:justify-between" : "justify-start",
                       )}
                     >
-                      {row.options.map((option, index) => {
-                        const isActive = option.normalized === entity;
-                        const toneIndex = visiblePopularEntities.findIndex((entityOption) => entityOption.normalized === option.normalized);
-
-                        return (
-                          <PopularEntityButton
-                            key={option.normalized}
-                            option={option}
-                            toneIndex={toneIndex >= 0 ? toneIndex : index}
-                            isActive={isActive}
-                            disabled={isPending}
-                            onSelect={toggleEntity}
-                          />
-                        );
-                      })}
+                      {row.options.map((option) => (
+                        <PopularEntityButton
+                          key={option.normalized}
+                          option={option}
+                          isActive={option.normalized === entity}
+                          disabled={isPending}
+                          onSelect={toggleEntity}
+                        />
+                      ))}
                     </div>
                   ))}
                 </div>
