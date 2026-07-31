@@ -95,6 +95,9 @@ describe("admin settings service", () => {
     expect(settings.promptConfigs.find((config) => config.type === "item_understanding")?.systemPrompt).toContain(
       "自动生成实体关联",
     );
+    expect(settings.promptConfigs.find((config) => config.type === "item_understanding")?.systemPrompt).not.toContain(
+      '"tags":',
+    );
     expect(settings.promptConfigs.find((config) => config.type === "cluster_summary")).toMatchObject({
       temperature: 0.2,
       maxTokens: 2000,
@@ -557,6 +560,24 @@ describe("admin settings service", () => {
     expect(defaultConfig.systemPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
     expect(defaultConfig.systemPrompt).toContain("双引号必须转义");
     expect(customConfig.systemPrompt).toBe("用户自定义条目理解提示词");
+  });
+
+  it("upgrades a persisted default item_understanding prompt that still emits tags", async () => {
+    await getIngestionRuntimeConfig();
+    await prisma.promptConfig.updateMany({
+      where: { type: "item_understanding", isDefault: true },
+      data: {
+        systemPrompt: `${DEFAULT_ITEM_UNDERSTANDING_PROMPT}\n输出字段："tags":[]\ntags 返回 0-5 个具体、稳定、可复用的筛选标签。`,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const config = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "item_understanding", isDefault: true },
+    });
+    expect(config.systemPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
+    expect(config.systemPrompt).not.toContain('"tags":');
   });
 
   it("upgrades only the legacy default cluster_summary token budget", async () => {

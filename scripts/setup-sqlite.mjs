@@ -503,7 +503,7 @@ function applyEntityItemBackfill() {
         SELECT "id", "eventSubject", "eventObject"
         FROM "items"
         WHERE "eventSubject" IS NOT NULL OR "eventObject" IS NOT NULL
-        ORDER BY "id" ASC
+        ORDER BY "createdAt" DESC, "id" DESC
         LIMIT ${entityBackfillLimit}
       )
       WHERE "eventSubject" IS NOT NULL
@@ -513,7 +513,7 @@ function applyEntityItemBackfill() {
         SELECT "id", "eventSubject", "eventObject"
         FROM "items"
         WHERE "eventSubject" IS NOT NULL OR "eventObject" IS NOT NULL
-        ORDER BY "id" ASC
+        ORDER BY "createdAt" DESC, "id" DESC
         LIMIT ${entityBackfillLimit}
       )
       WHERE "eventObject" IS NOT NULL;

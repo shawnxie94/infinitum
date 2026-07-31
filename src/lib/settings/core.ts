@@ -463,6 +463,9 @@ const REMOVED_PROMPT_CONFIG_TYPES = [
   "item_aggregation",
 ] as const;
 
+const LEGACY_ITEM_UNDERSTANDING_TAG_MARKER = '"tags":';
+const LEGACY_ITEM_UNDERSTANDING_TAG_RULE_MARKER = "tags 返回 0-5 个具体";
+
 async function deleteRemovedPromptConfigTypes() {
   await prisma.$executeRawUnsafe(
     `DELETE FROM "prompt_configs" WHERE "type" IN (${REMOVED_PROMPT_CONFIG_TYPES.map(() => "?").join(", ")})`,
@@ -639,16 +642,35 @@ async function upgradeLegacyClusterSummaryTokenBudget() {
 }
 
 async function upgradeLegacyItemUnderstandingPrompt() {
-  await prisma.promptConfig.updateMany({
+  const configs = await prisma.promptConfig.findMany({
     where: {
       type: PromptConfigType.item_understanding,
       isDefault: true,
-      systemPrompt: LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
     },
-    data: {
-      systemPrompt: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+    select: {
+      id: true,
+      systemPrompt: true,
     },
   });
+
+  for (const config of configs) {
+    const systemPrompt = config.systemPrompt ?? "";
+    const isLegacyPrompt =
+      systemPrompt === LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT ||
+      (systemPrompt.includes(LEGACY_ITEM_UNDERSTANDING_TAG_MARKER) &&
+        systemPrompt.includes(LEGACY_ITEM_UNDERSTANDING_TAG_RULE_MARKER) &&
+        systemPrompt.includes('"eventSignature"') &&
+        systemPrompt.includes('"aggregation"'));
+
+    if (!isLegacyPrompt) continue;
+
+    await prisma.promptConfig.update({
+      where: { id: config.id },
+      data: {
+        systemPrompt: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+      },
+    });
+  }
 }
 
 async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {

@@ -532,7 +532,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT "latestCreatedAt" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("2026-04-11T10:05:00.000Z");
   }, 20_000);
 
-  it("backfills up to 500 historical item entities once during the entity upgrade", () => {
+  it("backfills the latest 500 historical item entities once during the entity upgrade", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-entity-backfill-"));
     const dbPath = path.join(tempDir, "entity-backfill.db");
 
@@ -542,6 +542,16 @@ describe("sqlite setup", () => {
       cwd: process.cwd(),
       encoding: "utf8",
     });
+
+    const itemValues = Array.from({ length: 501 }, (_, index) => {
+      const itemId = `item-entity-backfill-${String(index).padStart(3, "0")}`;
+      const timestamp = new Date(Date.UTC(2026, 0, 1 + index)).toISOString();
+      return `(
+        '${itemId}', 'source-entity-backfill', 'cluster-entity-backfill', 'https://entity-backfill.example.com/${itemId}',
+        'https://entity-backfill.example.com/${itemId}', '${itemId}', 'Entity Backfill Item ${index}', '${timestamp}',
+        'processed', 'allowed', 50, 'ok', 'en', 'Entity ${index}', NULL, '${timestamp}', '${timestamp}'
+      )`;
+    }).join(",\n");
 
     runSqlite(
       dbPath,
@@ -567,11 +577,7 @@ describe("sqlite setup", () => {
         "id", "sourceId", "clusterId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle",
         "publishedAt", "status", "moderationStatus", "qualityScore", "qualityRationale", "language",
         "eventSubject", "eventObject", "createdAt", "updatedAt"
-      ) VALUES (
-        'item-entity-backfill', 'source-entity-backfill', 'cluster-entity-backfill', 'https://entity-backfill.example.com/item',
-        'https://entity-backfill.example.com/item', 'item-entity-backfill', 'Entity Backfill Item', CURRENT_TIMESTAMP,
-        'processed', 'allowed', 50, 'ok', 'en', ' OpenAI ', ' GPT-5 ', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-      );
+      ) VALUES ${itemValues};
 
       PRAGMA foreign_keys=OFF;
       DROP TABLE "item_entities";
@@ -588,10 +594,12 @@ describe("sqlite setup", () => {
       encoding: "utf8",
     });
 
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "entities"`)).toBe("2");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "item_entities" WHERE "itemId" = 'item-entity-backfill'`)).toBe("2");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "entities" WHERE "normalized" IN ('openai', 'gpt-5')`)).toBe("2");
-    expect(runSqlite(dbPath, `SELECT "feedEntitiesJson" FROM "content_clusters" WHERE "id" = 'cluster-entity-backfill'`)).toContain("OpenAI");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "entities"`)).toBe("500");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "item_entities"`)).toBe("500");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "item_entities" WHERE "itemId" = 'item-entity-backfill-500'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "item_entities" WHERE "itemId" = 'item-entity-backfill-000'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "entities" WHERE "normalized" = 'entity 500'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT "feedEntitiesJson" FROM "content_clusters" WHERE "id" = 'cluster-entity-backfill'`)).toContain("Entity 500");
 
     runSqlite(
       dbPath,
