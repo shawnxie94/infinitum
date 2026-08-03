@@ -27,7 +27,6 @@ type FeedPayload = {
   groupId: string | null;
   sourceId: string | null;
   title: string | null;
-  entity: string | null;
   entryId: string | null;
   entryType: "single" | "cluster" | null;
   entryKeys: string[];

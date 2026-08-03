@@ -201,7 +201,6 @@ function buildReadingProgressFilterKey(query: FeedQueryState) {
     groupId: query.groupId ?? "",
     sourceId: query.sourceId ?? "",
     title: query.title ?? "",
-    entity: query.entity ?? "",
     entryKeys: query.entryKeys,
   });
 }
@@ -210,7 +209,6 @@ function hasAdvancedQueryFilter(query: FeedQueryState) {
   return Boolean(
     query.sourceId ||
       query.title ||
-      query.entity ||
       query.entryKeys.length > 0 ||
       query.publishedStartDate ||
       query.publishedEndDate,
@@ -242,7 +240,6 @@ function buildHomeFeedQuery(): FeedQueryState {
     groupId: null,
     sourceId: null,
     title: null,
-    entity: null,
     entryKeys: [],
     createdRangeExplicit: false,
   };
@@ -407,7 +404,6 @@ export function FeedPanel({
   initialGroupId = null,
   initialSourceId = null,
   initialTitle = null,
-  initialEntity = null,
   initialEntryKeys = [],
   availableGroups = [],
   initialGroupTotalCount,
@@ -431,7 +427,6 @@ export function FeedPanel({
   const [sourceId, setSourceId] = useState<string | null>(normalizeOptionalId(initialSourceId));
   const [titleInput, setTitleInput] = useState<string>(normalizeSearchText(initialTitle) ?? "");
   const [titleFilter, setTitleFilter] = useState<string | null>(normalizeSearchText(initialTitle));
-  const [entity, setEntity] = useState<string | null>(normalizeOptionalId(initialEntity));
   const [entryKeys, setEntryKeys] = useState<FeedEntryKey[]>(initialEntryKeys);
   const [status, setStatus] = useState<FetchRunSnapshot | null>(initialStatus);
   const [groups, setGroups] = useState<FeedGroupOption[]>(availableGroups);
@@ -476,7 +471,6 @@ export function FeedPanel({
     groupId: normalizeOptionalId(initialGroupId),
     sourceId: normalizeOptionalId(initialSourceId),
     title: normalizeSearchText(initialTitle),
-    entity: normalizeOptionalId(initialEntity),
     entryKeys: initialEntryKeys,
     createdRangeExplicit: initialCreatedRangeExplicit,
   };
@@ -502,7 +496,6 @@ export function FeedPanel({
       groupId: appliedQuery.groupId,
       sourceId: appliedQuery.sourceId,
       title: appliedQuery.title,
-      entity: appliedQuery.entity,
       entryKeys: appliedQuery.entryKeys,
     }),
     [appliedQuery],
@@ -549,10 +542,6 @@ export function FeedPanel({
       filters.push(`信息源：${availableSources.find((source) => source.id === sourceId)?.name ?? sourceId}`);
     }
 
-    if (entity) {
-      filters.push(`实体：${entity}`);
-    }
-
     if (entryKeys.length > 0) {
       filters.push(`精确筛选：${entryKeys.length} 条`);
     }
@@ -572,7 +561,6 @@ export function FeedPanel({
     summary.publishedRangeLabel,
     summary.rangeLabel,
     summary.sortLabel,
-    entity,
     titleFilter,
   ]);
 
@@ -672,7 +660,6 @@ export function FeedPanel({
     setSourceId(homeQuery.sourceId);
     setTitleInput("");
     setTitleFilter(homeQuery.title);
-    setEntity(homeQuery.entity);
     setEntryKeys(homeQuery.entryKeys);
     setAdvancedFiltersOpen(false);
     setSelectedItems(new Set());
@@ -693,7 +680,6 @@ export function FeedPanel({
     groupId,
     sourceId,
     title: titleFilter,
-    entity,
     entryKeys,
     createdRangeExplicit,
     ...overrides,
@@ -771,7 +757,6 @@ export function FeedPanel({
       groupId: null,
       sourceId: null,
       title: null,
-      entity: null,
       entryKeys: [],
     });
     setRange(nextQuery.range);
@@ -785,7 +770,6 @@ export function FeedPanel({
     setSourceId(null);
     setTitleInput("");
     setTitleFilter(null);
-    setEntity(null);
     setEntryKeys([]);
     setAdvancedFiltersOpen(false);
     loadFeed(nextQuery, 1, pageSize, { scrollToTop: true });

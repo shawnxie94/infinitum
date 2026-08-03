@@ -46,7 +46,6 @@ function buildFilters(overrides: Partial<Parameters<typeof getCachedFeedItems>[0
     groupId: null,
     sourceId: null,
     title: null,
-    entity: "ai",
     entryId: null,
     entryType: null,
     entryKeys: [],

@@ -14,7 +14,6 @@ describe("feed request parsing", () => {
 
     expect(resolveFeedRequest({ title: "Agent" }, now).filters.range).toBe("all");
     expect(resolveFeedRequest({ sourceId: "source-1" }, now).filters.range).toBe("all");
-    expect(resolveFeedRequest({ entity: "openai" }, now).filters.range).toBe("all");
     expect(resolveFeedRequest({ publishedStart: "2026-04-01" }, now).filters.range).toBe("all");
     expect(resolveFeedRequest({ entryKeys: "single:item-a,cluster:cluster-a" }, now).filters.range).toBe("all");
   });
@@ -25,12 +24,6 @@ describe("feed request parsing", () => {
     expect(resolveFeedRequest({ range: "7d", title: "Agent" }, now).filters.range).toBe("7d");
   });
 
-  it("normalizes entity filters", () => {
-    const now = new Date("2026-04-10T16:45:00.000Z");
-
-    expect(resolveFeedRequest({ entity: " openai " }, now).filters.entity).toBe("openai");
-    expect(resolveFeedRequest({ entity: " " }, now).filters.entity).toBeNull();
-  });
 
   it("normalizes multi-entry filters", () => {
     const now = new Date("2026-04-10T16:45:00.000Z");

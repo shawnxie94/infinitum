@@ -15,7 +15,6 @@ export type FeedFilters = {
   groupId: string | null;
   sourceId: string | null;
   title: string | null;
-  entity: string | null;
   entryId: string | null;
   entryType: FeedEntryType | null;
   entryKeys: FeedEntryKey[];

@@ -282,53 +282,6 @@ describe("/api/feed", () => {
     vi.useRealTimers();
   });
 
-  it("filters feed entries by entity", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
-    await replaceItemEntities("item-a1", ["OpenAI", "AI Agent"]);
-    await replaceItemEntities("item-a2", ["OpenAI"]);
-    await replaceItemEntities("item-b1", ["Robotics"]);
-
-    const { GET } = await import("@/app/api/feed/route");
-    const response = await GET(
-      new Request("http://localhost/api/feed?range=7d&entity=openai"),
-    );
-    const json = await response.json();
-
-    expect(json.entity).toBe("openai");
-    expect(json.items).toHaveLength(1);
-    expect(json.items[0]).toMatchObject({
-      type: "cluster",
-      id: "cluster-a",
-      title: "OpenAI Agent 发布",
-    });
-    expect(json).not.toHaveProperty("popularEntities");
-
-    vi.useRealTimers();
-  });
-
-  it("filters single feed items by entity", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
-    await replaceItemEntities("item-b1", ["Robotics"]);
-
-    const { GET } = await import("@/app/api/feed/route");
-    const response = await GET(
-      new Request("http://localhost/api/feed?range=7d&entity=robotics"),
-    );
-    const json = await response.json();
-
-    expect(json.items).toHaveLength(1);
-    expect(json.items[0]).toMatchObject({
-      type: "single",
-      id: "item-b1",
-      title: "故事 B",
-    });
-
-    vi.useRealTimers();
-  });
-
-
   it("omits aggregation parent metadata from the public feed list", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));

@@ -140,7 +140,6 @@ export function buildFeedSearch(
     groupId,
     sourceId,
     title,
-    entity,
     entryKeys,
     createdRangeExplicit = true,
   }: FeedQueryState,
@@ -153,7 +152,6 @@ export function buildFeedSearch(
   const normalizedGroupId = normalizeOptionalId(groupId);
   const normalizedSourceId = normalizeOptionalId(sourceId);
   const normalizedTitle = normalizeSearchText(title);
-  const normalizedEntity = normalizeOptionalId(entity);
   const page = pagination?.page ?? 1;
   const size = pagination?.size ?? DEFAULT_FEED_PAGE_SIZE;
   const hasCreatedDateRange = Boolean(startDate || endDate);
@@ -190,10 +188,6 @@ export function buildFeedSearch(
 
   if (normalizedTitle) {
     search.set("title", normalizedTitle);
-  }
-
-  if (normalizedEntity) {
-    search.set("entity", normalizedEntity);
   }
 
   if (entryKeys.length > 0) {

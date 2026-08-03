@@ -30,7 +30,6 @@ export type FeedPanelProps = {
   initialGroupId?: string | null;
   initialSourceId?: string | null;
   initialTitle?: string | null;
-  initialEntity?: string | null;
   initialEntryKeys?: FeedEntryKey[];
   availableGroups?: FeedGroupOption[];
   initialGroupTotalCount?: number;
@@ -48,7 +47,6 @@ export type FeedQueryState = {
   groupId: string | null;
   sourceId: string | null;
   title: string | null;
-  entity: string | null;
   entryKeys: FeedEntryKey[];
   createdRangeExplicit?: boolean;
 };

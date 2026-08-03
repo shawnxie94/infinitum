@@ -738,17 +738,6 @@ function buildItemWhere(
             ...(filters.sourceId ? { id: filters.sourceId } : {}),
           },
         },
-        ...(filters.entity
-          ? {
-              entities: {
-                some: {
-                  entity: {
-                    normalized: filters.entity,
-                  },
-                },
-              },
-            }
-          : {}),
       },
       {
         OR: [{ clusterId: null }, { cluster: { is: { status: "active" } } }],
@@ -1015,29 +1004,7 @@ function buildFeedEntryCandidatesCte(
     timeWhereClauses.length > 0
       ? Prisma.sql`WHERE ${Prisma.join(timeWhereClauses, " AND ")}`
       : Prisma.empty;
-  const filteredItemsCte = filters.entity
-    ? Prisma.sql`
-    entity_matched_clusters AS (
-      SELECT DISTINCT bfi."clusterId" AS id
-      FROM base_filtered_items bfi
-      INNER JOIN "item_entities" it ON it."itemId" = bfi."itemId"
-      INNER JOIN "entities" t ON t.id = it."entityId"
-      WHERE t.normalized = ${filters.entity}
-        AND bfi."clusterId" IS NOT NULL
-    ),
-    filtered_items AS (
-      SELECT bfi.*
-      FROM base_filtered_items bfi
-      WHERE EXISTS (
-          SELECT 1
-          FROM "item_entities" it
-          INNER JOIN "entities" t ON t.id = it."entityId"
-          WHERE it."itemId" = bfi."itemId"
-            AND t.normalized = ${filters.entity}
-        )
-        OR bfi."clusterId" IN (SELECT id FROM entity_matched_clusters)
-    )`
-    : Prisma.sql`
+  const filteredItemsCte = Prisma.sql`
     filtered_items AS (
       SELECT *
       FROM base_filtered_items
@@ -1342,29 +1309,7 @@ function buildFeedEntryCountCandidatesCte(
     timeWhereClauses.length > 0
       ? Prisma.sql`WHERE ${Prisma.join(timeWhereClauses, " AND ")}`
       : Prisma.empty;
-  const filteredItemsCte = filters.entity
-    ? Prisma.sql`
-    entity_matched_clusters AS (
-      SELECT DISTINCT bfi."clusterId" AS id
-      FROM base_filtered_items bfi
-      INNER JOIN "item_entities" it ON it."itemId" = bfi."itemId"
-      INNER JOIN "entities" t ON t.id = it."entityId"
-      WHERE t.normalized = ${filters.entity}
-        AND bfi."clusterId" IS NOT NULL
-    ),
-    filtered_items AS (
-      SELECT bfi.*
-      FROM base_filtered_items bfi
-      WHERE EXISTS (
-          SELECT 1
-          FROM "item_entities" it
-          INNER JOIN "entities" t ON t.id = it."entityId"
-          WHERE it."itemId" = bfi."itemId"
-            AND t.normalized = ${filters.entity}
-        )
-        OR bfi."clusterId" IN (SELECT id FROM entity_matched_clusters)
-    )`
-    : Prisma.sql`
+  const filteredItemsCte = Prisma.sql`
     filtered_items AS (
       SELECT *
       FROM base_filtered_items
@@ -1551,28 +1496,6 @@ function buildEntityFeedEntryCandidatesCte(
   if (filters.publishedRangeEnd) {
     clusterWhereClauses.push(Prisma.sql`cc."latestPublishedAt" <= ${filters.publishedRangeEnd.getTime()}`);
     singleWhereClauses.push(Prisma.sql`i."publishedAt" <= ${filters.publishedRangeEnd.getTime()}`);
-  }
-
-  if (filters.entity) {
-    clusterWhereClauses.push(Prisma.sql`
-      EXISTS (
-        SELECT 1
-        FROM json_each(cc."feedEntitiesJson") entity
-        WHERE CASE
-          WHEN json_valid(entity.value) THEN json_extract(entity.value, '$.normalized')
-          ELSE entity.value
-        END = ${filters.entity}
-      )
-    `);
-    singleWhereClauses.push(Prisma.sql`
-      EXISTS (
-        SELECT 1
-        FROM "item_entities" it
-        INNER JOIN "entities" t ON t.id = it."entityId"
-        WHERE it."itemId" = i.id
-          AND t.normalized = ${filters.entity}
-      )
-    `);
   }
 
   return Prisma.sql`

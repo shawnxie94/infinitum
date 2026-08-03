@@ -22,7 +22,6 @@ type ResolvedFeedRequest = {
 const ADVANCED_FILTER_KEYS = [
   "sourceId",
   "title",
-  "entity",
   "publishedStart",
   "publishedEnd",
   "entryId",
@@ -80,7 +79,6 @@ export function resolveFeedRequest(searchParams: SearchParamSource, now = new Da
   const groupIdParam = getSearchParamValue(searchParams, "groupId");
   const sourceIdParam = getSearchParamValue(searchParams, "sourceId");
   const titleParam = getSearchParamValue(searchParams, "title");
-  const entityParam = getSearchParamValue(searchParams, "entity");
   const entryIdParam = getSearchParamValue(searchParams, "entryId");
   const entryTypeParam = getSearchParamValue(searchParams, "entryType");
   const entryKeysParam = getSearchParamValues(searchParams, "entryKeys");
@@ -97,7 +95,6 @@ export function resolveFeedRequest(searchParams: SearchParamSource, now = new Da
         groupId: normalizeFeedFilterId(groupIdParam),
         sourceId: normalizeFeedFilterId(sourceIdParam),
         title: titleParam?.trim() ? titleParam.trim() : null,
-        entity: normalizeFeedFilterId(entityParam),
         entryId: normalizeFeedFilterId(entryIdParam),
         entryType: entryTypeParam === "single" || entryTypeParam === "cluster" ? entryTypeParam : null,
         entryKeys: normalizeFeedEntryKeys(entryKeysParam),

@@ -159,7 +159,6 @@ export function resolveFeedFilters(
     groupId: normalizeFeedFilterId(input.groupId),
     sourceId: normalizeFeedFilterId(input.sourceId),
     title: input.title?.trim() ? input.title.trim() : null,
-    entity: normalizeFeedFilterId(input.entity),
     entryId: normalizeFeedFilterId(input.entryId),
     entryType: input.entryType === "single" || input.entryType === "cluster" ? input.entryType : null,
     entryKeys: normalizeFeedEntryKeys(input.entryKeys),
