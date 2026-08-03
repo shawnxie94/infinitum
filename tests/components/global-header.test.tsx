@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +21,9 @@ afterEach(() => {
   refreshMock.mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  window.localStorage.clear();
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.removeAttribute("data-font-size");
 });
 
 describe("GlobalHeader", () => {
@@ -161,5 +164,37 @@ describe("GlobalHeader", () => {
     expect(screen.getByRole("button", { name: "RSS" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "GitHub" }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: "登录" }).length).toBeGreaterThan(0);
+  });
+
+  it("renders font size presets and persists the selected size", async () => {
+    const user = userEvent.setup();
+
+    render(<GlobalHeader activeNav="home" isAdmin={false} />);
+
+    const toggle = screen.getByRole("button", { name: "调整字体大小" });
+    await user.click(toggle);
+
+    const menu = toggle.nextElementSibling as HTMLElement | null;
+    expect(menu).not.toBeNull();
+
+    expect(within(menu!).getByRole("button", { name: "小" })).toBeInTheDocument();
+    expect(within(menu!).getByRole("button", { name: "中" })).toBeInTheDocument();
+    expect(within(menu!).getByRole("button", { name: "大" })).toBeInTheDocument();
+    expect(within(menu!).getByRole("button", { name: "超大" })).toBeInTheDocument();
+
+    await user.click(within(menu!).getByRole("button", { name: "大" }));
+
+    expect(window.localStorage.getItem("font-size")).toBe("lg");
+    expect(document.documentElement.getAttribute("data-font-size")).toBe("lg");
+  });
+
+  it("restores the saved font size preference on mount", async () => {
+    window.localStorage.setItem("font-size", "xl");
+
+    render(<GlobalHeader activeNav="home" isAdmin={false} />);
+
+    await screen.findByRole("button", { name: "调整字体大小" });
+
+    expect(document.documentElement.getAttribute("data-font-size")).toBe("xl");
   });
 });
