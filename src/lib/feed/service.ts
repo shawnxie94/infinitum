@@ -34,7 +34,7 @@ function serializeFeedFilters(filters: FeedFiltersInput) {
 }
 
 function serializeFeedPagination(pagination: FeedPaginationInput) {
-  return `${pagination.page}:${pagination.size}:${pagination.includePopularEntities === false ? "without-entities" : "with-entities"}`;
+  return `${pagination.page}:${pagination.size}`;
 }
 
 function serializeFetchRunCacheVersion(run: Awaited<ReturnType<typeof getLatestFetchRun>>) {

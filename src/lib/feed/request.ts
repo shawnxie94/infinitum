@@ -16,7 +16,6 @@ type ResolvedFeedRequest = {
   pagination: {
     page: number;
     size: number;
-    includePopularEntities: boolean;
   };
 };
 
@@ -32,7 +31,7 @@ const ADVANCED_FILTER_KEYS = [
 ] as const;
 const CREATED_TIME_FILTER_KEYS = ["range", "start", "end"] as const;
 
-function getSearchParamValue(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size" | "includeEntities") {
+function getSearchParamValue(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size") {
   if (searchParams instanceof URLSearchParams) {
     return searchParams.get(key) ?? undefined;
   }
@@ -41,7 +40,7 @@ function getSearchParamValue(searchParams: SearchParamSource, key: keyof FeedFil
   return Array.isArray(value) ? value[0] : value;
 }
 
-function getSearchParamValues(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size" | "includeEntities") {
+function getSearchParamValues(searchParams: SearchParamSource, key: keyof FeedFilters | "page" | "size") {
   if (searchParams instanceof URLSearchParams) {
     return searchParams.getAll(key);
   }
@@ -108,7 +107,6 @@ export function resolveFeedRequest(searchParams: SearchParamSource, now = new Da
     pagination: {
       page: parsePage(getSearchParamValue(searchParams, "page")),
       size: parsePageSize(getSearchParamValue(searchParams, "size")),
-      includePopularEntities: getSearchParamValue(searchParams, "includeEntities") !== "false",
     },
   };
 }

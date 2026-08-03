@@ -88,7 +88,6 @@ import type {
   FeedPagination,
   FeedRange,
   FeedSort,
-  FeedEntityOption,
   FetchRunSnapshot,
 } from "@/lib/feed/types";
 import { DEFAULT_FEED_PAGE_SIZE, FEED_PAGE_SIZE_OPTIONS } from "@/lib/feed/types";
@@ -180,107 +179,6 @@ function GroupBadge({ group }: { group: FeedGroupBadge | null | undefined }) {
   );
 }
 
-const ENTITY_TONES = [
-  { bg: "#ecfeff", border: "#06b6d4", text: "#0e7490", active: "#0891b2" },
-  { bg: "#f0fdf4", border: "#22c55e", text: "#15803d", active: "#16a34a" },
-  { bg: "#fff7ed", border: "#f97316", text: "#c2410c", active: "#ea580c" },
-  { bg: "#f5f3ff", border: "#8b5cf6", text: "#6d28d9", active: "#7c3aed" },
-  { bg: "#fef2f2", border: "#ef4444", text: "#b91c1c", active: "#dc2626" },
-  { bg: "#eff6ff", border: "#3b82f6", text: "#1d4ed8", active: "#2563eb" },
-  { bg: "#f0fdfa", border: "#14b8a6", text: "#0f766e", active: "#0d9488" },
-  { bg: "#fdf4ff", border: "#d946ef", text: "#a21caf", active: "#c026d3" },
-  { bg: "#fff1f2", border: "#fb7185", text: "#be123c", active: "#e11d48" },
-  { bg: "#f7fee7", border: "#84cc16", text: "#4d7c0f", active: "#65a30d" },
-  { bg: "#f8fafc", border: "#64748b", text: "#334155", active: "#475569" },
-  { bg: "#eef2ff", border: "#6366f1", text: "#4338ca", active: "#4f46e5" },
-  { bg: "#fffbeb", border: "#f59e0b", text: "#b45309", active: "#d97706" },
-  { bg: "#faf5ff", border: "#a855f7", text: "#7e22ce", active: "#9333ea" },
-  { bg: "#f0f9ff", border: "#0ea5e9", text: "#0369a1", active: "#0284c7" },
-  { bg: "#fefce8", border: "#eab308", text: "#a16207", active: "#ca8a04" },
-  { bg: "#f1f5f9", border: "#475569", text: "#1e293b", active: "#334155" },
-  { bg: "#ecfdf5", border: "#10b981", text: "#047857", active: "#059669" },
-  { bg: "#fdf2f8", border: "#ec4899", text: "#be185d", active: "#db2777" },
-  { bg: "#f4f4f5", border: "#71717a", text: "#3f3f46", active: "#52525b" },
-];
-const POPULAR_ENTITY_DISPLAY_LIMIT = 32;
-type EntityButtonStyle = CSSProperties & {
-  "--entity-accent": string;
-  "--entity-bg": string;
-  "--entity-bg-hover": string;
-  "--entity-border": string;
-  "--entity-border-hover": string;
-  "--entity-text": string;
-  "--entity-active-bg": string;
-  "--entity-active-border": string;
-  "--entity-active-text": string;
-};
-
-function getEntityToneKey(value: string) {
-  let hash = 2166136261;
-  for (const char of value) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return Math.abs(hash) % ENTITY_TONES.length;
-}
-
-const MAX_ENTITY_DISPLAY_LENGTH = 10;
-
-function getEntityDisplayName(value: string) {
-  return value.length > MAX_ENTITY_DISPLAY_LENGTH
-    ? `${value.slice(0, MAX_ENTITY_DISPLAY_LENGTH)}…`
-    : value;
-}
-
-function getEntityButtonStyle(option: FeedEntityOption): EntityButtonStyle {
-  const tone = ENTITY_TONES[getEntityToneKey(option.normalized)] ?? ENTITY_TONES[0];
-
-  return {
-    "--entity-accent": tone.border,
-    "--entity-bg": tone.bg,
-    "--entity-bg-hover": `color-mix(in srgb, ${tone.border} 14%, #ffffff)`,
-    "--entity-border": `${tone.border}66`,
-    "--entity-border-hover": `${tone.border}99`,
-    "--entity-text": tone.text,
-    "--entity-active-bg": tone.active,
-    "--entity-active-border": tone.active,
-    "--entity-active-text": "#ffffff",
-  };
-}
-
-function PopularEntityButton({
-  option,
-  isActive,
-  disabled,
-  onSelect,
-}: {
-  option: FeedEntityOption;
-  isActive: boolean;
-  disabled: boolean;
-  onSelect: (entity: string) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(option.normalized)}
-      disabled={disabled}
-      aria-pressed={isActive}
-      aria-label={`筛选实体：${option.name}，${option.count} 条`}
-      title={`${option.name} ${option.count}`}
-      style={getEntityButtonStyle(option)}
-      className={cx(
-        "popular-entity-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold transition",
-        "hover:shadow-[var(--shadow-sm)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]",
-        "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none",
-        isActive ? "shadow-[var(--shadow-sm)]" : "",
-      )}
-    >
-      <span>{getEntityDisplayName(option.name)}</span>
-      <span className="shrink-0 text-[11px] font-bold opacity-75">{option.count}</span>
-    </button>
-  );
-}
-
 const READING_PROGRESS_STORAGE_KEY = "infinitum.feed.readingProgress.v1";
 
 type ReadingProgress = {
@@ -290,11 +188,6 @@ type ReadingProgress = {
   page: number;
   size: number;
   updatedAt: string;
-};
-
-type PopularEntityLayoutRow = {
-  keys: string[];
-  shouldDistribute: boolean;
 };
 
 function buildReadingProgressFilterKey(query: FeedQueryState) {
@@ -519,7 +412,6 @@ export function FeedPanel({
   availableGroups = [],
   initialGroupTotalCount,
   availableSources = [],
-  popularEntities: initialPopularEntities = [],
   initialHeaderLinks = [],
 }: FeedPanelProps) {
   const router = useRouter();
@@ -543,9 +435,6 @@ export function FeedPanel({
   const [entryKeys, setEntryKeys] = useState<FeedEntryKey[]>(initialEntryKeys);
   const [status, setStatus] = useState<FetchRunSnapshot | null>(initialStatus);
   const [groups, setGroups] = useState<FeedGroupOption[]>(availableGroups);
-  const [popularEntities, setPopularEntities] = useState<FeedEntityOption[]>(
-    initialPopularEntities,
-  );
   const isLgUp = useMinWidth("(min-width: 1024px)", true);
   const [groupTotalCount, setGroupTotalCount] = useState<number>(
     initialGroupTotalCount ?? fallbackInitialPagination.total,
@@ -571,14 +460,12 @@ export function FeedPanel({
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(
     Boolean(initialStartDate || initialEndDate || initialPublishedStartDate || initialPublishedEndDate || initialSourceId || initialTitle),
   );
-  const [popularEntityLayoutRows, setPopularEntityLayoutRows] = useState<PopularEntityLayoutRow[]>([]);
   const [readingProgress, setReadingProgress] = useState<ReadingProgress | null>(null);
   const [isReadingProgressHidden, setIsReadingProgressHidden] = useState(false);
   const [pendingRestoreEntryId, setPendingRestoreEntryId] = useState<string | null>(null);
   const progressWriteTimerRef = useRef<number | null>(null);
   const lastSavedProgressRef = useRef<string | null>(null);
   const pendingScrollToTopRef = useRef(false);
-  const popularEntityListRef = useRef<HTMLDivElement | null>(null);
   const initialQuery: FeedQueryState = {
     range: initialRange,
     sort: initialSort,
@@ -663,7 +550,7 @@ export function FeedPanel({
     }
 
     if (entity) {
-      filters.push(`实体：${popularEntities.find((option) => option.normalized === entity)?.name ?? entity}`);
+      filters.push(`实体：${entity}`);
     }
 
     if (entryKeys.length > 0) {
@@ -678,7 +565,6 @@ export function FeedPanel({
     entryKeys.length,
     groupId,
     isLgUp,
-    popularEntities,
     range,
     sort,
     sourceId,
@@ -689,72 +575,7 @@ export function FeedPanel({
     entity,
     titleFilter,
   ]);
-  const visiblePopularEntities = useMemo(() => {
-    return popularEntities.slice(0, POPULAR_ENTITY_DISPLAY_LIMIT);
-  }, [popularEntities]);
 
-  useEffect(() => {
-    const element = popularEntityListRef.current;
-
-    if (!element || visiblePopularEntities.length === 0) {
-      setPopularEntityLayoutRows([]);
-      return;
-    }
-
-    const measure = () => {
-      const children = Array.from(element.children).filter(
-        (child): child is HTMLElement => child instanceof HTMLElement,
-      );
-      if (element.clientWidth <= 0 || children.length === 0) {
-        setPopularEntityLayoutRows([]);
-        return;
-      }
-
-      const computedStyle = window.getComputedStyle(element);
-      const gap = Number.parseFloat(computedStyle.columnGap || computedStyle.gap || "0") || 0;
-      const visibleRowTops = [...new Set(children.map((child) => child.offsetTop))].sort((left, right) => left - right).slice(0, 2);
-      const visibleRows = visibleRowTops.map((rowTop) => children.filter((child) => child.offsetTop === rowTop));
-      const nextRows = visibleRows.map((row) => {
-        const keys = row.map((child) => child.dataset.entityKey).filter((key): key is string => Boolean(key));
-        const rowWidth = row.reduce((sum, child) => sum + child.offsetWidth, 0)
-          + Math.max(0, row.length - 1) * gap;
-        const remainingWidth = element.clientWidth - rowWidth;
-        const lastChild = row.at(-1);
-        const nextChild = lastChild ? children[children.indexOf(lastChild) + 1] : undefined;
-        const nextEntityFitWidth = nextChild ? nextChild.offsetWidth + gap : 0;
-        const shouldDistribute = keys.length > 1 && nextEntityFitWidth > 0 && remainingWidth < nextEntityFitWidth;
-
-        return { keys, shouldDistribute };
-      });
-
-      setPopularEntityLayoutRows((current) => JSON.stringify(current) === JSON.stringify(nextRows) ? current : nextRows);
-    };
-
-    measure();
-
-    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-    resizeObserver?.observe(element);
-    window.addEventListener("resize", measure);
-
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [visiblePopularEntities]);
-
-  const visiblePopularEntityRows = useMemo(() => {
-    if (popularEntityLayoutRows.length === 0) {
-      return [];
-    }
-
-    const optionByKey = new Map(visiblePopularEntities.map((option) => [option.normalized, option]));
-    return popularEntityLayoutRows
-      .map((row) => ({
-        options: row.keys.map((key) => optionByKey.get(key)).filter((option): option is FeedEntityOption => Boolean(option)),
-        shouldDistribute: row.shouldDistribute,
-      }))
-      .filter((row) => row.options.length > 0);
-  }, [popularEntityLayoutRows, visiblePopularEntities]);
 
   const visibleClusterOptions = useMemo(() => {
     return clusterOptions.filter((cluster) => {
@@ -799,7 +620,6 @@ export function FeedPanel({
     size = pageSize,
     options?: {
       scrollToTop?: boolean;
-      includePopularEntities?: boolean;
       replaceUrl?: string;
     },
   ) => {
@@ -825,13 +645,9 @@ export function FeedPanel({
       const payload = await requestFeed(normalizedQuery, {
         page,
         size,
-        includePopularEntities: options?.includePopularEntities,
       });
       replaceFeedData(payload.items, payload.pagination);
       setGroups(payload.groups ?? availableGroups);
-      if (payload.popularEntities) {
-        setPopularEntities(payload.popularEntities);
-      }
       setGroupTotalCount(payload.groupTotalCount ?? payload.pagination.total);
       setRefreshFeedback(null);
 
@@ -863,7 +679,6 @@ export function FeedPanel({
 
     loadFeed(homeQuery, 1, DEFAULT_FEED_PAGE_SIZE, {
       scrollToTop: true,
-      includePopularEntities: true,
       replaceUrl: "/",
     });
   }, [loadFeed]);
@@ -976,13 +791,6 @@ export function FeedPanel({
     loadFeed(nextQuery, 1, pageSize, { scrollToTop: true });
   };
 
-  const toggleEntity = (nextEntity: string) => {
-    const normalizedEntity = normalizeOptionalId(nextEntity);
-    const selectedEntity = normalizedEntity && normalizedEntity !== entity ? normalizedEntity : null;
-    setEntity(selectedEntity);
-    loadFeed(buildQuery({ entity: selectedEntity }), 1, pageSize, { scrollToTop: true });
-  };
-
   const refresh = () => {
     if (!isAdmin || status?.status === "running" || queuedRefreshAt) {
       return;
@@ -1019,13 +827,9 @@ export function FeedPanel({
       const payload = await requestFeed(latestQueryRef.current, {
         page: currentPage,
         size: pageSize,
-        includePopularEntities: currentPage === 1,
       });
       replaceFeedData(payload.items, payload.pagination);
       setGroups(payload.groups ?? availableGroups);
-      if (payload.popularEntities) {
-        setPopularEntities(payload.popularEntities);
-      }
       setGroupTotalCount(payload.groupTotalCount ?? payload.pagination.total);
     });
   };
@@ -1717,9 +1521,6 @@ export function FeedPanel({
         setItems(feedPayload.items);
         setPagination(feedPayload.pagination);
         setGroups(feedPayload.groups ?? availableGroups);
-        if (feedPayload.popularEntities) {
-          setPopularEntities(feedPayload.popularEntities);
-        }
         setGroupTotalCount(feedPayload.groupTotalCount ?? feedPayload.pagination.total);
         resetExpandedClusterState();
         setRefreshFeedback({
@@ -1746,7 +1547,7 @@ export function FeedPanel({
     if (!FEED_PAGE_SIZE_OPTIONS.includes(nextSize as (typeof FEED_PAGE_SIZE_OPTIONS)[number])) {
       return;
     }
-    loadFeed(latestQueryRef.current, 1, nextSize, { scrollToTop: true, includePopularEntities: false });
+    loadFeed(latestQueryRef.current, 1, nextSize, { scrollToTop: true });
   };
 
   const handleJumpToPage = () => {
@@ -1762,7 +1563,7 @@ export function FeedPanel({
       return;
     }
 
-    loadFeed(latestQueryRef.current, normalizedPage, pageSize, { scrollToTop: true, includePopularEntities: false });
+    loadFeed(latestQueryRef.current, normalizedPage, pageSize, { scrollToTop: true });
   };
 
   const resumeReadingProgress = () => {
@@ -1787,7 +1588,7 @@ export function FeedPanel({
       }
     }
 
-    loadFeed(latestQueryRef.current, restoredPage, readingProgress.size, { includePopularEntities: false });
+    loadFeed(latestQueryRef.current, restoredPage, readingProgress.size, {  });
   };
 
   const neutralBadgeClassName =
@@ -1844,69 +1645,6 @@ export function FeedPanel({
       }
     >
       <section className="grid w-full min-w-0 gap-4">
-        {visiblePopularEntities.length > 0 ? (
-          <section
-            role="region"
-            aria-label="热门实体"
-            className="hidden w-full min-w-0 lg:block"
-          >
-            <div className="relative w-full min-w-0">
-              <div
-                ref={popularEntityListRef}
-                aria-hidden="true"
-                className="pointer-events-none invisible absolute inset-x-0 top-0 flex w-full min-w-0 flex-wrap items-center justify-start gap-1.5 overflow-visible"
-              >
-                {visiblePopularEntities.map((option) => (
-                  <span
-                    key={option.normalized}
-                    data-entity-key={option.normalized}
-                    style={getEntityButtonStyle(option)}
-                    className="popular-entity-button inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border px-2 text-xs font-semibold"
-                  >
-                    <span>{getEntityDisplayName(option.name)}</span>
-                    <span className="shrink-0 text-[11px] font-bold opacity-75">{option.count}</span>
-                  </span>
-                ))}
-              </div>
-              {visiblePopularEntityRows.length === 0 ? (
-                <div className="flex max-h-[4.375rem] w-full min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
-                  {visiblePopularEntities.map((option) => (
-                    <PopularEntityButton
-                      key={option.normalized}
-                      option={option}
-                      isActive={option.normalized === entity}
-                      disabled={isPending}
-                      onSelect={toggleEntity}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="grid max-h-[4.375rem] w-full min-w-0 gap-1.5 overflow-hidden">
-                  {visiblePopularEntityRows.map((row, rowIndex) => (
-                    <div
-                      key={`popular-entity-row-${rowIndex}`}
-                      className={cx(
-                        "flex h-8 w-full min-w-0 items-center gap-1.5 overflow-hidden",
-                        row.shouldDistribute ? "lg:justify-between" : "justify-start",
-                      )}
-                    >
-                      {row.options.map((option) => (
-                        <PopularEntityButton
-                          key={option.normalized}
-                          option={option}
-                          isActive={option.normalized === entity}
-                          disabled={isPending}
-                          onSelect={toggleEntity}
-                        />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        ) : null}
-
         {isLgUp ? (
 <section
           role="region"
@@ -2712,8 +2450,7 @@ export function FeedPanel({
             onPageChange={(nextPage) =>
               loadFeed(latestQueryRef.current, nextPage, pageSize, {
                 scrollToTop: true,
-                includePopularEntities: false,
-              })}
+                              })}
             onPageSizeChange={handlePageSizeChange}
             disabled={isPending}
             nextLabel={isPending ? "加载中..." : "下一页"}

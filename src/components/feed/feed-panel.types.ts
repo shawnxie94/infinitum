@@ -9,7 +9,6 @@ import type {
   FeedRange,
   FeedSort,
   FeedSourceOption,
-  FeedEntityOption,
   FetchRunSnapshot,
 } from "@/lib/feed/types";
 import type { AdminHeaderLink } from "@/lib/settings/types";
@@ -36,7 +35,6 @@ export type FeedPanelProps = {
   availableGroups?: FeedGroupOption[];
   initialGroupTotalCount?: number;
   availableSources?: FeedSourceOption[];
-  popularEntities?: FeedEntityOption[];
   initialHeaderLinks?: AdminHeaderLink[];
 };
 

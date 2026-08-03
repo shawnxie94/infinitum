@@ -39,10 +39,4 @@ describe("feed request parsing", () => {
       .toEqual(["single:item-a", "cluster:cluster-a"]);
   });
 
-  it("allows callers to skip popular entity calculation", () => {
-    const now = new Date("2026-04-10T16:45:00.000Z");
-
-    expect(resolveFeedRequest({ includeEntities: "false" }, now).pagination.includePopularEntities).toBe(false);
-    expect(resolveFeedRequest({}, now).pagination.includePopularEntities).toBe(true);
-  });
 });

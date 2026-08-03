@@ -147,7 +147,6 @@ export function buildFeedSearch(
   pagination?: {
     page?: number;
     size?: number;
-    includePopularEntities?: boolean;
   },
 ): string {
   const search = new URLSearchParams();
@@ -207,10 +206,6 @@ export function buildFeedSearch(
 
   if (size !== DEFAULT_FEED_PAGE_SIZE) {
     search.set("size", String(size));
-  }
-
-  if (pagination?.includePopularEntities === false) {
-    search.set("includeEntities", "false");
   }
 
   return search.toString();

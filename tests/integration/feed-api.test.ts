@@ -259,7 +259,7 @@ describe("/api/feed", () => {
 
     const { GET } = await import("@/app/api/feed/route");
     const response = await GET(
-      new Request("http://localhost/api/feed?entryKeys=cluster:cluster-b&includeEntities=false"),
+      new Request("http://localhost/api/feed?entryKeys=cluster:cluster-b"),
     );
 
     const json = await response.json();
@@ -282,7 +282,7 @@ describe("/api/feed", () => {
     vi.useRealTimers();
   });
 
-  it("filters feed entries by entity and returns popular entities", async () => {
+  it("filters feed entries by entity", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
     await replaceItemEntities("item-a1", ["OpenAI", "AI Agent"]);
@@ -302,60 +302,7 @@ describe("/api/feed", () => {
       id: "cluster-a",
       title: "OpenAI Agent 发布",
     });
-    expect(json.popularEntities).toEqual([
-      { name: "AI Agent", normalized: "ai agent", count: 1 },
-      { name: "OpenAI", normalized: "openai", count: 1 },
-      { name: "Robotics", normalized: "robotics", count: 1 },
-    ]);
-    expect(json.popularEntities).toEqual(json.popularEntities);
-
-    vi.useRealTimers();
-  });
-
-  it("returns the same number of popular entities as the two-row homepage display cap can render", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
-
-    const source = await prisma.source.findFirstOrThrow();
-    const taggedItems: Prisma.ItemCreateManyInput[] = Array.from({ length: 40 }, (_, index) => {
-      const itemNumber = String(index + 1).padStart(2, "0");
-
-      return {
-        id: `popular-entity-item-${itemNumber}`,
-        sourceId: source.id,
-        originalUrl: `https://api.example.com/popular-entity-${itemNumber}`,
-        canonicalUrl: `https://api.example.com/popular-entity-${itemNumber}`,
-        urlHash: `popular-entity-hash-${itemNumber}`,
-        originalTitle: `Popular Entity ${itemNumber}`,
-        translatedTitle: `热门标签 ${itemNumber}`,
-        author: "Author Tags",
-        publishedAt: new Date("2026-04-10T07:00:00.000Z"),
-        summaryText: `热门标签摘要 ${itemNumber}`,
-        status: "processed",
-        moderationStatus: "allowed",
-        qualityScore: 70,
-        qualityRationale: "热门标签测试",
-        language: "en",
-        createdAt: new Date(`2026-04-10T07:${itemNumber}:00.000Z`),
-      };
-    });
-
-    await prisma.item.createMany({ data: taggedItems });
-    await Promise.all(
-      taggedItems.map((_, index) => {
-        const itemNumber = String(index + 1).padStart(2, "0");
-        return replaceItemEntities(`popular-entity-item-${itemNumber}`, [`Entity ${itemNumber}`]);
-      }),
-    );
-
-    const { GET } = await import("@/app/api/feed/route");
-    const response = await GET(
-      new Request("http://localhost/api/feed?range=7d"),
-    );
-    const json = await response.json();
-
-    expect(json.popularEntities).toHaveLength(32);
-    expect(json.popularEntities).toEqual(json.popularEntities);
+    expect(json).not.toHaveProperty("popularEntities");
 
     vi.useRealTimers();
   });
@@ -381,23 +328,6 @@ describe("/api/feed", () => {
     vi.useRealTimers();
   });
 
-  it("skips popular entities when the feed request opts out", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
-    await replaceItemEntities("item-a1", ["OpenAI", "AI Agent"]);
-
-    const { GET } = await import("@/app/api/feed/route");
-    const response = await GET(
-      new Request("http://localhost/api/feed?range=7d&includeEntities=false"),
-    );
-    const json = await response.json();
-
-    expect(json.items.length).toBeGreaterThan(0);
-    expect(json).not.toHaveProperty("popularEntities");
-    expect(json).not.toHaveProperty("popularEntities");
-
-    vi.useRealTimers();
-  });
 
   it("omits aggregation parent metadata from the public feed list", async () => {
     vi.useFakeTimers();

@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { FeedPanel } from "@/components/feed/feed-panel";
-import type { FeedEntryDTO, FeedEntityOption, FeedGroupOption, FeedRange, FeedSort, FeedSourceOption } from "@/lib/feed/types";
+import type { FeedEntryDTO, FeedGroupOption, FeedRange, FeedSort, FeedSourceOption } from "@/lib/feed/types";
 
 type TestingRenderParameters = Parameters<typeof testingRender>;
 
@@ -638,261 +638,6 @@ describe("FeedPanel", () => {
       expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=today&sort=time_desc&sourceId=source-ai");
     });
     expect(getSelectRoot("创建时间")).toHaveTextContent("当天");
-  });
-
-  it("keeps the current created time range when toggling a popular entity", async () => {
-    const user = userEvent.setup();
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
-      new Response(
-        JSON.stringify({
-          items: initialEntries,
-          nextCursor: null,
-          range: "today" satisfies FeedRange,
-          sort: "time_desc" satisfies FeedSort,
-          start: null,
-          end: null,
-          entity: "ios",
-          popularEntities: [{ name: "iOS", normalized: "ios", count: 5 }],
-        }),
-      ),
-    );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(
-      <FeedPanel
-        initialItems={initialEntries}
-        initialRange="today"
-        initialCreatedRangeExplicit={false}
-        initialSort="time_desc"
-        initialStartDate={null}
-        initialEndDate={null}
-        initialNextCursor={null}
-        initialStatus={null}
-        isAdmin={false}
-        popularEntities={[{ name: "iOS", normalized: "ios", count: 5 }]}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "筛选实体：iOS，5 条" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=today&sort=time_desc&entity=ios");
-    });
-    expect(getSelectRoot("创建时间")).toHaveTextContent("当天");
-  });
-
-  it("resets the feed to the initial home state from the active home nav after filtering by entity", async () => {
-    const user = userEvent.setup();
-    window.history.replaceState(null, "", "/");
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [
-              {
-                ...initialEntries[1],
-                id: "item-tagged-ios",
-                title: "iOS 标签内容",
-              },
-            ],
-            pagination: { page: 1, size: 50, total: 1, totalPages: 1 },
-            nextCursor: null,
-            range: "today" satisfies FeedRange,
-            sort: "time_desc" satisfies FeedSort,
-            start: null,
-            end: null,
-            publishedStart: null,
-            publishedEnd: null,
-            groupId: null,
-            sourceId: null,
-            title: null,
-            entity: "ios",
-            popularEntities: [{ name: "iOS", normalized: "ios", count: 5 }],
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            items: [
-              {
-                ...initialEntries[1],
-                id: "item-home-default",
-                title: "主页初始内容",
-              },
-            ],
-            pagination: { page: 1, size: 50, total: 1, totalPages: 1 },
-            nextCursor: null,
-            range: "today" satisfies FeedRange,
-            sort: "time_desc" satisfies FeedSort,
-            start: null,
-            end: null,
-            publishedStart: null,
-            publishedEnd: null,
-            groupId: null,
-            sourceId: null,
-            title: null,
-            entity: null,
-            popularEntities: [{ name: "iOS", normalized: "ios", count: 5 }],
-          }),
-        ),
-      );
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    render(
-      <FeedPanel
-        initialItems={initialEntries}
-        initialRange="today"
-        initialCreatedRangeExplicit={false}
-        initialSort="time_desc"
-        initialStartDate={null}
-        initialEndDate={null}
-        initialNextCursor={null}
-        initialStatus={null}
-        isAdmin={false}
-        popularEntities={[{ name: "iOS", normalized: "ios", count: 5 }]}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "筛选实体：iOS，5 条" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=today&sort=time_desc&entity=ios");
-    });
-    expect(window.location.search).toBe("?range=today&sort=time_desc&entity=ios");
-    expect(await screen.findByText("iOS 标签内容")).toBeInTheDocument();
-    expect(screen.getByText("实体：iOS")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "筛选实体：iOS，5 条" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(screen.getByRole("link", { name: "主页" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=today&sort=time_desc");
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(window.location.pathname).toBe("/");
-    expect(window.location.search).toBe("");
-    expect(await screen.findByText("主页初始内容")).toBeInTheDocument();
-    expect(screen.queryByText("实体：iOS")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "筛选实体：iOS，5 条" })).toHaveAttribute("aria-pressed", "false");
-  });
-
-  it("renders enough popular entities for the two-row desktop strip", () => {
-    const popularEntities: FeedEntityOption[] = Array.from({ length: 34 }, (_, index) => {
-      const entityNumber = index + 1;
-
-      return {
-        name: `Entity ${entityNumber}`,
-        normalized: `entity-${entityNumber}`,
-        count: 100 - index,
-      };
-    });
-
-    render(
-      <FeedPanel
-        initialItems={initialEntries}
-        initialRange="today"
-        initialCreatedRangeExplicit={false}
-        initialSort="time_desc"
-        initialStartDate={null}
-        initialEndDate={null}
-        initialNextCursor={null}
-        initialStatus={null}
-        isAdmin={false}
-        popularEntities={popularEntities}
-      />,
-    );
-
-    const entityButtons = screen.getAllByRole("button", { name: /筛选实体：/ });
-    const popularRegion = screen.getByRole("region", { name: "热门实体" });
-
-    expect(entityButtons).toHaveLength(32);
-    expect(screen.getByRole("button", { name: "筛选实体：Entity 32，69 条" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "筛选实体：Entity 33，68 条" })).not.toBeInTheDocument();
-    expect(entityButtons[0]?.parentElement).not.toHaveClass("lg:justify-between");
-    expect(popularRegion.className).toContain("hidden");
-    expect(popularRegion.className).toContain("lg:block");
-  });
-
-  it("distributes a popular entity row when the next actual entity does not fit", async () => {
-    const popularEntities: FeedEntityOption[] = [
-      { name: "开源", normalized: "open-source", count: 29 },
-      { name: "Agent", normalized: "agent", count: 21 },
-      { name: "Anthropic", normalized: "anthropic", count: 17 },
-      { name: "OpenAI", normalized: "openai", count: 14 },
-      { name: "大模型", normalized: "large-model", count: 12 },
-      { name: "Meta", normalized: "meta", count: 10 },
-      { name: "字节跳动", normalized: "bytedance", count: 10 },
-      { name: "AI", normalized: "ai", count: 8 },
-      { name: "豆包", normalized: "doubao", count: 8 },
-      { name: "Google", normalized: "google", count: 7 },
-      { name: "AI安全", normalized: "ai-safety", count: 6 },
-      { name: "AI编程", normalized: "ai-programming", count: 6 },
-      { name: "Microsoft", normalized: "microsoft", count: 6 },
-    ];
-    const entityWidths = new Map<string, number>([
-      ["open-source", 59],
-      ["agent", 65],
-      ["anthropic", 89],
-      ["openai", 71],
-      ["large-model", 71],
-      ["meta", 59],
-      ["bytedance", 83],
-      ["ai", 42],
-      ["doubao", 54],
-      ["google", 66],
-      ["ai-safety", 66],
-      ["ai-programming", 66],
-      ["microsoft", 84],
-    ]);
-    const entityOrder = new Map(popularEntities.map((entity, index) => [entity.normalized, index]));
-    const originalGetComputedStyle = window.getComputedStyle.bind(window);
-
-    vi.spyOn(window, "getComputedStyle").mockImplementation((element) => {
-      const computedStyle = originalGetComputedStyle(element);
-      if (element instanceof HTMLElement && element.getAttribute("aria-hidden") === "true") {
-        Object.defineProperty(computedStyle, "columnGap", { configurable: true, value: "6px" });
-        Object.defineProperty(computedStyle, "gap", { configurable: true, value: "6px" });
-      }
-
-      return computedStyle;
-    });
-    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function clientWidthMock(this: HTMLElement) {
-      return this.getAttribute("aria-hidden") === "true" ? 936 : 0;
-    });
-    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function offsetWidthMock(this: HTMLElement) {
-      const entityKey = this.dataset.entityKey;
-      return entityKey ? entityWidths.get(entityKey) ?? 0 : 0;
-    });
-    vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function offsetTopMock(this: HTMLElement) {
-      const entityKey = this.dataset.entityKey;
-      const index = entityKey ? entityOrder.get(entityKey) : undefined;
-      return typeof index === "number" && index >= 12 ? 38 : 0;
-    });
-
-    render(
-      <FeedPanel
-        initialItems={initialEntries}
-        initialRange="today"
-        initialCreatedRangeExplicit={false}
-        initialSort="time_desc"
-        initialStartDate={null}
-        initialEndDate={null}
-        initialNextCursor={null}
-        initialStatus={null}
-        isAdmin={false}
-        popularEntities={popularEntities}
-      />,
-    );
-
-    const firstRow = screen.getByRole("button", { name: "筛选实体：AI编程，6 条" }).parentElement;
-
-    await waitFor(() => {
-      expect(firstRow).toHaveClass("lg:justify-between");
-    });
   });
 
   it("keeps the created time range when the user changes it before applying advanced filters", async () => {
@@ -2796,7 +2541,7 @@ describe("FeedPanel", () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = getFetchUrl(input);
 
-      if (url === "/api/feed?range=7d&sort=time_desc&page=2&includeEntities=false") {
+      if (url === "/api/feed?range=7d&sort=time_desc&page=2") {
         return new Response(
           JSON.stringify({
             items: [
@@ -2824,7 +2569,7 @@ describe("FeedPanel", () => {
         );
       }
 
-      if (url === "/api/feed?range=7d&sort=time_desc&size=100&includeEntities=false") {
+      if (url === "/api/feed?range=7d&sort=time_desc&size=100") {
         return new Response(
           JSON.stringify({
             items: [
@@ -2851,7 +2596,7 @@ describe("FeedPanel", () => {
         );
       }
 
-      if (url === "/api/feed?range=7d&sort=time_desc&page=3&size=100&includeEntities=false") {
+      if (url === "/api/feed?range=7d&sort=time_desc&page=3&size=100") {
         return new Response(
           JSON.stringify({
             items: [
@@ -2879,7 +2624,7 @@ describe("FeedPanel", () => {
         );
       }
 
-      if (url === "/api/feed?range=7d&sort=time_desc&page=2&size=100&includeEntities=false") {
+      if (url === "/api/feed?range=7d&sort=time_desc&page=2&size=100") {
         return new Response(
           JSON.stringify({
             items: [
@@ -2927,25 +2672,23 @@ describe("FeedPanel", () => {
         }}
         initialStatus={null}
         isAdmin={false}
-        popularEntities={[{ name: "OpenAI", normalized: "openai", count: 3 }]}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "下一页" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&page=2&includeEntities=false");
+      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&page=2");
     });
 
     expect(await screen.findByText("第二页标题")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "筛选实体：OpenAI，3 条" })).toBeInTheDocument();
     expect(screen.queryByText("OpenAI Agent 发布")).not.toBeInTheDocument();
     expect(screen.getByText("第 2 / 2 页")).toBeInTheDocument();
 
     await selectFilterOption(user, "每页显示", "100");
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&size=100&includeEntities=false");
+      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&size=100");
     });
 
     expect(await screen.findByText("分页尺寸第一页")).toBeInTheDocument();
@@ -2961,7 +2704,7 @@ describe("FeedPanel", () => {
     await user.click(screen.getByRole("button", { name: "跳转" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&page=3&size=100&includeEntities=false");
+      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&page=3&size=100");
     });
 
     expect(await screen.findByText("第三页标题")).toBeInTheDocument();
@@ -2970,7 +2713,7 @@ describe("FeedPanel", () => {
     await user.click(screen.getByRole("button", { name: "上一页" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&page=2&size=100&includeEntities=false");
+      expect(fetchMock).toHaveBeenCalledWith("/api/feed?range=7d&sort=time_desc&page=2&size=100");
     });
 
     expect(await screen.findByText("第二页百条模式")).toBeInTheDocument();

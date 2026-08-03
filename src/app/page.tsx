@@ -222,7 +222,6 @@ export default async function Home({ searchParams }: PageProps) {
         availableGroups={feed.groups}
         initialGroupTotalCount={feed.groupTotalCount}
         availableSources={feedFilterOptions.sources}
-        popularEntities={feed.popularEntities}
         initialHeaderLinks={headerLinks}
       />
     </main>

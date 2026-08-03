@@ -224,11 +224,6 @@ export type FeedSourceOption = {
   groupId: string | null;
 };
 
-export type FeedEntityOption = {
-  name: string;
-  normalized: string;
-  count: number;
-};
 
 export type SourceConfig = {
   name: string;

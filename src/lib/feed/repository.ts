@@ -18,7 +18,6 @@ import type {
   AggregationSplitParentDTO,
   ClusterDTO,
   FeedGroupOption,
-  FeedEntityOption,
   FeedClusterPreviewItemDTO,
   FeedEntryDTO,
   FeedFilters,
@@ -31,7 +30,6 @@ import type {
 } from "@/lib/feed/types";
 
 const DISPLAYABLE_MODERATION_STATUSES = ["allowed", "restored"] as const;
-const POPULAR_FEED_ENTITY_QUERY_LIMIT = 32;
 const isClusterEntityFilteringEnabled = () => process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED !== "false";
 const aggregationParentSelect = {
   id: true,
@@ -120,11 +118,6 @@ type FeedGroupCountRow = {
   count: bigint;
 };
 
-type FeedEntityCountRow = {
-  name: string;
-  normalized: string;
-  count: bigint;
-};
 
 type ClusterScoreStats = {
   aiScore: number;
@@ -1828,77 +1821,6 @@ async function listFeedGroupCounts(
   };
 }
 
-async function listPopularFeedEntities(
-  filters: FeedFilters & {
-    rangeStart: Date | null;
-    rangeEnd: Date | null;
-    publishedRangeStart: Date | null;
-    publishedRangeEnd: Date | null;
-  },
-  limit = POPULAR_FEED_ENTITY_QUERY_LIMIT,
-): Promise<FeedEntityOption[]> {
-  const effectiveFilters = {
-    ...filters,
-    entity: null,
-  };
-  const searchTerm = sanitizeFts5Query(filters.title);
-  const entryCandidatesCte = buildActiveFeedEntryCandidatesCte(effectiveFilters, searchTerm, {
-    includeDisplayFields: false,
-  });
-  const rows = await prisma.$queryRaw<FeedEntityCountRow[]>(Prisma.sql`
-    ${entryCandidatesCte},
-    entry_entity_matches AS (
-      SELECT DISTINCT
-        'single' AS "entryType",
-        ec.id AS "entryId",
-        t.name AS name,
-        t.normalized AS normalized
-      FROM entry_candidates ec
-      INNER JOIN "item_entities" it ON it."itemId" = ec.id
-      INNER JOIN "entities" t ON t.id = it."entityId"
-      WHERE ec.type = 'single'
-
-      UNION ALL
-
-      SELECT DISTINCT
-        'cluster' AS "entryType",
-        ec.id AS "entryId",
-        CASE
-          WHEN json_valid(entity.value) THEN COALESCE(json_extract(entity.value, '$.name'), json_extract(entity.value, '$.normalized'))
-          ELSE entity.value
-        END AS name,
-        CASE
-          WHEN json_valid(entity.value) THEN json_extract(entity.value, '$.normalized')
-          ELSE entity.value
-        END AS normalized
-      FROM entry_candidates ec
-      INNER JOIN "content_clusters" cc ON cc.id = ec.id
-      INNER JOIN json_each(cc."feedEntitiesJson") entity
-      WHERE ec.type = 'cluster'
-        AND CASE
-          WHEN json_valid(entity.value) THEN json_extract(entity.value, '$.normalized')
-          ELSE entity.value
-        END IS NOT NULL
-    )
-    SELECT
-      etm.name AS name,
-      etm.normalized AS normalized,
-      COUNT(*) AS count
-    FROM entry_entity_matches etm
-    WHERE etm.normalized IS NOT NULL
-      AND etm.normalized != ''
-    GROUP BY etm.name, etm.normalized
-    ORDER BY count DESC, etm.name ASC
-    LIMIT ${limit}
-  `);
-
-  return rows.map((row) => ({
-    name: row.name,
-    normalized: row.normalized,
-    count: toNumber(row.count),
-  }));
-}
-
 export async function listFeedItems(
   filters: FeedFilters & {
     rangeStart: Date | null;
@@ -1909,7 +1831,6 @@ export async function listFeedItems(
   pagination: {
     page: number;
     size: number;
-    includePopularEntities?: boolean;
   },
 ) {
   const searchTerm = sanitizeFts5Query(filters.title);
@@ -1940,11 +1861,9 @@ export async function listFeedItems(
       OFFSET ${pageOffset}
     `);
 
-  const shouldLoadPopularEntities = pagination.includePopularEntities !== false;
-  const [initialPageRows, groupCounts, popularEntities] = await Promise.all([
+  const [initialPageRows, groupCounts] = await Promise.all([
     queryPageRows(offset),
     listFeedGroupCounts(filters),
-    shouldLoadPopularEntities ? listPopularFeedEntities(filters) : Promise.resolve(undefined),
   ]);
   let pageRows = initialPageRows;
   const total = resolvePaginationTotalFromGroupCounts(groupCounts, filters.groupId);
@@ -2082,7 +2001,6 @@ export async function listFeedItems(
     items,
     groups: groupCounts.groups,
     groupTotalCount: groupCounts.totalCount,
-    popularEntities,
     pagination: normalizedPagination,
     nextCursor,
   };
