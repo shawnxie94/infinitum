@@ -50,6 +50,49 @@ describe("item processing recovery state", () => {
     ).toEqual(["aggregation_retriable"]);
   });
 
+  it("keeps aggregation parents with active split children out of re-split recovery", () => {
+    expect(
+      classifyItemProcessingRecoveryReasons({
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryStatus: "succeeded",
+        analysisStatus: "failed",
+        isAggregation: true,
+        aggregationParseStatus: "parsed",
+        hasActiveSplitChildren: true,
+        source: { aiParsingEnabled: true, aggregationDetectionEnabled: true },
+      }),
+    ).toEqual([]);
+
+    expect(
+      classifyItemProcessingRecoveryReasons({
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryStatus: "succeeded",
+        analysisStatus: "succeeded",
+        isAggregation: true,
+        aggregationParseStatus: "failed",
+        hasActiveSplitChildren: true,
+        source: { aiParsingEnabled: true, aggregationDetectionEnabled: true },
+      }),
+    ).toEqual([]);
+
+    // Summary failure still triggers recovery so the summary can be regenerated
+    // without re-splitting the parent.
+    expect(
+      classifyItemProcessingRecoveryReasons({
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryStatus: "failed",
+        analysisStatus: "succeeded",
+        isAggregation: true,
+        aggregationParseStatus: "parsed",
+        hasActiveSplitChildren: true,
+        source: { aiParsingEnabled: true, aggregationDetectionEnabled: true },
+      }),
+    ).toEqual(["summary_failed"]);
+  });
+
   it("classifies incomplete event signatures as recovery candidates", () => {
     expect(
       classifyItemProcessingRecoveryReasons({

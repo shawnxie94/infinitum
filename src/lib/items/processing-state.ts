@@ -49,6 +49,7 @@ export function classifyItemProcessingRecoveryReasons(item: {
   analysisStatus?: string | null;
   isAggregation?: boolean | null;
   aggregationParseStatus?: string | null;
+  hasActiveSplitChildren?: boolean;
   eventType?: string | null;
   eventSubject?: string | null;
   eventAction?: string | null;
@@ -74,12 +75,15 @@ export function classifyItemProcessingRecoveryReasons(item: {
     reasons.push("summary_failed");
   }
 
-  if (aiParsingEnabled && item.analysisStatus === "failed") {
+  // A successfully split aggregation parent already has live children; analysis
+  // failure alone must not drag it into a full re-analysis/re-split cycle.
+  if (aiParsingEnabled && item.analysisStatus === "failed" && !item.hasActiveSplitChildren) {
     reasons.push("analysis_failed");
   }
 
   if (
     aggregationDetectionEnabled &&
+    !item.hasActiveSplitChildren &&
     item.aggregationParseStatus &&
     (RETRIABLE_AGGREGATION_PARSE_STATUSES as readonly string[]).includes(item.aggregationParseStatus)
   ) {

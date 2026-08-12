@@ -59,6 +59,7 @@ function createFilteredItem(overrides: Partial<Record<string, unknown>> = {}) {
     moderationStatus: "filtered",
     moderationReason: "marketing",
     moderationDetail: "营销措辞明显",
+    filterReason: null,
     qualityScore: 18,
     qualityRationale: "低质量",
     canRegenerateTranslation: true,
@@ -228,6 +229,48 @@ describe("ContentReviewPanel", () => {
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent("内容已恢复。");
     });
+  });
+
+  it("labels reparsed parent children as 重拆下线 instead of 待复核", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = getFetchUrl(input);
+
+      if (url === "/api/admin/items?moderationStatus=filtered&page=1&pageSize=10") {
+        return new Response(
+          JSON.stringify({
+            items: [
+              createFilteredItem({
+                title: "被重拆下线的子事件",
+                moderationReason: null,
+                moderationDetail: null,
+                filterReason: "reparsed_parent",
+              }),
+            ],
+            total: 1,
+          }),
+        );
+      }
+
+      if (url === "/api/admin/clusters?page=1&pageSize=10&minItemCount=2") {
+        return new Response(
+          JSON.stringify({
+            clusters: [],
+          }),
+        );
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<ContentReviewPanel />);
+    await waitForLoaded();
+
+    const filteredTable = screen.getByRole("table");
+    expect(within(filteredTable).getByRole("button", { name: /被重拆下线的子事件/ })).toBeInTheDocument();
+    expect(within(filteredTable).getByText("重拆下线")).toBeInTheDocument();
+    expect(within(filteredTable).queryByText("待复核")).not.toBeInTheDocument();
   });
 
   it("filters the current review list by keyword", async () => {

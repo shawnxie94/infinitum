@@ -116,6 +116,7 @@ export type ReviewItemDTO = {
   moderationStatus: "allowed" | "filtered" | "restored";
   moderationReason: "marketing" | "low_quality" | "duplicate_noise" | "rule_filter" | "rule_blacklist" | "other" | null;
   moderationDetail: string | null;
+  filterReason: string | null;
   qualityScore: number;
   qualityRationale: string;
   canRegenerateTranslation?: boolean;

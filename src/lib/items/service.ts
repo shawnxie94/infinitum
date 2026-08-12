@@ -509,6 +509,11 @@ async function syncItemProcessingRetryState(itemId: string) {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
     include: {
+      _count: {
+        select: {
+          aggregationSplitChildren: true,
+        },
+      },
       source: {
         select: {
           aiParsingEnabled: true,
@@ -521,7 +526,10 @@ async function syncItemProcessingRetryState(itemId: string) {
     return;
   }
 
-  const reasons = classifyItemProcessingRecoveryReasons(item);
+  const reasons = classifyItemProcessingRecoveryReasons({
+    ...item,
+    hasActiveSplitChildren: item._count.aggregationSplitChildren > 0,
+  });
   if (reasons.length === 0) {
     await clearItemProcessingRetryState(itemId);
     return;
@@ -537,13 +545,21 @@ async function syncItemProcessingRetryState(itemId: string) {
 export async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Promise<ItemReanalyzeOutcome> {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
-    include: { source: true },
+    include: {
+      _count: {
+        select: {
+          aggregationSplitChildren: true,
+        },
+      },
+      source: true,
+    },
   });
 
   if (!item) {
     throw new Error("Item not found");
   }
 
+  const hasActiveSplitChildren = item._count.aggregationSplitChildren > 0;
   const aiProvider = await resolveAiProvider(options?.aiProvider);
   const understanding = await resolveItemUnderstanding(aiProvider, item);
   const summaryText = understanding.diagnostics.summaryValid
@@ -584,6 +600,11 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
   const aggregationIsValid = aggregationDetectionEnabled && understanding.diagnostics.aggregationValid;
 
   if (!understanding.diagnostics.analysisValid || (aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid)) {
+    const aggregationInvalid =
+      aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid;
+    // An aggregation parent with live split children keeps its split even when
+    // this understanding attempt fails to confirm the aggregation.
+    const preserveSplit = aggregationInvalid && hasActiveSplitChildren;
     const updated = await prisma.item.update({
       where: { id: item.id },
       data: {
@@ -592,13 +613,17 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
         ...(!understanding.diagnostics.analysisValid
           ? { analysisStatus: "failed" as const, aiProcessedAt: null }
           : {}),
-        ...(aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid
+        ...(aggregationInvalid
           ? {
               aggregationCheckedAt: new Date(),
-              aggregationParseStatus: AGGREGATION_PARSE_STATUS.failed,
+              ...(preserveSplit
+                ? {}
+                : { aggregationParseStatus: AGGREGATION_PARSE_STATUS.failed }),
             }
           : {}),
-        errorMessage: `统一条目理解部分字段无效：${failedFields.join(", ")}`,
+        errorMessage: preserveSplit
+          ? `统一条目理解部分字段无效：${failedFields.join(", ")}（聚合解析未确认，保留现有拆分）`
+          : `统一条目理解部分字段无效：${failedFields.join(", ")}`,
       },
       include: { source: true },
     });
@@ -677,6 +702,17 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     if (reparseResult.status === "failed") {
       invalidateFeedCache();
       invalidateDailyReportCache();
+      if (hasActiveSplitChildren) {
+        // The pre-reparse update marked the parent "detected"; when the re-split
+        // itself fails, the existing children are still the active split, so
+        // keep the parse state truthful instead of leaving it stuck retriable.
+        await prisma.item.update({
+          where: { id: item.id },
+          data: {
+            aggregationParseStatus: AGGREGATION_PARSE_STATUS.parsed,
+          },
+        });
+      }
       const updated = await prisma.item.findUniqueOrThrow({
         where: { id: item.id },
         include: { source: true },
@@ -689,6 +725,41 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
       affectedClusterIds.add(clusterId);
     }
     regularAggregationParseStatus = AGGREGATION_PARSE_STATUS.notAggregation;
+  }
+
+  if (hasActiveSplitChildren && !isAggregation) {
+    // New understanding did not confirm aggregation: keep the existing split
+    // children and parse state instead of retiring them, and only refresh the
+    // content fields that are still valid.
+    const nextStatus = moderationStatus === "filtered" ? "filtered" : "processed";
+    const updated = await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        translatedTitle:
+          shouldTranslateTitle(item.originalTitle)
+            ? understanding.translatedTitle?.trim() || item.originalTitle
+            : item.translatedTitle,
+        summaryText,
+        summaryStatus,
+        analysisStatus,
+        moderationStatus,
+        moderationReason: understanding.moderationReason,
+        moderationDetail: understanding.moderationDetail,
+        qualityScore: understanding.qualityScore,
+        qualityRationale: understanding.qualityRationale,
+        ...serializeEventSignature(understanding.eventSignature),
+        aiProcessedAt: analysisStatus === "succeeded" ? new Date() : null,
+        status: nextStatus,
+        aggregationCheckedAt: aggregationDetectionEnabled ? new Date() : null,
+        errorMessage: "统一条目理解未确认聚合，保留现有拆分",
+      },
+      include: { source: true },
+    });
+    await replaceItemEntitiesSafely(updated.id, []);
+    invalidateFeedCache();
+    await syncItemProcessingRetryState(item.id);
+
+    return { item: updated, failedFields };
   }
 
   const nextStatus = moderationStatus === "filtered" ? "filtered" : "processed";

@@ -176,6 +176,18 @@ function getReviewReasonLabel(reason: ReviewItemDTO["moderationReason"]) {
   return reviewReasonLabels[reason];
 }
 
+function getFilteredItemReasonLabel(item: ReviewItemDTO) {
+  if (item.filterReason === "reparsed_parent") {
+    return "重拆下线";
+  }
+  return getReviewReasonLabel(item.moderationReason);
+}
+
+const splitChildFilterReasonLabels: Record<string, string> = {
+  reparsed_parent: "重拆下线",
+  aggregation_split_cancelled: "拆分取消",
+};
+
 function getSplitStatusLabel(status: string | null) {
   return status ? splitStatusLabels[status] ?? status : "未知";
 }
@@ -312,7 +324,7 @@ function FilteredItemDetailModal({
             <div>
               <span className="text-[var(--text-3)]">过滤原因:</span>{" "}
               <StatusTag tone={reviewReasonTone[item.moderationReason ?? "other"]}>
-                {getReviewReasonLabel(item.moderationReason)}
+                {getFilteredItemReasonLabel(item)}
               </StatusTag>
             </div>
             <div>
@@ -645,7 +657,11 @@ function AggregationSplitDetailModal({
                     <span>{child.sourceName}</span>
                     <span>{formatDate(child.publishedAt)}</span>
                     <span>质量 {child.qualityScore}</span>
-                    <span>{child.filterReason ?? "未过滤"}</span>
+                    <span>
+                      {child.filterReason
+                        ? splitChildFilterReasonLabels[child.filterReason] ?? child.filterReason
+                        : "未过滤"}
+                    </span>
                   </div>
                   <p className="text-xs text-[var(--text-2)] leading-5 line-clamp-2">
                     {renderInlineMarkdown(child.summary || "暂无摘要")}
@@ -1898,7 +1914,7 @@ function ContentReviewContent({
                   </td>
                   <td className="px-4 py-3">
                     <StatusTag tone={reviewReasonTone[item.moderationReason ?? "other"]}>
-                      {getReviewReasonLabel(item.moderationReason)}
+                      {getFilteredItemReasonLabel(item)}
                     </StatusTag>
                   </td>
                   <td className="px-4 py-3 text-[var(--text-2)]">{item.qualityScore}</td>

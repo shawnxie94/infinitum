@@ -397,6 +397,12 @@ export async function processFeedItem({
       : existingItem;
   const author = getFeedItemAuthor(item);
   const isNew = !existing;
+  const hasActiveSplitChildren =
+    existing?.isAggregation === true && aggregationDetectionEnabled
+      ? (await prisma.aggregationSplitLink.count({
+          where: { parentItemId: existing.id },
+        })) > 0
+      : false;
   const resolvedPublishedAt = resolvePublishedAt({
     existing,
     incoming: publishedAt,
@@ -637,22 +643,34 @@ export async function processFeedItem({
       analysisFailed = !understanding.diagnostics.analysisValid;
 
       aggregationCheckedAt = aggregationDetectionEnabled ? new Date() : null;
+      // A parent with live split children keeps its split when this attempt
+      // fails to confirm the aggregation, instead of being re-marked retriable
+      // and dragged through another full re-split cycle.
+      const preserveExistingSplit =
+        hasActiveSplitChildren &&
+        aggregationDetectionEnabled &&
+        (!understanding.diagnostics.aggregationValid ||
+          !Boolean(moderationStatus !== "filtered" && understanding.aggregation.isAggregation));
       if (aggregationDetectionEnabled && understanding.diagnostics.aggregationValid) {
-        isAggregation = Boolean(
-          moderationStatus !== "filtered" && understanding.aggregation.isAggregation,
-        );
+        isAggregation = preserveExistingSplit
+          ? true
+          : Boolean(
+              moderationStatus !== "filtered" && understanding.aggregation.isAggregation,
+            );
       }
       aggregationParseStatus = aggregationDetectionEnabled
-        ? understanding.diagnostics.aggregationValid
-          ? isAggregation ? AGGREGATION_PARSE_STATUS.detected : AGGREGATION_PARSE_STATUS.notAggregation
-          : AGGREGATION_PARSE_STATUS.failed
+        ? preserveExistingSplit
+          ? AGGREGATION_PARSE_STATUS.parsed
+          : understanding.diagnostics.aggregationValid
+            ? isAggregation ? AGGREGATION_PARSE_STATUS.detected : AGGREGATION_PARSE_STATUS.notAggregation
+            : AGGREGATION_PARSE_STATUS.failed
         : null;
 
       if (aggregationDetectionEnabled && !understanding.diagnostics.aggregationValid) {
-        aggregationParseFailed = true;
+        aggregationParseFailed = !preserveExistingSplit;
       }
 
-      if (isAggregation) {
+      if (isAggregation && !preserveExistingSplit) {
         const events = understanding.aggregation.events;
         const preUpsertStartedAt = Date.now();
         const preUpsert = await upsertItem(
@@ -749,8 +767,10 @@ export async function processFeedItem({
       analysisFailed = true;
       if (aggregationDetectionEnabled) {
         aggregationCheckedAt = new Date();
-        aggregationParseStatus = AGGREGATION_PARSE_STATUS.failed;
-        aggregationParseFailed = true;
+        aggregationParseStatus = hasActiveSplitChildren
+          ? AGGREGATION_PARSE_STATUS.parsed
+          : AGGREGATION_PARSE_STATUS.failed;
+        aggregationParseFailed = !hasActiveSplitChildren;
       }
     }
 
@@ -884,6 +904,11 @@ export async function processFeedItem({
     const retryItem = await prisma.item.findUnique({
       where: { id: stored.id },
       include: {
+        _count: {
+          select: {
+            aggregationSplitChildren: true,
+          },
+        },
         source: {
           select: {
             aiParsingEnabled: true,
@@ -893,7 +918,10 @@ export async function processFeedItem({
       },
     });
     if (retryItem) {
-      const reasons = classifyItemProcessingRecoveryReasons(retryItem);
+      const reasons = classifyItemProcessingRecoveryReasons({
+        ...retryItem,
+        hasActiveSplitChildren: retryItem._count.aggregationSplitChildren > 0,
+      });
       if (reasons.length === 0) {
         if (retryItem.nextProcessingRetryAt || retryItem.lastProcessingError) {
           await clearItemProcessingRetryState(retryItem.id);

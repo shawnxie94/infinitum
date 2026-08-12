@@ -3,9 +3,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import { getDailyReportQualityMetrics } from "@/lib/daily-report/quality";
 
-const REPORT_DATE_A = "2026-05-10";
-const REPORT_DATE_B = "2026-05-11";
-const REPORT_DATE_C = "2026-05-12";
+function dateDaysAgo(days: number) {
+  const shifted = new Date();
+  shifted.setUTCDate(shifted.getUTCDate() - days);
+  return shifted.toISOString().slice(0, 10);
+}
+
+// Seed dates stay relative to "now" so the hardcoded values do not drift out of
+// the metrics date window (e.g. days: 90) as time passes.
+const REPORT_DATE_A = dateDaysAgo(3);
+const REPORT_DATE_B = dateDaysAgo(2);
+const REPORT_DATE_C = dateDaysAgo(1);
 
 function buildContent(overrides: {
   topCount: number;
@@ -47,8 +55,8 @@ async function createItem(sourceId: string, key: string, url: string) {
       canonicalUrl: url,
       urlHash: key,
       originalTitle: `Title for ${key}`,
-      publishedAt: new Date("2026-05-09T08:00:00.000Z"),
-      createdAt: new Date("2026-05-09T08:00:00.000Z"),
+      publishedAt: new Date(`${dateDaysAgo(4)}T08:00:00.000Z`),
+      createdAt: new Date(`${dateDaysAgo(4)}T08:00:00.000Z`),
       status: "processed",
       moderationStatus: "allowed",
       summaryText: "summary",

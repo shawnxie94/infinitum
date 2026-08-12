@@ -437,6 +437,8 @@ export async function retireAggregationChildItems(parentId: string): Promise<num
         data: {
           status: "filtered",
           moderationStatus: "filtered",
+          moderationReason: "other",
+          moderationDetail: "聚合重拆后下线：旧拆分结果已被新解析替换",
           filterReason: "reparsed_parent",
           errorMessage: null,
         },
@@ -457,6 +459,8 @@ export async function retireAggregationChildItems(parentId: string): Promise<num
       data: {
         status: "filtered",
         moderationStatus: "filtered",
+        moderationReason: "other",
+        moderationDetail: "聚合重拆后下线：旧拆分结果已被新解析替换",
         filterReason: "reparsed_parent",
         errorMessage: null,
       },

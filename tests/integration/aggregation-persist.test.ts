@@ -117,6 +117,64 @@ describe("aggregation child persistence", () => {
     ).toBe(1);
   });
 
+  it("retires dropped child items with a clear moderation reason", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Retire Roundup",
+        rssUrl: "https://retire-roundup.example.com/feed.xml",
+        siteUrl: "https://retire-roundup.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationDetectionEnabled: true,
+      },
+    });
+    const parent = await prisma.item.create({
+      data: {
+        sourceId: source.id,
+        originalUrl: "https://retire-roundup.example.com/2026-04-10",
+        canonicalUrl: "https://retire-roundup.example.com/2026-04-10",
+        urlHash: "retire-roundup-parent",
+        originalTitle: "2026-04-10 Retire Daily",
+        publishedAt: new Date("2026-04-10T08:00:00.000Z"),
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryText: "Daily roundup",
+        isAggregation: true,
+        aggregationParseStatus: "parsed",
+        aggregationCheckedAt: new Date("2026-04-10T09:00:00.000Z"),
+      },
+    });
+    const { childItemIds } = await persistAggregationChildItems({
+      sourceId: source.id,
+      parent,
+      publishedAt: parent.publishedAt,
+      events: [
+        {
+          eventType: "launch",
+          eventSubject: "MiniMax",
+          eventAction: "发布",
+          eventObject: "H3",
+          eventDate: "2026-04-10",
+          title: "MiniMax 发布 H3",
+          oneLiner: "MiniMax 发布 H3 视频生成模型",
+          qualityScore: 85,
+          sourceUrl: "https://news.example.com/minimax-h3",
+        },
+      ],
+    });
+
+    await expect(retireAggregationChildItems(parent.id)).resolves.toBe(1);
+
+    const retired = await prisma.item.findUniqueOrThrow({
+      where: { id: childItemIds[0] },
+    });
+    expect(retired.status).toBe("filtered");
+    expect(retired.moderationStatus).toBe("filtered");
+    expect(retired.moderationReason).toBe("other");
+    expect(retired.moderationDetail).toBe("聚合重拆后下线：旧拆分结果已被新解析替换");
+    expect(retired.filterReason).toBe("reparsed_parent");
+  });
+
   it("persists entities derived from aggregation child event fields", async () => {
     const source = await prisma.source.create({
       data: {

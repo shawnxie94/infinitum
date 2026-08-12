@@ -17,7 +17,7 @@ import {
   scheduleItemProcessingRetry,
   type ItemProcessingRecoveryReason,
 } from "@/lib/items/processing-state";
-import { reanalyzeItem } from "@/lib/items/service";
+import { reanalyzeItem, regenerateItemContent } from "@/lib/items/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 import {
   enqueueTaskRun,
@@ -33,6 +33,7 @@ type RecoveryCandidate = {
   clusterId: string | null;
   isAggregation: boolean;
   aggregationParseStatus: string | null;
+  hasActiveSplitChildren?: boolean;
   processingAttemptCount: number;
   summaryStatus: string;
   analysisStatus: string;
@@ -117,6 +118,11 @@ async function listRecoveryCandidates(now: Date): Promise<RecoveryCandidate[]> {
       eventAction: true,
       eventObject: true,
       eventDate: true,
+      _count: {
+        select: {
+          aggregationSplitChildren: true,
+        },
+      },
       source: {
         select: {
           aiParsingEnabled: true,
@@ -133,10 +139,17 @@ async function listRecoveryCandidates(now: Date): Promise<RecoveryCandidate[]> {
   });
 
   return rows
-    .map((row) => ({
-      ...row,
-      reasons: classifyItemProcessingRecoveryReasons(row),
-    }))
+    .map((row) => {
+      const hasActiveSplitChildren = row._count.aggregationSplitChildren > 0;
+      return {
+        ...row,
+        hasActiveSplitChildren,
+        reasons: classifyItemProcessingRecoveryReasons({
+          ...row,
+          hasActiveSplitChildren,
+        }),
+      };
+    })
     .filter((row) => row.reasons.length > 0)
     .slice(0, ITEM_PROCESSING_RECOVERY_BATCH_SIZE);
 }
@@ -289,12 +302,59 @@ export async function executeItemProcessingRecoveryTask(
       processedIds.add(candidate.id);
 
       try {
+        if (candidate.hasActiveSplitChildren) {
+          // Aggregation parents with live split children only need their
+          // summary regenerated; a full re-analysis would retire and rebuild
+          // the split on every flaky understanding response.
+          await regenerateItemContent(candidate.id, "summary", {
+            aiProvider: trackedAiProvider,
+          });
+          const refreshed = await prisma.item.findUniqueOrThrow({
+            where: { id: candidate.id },
+            include: {
+              _count: {
+                select: {
+                  aggregationSplitChildren: true,
+                },
+              },
+              source: {
+                select: {
+                  aiParsingEnabled: true,
+                  aggregationDetectionEnabled: true,
+                  aggregationEnabled: true,
+                },
+              },
+            },
+          });
+          const remaining = classifyItemProcessingRecoveryReasons({
+            ...refreshed,
+            hasActiveSplitChildren: refreshed._count.aggregationSplitChildren > 0,
+          });
+          if (remaining.length === 0) {
+            recoveredCount += 1;
+          } else {
+            await scheduleItemProcessingRetry({
+              itemId: candidate.id,
+              reasons: remaining,
+              attemptCount: candidate.processingAttemptCount,
+              now,
+            });
+          }
+          feedInvalidated = true;
+          continue;
+        }
+
         const outcome = await reanalyzeItem(candidate.id, {
           aiProvider: trackedAiProvider,
         });
         const refreshed = await prisma.item.findUniqueOrThrow({
           where: { id: candidate.id },
           include: {
+            _count: {
+              select: {
+                aggregationSplitChildren: true,
+              },
+            },
             source: {
               select: {
                 aiParsingEnabled: true,
@@ -304,7 +364,10 @@ export async function executeItemProcessingRecoveryTask(
             },
           },
         });
-        const remaining = classifyItemProcessingRecoveryReasons(refreshed);
+        const remaining = classifyItemProcessingRecoveryReasons({
+          ...refreshed,
+          hasActiveSplitChildren: refreshed._count.aggregationSplitChildren > 0,
+        });
 
         if (outcome.item.clusterId) {
           affectedClusterIds.add(outcome.item.clusterId);

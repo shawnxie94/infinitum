@@ -613,6 +613,7 @@ export function mapItemToReviewItem(item: ItemWithSource): ReviewItemDTO {
     moderationStatus: item.moderationStatus,
     moderationReason: item.moderationReason,
     moderationDetail: item.moderationDetail,
+    filterReason: item.filterReason,
     qualityScore: item.qualityScore,
     qualityRationale: item.qualityRationale,
     canRegenerateTranslation: shouldTranslateTitle(item.originalTitle),
