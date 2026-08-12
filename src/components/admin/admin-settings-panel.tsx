@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
   acceptBriefingPreferenceSuggestion,
-  dismissAllBriefingPreferenceSuggestions,
+  dismissBriefingPreferenceSuggestions,
   generateBriefingPreferenceSuggestions,
   importSourcesFromOpmlText,
   deleteHeaderLink,
@@ -228,7 +228,7 @@ function BriefingPreferenceSuggestionModal({
       footer={
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Button onClick={onDismissAll} variant="danger" disabled={isBusy || pendingCount === 0}>
-            全部忽略
+            忽略当前列表
           </Button>
           <div className="flex flex-wrap items-center justify-end gap-4">
             <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
@@ -1065,13 +1065,16 @@ export function AdminSettingsPanel({
   const dismissAllBriefingPreferenceSuggestionItems = () => {
     startTransition(async () => {
       try {
-        const dismissedCount = await dismissAllBriefingPreferenceSuggestions();
-        setBriefingPreferenceSuggestions([]);
+        const dismissedCount = await dismissBriefingPreferenceSuggestions(
+          briefingPreferenceSuggestions.map((item) => item.id),
+        );
+        const nextSuggestions = await listBriefingPreferenceSuggestions();
+        setBriefingPreferenceSuggestions(nextSuggestions);
         setBriefingPreferenceSuggestionPage(1);
         setBriefingPreferenceDismissAllConfirmOpen(false);
         showToast(`已忽略 ${dismissedCount} 条偏好建议。`, "success");
       } catch (error) {
-        showToast(error instanceof Error ? error.message : "全部忽略偏好建议失败。", "error");
+        showToast(error instanceof Error ? error.message : "忽略偏好建议失败。", "error");
       }
     });
   };
@@ -2392,7 +2395,7 @@ export function AdminSettingsPanel({
               <ModalShell
                 isOpen={briefingPreferenceDismissAllConfirmOpen}
                 onClose={() => setBriefingPreferenceDismissAllConfirmOpen(false)}
-                title="确认全部忽略"
+                title="确认忽略当前列表"
                 widthClassName="max-w-md"
                 bodyClassName="space-y-3 p-6"
                 footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
@@ -2410,13 +2413,13 @@ export function AdminSettingsPanel({
                       onClick={dismissAllBriefingPreferenceSuggestionItems}
                       disabled={isPending}
                     >
-                      全部忽略
+                      忽略当前列表
                     </Button>
                   </div>
                 }
               >
                 <p className="text-sm leading-6 text-[var(--text-2)]">
-                  确定要忽略全部待处理的偏好建议吗？忽略后不会写入事件偏好规则。
+                  确定要忽略当前列表中的 {briefingPreferenceSuggestions.length} 条待处理建议吗？忽略后不会写入事件偏好规则。
                 </p>
               </ModalShell>
 

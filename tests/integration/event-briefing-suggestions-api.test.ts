@@ -25,11 +25,12 @@ describe("/api/admin/settings/event-briefing/suggestions", () => {
     await prisma.briefingPreferenceConfig.deleteMany();
   });
 
-  it("dismisses all pending suggestions via the dismiss_all action", async () => {
+  it("dismisses only the provided suggestions via the dismiss_ids action", async () => {
     requireAdmin.mockResolvedValue(undefined);
     await prisma.briefingPreferenceSuggestion.createMany({
       data: [
         {
+          id: "suggestion-first",
           suggestionKey: "keyword:code",
           ruleType: "keyword",
           value: "code",
@@ -40,6 +41,7 @@ describe("/api/admin/settings/event-briefing/suggestions", () => {
           status: "pending",
         },
         {
+          id: "suggestion-second",
           suggestionKey: "keyword:security",
           ruleType: "keyword",
           value: "security",
@@ -50,6 +52,18 @@ describe("/api/admin/settings/event-briefing/suggestions", () => {
           status: "pending",
         },
         {
+          id: "suggestion-outside",
+          suggestionKey: "keyword:outside",
+          ruleType: "keyword",
+          value: "outside",
+          label: "outside",
+          suggestedWeight: 1,
+          confidence: 0.5,
+          reason: "不在本次忽略范围内的建议。",
+          status: "pending",
+        },
+        {
+          id: "suggestion-accepted",
           suggestionKey: "keyword:accepted",
           ruleType: "keyword",
           value: "accepted",
@@ -67,16 +81,24 @@ describe("/api/admin/settings/event-briefing/suggestions", () => {
     const response = await POST(
       new Request("http://localhost/api/admin/settings/event-briefing/suggestions", {
         method: "POST",
-        body: JSON.stringify({ action: "dismiss_all" }),
+        body: JSON.stringify({
+          action: "dismiss_ids",
+          suggestionIds: ["suggestion-first", "suggestion-second"],
+        }),
       }),
     );
     const json = await response.json();
 
     expect(response.status).toBe(200);
     expect(json.dismissedCount).toBe(2);
-    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBe(0);
+    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBe(1);
     expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "dismissed" } })).toBe(2);
     expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
+    expect(
+      await prisma.briefingPreferenceSuggestion.findUniqueOrThrow({
+        where: { id: "suggestion-outside" },
+      }),
+    ).toMatchObject({ status: "pending" });
   });
 
   it("keeps generating suggestions when the action body is absent", async () => {

@@ -382,12 +382,12 @@ export async function dismissBriefingPreferenceSuggestion(id: string) {
   return payload.suggestion;
 }
 
-export async function dismissAllBriefingPreferenceSuggestions() {
+export async function dismissBriefingPreferenceSuggestions(suggestionIds: string[]) {
   const payload = await requestAdminSettingsJson<BriefingPreferenceSuggestionsPayload>(
     "/api/admin/settings/event-briefing/suggestions",
     "POST",
-    { action: "dismiss_all" },
-    "全部忽略偏好建议失败。",
+    { action: "dismiss_ids", suggestionIds },
+    "忽略偏好建议失败。",
   );
 
   return payload.dismissedCount ?? 0;

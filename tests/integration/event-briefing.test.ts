@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   acceptBriefingPreferenceSuggestion,
-  dismissAllBriefingPreferenceSuggestions,
+  dismissBriefingPreferenceSuggestions,
   generateBriefingPreferenceSuggestions,
   recordCuratorBehavior,
 } from "@/lib/curator-behavior/service";
@@ -109,10 +109,11 @@ describe("event briefing service", () => {
     expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
   });
 
-  it("dismisses all pending briefing preference suggestions", async () => {
+  it("dismisses only the provided briefing preference suggestions", async () => {
     await prisma.briefingPreferenceSuggestion.createMany({
       data: [
         {
+          id: "suggestion-first",
           suggestionKey: "keyword:code",
           ruleType: "keyword",
           value: "code",
@@ -123,6 +124,7 @@ describe("event briefing service", () => {
           status: "pending",
         },
         {
+          id: "suggestion-second",
           suggestionKey: "keyword:security",
           ruleType: "keyword",
           value: "security",
@@ -133,6 +135,18 @@ describe("event briefing service", () => {
           status: "pending",
         },
         {
+          id: "suggestion-outside",
+          suggestionKey: "keyword:outside",
+          ruleType: "keyword",
+          value: "outside",
+          label: "outside",
+          suggestedWeight: 1,
+          confidence: 0.5,
+          reason: "不在本次忽略范围内的建议。",
+          status: "pending",
+        },
+        {
+          id: "suggestion-accepted",
           suggestionKey: "keyword:accepted",
           ruleType: "keyword",
           value: "accepted",
@@ -146,10 +160,20 @@ describe("event briefing service", () => {
       ],
     });
 
-    expect(await dismissAllBriefingPreferenceSuggestions()).toBe(2);
-    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBe(0);
+    expect(await dismissBriefingPreferenceSuggestions(["suggestion-first", "suggestion-second"])).toBe(2);
+    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBe(1);
     expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "dismissed" } })).toBe(2);
     expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
+    expect(
+      await prisma.briefingPreferenceSuggestion.findUniqueOrThrow({
+        where: { id: "suggestion-outside" },
+      }),
+    ).toMatchObject({ status: "pending" });
+    expect(
+      await prisma.briefingPreferenceSuggestion.findUniqueOrThrow({
+        where: { id: "suggestion-accepted" },
+      }),
+    ).toMatchObject({ status: "accepted" });
   });
 
   it("ranks public daily clusters and singles with curator preferences", async () => {
