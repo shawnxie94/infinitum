@@ -1778,12 +1778,19 @@ describe("AdminSettingsPanel", () => {
     const dialog = await screen.findByRole("dialog", { name: "偏好建议" });
     expect(within(dialog).getByLabelText("偏好建议筛选")).toBeInTheDocument();
     expect(within(dialog).getByLabelText("偏好建议排序")).toHaveValue("sample_desc");
+    expect(within(dialog).getByRole("button", { name: "全部忽略" })).toBeEnabled();
     expect(within(dialog).queryByRole("option", { name: "按证据强度" })).not.toBeInTheDocument();
     expect(within(dialog).getByText("AI Coding")).toBeInTheDocument();
     expect(within(dialog).getByText("+3")).toBeInTheDocument();
     expect(within(dialog).getByText("3 次")).toBeInTheDocument();
     expect(within(dialog).queryByText("3 次 / 71%")).not.toBeInTheDocument();
     expect(within(dialog).queryByText("ai-coding")).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "全部忽略" }));
+    const dismissAllDialog = screen.getByRole("dialog", { name: "确认全部忽略" });
+    expect(within(dismissAllDialog).getByText("确定要忽略全部待处理的偏好建议吗？忽略后不会写入事件偏好规则。")).toBeInTheDocument();
+    await user.click(within(dismissAllDialog).getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("dialog", { name: "确认全部忽略" })).not.toBeInTheDocument();
 
     await user.type(within(dialog).getByLabelText("偏好建议筛选"), "Coding");
     expect(within(dialog).getByText("AI Coding")).toBeInTheDocument();

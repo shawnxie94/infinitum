@@ -717,3 +717,16 @@ export async function dismissBriefingPreferenceSuggestion(id: string) {
 
   return serializeSuggestion(updated);
 }
+
+export async function dismissAllBriefingPreferenceSuggestions() {
+  const result = await prisma.briefingPreferenceSuggestion.updateMany({
+    where: { status: "pending" },
+    data: {
+      status: "dismissed",
+      dismissedAt: new Date(),
+      acceptedAt: null,
+    },
+  });
+
+  return result.count;
+}

@@ -202,6 +202,46 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).not.toContain("true|false");
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"isAggregation":false');
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"isAggregation":true');
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("页面附加内容不代表正文主体");
+  });
+
+  it("appends the fixed moderation reason enum to custom item prompts", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            summary: "这是一条有效内容摘要。",
+            translatedTitle: "",
+            moderationStatus: "allowed",
+            moderationReason: null,
+            moderationDetail: "内容有效。",
+            qualityScore: 80,
+            qualityRationale: "事实清晰。",
+            eventSignature: null,
+            aggregation: { isAggregation: false, mainEvent: null, events: [] },
+          }),
+        },
+      }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      {
+        itemUnderstanding: {
+          systemPrompt: "这是管理员自定义的条目理解提示词。",
+          promptTemplate: "正文：{{inputText}}",
+        },
+      },
+      { chat: { completions: { create } } },
+    );
+
+    await provider.understandItem("正文内容", {
+      title: "测试标题",
+      translateTitle: false,
+    });
+
+    const systemPrompt = create.mock.calls[0]?.[0]?.messages?.[0]?.content as string;
+    expect(systemPrompt).toContain("这是管理员自定义的条目理解提示词。");
+    expect(systemPrompt).toContain("moderationReason 只能是 marketing、low_quality、duplicate_noise、rule_filter、rule_blacklist、other 或 null");
   });
 
   it("repairs a syntactically invalid item understanding response before retrying the model", async () => {

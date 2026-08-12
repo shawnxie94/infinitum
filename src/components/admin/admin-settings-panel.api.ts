@@ -47,6 +47,7 @@ type EventBriefingPayload = {
 type BriefingPreferenceSuggestionsPayload = {
   error?: string;
   suggestions?: AdminBriefingPreferenceSuggestion[];
+  dismissedCount?: number;
 };
 
 type BriefingPreferenceSuggestionAcceptPayload = {
@@ -379,6 +380,17 @@ export async function dismissBriefingPreferenceSuggestion(id: string) {
   }
 
   return payload.suggestion;
+}
+
+export async function dismissAllBriefingPreferenceSuggestions() {
+  const payload = await requestAdminSettingsJson<BriefingPreferenceSuggestionsPayload>(
+    "/api/admin/settings/event-briefing/suggestions",
+    "POST",
+    { action: "dismiss_all" },
+    "全部忽略偏好建议失败。",
+  );
+
+  return payload.dismissedCount ?? 0;
 }
 
 export async function reorderSourceGroups(groupIds: string[]) {

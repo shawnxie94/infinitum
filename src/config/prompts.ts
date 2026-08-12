@@ -2,6 +2,8 @@ import { compileDailyReportTemplatePrompt, DEFAULT_DAILY_REPORT_TEMPLATE } from 
 
 export const ITEM_UNDERSTANDING_JSON_SYNTAX_RULE = "所有字符串字段都必须符合 JSON 字符串语法：字符串内部双引号必须转义为 \\\", 换行必须转义为 \\n；禁止在字符串中输出未转义的控制字符，字段之间的逗号和所有括号必须完整。";
 
+export const ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE = "系统固定输出约束：moderationReason 只能是 marketing、low_quality、duplicate_noise、rule_filter、rule_blacklist、other 或 null；禁止输出其他值。";
+
 const LEGACY_ITEM_UNDERSTANDING_OUTPUT_FORMAT = `{"summary":"...","translatedTitle":"...","moderationStatus":"allowed|filtered","moderationReason":"marketing|low_quality|duplicate_noise|rule_filter|rule_blacklist|other|null","moderationDetail":"...","qualityScore":0,"qualityRationale":"...","eventSignature":{"eventType":"release|launch|update|funding|acquisition|partnership|policy|research|security|other|null","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"},"aggregation":{"isAggregation":true|false,"mainEvent":{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}|null,"events":[{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null","title":"...","oneLiner":"...","qualityScore":0,"sourceUrl":"https://...|null"}]}}`;
 
 const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES = `非聚合内容示例（所有字段都必须保留）：
@@ -18,7 +20,7 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 输出要求：
 1. summary：100 到 200 字中文摘要，覆盖主体、动作、关键结果、背景和影响；只写正文，可使用有限 Markdown 行内强调，不要链接、标题、列表或编造内容。
 2. translatedTitle：仅当“是否需要翻译标题”为“是”时填写忠实简洁的中文标题，否则返回空字符串。
-3. moderationStatus 默认 allowed，仅明显营销、低质灌水或噪声重复返回 filtered；moderationReason 只能使用固定枚举或 null。
+3. moderationStatus 默认 allowed；仅当正文主体明显属于营销宣传、低质灌水或噪声重复时返回 filtered。页眉、页脚、侧栏、底部推荐位、插入式广告等页面附加内容不代表正文主体，不要仅因这些内容将条目标记为 filtered；moderationReason 只能使用固定枚举或 null。
 4. qualityScore 为 0-100 整数；qualityRationale 用一句中文说明事实密度、独特性、完整度、可信度或时效性。
 5. eventSignature 描述整篇内容最主要的具体事件；无法稳定判断的字段返回 null，不要用宽泛主题代替具体事件。
 6. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
@@ -29,6 +31,14 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 11. 不要输出独立分类字段；系统会从结构化事件主体和对象自动生成实体关联。
 12. ${ITEM_UNDERSTANDING_JSON_SYNTAX_RULE}
 13. 所有文本默认中文，品牌、产品和专有名词可保留原文。最终只能输出合法 JSON。`;
+
+// The previous wording of rule 3 before "页面附加内容" guidance was added.
+// Used to idempotently upgrade untouched default rows in already-initialized
+// databases; custom prompts never match because equality is required.
+export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT.replace(
+  `3. moderationStatus 默认 allowed；仅当正文主体明显属于营销宣传、低质灌水或噪声重复时返回 filtered。页眉、页脚、侧栏、底部推荐位、插入式广告等页面附加内容不代表正文主体，不要仅因这些内容将条目标记为 filtered；moderationReason 只能使用固定枚举或 null。`,
+  `3. moderationStatus 默认 allowed，仅明显营销、低质灌水或噪声重复返回 filtered；moderationReason 只能使用固定枚举或 null。`,
+);
 
 export const LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT
   .replace(

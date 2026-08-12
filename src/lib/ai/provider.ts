@@ -17,6 +17,7 @@ import {
   DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
+  ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE,
 } from "@/config/prompts";
 import type { RuntimeConfig } from "@/config/runtime";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
@@ -1127,9 +1128,13 @@ export function createAiProvider(
     promptOverrides?.itemUnderstanding,
   );
   const itemUnderstandingConfig = promptOverrides?.itemUnderstanding
-    ? resolvedItemUnderstandingConfig
+    ? {
+        ...resolvedItemUnderstandingConfig,
+        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
+      }
     : {
         ...resolvedItemUnderstandingConfig,
+        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
         temperature: 0,
         maxTokens: 8000,
       };

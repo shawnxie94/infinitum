@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   acceptBriefingPreferenceSuggestion,
+  dismissAllBriefingPreferenceSuggestions,
   generateBriefingPreferenceSuggestions,
   recordCuratorBehavior,
 } from "@/lib/curator-behavior/service";
@@ -105,6 +106,49 @@ describe("event briefing service", () => {
       weight: 3,
     });
     expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBeGreaterThan(0);
+    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
+  });
+
+  it("dismisses all pending briefing preference suggestions", async () => {
+    await prisma.briefingPreferenceSuggestion.createMany({
+      data: [
+        {
+          suggestionKey: "keyword:code",
+          ruleType: "keyword",
+          value: "code",
+          label: "code",
+          suggestedWeight: 3,
+          confidence: 0.8,
+          reason: "关键词「code」偏好更强。",
+          status: "pending",
+        },
+        {
+          suggestionKey: "keyword:security",
+          ruleType: "keyword",
+          value: "security",
+          label: "security",
+          suggestedWeight: -3,
+          confidence: 0.7,
+          reason: "关键词「security」降权信号更强。",
+          status: "pending",
+        },
+        {
+          suggestionKey: "keyword:accepted",
+          ruleType: "keyword",
+          value: "accepted",
+          label: "accepted",
+          suggestedWeight: 2,
+          confidence: 0.6,
+          reason: "已接受。",
+          status: "accepted",
+          acceptedAt: new Date("2026-07-01T00:00:00.000Z"),
+        },
+      ],
+    });
+
+    expect(await dismissAllBriefingPreferenceSuggestions()).toBe(2);
+    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBe(0);
+    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "dismissed" } })).toBe(2);
     expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
   });
 

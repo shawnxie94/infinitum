@@ -4,6 +4,7 @@ import { PromptConfigType } from "@prisma/client";
 import {
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
 import type { RuntimeConfig } from "@/config/runtime";
@@ -518,6 +519,7 @@ async function ensureModelAndPromptConfigsSeeded() {
   ]);
 
   await upgradeLegacyItemUnderstandingPrompt();
+  await upgradePreviousDefaultItemUnderstandingPrompt();
   await upgradeLegacyDailyReportPrompt(fileConfig);
   await upgradeLegacyClusterSummaryTokenBudget();
 
@@ -671,6 +673,22 @@ async function upgradeLegacyItemUnderstandingPrompt() {
       },
     });
   }
+}
+
+async function upgradePreviousDefaultItemUnderstandingPrompt() {
+  // Environments initialized before the wording change keep the previous
+  // default text in prompt_configs. Upgrade only untouched default rows
+  // (exact match), so administrator-edited prompts are never overwritten.
+  await prisma.promptConfig.updateMany({
+    where: {
+      type: PromptConfigType.item_understanding,
+      isDefault: true,
+      systemPrompt: PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+    },
+    data: {
+      systemPrompt: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+    },
+  });
 }
 
 async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {

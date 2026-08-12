@@ -4,6 +4,7 @@ import {
   DEFAULT_DAILY_REPORT_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { prisma } from "@/lib/db";
 import {
@@ -108,6 +109,56 @@ describe("admin settings service", () => {
       maxTokens: 80,
       topP: null,
     });
+  });
+
+  it("upgrades the previous default item understanding prompt idempotently", async () => {
+    await prisma.promptConfig.create({
+      data: {
+        id: "prompt-previous-default",
+        name: "默认条目理解提示词",
+        type: "item_understanding",
+        prompt: "正文：{{inputText}}",
+        systemPrompt: PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+        isEnabled: true,
+        isDefault: true,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const upgraded = await prisma.promptConfig.findUniqueOrThrow({
+      where: { id: "prompt-previous-default" },
+    });
+    expect(upgraded.systemPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
+
+    // Idempotent: a second run leaves the already-upgraded row unchanged.
+    await ensureRuntimeConfigSeeded();
+    const afterSecondRun = await prisma.promptConfig.findUniqueOrThrow({
+      where: { id: "prompt-previous-default" },
+    });
+    expect(afterSecondRun.systemPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
+  });
+
+  it("never overwrites administrator-edited item understanding prompts", async () => {
+    const customPrompt = "这是一条管理员手工修改过的自定义条目理解提示词。";
+    await prisma.promptConfig.create({
+      data: {
+        id: "prompt-custom",
+        name: "自定义条目理解提示词",
+        type: "item_understanding",
+        prompt: "正文：{{inputText}}",
+        systemPrompt: customPrompt,
+        isEnabled: true,
+        isDefault: true,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const untouched = await prisma.promptConfig.findUniqueOrThrow({
+      where: { id: "prompt-custom" },
+    });
+    expect(untouched.systemPrompt).toBe(customPrompt);
   });
 
   it("saves content extraction connection and limits", async () => {

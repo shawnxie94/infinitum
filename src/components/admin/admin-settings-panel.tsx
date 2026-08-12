@@ -20,6 +20,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 
 import {
   acceptBriefingPreferenceSuggestion,
+  dismissAllBriefingPreferenceSuggestions,
   generateBriefingPreferenceSuggestions,
   importSourcesFromOpmlText,
   deleteHeaderLink,
@@ -170,6 +171,7 @@ const BRIEFING_PREFERENCE_SUGGESTION_PAGE_SIZE = 10;
 
 type BriefingPreferenceSuggestionModalProps = {
   suggestions: AdminBriefingPreferenceSuggestion[];
+  pendingCount: number;
   totalCount: number;
   page: number;
   pageSize: number;
@@ -184,6 +186,7 @@ type BriefingPreferenceSuggestionModalProps = {
   onPageSizeChange: (pageSize: number) => void;
   onAccept: (suggestion: AdminBriefingPreferenceSuggestion) => void;
   onDismiss: (suggestion: AdminBriefingPreferenceSuggestion) => void;
+  onDismissAll: () => void;
   onRefresh: () => void;
 };
 
@@ -193,6 +196,7 @@ function formatSignedWeight(value: number) {
 
 function BriefingPreferenceSuggestionModal({
   suggestions,
+  pendingCount,
   totalCount,
   page,
   pageSize,
@@ -207,6 +211,7 @@ function BriefingPreferenceSuggestionModal({
   onPageSizeChange,
   onAccept,
   onDismiss,
+  onDismissAll,
   onRefresh,
 }: BriefingPreferenceSuggestionModalProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -221,13 +226,18 @@ function BriefingPreferenceSuggestionModal({
       bodyClassName="space-y-4 p-4 max-h-[76vh] overflow-y-auto"
       footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
       footer={
-        <div className="flex flex-wrap items-center justify-end gap-4">
-          <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
-            刷新建议
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Button onClick={onDismissAll} variant="danger" disabled={isBusy || pendingCount === 0}>
+            全部忽略
           </Button>
-          <Button onClick={onClose} variant="secondary" disabled={isBusy}>
-            关闭
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-4">
+            <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
+              刷新建议
+            </Button>
+            <Button onClick={onClose} variant="secondary" disabled={isBusy}>
+              关闭
+            </Button>
+          </div>
         </div>
       }
     >
@@ -697,6 +707,7 @@ export function AdminSettingsPanel({
     useState<AdminBriefingPreferenceSuggestion | null>(null);
   const [briefingPreferenceDismissTarget, setBriefingPreferenceDismissTarget] =
     useState<AdminBriefingPreferenceSuggestion | null>(null);
+  const [briefingPreferenceDismissAllConfirmOpen, setBriefingPreferenceDismissAllConfirmOpen] = useState(false);
   const [eventBriefingEntities, setEventBriefingEntities] = useState<AdminEntity[]>([]);
   const [eventBriefingEntitiesLoaded, setEventBriefingEntitiesLoaded] = useState(false);
   const normalizedBlacklistKeywords = blacklistText
@@ -1048,6 +1059,19 @@ export function AdminSettingsPanel({
         showToast("偏好建议已忽略。", "success");
       } catch (error) {
         showToast(error instanceof Error ? error.message : "偏好建议忽略失败。", "error");
+      }
+    });
+  };
+  const dismissAllBriefingPreferenceSuggestionItems = () => {
+    startTransition(async () => {
+      try {
+        const dismissedCount = await dismissAllBriefingPreferenceSuggestions();
+        setBriefingPreferenceSuggestions([]);
+        setBriefingPreferenceSuggestionPage(1);
+        setBriefingPreferenceDismissAllConfirmOpen(false);
+        showToast(`已忽略 ${dismissedCount} 条偏好建议。`, "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "全部忽略偏好建议失败。", "error");
       }
     });
   };
@@ -2337,6 +2361,7 @@ export function AdminSettingsPanel({
 
               <BriefingPreferenceSuggestionModal
                 suggestions={pagedBriefingPreferenceSuggestions}
+                pendingCount={briefingPreferenceSuggestions.length}
                 totalCount={briefingPreferenceSuggestionTotalCount}
                 page={safeBriefingPreferenceSuggestionPage}
                 pageSize={briefingPreferenceSuggestionPageSize}
@@ -2360,8 +2385,40 @@ export function AdminSettingsPanel({
                 }}
                 onAccept={setBriefingPreferenceAcceptTarget}
                 onDismiss={setBriefingPreferenceDismissTarget}
+                onDismissAll={() => setBriefingPreferenceDismissAllConfirmOpen(true)}
                 onRefresh={refreshBriefingPreferenceSuggestions}
               />
+
+              <ModalShell
+                isOpen={briefingPreferenceDismissAllConfirmOpen}
+                onClose={() => setBriefingPreferenceDismissAllConfirmOpen(false)}
+                title="确认全部忽略"
+                widthClassName="max-w-md"
+                bodyClassName="space-y-3 p-6"
+                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
+                footer={
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={() => setBriefingPreferenceDismissAllConfirmOpen(false)}
+                      disabled={isPending}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={dismissAllBriefingPreferenceSuggestionItems}
+                      disabled={isPending}
+                    >
+                      全部忽略
+                    </Button>
+                  </div>
+                }
+              >
+                <p className="text-sm leading-6 text-[var(--text-2)]">
+                  确定要忽略全部待处理的偏好建议吗？忽略后不会写入事件偏好规则。
+                </p>
+              </ModalShell>
 
               <ModalShell
                 isOpen={Boolean(briefingPreferenceAcceptTarget)}
