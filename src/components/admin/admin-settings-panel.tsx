@@ -65,6 +65,7 @@ import type {
 } from "@/lib/settings/types";
 import {
   DEFAULT_SCHEDULE_TIMEZONE,
+  DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS,
   MAX_CLEANUP_RETENTION_DAYS,
   MAX_AGGREGATION_SPLIT_MAX_EVENTS,
   MAX_DAILY_REPORT_OFFSET_DAYS,
@@ -78,6 +79,7 @@ import {
   MAX_PER_SOURCE_ITEM_LIMIT,
   MAX_DAILY_REPORT_CANDIDATE_LIMIT,
   MIN_DAILY_REPORT_CANDIDATE_LIMIT,
+  MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS,
   MIN_PER_SOURCE_ITEM_LIMIT,
 } from "@/lib/tasks/scheduler";
 import { getStableGroupBadgeColor } from "@/lib/groups/badge";
@@ -612,6 +614,9 @@ export function AdminSettingsPanel({
   );
   const [dailyReportOffsetDays, setDailyReportOffsetDays] = useState(
     String(initialSettings.dailyReportSchedule.dailyReportOffsetDays),
+  );
+  const [dailyReportRecentTopicLookbackDays, setDailyReportRecentTopicLookbackDays] = useState(
+    String(initialSettings.dailyReportSchedule.dailyReportRecentTopicLookbackDays ?? DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS),
   );
   const [dailyReportAutoPublish, setDailyReportAutoPublish] = useState(
     initialSettings.dailyReportSchedule.dailyReportAutoPublish,
@@ -1815,6 +1820,7 @@ export function AdminSettingsPanel({
       ? Number.parseInt(dailyReportPlanningBatchSize.trim(), 10)
       : null;
     const parsedDailyReportOffsetDays = Number.parseInt(dailyReportOffsetDays.trim(), 10);
+    const parsedDailyReportRecentTopicLookbackDays = Number.parseInt(dailyReportRecentTopicLookbackDays.trim(), 10);
 
     if (
       !Number.isInteger(parsedDailyReportCandidateLimit) ||
@@ -1848,6 +1854,17 @@ export function AdminSettingsPanel({
       return;
     }
 
+    if (
+      !Number.isInteger(parsedDailyReportRecentTopicLookbackDays) ||
+      parsedDailyReportRecentTopicLookbackDays < MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS
+    ) {
+      showToast(
+        `历史主题召回天数需为不小于 ${MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS} 的整数。`,
+        "error",
+      );
+      return;
+    }
+
     startTransition(async () => {
       try {
         const schedule = await saveDefaultDailyReportSchedule({
@@ -1856,6 +1873,7 @@ export function AdminSettingsPanel({
           dailyReportCandidateLimit: parsedDailyReportCandidateLimit,
           dailyReportPlanningBatchSize: parsedDailyReportPlanningBatchSize,
           dailyReportOffsetDays: parsedDailyReportOffsetDays,
+          dailyReportRecentTopicLookbackDays: parsedDailyReportRecentTopicLookbackDays,
           dailyReportAutoPublish,
           dailyReportChannelIds,
         });
@@ -1868,6 +1886,7 @@ export function AdminSettingsPanel({
           schedule.dailyReportPlanningBatchSize == null ? "" : String(schedule.dailyReportPlanningBatchSize),
         );
         setDailyReportOffsetDays(String(schedule.dailyReportOffsetDays));
+        setDailyReportRecentTopicLookbackDays(String(schedule.dailyReportRecentTopicLookbackDays ?? DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS));
         setDailyReportAutoPublish(schedule.dailyReportAutoPublish);
         setDailyReportChannelIds(schedule.dailyReportChannelIds?.length
           ? schedule.dailyReportChannelIds
@@ -1947,6 +1966,7 @@ export function AdminSettingsPanel({
       ? ""
       : String(dailyReportScheduleSnapshot.dailyReportPlanningBatchSize)) ||
     dailyReportOffsetDays.trim() !== String(dailyReportScheduleSnapshot.dailyReportOffsetDays) ||
+    dailyReportRecentTopicLookbackDays.trim() !== String(dailyReportScheduleSnapshot.dailyReportRecentTopicLookbackDays ?? DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS) ||
     dailyReportAutoPublish !== dailyReportScheduleSnapshot.dailyReportAutoPublish ||
     !areStringArraysEqual(
       dailyReportChannelIds,
@@ -3852,6 +3872,16 @@ export function AdminSettingsPanel({
                     value={dailyReportPlanningBatchSize}
                     onChange={(event) => setDailyReportPlanningBatchSize(event.target.value)}
                     placeholder="留空则完整候选集一次处理"
+                  />
+                </FormField>
+
+                <FormField label="历史主题召回天数" htmlFor="daily-report-recent-topic-lookback-days">
+                  <TextInput
+                    id="daily-report-recent-topic-lookback-days"
+                    type="number"
+                    min={MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS}
+                    value={dailyReportRecentTopicLookbackDays}
+                    onChange={(event) => setDailyReportRecentTopicLookbackDays(event.target.value)}
                   />
                 </FormField>
               </div>

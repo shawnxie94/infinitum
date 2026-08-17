@@ -4,6 +4,8 @@ import { DEFAULT_DAILY_REPORT_TEMPLATE } from "@/lib/daily-report/template";
 import { normalizeDailyReportTemplateConfig } from "@/lib/daily-report/template";
 import {
   mergeDailyReportTopics,
+  normalizeDailyReportDraftForTemplate,
+  normalizeDailyReportPlanForValidation,
   splitDailyReportCandidates,
   validateDailyReportAssessments,
   validateDailyReportDraft,
@@ -119,6 +121,62 @@ describe("daily report planning contracts", () => {
     ]));
   });
 
+  it("normalizes deterministic plan conflicts before hard validation", () => {
+    const candidates = Array.from({ length: 6 }, (_, index) => candidate(index + 1));
+    const assessments = candidates.map((item) => assessment(item.id));
+    const topics = mergeDailyReportTopics(candidates, assessments);
+    const template = normalizeDailyReportTemplateConfig({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks.map((block) =>
+        block.type === "section" && block.key === "other-worth-reading"
+          ? { ...block, maxItems: 2 }
+          : block,
+      ),
+    });
+    const normalized = normalizeDailyReportPlanForValidation({
+      schemaVersion: 1,
+      headlineHint: null,
+      sections: [
+        { blockKey: "other-worth-reading", blockTitle: "其他值得看", topicIds: ["topic-1", "topic-1"], candidateIds: [1, 2, 3] },
+        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: ["topic-1"], candidateIds: [1, 4] },
+      ],
+      excludedCandidateIds: [1, 1, 5],
+      selectionRationale: "",
+    }, topics, template);
+
+    expect(normalized.sections[0]?.topicIds).toEqual(["topic-1"]);
+    expect(normalized.sections[0]?.candidateIds).toEqual([1, 2]);
+    expect(normalized.sections[1]?.candidateIds).toEqual([4]);
+    expect(normalized.excludedCandidateIds).toEqual([5]);
+    expect(validateDailyReportPlan(normalized, topics, candidates, template)).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "duplicate_topic" }),
+        expect.objectContaining({ code: "duplicate_candidate" }),
+        expect.objectContaining({ code: "selected_and_excluded" }),
+        expect.objectContaining({ code: "section_max_items" }),
+      ]),
+    );
+  });
+
+  it("clears bodies for title-only template sections", () => {
+    const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
+    const draft = normalizeDailyReportDraftForTemplate({
+      blocks: [
+        {
+          type: "section",
+          blockKey: "other-worth-reading",
+          title: "其他值得看",
+          items: [{ title: "一条补充信息", body: "模型不应展示的正文", sourceIds: [1] }],
+        },
+      ],
+    }, template);
+
+    expect(draft.blocks[0]).toMatchObject({
+      type: "section",
+      items: [{ title: "一条补充信息", body: "" }],
+    });
+  });
+
   it("rejects an impossible required-cardinality plan instead of relaxing template bounds", () => {
     const candidates = [candidate(1), candidate(2), candidate(3), candidate(4)];
     const topics = mergeDailyReportTopics(candidates, candidates.map((item) => assessment(item.id)));
@@ -192,6 +250,39 @@ describe("daily report planning contracts", () => {
     expect(violations.map((violation) => violation.code)).toContain("draft_source_empty");
   });
 
+  it("allows an empty item body when the section disables body validation", () => {
+    const candidates = [candidate(1), candidate(2), candidate(3), candidate(4), candidate(5), candidate(6)];
+    const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
+    const plan = {
+      schemaVersion: 1 as const,
+      headlineHint: null,
+      sections: [
+        { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: [], candidateIds: [1, 2, 3] },
+        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: [], candidateIds: [4, 5] },
+        { blockKey: "other-worth-reading", blockTitle: "其他值得看", topicIds: [], candidateIds: [6] },
+      ],
+      excludedCandidateIds: [],
+      selectionRationale: "",
+    };
+    const violations = validateDailyReportDraft({
+      blocks: [
+        { type: "text", title: "摘要", body: "摘要内容" },
+        { type: "section", blockKey: "热点事件", title: "热点事件", items: [
+          { title: "候选 1", body: "正文", sourceIds: [1] },
+          { title: "候选 2", body: "正文", sourceIds: [2] },
+          { title: "候选 3", body: "正文", sourceIds: [3] },
+        ] },
+        { type: "section", blockKey: "变更与实践", title: "变更与实践", items: [
+          { title: "候选 4", body: "正文", sourceIds: [4] },
+          { title: "候选 5", body: "正文", sourceIds: [5] },
+        ] },
+        { type: "section", blockKey: "其他值得看", title: "其他值得看", items: [{ title: "候选 6", body: "", sourceIds: [6] }] },
+      ],
+    }, plan, candidates, template);
+
+    expect(violations.map((violation) => violation.code)).not.toContain("draft_item_empty");
+  });
+
   it("requires exact block keys, required notes, and unique source references", () => {
     const candidates = [candidate(1), candidate(2), candidate(3), candidate(4), candidate(5)];
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
@@ -239,6 +330,8 @@ describe("daily report planning contracts", () => {
       "draft_duplicate_source",
       "draft_required_note_missing",
     ]));
+    expect(violations.find((violation) => violation.code === "draft_required_note_missing")?.message)
+      .toContain("热点事件 第 1 条「候选 1」，来源 1缺少必填要点 重点");
     expect(wrongKeyViolations.map((violation) => violation.code)).toContain("unknown_block");
   });
 });

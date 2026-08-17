@@ -142,6 +142,7 @@ export type AdminSettingsSnapshot = {
     dailyReportCandidateLimit: number;
     dailyReportPlanningBatchSize?: number | null;
     dailyReportOffsetDays: number;
+    dailyReportRecentTopicLookbackDays?: number;
     dailyReportAutoPublish: boolean;
     dailyReportChannelIds?: string[];
     processingStartAt?: string | null;
@@ -165,6 +166,7 @@ export type AdminSettingsSnapshot = {
     dailyReportCandidateLimit: number;
     dailyReportPlanningBatchSize?: number | null;
     dailyReportOffsetDays: number;
+    dailyReportRecentTopicLookbackDays?: number;
     dailyReportAutoPublish: boolean;
     dailyReportChannelIds: string[];
     processingStartAt?: string | null;

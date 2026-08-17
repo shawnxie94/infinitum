@@ -15,6 +15,7 @@ import {
   updatePromptConfig,
 } from "@/components/admin/ai-settings-panel.api";
 import { DailyReportTemplateEditor } from "@/components/admin/daily-report-template-editor";
+import { DailyReportTemplatePreview } from "@/components/admin/daily-report-template-preview";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -42,8 +43,10 @@ import {
   getPromptTypeLabel,
 } from "@/lib/settings/ai-config";
 import {
+  DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
+} from "@/config/prompts";
+import {
   compileDailyReportTemplatePrompt,
-  DAILY_REPORT_SYSTEM_ROLE_PROMPT,
   DEFAULT_DAILY_REPORT_TEMPLATE,
   DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
   parseDailyReportTemplateJson,
@@ -169,20 +172,42 @@ function buildEmptyPromptForm(type: PromptConfigType): PromptFormState {
 }
 
 function getPreviewSystemPrompt(config: AdminPromptConfig) {
-  if (config.type !== "daily_report") {
-    return config.systemPrompt || "未设置（必填）";
-  }
+  return config.systemPrompt || "未设置（必填）";
+}
 
-  if (config.templateJson?.trim()) {
-    try {
-      const template = parseDailyReportTemplateJson(config.templateJson);
-      if (template) return compileDailyReportTemplatePrompt(template);
-    } catch {
-      return config.systemPrompt || DAILY_REPORT_SYSTEM_ROLE_PROMPT;
-    }
+function getDailyReportTemplateSummary(config: AdminPromptConfig) {
+  if (!config.templateJson?.trim()) return { summary: "未配置", blockTitles: [] as string[] };
+  try {
+    const template = parseDailyReportTemplateJson(config.templateJson);
+    if (!template) return { summary: "模板格式待迁移", blockTitles: [] as string[] };
+    return {
+      summary: `${template.blocks.length} 个内容块`,
+      blockTitles: template.blocks.map((block) => block.title),
+    };
+  } catch {
+    return { summary: "模板格式待修复", blockTitles: [] as string[] };
   }
+}
 
-  return config.systemPrompt || DAILY_REPORT_SYSTEM_ROLE_PROMPT;
+function DailyReportTemplateCardSummary({ config }: { config: AdminPromptConfig }) {
+  const summary = getDailyReportTemplateSummary(config);
+
+  return (
+    <div className="space-y-1">
+      <span className="font-medium">日报模板：</span>
+      {summary.blockTitles.length > 0 ? (
+        <ul aria-label="内容块标题" className="ml-5 list-disc space-y-0.5 text-sm text-[var(--text-2)]">
+          {summary.blockTitles.map((title) => (
+            <li key={`${config.id}-${title}`}>
+              {title}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span className="ml-1 text-sm text-[var(--text-2)]">{summary.summary}</span>
+      )}
+    </div>
+  );
 }
 
 async function writeClipboardText(value: string): Promise<boolean> {
@@ -552,6 +577,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
     setPromptSaving(true);
     try {
       let systemPrompt = promptForm.systemPrompt;
+      let prompt = promptForm.prompt;
       let templateJson: string | null = null;
 
       if (promptForm.type === "daily_report" && promptForm.templateJson.trim()) {
@@ -562,12 +588,13 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
         }
         templateJson = stringifyDailyReportTemplate(template);
         systemPrompt = compileDailyReportTemplatePrompt(template);
+        prompt = DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE;
       }
 
       const payload = {
         name: promptForm.name,
         type: promptForm.type,
-        prompt: promptForm.prompt,
+        prompt,
         systemPrompt,
         templateJson,
         temperature,
@@ -1188,12 +1215,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                           </div>
                         ) : null}
                         {config.type === "daily_report" ? (
-                          <div>
-                            <span className="font-medium">系统角色：</span>
-                            <code className="mt-1 block max-h-20 overflow-y-auto rounded bg-[var(--bg-muted)] px-2 py-1 text-xs">
-                              {DAILY_REPORT_SYSTEM_ROLE_PROMPT}
-                            </code>
-                          </div>
+                          <DailyReportTemplateCardSummary config={config} />
                         ) : config.systemPrompt ? (
                           <div>
                             <span className="font-medium">系统提示词：</span>
@@ -1204,12 +1226,14 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                             </code>
                           </div>
                         ) : null}
-                        <div>
-                          <span className="font-medium">提示词模板：</span>
-                          <code className="mt-1 block max-h-20 overflow-y-auto rounded bg-[var(--bg-muted)] px-2 py-1 text-xs">
-                            {config.prompt.length > 120 ? `${config.prompt.slice(0, 120)}...` : config.prompt}
-                          </code>
-                        </div>
+                        {config.type !== "daily_report" ? (
+                          <div>
+                            <span className="font-medium">提示词模板：</span>
+                            <code className="mt-1 block max-h-20 overflow-y-auto rounded bg-[var(--bg-muted)] px-2 py-1 text-xs">
+                              {config.prompt.length > 120 ? `${config.prompt.slice(0, 120)}...` : config.prompt}
+                            </code>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
@@ -1303,25 +1327,26 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
           />
         </FormBlock>
 
-        <FormBlock label={promptForm.type === "daily_report" ? "系统角色" : "系统提示词"} required>
-          <TextArea
-            className="min-h-[5rem] resize-y"
-            rows={promptForm.type === "daily_report" ? 3 : 4}
-            value={promptForm.type === "daily_report" ? DAILY_REPORT_SYSTEM_ROLE_PROMPT : promptForm.systemPrompt}
-            readOnly={promptForm.type === "daily_report"}
-            onChange={(event) =>
-              setPromptForm((current) => ({
-                ...current,
-                systemPrompt: event.target.value,
-              }))
-            }
-          />
-        </FormBlock>
+        {promptForm.type !== "daily_report" ? (
+          <FormBlock label="系统提示词" required>
+            <TextArea
+              className="min-h-[5rem] resize-y"
+              rows={4}
+              value={promptForm.systemPrompt}
+              onChange={(event) =>
+                setPromptForm((current) => ({
+                  ...current,
+                  systemPrompt: event.target.value,
+                }))
+              }
+            />
+          </FormBlock>
+        ) : null}
 
         {promptForm.type === "daily_report" ? (
           <div className="space-y-2">
             <span className={labelClassName}>
-              日报输出结构<span className="text-[var(--danger-ink)]"> *</span>
+              日报模板<span className="text-[var(--danger-ink)]"> *</span>
             </span>
             <DailyReportTemplateEditor
               key={`${promptModalMode}-${editingPromptConfig?.id ?? "new"}`}
@@ -1339,23 +1364,25 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
           </div>
         ) : null}
 
-        <FormBlock label="提示词模板" required>
-          <TextArea
-            className="min-h-[8rem] resize-y"
-            rows={6}
-            value={promptForm.prompt}
-            onChange={(event) =>
-              setPromptForm((current) => ({
-                ...current,
-                prompt: event.target.value,
-              }))
-            }
-          />
-          <p className="text-xs text-[var(--text-3)]">
-            可使用占位符：{" "}
-            {PROMPT_PLACEHOLDERS_BY_TYPE[promptForm.type].join(" / ")}
-          </p>
-        </FormBlock>
+        {promptForm.type !== "daily_report" ? (
+          <FormBlock label="提示词模板" required>
+            <TextArea
+              className="min-h-[8rem] resize-y"
+              rows={6}
+              value={promptForm.prompt}
+              onChange={(event) =>
+                setPromptForm((current) => ({
+                  ...current,
+                  prompt: event.target.value,
+                }))
+              }
+            />
+            <p className="text-xs text-[var(--text-3)]">
+              可使用占位符：{" "}
+              {PROMPT_PLACEHOLDERS_BY_TYPE[promptForm.type].join(" / ")}
+            </p>
+          </FormBlock>
+        ) : null}
 
         <FormBlock label="关联模型API配置（可选）">
           <SelectField
@@ -1502,19 +1529,25 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
               ) : null}
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">系统提示词</label>
-              <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
-                {getPreviewSystemPrompt(showPromptPreview)}
-              </pre>
-            </div>
+            {showPromptPreview.type === "daily_report" ? (
+              <DailyReportTemplatePreview templateJson={showPromptPreview.templateJson} />
+            ) : (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">系统提示词</label>
+                <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
+                  {getPreviewSystemPrompt(showPromptPreview)}
+                </pre>
+              </div>
+            )}
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">提示词</label>
-              <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
-                {showPromptPreview.prompt}
-              </pre>
-            </div>
+            {showPromptPreview.type !== "daily_report" ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">提示词</label>
+                <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
+                  {showPromptPreview.prompt}
+                </pre>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-3 text-sm text-[var(--text-2)]">

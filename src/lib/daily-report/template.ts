@@ -23,6 +23,7 @@ export type DailyReportTemplateSectionBlock = {
   maxItems?: number | null;
   item: {
     bodyInstruction: string;
+    bodyRequired?: boolean;
     notes: DailyReportTemplateNote[];
   };
 };
@@ -45,10 +46,10 @@ export const DAILY_REPORT_SYSTEM_ROLE_PROMPT =
   "你是中文 AI 新闻日报编辑。请只基于输入候选内容生成一份 Briefing 型 AI 日报。最终响应必须是单个合法 JSON 对象；不要输出代码块、Markdown 文档、前后说明或任何 JSON 之外的文本。JSON 字段内仅在模板规则允许时使用有限行内 Markdown。";
 
 export const DEFAULT_DAILY_REPORT_HEADLINE_INSTRUCTION =
-  "基于最终输出的“热点事件”栏目全部条目生成标题主题，在 64 字限制内尽量覆盖每个热点事件的核心主体或动作；主题数量不固定，不强行凑数，也不要从其他栏目或趋势观察中提炼抽象主题；用“、”分隔；不要包含日期、年份、日报、AI 日报、Markdown、引号或尾随标点；会与“MM-DD日报 | ”前缀合成最终标题。";
+  "基于最终输出的“热点事件”栏目全部条目生成标题主题，在 64 字限制内尽量覆盖每个热点事件的核心主体或动作；主题数量不固定，不强行凑数，也不要从其他栏目或其他值得看中提炼抽象主题；用“、”分隔；不要包含日期、年份、日报、AI 日报、Markdown、引号或尾随标点；会与“MM-DD日报 | ”前缀合成最终标题。";
 
 export const DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES = [
-  "如果候选内容与最近 7 天已写主题只是同一事件的重复报道，不要再次写入。",
+  "如果候选内容与历史主题召回窗口内已写主题只是同一事件的重复报道，不要再次写入。",
   "如果确有新动作、新数据、新影响或状态变化，可以写入，但必须写成后续进展，避免重复介绍背景。",
   "不要因为同一公司、同一模型或同一抽象主题相似就机械过滤；判断重点是是否有新的事实增量。",
 ];
@@ -76,6 +77,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       item: {
         bodyInstruction:
           "每条正文约 120-260 字。覆盖事件主体、动作、结果、背景与影响；可使用有限 Markdown 行内标记：**加粗** 用于主体、关键结果、数字或建议，*斜体* 用于背景或不确定性。",
+        bodyRequired: true,
         notes: [
           {
             label: "重点",
@@ -95,6 +97,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。说明变化内容、适用对象、实践价值或可能影响。",
+        bodyRequired: true,
         notes: [],
       },
     },
@@ -108,6 +111,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。说明风险事件主体、背景和影响范围。",
+        bodyRequired: true,
         notes: [
           { label: "影响", required: true, instruction: "说明受影响对象。" },
           { label: "建议", required: true, instruction: "说明建议动作。" },
@@ -124,6 +128,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。概括工具或项目的核心变化。",
+        bodyRequired: true,
         notes: [
           { label: "适用场景", required: true, instruction: "说明为什么值得关注或适用场景。" },
         ],
@@ -139,6 +144,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。概括数据、趋势或研究结论。",
+        bodyRequired: true,
         notes: [
           { label: "数据", required: true, instruction: "列出关键数字或数据点。" },
           { label: "意义", required: true, instruction: "说明这些数据代表的趋势或意义。" },
@@ -146,10 +152,19 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       },
     },
     {
-      type: "text",
-      title: "趋势观察",
-      bodyInstruction:
-        "约 80-140 字。不要复述摘要或逐条回顾事件；从本期信息中提炼 1 条后续趋势、潜在影响或需要继续观察的判断，说明它可能如何影响普通用户、开发者、内容创作者、企业采购或日常工作流。只基于输入信息给出谨慎判断，不引入输入之外的新事实。可使用有限 Markdown 行内标记突出关键信息。",
+      type: "section",
+      key: "other-worth-reading",
+      title: "其他值得看",
+      description:
+        "优先选择未进入前面栏目、但仍值得关注的产品、开源项目、研究、数据、行业动态或实践信息。只保留独立且有明确事实增量的内容，不要重复已选主题或为了凑数填充。",
+      required: false,
+      minItems: 0,
+      maxItems: 10,
+      item: {
+        bodyInstruction: "",
+        bodyRequired: false,
+        notes: [],
+      },
     },
   ],
   globalRules: [
@@ -182,6 +197,12 @@ const LEGACY_DEFAULT_OPENING_INSTRUCTION =
   "约 100-180 字。概括当天 AI 领域最关键的事项和主线变化，优先覆盖重大发布、模型/产品进展、产业合作、安全风险、开源工具或关键数据。格式固定为“{{date}} AI 领域呈现...，值得关注的信息：...”，例如：“2026-04-29 AI 领域呈现多线并进格局，值得关注的信息：...”。可使用有限 Markdown 行内标记突出关键信息：用 **加粗** 标注事件主体、关键变化、数字或结论，用 *斜体* 标注必要背景或不确定性；不要使用链接、图片、标题、表格或列表。";
 const LEGACY_DEFAULT_CLOSING_INSTRUCTION =
   "约 80-140 字。总结当天值得持续关注的主线，说明这些变化可能如何影响普通用户、开发者、内容创作者、企业采购或日常工作流；可基于当天信息给出谨慎判断，但不要引入输入之外的新事实。可使用有限 Markdown 行内标记突出关键信息。";
+const PREVIOUS_DEFAULT_HEADLINE_INSTRUCTION =
+  "基于最终输出的“热点事件”栏目全部条目生成标题主题，在 64 字限制内尽量覆盖每个热点事件的核心主体或动作；主题数量不固定，不强行凑数，也不要从其他栏目或趋势观察中提炼抽象主题；用“、”分隔；不要包含日期、年份、日报、AI 日报、Markdown、引号或尾随标点；会与“MM-DD日报 | ”前缀合成最终标题。";
+const PREVIOUS_DEFAULT_RECENT_TOPIC_RULES = [
+  "如果候选内容与最近 7 天已写主题只是同一事件的重复报道，不要再次写入。",
+  ...DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES.slice(1),
+];
 
 function getLegacyDefaultDailyReportTemplate() {
   const template = cloneDefaultTemplate();
@@ -190,6 +211,45 @@ function getLegacyDefaultDailyReportTemplate() {
     const description = LEGACY_DEFAULT_SECTION_DESCRIPTIONS[block.title];
     return description ? { ...block, description } : block;
   });
+  return template;
+}
+
+function getPreviousDefaultDailyReportTemplate() {
+  const template = cloneDefaultTemplate();
+  template.blocks = template.blocks
+    .filter((block) => !(block.type === "section" && block.title === "其他值得看"));
+  template.blocks.push({
+    type: "text",
+    title: "趋势观察",
+    bodyInstruction:
+      "约 80-140 字。不要复述摘要或逐条回顾事件；从本期信息中提炼 1 条后续趋势、潜在影响或需要继续观察的判断，说明它可能如何影响普通用户、开发者、内容创作者、企业采购或日常工作流。只基于输入信息给出谨慎判断，不引入输入之外的新事实。可使用有限 Markdown 行内标记突出关键信息。",
+  });
+  return template;
+}
+
+function getPreviouslySeededV2DefaultDailyReportTemplate() {
+  const template = getPreviousDefaultDailyReportTemplate();
+  template.headlineInstruction = PREVIOUS_DEFAULT_HEADLINE_INSTRUCTION;
+  template.recentTopicRules = PREVIOUS_DEFAULT_RECENT_TOPIC_RULES;
+  template.blocks = template.blocks.map((block) => {
+    if (block.type !== "section") return block;
+    return {
+      ...block,
+      key: generatedSectionKey(block.title),
+      description: LEGACY_DEFAULT_SECTION_DESCRIPTIONS[block.title] ?? block.description,
+    };
+  });
+  return template;
+}
+
+function getPreviouslyMigratedV2DefaultDailyReportTemplate() {
+  const template = cloneDefaultTemplate();
+  const otherWorthReading = template.blocks.find(
+    (block) => block.type === "section" && block.title === "其他值得看",
+  );
+  if (otherWorthReading?.type === "section") {
+    otherWorthReading.item.bodyInstruction = "不要求输出正文，仅保留条目标题和来源；如确有必要可补充简短说明。";
+  }
   return template;
 }
 
@@ -262,6 +322,7 @@ export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDa
           ? block.maxItems
           : defaultSection?.maxItems ?? null;
         const fallbackSectionTitle = defaultSection?.title ?? "自定义栏目";
+        const bodyRequired = block.item?.bodyRequired !== false;
         return {
           type: "section",
           key: typeof block.key === "string" && block.key.trim() ? block.key.trim() : generatedSectionKey(nonEmptyText(block.title, fallbackSectionTitle)),
@@ -271,7 +332,10 @@ export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDa
           minItems,
           maxItems: maxItems == null ? null : Math.max(minItems, maxItems),
           item: {
-            bodyInstruction: nonEmptyText(block.item?.bodyInstruction, defaultSection?.item.bodyInstruction ?? "说明条目内容。"),
+            bodyInstruction: bodyRequired
+              ? nonEmptyText(block.item?.bodyInstruction, defaultSection?.item.bodyInstruction ?? "说明条目内容。")
+              : typeof block.item?.bodyInstruction === "string" ? block.item.bodyInstruction.trim() : "",
+            bodyRequired,
             notes: Array.isArray(block.item?.notes) ? block.item.notes.map(normalizeNote) : [],
           },
         };
@@ -297,8 +361,17 @@ export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDa
 export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemplateConfig) {
   const template = normalizeDailyReportTemplateConfig(templateInput);
   const defaultTemplate = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
+  const previousDefaultTemplate = getPreviousDefaultDailyReportTemplate();
   const legacyDefaultTemplate = getLegacyDefaultDailyReportTemplate();
-  const isUntouchedDefault = [defaultTemplate, legacyDefaultTemplate].some(
+  const previouslySeededV2DefaultTemplate = getPreviouslySeededV2DefaultDailyReportTemplate();
+  const previouslyMigratedV2DefaultTemplate = getPreviouslyMigratedV2DefaultDailyReportTemplate();
+  const isUntouchedDefault = [
+    defaultTemplate,
+    previousDefaultTemplate,
+    legacyDefaultTemplate,
+    previouslySeededV2DefaultTemplate,
+    previouslyMigratedV2DefaultTemplate,
+  ].some(
     (candidate) => JSON.stringify(template) === JSON.stringify(candidate),
   );
   if (!isUntouchedDefault) {
@@ -375,7 +448,14 @@ export function validateDailyReportTemplateConfig(
         throw new Error(`${block.title} required=true 时 minItems 至少为 1。`);
       }
       if (!isObject(block.item)) throw new Error(`${block.title} 缺少条目配置。`);
-      assertNonEmptyText(block.item.bodyInstruction, `${block.title}条目正文要求`);
+      if (block.item.bodyRequired !== undefined && typeof block.item.bodyRequired !== "boolean") {
+        throw new Error(`${block.title}.bodyRequired 必须是布尔值。`);
+      }
+      if (block.item.bodyRequired !== false) {
+        assertNonEmptyText(block.item.bodyInstruction, `${block.title}条目正文要求`);
+      } else if (typeof block.item.bodyInstruction !== "string") {
+        throw new Error(`${block.title}条目正文要求必须是字符串。`);
+      }
       if (!Array.isArray(block.item.notes)) throw new Error(`${block.title} 要点配置必须是数组。`);
       for (const note of block.item.notes) {
         assertNonEmptyText(note.label, `${block.title}要点标签`);
@@ -580,7 +660,10 @@ export function compileDailyReportTemplatePrompt(templateInput: DailyReportTempl
       `条目数非空校验：${block.required ? "开启" : "关闭"}`,
       `条目数量：${block.minItems ?? 0} 至 ${block.maxItems == null ? "不限" : block.maxItems} 条`,
     ].join("；");
-    lines.push(`${index}. section block「${block.title}」：${itemCountRule}；栏目要求：${block.description}；body 字段：${block.item.bodyInstruction} notes 要求：${noteRules}`);
+    const bodyRule = block.item.bodyRequired === false
+      ? `正文非空校验：关闭；body 字段可为空${block.item.bodyInstruction ? `；补充说明：${block.item.bodyInstruction}` : ""}`
+      : `正文非空校验：开启；body 字段：${block.item.bodyInstruction}`;
+    lines.push(`${index}. section block「${block.title}」：${itemCountRule}；栏目要求：${block.description}；${bodyRule}；notes 要求：${noteRules}`);
     index += 1;
   }
 

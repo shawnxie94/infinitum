@@ -425,6 +425,7 @@ model TaskSchedule {
   dailyReportCandidateLimit Int                   @default(120)
   dailyReportPlanningBatchSize Int?
   dailyReportOffsetDays     Int                   @default(0)
+  dailyReportRecentTopicLookbackDays Int           @default(7)
   dailyReportAutoPublish    Boolean               @default(false)
   dailyReportChannelIdsJson String                @default("[\"important\"]")
   cleanupRetentionDays      Int                   @default(365)

@@ -15,6 +15,7 @@ import {
   DEFAULT_AGGREGATION_SPLIT_MAX_EVENTS,
   DEFAULT_DAILY_REPORT_CANDIDATE_LIMIT,
   DEFAULT_DAILY_REPORT_OFFSET_DAYS,
+  DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS,
   isSchedulerHeartbeatStale,
   MAX_CLEANUP_RETENTION_DAYS,
   MAX_DAILY_REPORT_CANDIDATE_LIMIT,
@@ -22,6 +23,7 @@ import {
   MIN_CLEANUP_RETENTION_DAYS,
   MIN_DAILY_REPORT_CANDIDATE_LIMIT,
   MIN_DAILY_REPORT_OFFSET_DAYS,
+  MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS,
   normalizeScheduleInput,
 } from "@/lib/tasks/scheduler";
 import {
@@ -535,6 +537,7 @@ export function toTaskScheduleSnapshot(schedule: {
   dailyReportCandidateLimit: number | null;
   dailyReportPlanningBatchSize?: number | null;
   dailyReportOffsetDays: number | null;
+  dailyReportRecentTopicLookbackDays?: number | null;
   dailyReportAutoPublish: boolean | null;
   dailyReportChannelIdsJson?: string | null;
   cleanupRetentionDays: number | null;
@@ -557,6 +560,7 @@ export function toTaskScheduleSnapshot(schedule: {
     dailyReportCandidateLimit: schedule.dailyReportCandidateLimit ?? DEFAULT_DAILY_REPORT_CANDIDATE_LIMIT,
     dailyReportPlanningBatchSize: schedule.dailyReportPlanningBatchSize ?? null,
     dailyReportOffsetDays: schedule.dailyReportOffsetDays ?? DEFAULT_DAILY_REPORT_OFFSET_DAYS,
+    dailyReportRecentTopicLookbackDays: schedule.dailyReportRecentTopicLookbackDays ?? DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS,
     dailyReportAutoPublish: schedule.dailyReportAutoPublish ?? false,
     dailyReportChannelIds: parseDailyReportChannelIdsJson(schedule.dailyReportChannelIdsJson),
     cleanupRetentionDays: schedule.cleanupRetentionDays ?? DEFAULT_CLEANUP_RETENTION_DAYS,
@@ -615,6 +619,7 @@ export async function updateDefaultDailyReportSchedule(input: {
   dailyReportCandidateLimit: number;
   dailyReportPlanningBatchSize?: number | null;
   dailyReportOffsetDays: number;
+  dailyReportRecentTopicLookbackDays: number;
   dailyReportAutoPublish: boolean;
   dailyReportChannelIds?: string[];
 }) {
@@ -658,6 +663,15 @@ export async function updateDefaultDailyReportSchedule(input: {
     );
   }
 
+  if (
+    !Number.isInteger(input.dailyReportRecentTopicLookbackDays) ||
+    input.dailyReportRecentTopicLookbackDays < MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS
+  ) {
+    throw new Error(
+      `Daily report recent topic lookback days must be an integer greater than or equal to ${MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS}.`,
+    );
+  }
+
   const dailyReportChannelIds = [...new Set((input.dailyReportChannelIds ?? []).map((channelId) => channelId.trim()).filter(Boolean))];
   if (dailyReportChannelIds.length === 0) {
     throw new Error("Daily report candidate channels must include at least one channel.");
@@ -680,6 +694,7 @@ export async function updateDefaultDailyReportSchedule(input: {
       dailyReportCandidateLimit: input.dailyReportCandidateLimit,
       dailyReportPlanningBatchSize: input.dailyReportPlanningBatchSize ?? null,
       dailyReportOffsetDays: input.dailyReportOffsetDays,
+      dailyReportRecentTopicLookbackDays: input.dailyReportRecentTopicLookbackDays,
       dailyReportAutoPublish: input.dailyReportAutoPublish,
       dailyReportChannelIdsJson: serializeDailyReportChannelIds(dailyReportChannelIds),
       nextRunAt,

@@ -692,7 +692,7 @@ async function createHistoricalDailyReportSource(input: {
   });
 }
 
-async function createDailyReportSchedule(input: { autoPublish: boolean; planningBatchSize?: number | null }) {
+async function createDailyReportSchedule(input: { autoPublish: boolean; planningBatchSize?: number | null; recentTopicLookbackDays?: number }) {
   return prisma.taskSchedule.create({
     data: {
       key: "daily_report_default",
@@ -703,6 +703,7 @@ async function createDailyReportSchedule(input: { autoPublish: boolean; planning
       perSourceItemLimit: 20,
       dailyReportCandidateLimit: 120,
       dailyReportOffsetDays: 0,
+      dailyReportRecentTopicLookbackDays: input.recentTopicLookbackDays ?? 7,
       dailyReportAutoPublish: input.autoPublish,
       dailyReportPlanningBatchSize: input.planningBatchSize ?? null,
       timezone: "Asia/Shanghai",
@@ -789,6 +790,13 @@ describe("daily report service", () => {
           item: { ...(block.item as Record<string, unknown>), notes: [] },
         }
       : block);
+    testTemplate.blocks = testTemplate.blocks
+      .filter((block: Record<string, unknown>) => block.title !== "其他值得看")
+      .concat({
+        type: "text",
+        title: "趋势观察",
+        bodyInstruction: "测试趋势观察。",
+      });
     await prisma.promptConfig.update({
       where: { id: dailyReportPrompt.id },
       data: { templateJson: JSON.stringify(testTemplate) },
@@ -1542,6 +1550,13 @@ describe("daily report service", () => {
       eventObject: "Topic",
     });
     await createHistoricalDailyReportSource({
+      date: "2026-04-21",
+      status: "draft",
+      title: "草稿日报主题",
+      eventSubject: "Draft",
+      eventObject: "Topic",
+    });
+    await createHistoricalDailyReportSource({
       date: "2026-04-16",
       title: "七天外主题",
       eventSubject: "Old",
@@ -1561,7 +1576,29 @@ describe("daily report service", () => {
       }),
     ]);
     expect(recentTopics.map((topic) => topic.title)).not.toContain("失败日报主题");
+    expect(recentTopics.map((topic) => topic.title)).not.toContain("草稿日报主题");
     expect(recentTopics.map((topic) => topic.title)).not.toContain("七天外主题");
+  });
+
+  it("uses the configured lookback window when collecting recent report topics", async () => {
+    await createReportCandidates();
+    await createDailyReportSchedule({ autoPublish: false, recentTopicLookbackDays: 10 });
+    await createHistoricalDailyReportSource({
+      date: "2026-04-16",
+      title: "十天窗口内主题",
+      eventType: "release",
+      eventSubject: "OpenAI",
+      eventAction: "发布",
+      eventObject: "GPT-5",
+      eventDate: "2026-04-16",
+    });
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+
+    await generateDailyReport({ date: REPORT_DATE, force: true });
+
+    expect(getLastGeneratedDailyReportInput()?.recentTopics).toEqual([
+      expect.objectContaining({ date: "2026-04-16", title: "十天窗口内主题" }),
+    ]);
   });
 
   it("filters soft duplicate candidates with similar recent event core", async () => {

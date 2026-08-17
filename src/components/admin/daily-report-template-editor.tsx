@@ -259,6 +259,7 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
                     description: "说明该栏目选择哪些内容，以及每条要写什么。为空时自动隐藏该栏目。",
                     item: {
                       bodyInstruction: "写清楚该条目的主要内容。",
+                      bodyRequired: true,
                       notes: [],
                     },
                   });
@@ -389,19 +390,33 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
                     }
                   />
                 </FormBlock>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                  <label className="flex items-center gap-2 text-sm text-[var(--text-2)]">
-                    <input
-                      className={checkboxInputClassName}
-                      type="checkbox"
-                      checked={block.required === true}
-                      onChange={(event) => updateTemplate((draft) => {
-                        const target = draft.blocks[blockIndex];
-                        if (target?.type === "section") target.required = event.target.checked;
-                      })}
-                    />
-                    条目数非空校验
-                  </label>
+                <div className="grid grid-cols-1 gap-3 rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] p-2 sm:grid-cols-3 sm:items-stretch">
+                  <div className="flex min-h-16 h-full flex-col justify-between gap-1 px-1 py-0">
+                    <label className="flex min-h-6 items-center gap-2 text-sm leading-5 text-[var(--text-2)]">
+                      <input
+                        className={checkboxInputClassName}
+                        type="checkbox"
+                        checked={block.item.bodyRequired !== false}
+                        onChange={(event) => updateTemplate((draft) => {
+                          const target = draft.blocks[blockIndex];
+                          if (target?.type === "section") target.item.bodyRequired = event.target.checked;
+                        })}
+                      />
+                      正文非空校验
+                    </label>
+                    <label className="flex min-h-6 items-center gap-2 text-sm leading-5 text-[var(--text-2)]">
+                      <input
+                        className={checkboxInputClassName}
+                        type="checkbox"
+                        checked={block.required === true}
+                        onChange={(event) => updateTemplate((draft) => {
+                          const target = draft.blocks[blockIndex];
+                          if (target?.type === "section") target.required = event.target.checked;
+                        })}
+                      />
+                      条目数非空校验
+                    </label>
+                  </div>
                   <FormBlock label="最少条数">
                     <TextInput
                       type="number"

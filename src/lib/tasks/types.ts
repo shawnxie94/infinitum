@@ -176,6 +176,7 @@ export type TaskScheduleSnapshot = {
   dailyReportCandidateLimit: number;
   dailyReportPlanningBatchSize?: number | null;
   dailyReportOffsetDays: number;
+  dailyReportRecentTopicLookbackDays?: number;
   dailyReportAutoPublish: boolean;
   dailyReportChannelIds?: string[];
   cleanupRetentionDays: number;

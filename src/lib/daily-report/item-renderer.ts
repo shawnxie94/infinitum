@@ -8,9 +8,10 @@ export function renderDailyReportItemBody(
 ): string[] {
   const formatText = options.formatText ?? ((value: string) => value);
   const lines: string[] = [];
+  const body = typeof item.body === "string" ? item.body : "";
 
-  if (item.body.trim()) {
-    lines.push(formatText(item.body));
+  if (body.trim()) {
+    lines.push(formatText(body));
   }
 
   for (const note of item.notes ?? []) {

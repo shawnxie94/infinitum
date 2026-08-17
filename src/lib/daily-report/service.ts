@@ -38,6 +38,8 @@ import {
 } from "@/lib/daily-report/types";
 import {
   mergeDailyReportTopics,
+  normalizeDailyReportDraftForTemplate,
+  normalizeDailyReportPlanForValidation,
   splitDailyReportCandidates,
   toDailyReportPlanningCandidate,
   validateDailyReportAssessments,
@@ -70,9 +72,9 @@ import {
 } from "@/lib/tasks/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 import { buildDailyReportTaskTimeline, type DailyReportPipelineStage } from "@/lib/daily-report/timeline";
+import { DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS } from "@/lib/tasks/scheduler";
 
 const MIN_CANDIDATE_COUNT = 2;
-const DAILY_REPORT_RECENT_SOURCE_LOOKBACK_DAYS = 7;
 const DAILY_REPORT_RECENT_TOPIC_CONTEXT_LIMIT = 120;
 const MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE = 5;
 const MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE = 3;
@@ -129,6 +131,7 @@ function buildDailyReportGenerationSignature(input: {
   runtimeConfig: RuntimeConfig;
   templateSignature: string;
   planningBatchSize: number | null;
+  recentTopicLookbackDays: number;
 }) {
   const prompt = input.runtimeConfig.selectedPromptConfigs?.dailyReport;
   const modelApi = prompt?.modelApi ?? input.runtimeConfig.modelApi;
@@ -137,6 +140,7 @@ function buildDailyReportGenerationSignature(input: {
       pipelineVersion: "daily-report-selection-writing-v1",
       templateSignature: input.templateSignature,
       planningBatchSize: input.planningBatchSize,
+      recentTopicLookbackDays: input.recentTopicLookbackDays,
       modelApi: {
         baseURL: modelApi.baseURL,
         model: modelApi.model,
@@ -145,9 +149,6 @@ function buildDailyReportGenerationSignature(input: {
       },
       prompt: prompt
         ? {
-            name: prompt.name,
-            systemPrompt: prompt.systemPrompt,
-            promptTemplate: prompt.promptTemplate,
             temperature: prompt.temperature ?? null,
             maxTokens: prompt.maxTokens ?? null,
             topP: prompt.topP ?? null,
@@ -1082,7 +1083,8 @@ async function generateDailyReportInternal(input: {
   const schedule = await ensureDefaultDailyReportSchedule();
   const dailyReportChannelIds = parseDailyReportChannelIdsJson(schedule.dailyReportChannelIdsJson);
   const dailyReportSourceGroupIds = await resolveDailyReportChannelSourceGroupIds(dailyReportChannelIds);
-  const recentSources = await listRecentDailyReportSourceSnapshots(date, DAILY_REPORT_RECENT_SOURCE_LOOKBACK_DAYS);
+  const recentTopicLookbackDays = schedule.dailyReportRecentTopicLookbackDays ?? DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS;
+  const recentSources = await listRecentDailyReportSourceSnapshots(date, recentTopicLookbackDays);
   const recentTopics = buildRecentDailyReportTopics(recentSources);
   const candidateResult = await listDailyReportGenerationCandidates(
     date,
@@ -1126,6 +1128,7 @@ async function generateDailyReportInternal(input: {
     runtimeConfig,
     templateSignature,
     planningBatchSize: schedule.dailyReportPlanningBatchSize ?? null,
+    recentTopicLookbackDays,
   });
   const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics, generationSignature);
   const existing = await prisma.dailyReport.findUnique({
@@ -1340,7 +1343,7 @@ async function generateDailyReportInternal(input: {
       currentBatchIndex = batchIndex;
       const batchAssessments = checkpointBatch?.assessments
         ? validateDailyReportAssessments(batch, checkpointBatch.assessments)
-        : await runStageWithAttempts("assess", async () => validateDailyReportAssessments(batch, await provider.assessDailyReportCandidates({ candidates: batch, template })), {
+        : await runStageWithAttempts("assess", async () => validateDailyReportAssessments(batch, await provider.assessDailyReportCandidates({ candidates: batch, template, recentTopicLookbackDays })), {
           attemptKey: `ASSESS.batch.${batchIndex}`,
           matrixStage: "ASSESS",
         });
@@ -1415,14 +1418,15 @@ async function generateDailyReportInternal(input: {
     await input.onStageUpdate?.("plan");
     const planFromProvider = canResume && checkpoint?.plan
       ? checkpoint.plan as Awaited<ReturnType<typeof provider.planDailyReport>>
-      : await runStageWithAttempts("plan", async () => provider.planDailyReport({ ledger, topics, template }));
+      : await runStageWithAttempts("plan", async () => provider.planDailyReport({ ledger, topics, template, recentTopicLookbackDays }));
     const plan = canResume && checkpoint?.plan && checkpoint.completedStages.includes("plan_validate")
       ? planFromProvider
       : await runStageWithAttempts("plan_validate", async (attempt) => {
         await input.onStageUpdate?.("plan_validate");
-        const candidatePlan = attempt === 1
+        const rawCandidatePlan = attempt === 1
           ? planFromProvider
-          : await provider.planDailyReport({ ledger, topics, template });
+          : await provider.planDailyReport({ ledger, topics, template, recentTopicLookbackDays });
+        const candidatePlan = normalizeDailyReportPlanForValidation(rawCandidatePlan, topics, template);
         const violations = validateDailyReportPlan(candidatePlan, topics, planningCandidates, template);
         latestPlanAttempt = candidatePlan;
         latestPlanViolations = violations;
@@ -1469,9 +1473,9 @@ async function generateDailyReportInternal(input: {
     finalizationPlan = plan;
     finalizationSelectedCandidates = selectedCandidates;
     await input.onStageUpdate?.("write");
-    let draft = canResume && checkpoint?.draft
+    let draft = normalizeDailyReportDraftForTemplate(canResume && checkpoint?.draft
       ? checkpoint.draft as Awaited<ReturnType<typeof provider.writeDailyReport>>
-      : await runStageWithAttempts("write", async () => provider.writeDailyReport({ selectedCandidates, plan, template }));
+      : await runStageWithAttempts("write", async () => provider.writeDailyReport({ selectedCandidates, plan, template })), template);
     let draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
     stageAttempts.VALIDATE = Math.min(getDailyReportAttemptLimit("VALIDATE"), 1);
     validationViolationCount = draftViolations.length;
@@ -1495,9 +1499,9 @@ async function generateDailyReportInternal(input: {
     if (draftViolations.length > 0) {
       repairCount = 1;
       await input.onStageUpdate?.("repair");
-      draft = await runStageWithAttempts("repair", async () => provider.repairDailyReportDraft({ draft, violations: draftViolations, plan, template }), {
+      draft = normalizeDailyReportDraftForTemplate(await runStageWithAttempts("repair", async () => provider.repairDailyReportDraft({ draft, violations: draftViolations, plan, template }), {
         matrixStage: "REPAIR",
-      });
+      }), template);
       draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
       validationViolationCount = draftViolations.length;
       if (latestCheckpoint) {

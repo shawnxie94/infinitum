@@ -243,6 +243,7 @@ export async function saveDefaultDailyReportSchedule(input: {
   dailyReportCandidateLimit: number;
   dailyReportPlanningBatchSize: number | null;
   dailyReportOffsetDays: number;
+  dailyReportRecentTopicLookbackDays: number;
   dailyReportAutoPublish: boolean;
   dailyReportChannelIds: string[];
 }) {

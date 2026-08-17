@@ -303,7 +303,7 @@ export async function listRecentDailyReportSourceSnapshots(
         },
         timezone: DAILY_REPORT_TIMEZONE,
         status: {
-          not: "failed",
+          equals: "published",
         },
       },
     },

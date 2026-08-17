@@ -747,6 +747,35 @@ describe("admin settings service", () => {
       .resolves.toMatchObject({ templateJson: customTemplateJson });
   });
 
+  it("does not rewrite an unchanged custom legacy migration audit", async () => {
+    await getIngestionRuntimeConfig();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report", isDefault: true },
+      data: {
+        systemPrompt: "自定义旧日报提示词",
+        templateJson: JSON.stringify({
+          opening: { label: "自定义开场", instruction: "只写自定义摘要。" },
+          sections: [{ title: "核心动态", description: "只写自定义栏目。" }],
+          closing: { label: "自定义收尾", instruction: "只写自定义收尾。" },
+        }),
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+    const first = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report", isDefault: true },
+      select: { templateMigrationAuditJson: true },
+    });
+
+    await ensureRuntimeConfigSeeded();
+    const second = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report", isDefault: true },
+      select: { templateMigrationAuditJson: true },
+    });
+
+    expect(second.templateMigrationAuditJson).toBe(first.templateMigrationAuditJson);
+  });
+
   it("preserves null daily_report systemPrompts when reseeding", async () => {
     await getIngestionRuntimeConfig();
     await prisma.promptConfig.updateMany({

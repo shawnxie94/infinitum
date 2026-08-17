@@ -101,7 +101,10 @@ export function validateDailyReportAssessments(
       || !nullableString(rawAssessment.eventHint.eventAction)
       || !nullableString(rawAssessment.eventHint.eventObject)
       || !nullableString(rawAssessment.eventHint.eventDate)) {
-      throw new Error(`ASSESS 候选 ${candidateId} 的 eventHint 结构无效。`);
+      const eventHintShape = isRecord(rawAssessment.eventHint)
+        ? Object.keys(rawAssessment.eventHint).sort().join(",") || "空对象"
+        : rawAssessment.eventHint === null ? "null" : typeof rawAssessment.eventHint;
+      throw new Error(`ASSESS 候选 ${candidateId} 的 eventHint 结构无效（期望包含 eventType,eventSubject,eventAction,eventObject,eventDate，实际为 ${eventHintShape}）。`);
     }
     if (typeof rawAssessment.evidenceSummary !== "string" || !rawAssessment.evidenceSummary.trim()) {
       throw new Error(`ASSESS 候选 ${candidateId} 的 evidenceSummary 不能为空。`);
@@ -177,6 +180,55 @@ function sectionBlocks(template: NormalizedDailyReportTemplate) {
   return template.blocks.filter((block): block is DailyReportTemplateSectionBlock => block.type === "section");
 }
 
+/**
+ * Apply template-owned presentation constraints before validation/persistence.
+ * A section with bodyRequired=false is intentionally title/source-only; model
+ * output must not be allowed to reintroduce a body into the rendered report.
+ */
+export function normalizeDailyReportDraftForTemplate(
+  draft: DailyReportDraft,
+  template: NormalizedDailyReportTemplate,
+): DailyReportDraft {
+  if (!draft || typeof draft !== "object" || Array.isArray(draft)) return draft;
+  const rawDraft = draft as unknown as Record<string, unknown>;
+  if (!Array.isArray(rawDraft.blocks)) return draft;
+
+  const bodylessSectionKeys = new Set(
+    sectionBlocks(template)
+      .filter((block) => block.item.bodyRequired === false && block.key)
+      .map((block) => block.key as string),
+  );
+  const bodylessSectionTitles = new Set(
+    sectionBlocks(template)
+      .filter((block) => block.item.bodyRequired === false)
+      .map((block) => block.title),
+  );
+
+  return {
+    ...rawDraft,
+    blocks: rawDraft.blocks.map((rawBlock) => {
+      if (!rawBlock || typeof rawBlock !== "object" || Array.isArray(rawBlock)) return rawBlock;
+      const block = rawBlock as Record<string, unknown>;
+      if (block.type !== "section" || !Array.isArray(block.items)) return block;
+      const blockKey = typeof block.blockKey === "string" ? block.blockKey.trim() : "";
+      const blockTitle = typeof block.title === "string" ? block.title.trim() : "";
+      const bodyless = bodylessSectionKeys.has(blockKey)
+        || (!blockKey && bodylessSectionTitles.has(blockTitle));
+      return {
+        ...block,
+        items: block.items.map((rawItem) => {
+          if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) return rawItem;
+          const item = rawItem as Record<string, unknown>;
+          return {
+            ...item,
+            body: bodyless ? "" : typeof item.body === "string" ? item.body : "",
+          };
+        }),
+      };
+    }),
+  } as unknown as DailyReportDraft;
+}
+
 function textBlocks(template: NormalizedDailyReportTemplate) {
   return template.blocks.filter((block): block is DailyReportTemplateTextBlock => block.type === "text");
 }
@@ -195,6 +247,82 @@ function stringArray(value: unknown) {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
     ? value as string[]
     : null;
+}
+
+/**
+ * Remove only deterministic plan conflicts before applying the hard validator.
+ * Unknown references and ownership mismatches are intentionally preserved so
+ * they still fail validation instead of being silently hidden.
+ */
+export function normalizeDailyReportPlanForValidation(
+  plan: DailyReportPlan,
+  topics: DailyReportMergedTopic[],
+  template: NormalizedDailyReportTemplate,
+): DailyReportPlan {
+  if (!isRecord(plan) || !Array.isArray(plan.sections)) {
+    return plan;
+  }
+
+  const sectionBlocksByKey = new Map(
+    sectionBlocks(template)
+      .filter((block) => block.key)
+      .map((block) => [block.key!, block]),
+  );
+  const assignedTopicIds = new Set<string>();
+  const assignedCandidateIds = new Set<number>();
+
+  const sections = plan.sections.map((rawSection) => {
+    if (!isRecord(rawSection)) return rawSection;
+
+    const rawTopicIds = stringArray(rawSection.topicIds);
+    const rawCandidateIds = numberArray(rawSection.candidateIds);
+    if (!rawTopicIds || !rawCandidateIds) return rawSection;
+
+    const topicIds = rawTopicIds.filter((topicId) => {
+      if (assignedTopicIds.has(topicId)) return false;
+      assignedTopicIds.add(topicId);
+      return true;
+    });
+    const blockKey = typeof rawSection.blockKey === "string" ? rawSection.blockKey.trim() : "";
+    const maxItems = sectionBlocksByKey.get(blockKey)?.maxItems;
+    const candidateIds: number[] = [];
+
+    for (const candidateId of rawCandidateIds) {
+      if (assignedCandidateIds.has(candidateId)) continue;
+
+      // Keep unknown candidates and ownership mismatches for the validator to
+      // report. Only discard duplicates that can be proven redundant locally.
+      const ownerTopicIds = topics
+        .filter((topic) => topic.candidateIds.includes(candidateId))
+        .map((topic) => topic.topicId);
+      const hasCurrentOwner = ownerTopicIds.some((topicId) => topicIds.includes(topicId));
+      const hasPreviouslyAssignedOwner = ownerTopicIds.some(
+        (topicId) => assignedTopicIds.has(topicId) && !topicIds.includes(topicId),
+      );
+      if (!hasCurrentOwner && hasPreviouslyAssignedOwner) continue;
+
+      assignedCandidateIds.add(candidateId);
+      candidateIds.push(candidateId);
+      if (maxItems != null && candidateIds.length >= maxItems) break;
+    }
+
+    return {
+      ...rawSection,
+      topicIds,
+      candidateIds,
+    };
+  }) as DailyReportPlan["sections"];
+
+  const selectedCandidateIds = new Set(sections.flatMap((section) => section.candidateIds));
+  const excludedCandidateIds = numberArray(plan.excludedCandidateIds)
+    ?.filter((candidateId, index, values) => values.indexOf(candidateId) === index && !selectedCandidateIds.has(candidateId))
+    ?? plan.excludedCandidateIds;
+
+  return {
+    ...plan,
+    sections,
+    excludedCandidateIds,
+  };
 }
 
 export function validateDailyReportPlan(
@@ -263,9 +391,16 @@ export function validateDailyReportPlan(
       if (!candidate) violations.push({ code: "unknown_candidate", stage: "plan", candidateIds: [candidateId], message: `计划引用未知候选 ${candidateId}。` });
       if (selected.has(candidateId)) violations.push({ code: "duplicate_candidate", stage: "plan", candidateIds: [candidateId], message: `候选 ${candidateId} 被重复选择。` });
       selected.add(candidateId);
-      const matchingTopic = topics.find((topic) => topic.candidateIds.includes(candidateId));
-      if (candidate && (!matchingTopic || !topicIds.includes(matchingTopic.topicId))) {
-        violations.push({ code: "candidate_topic_mismatch", stage: "plan", blockKey, candidateIds: [candidateId], message: `候选 ${candidateId} 不属于栏目引用的主题。` });
+      const matchingTopics = topics.filter((topic) => topic.candidateIds.includes(candidateId));
+      if (candidate && (!matchingTopics.length || !matchingTopics.some((topic) => topicIds.includes(topic.topicId)))) {
+        const ownerTopicIds = matchingTopics.map((topic) => topic.topicId).join(", ") || "无";
+        violations.push({
+          code: "candidate_topic_mismatch",
+          stage: "plan",
+          blockKey,
+          candidateIds: [candidateId],
+          message: `候选 ${candidateId} 不属于栏目引用的主题（候选所属主题：${ownerTopicIds}，栏目引用主题：${topicIds.join(", ")}）。`,
+        });
       }
     }
     if (block) {
@@ -359,15 +494,15 @@ export function validateDailyReportDraft(
     if (templateBlock.maxItems != null && items.length > templateBlock.maxItems) {
       violations.push({ code: "draft_max_items", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 超过模板最大条数。` });
     }
-    for (const rawItem of items) {
+    items.forEach((rawItem, itemIndex) => {
       if (!isRecord(rawItem)) {
         violations.push({ code: "draft_schema", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 包含无效条目。` });
-        continue;
+        return;
       }
       const itemSourceIds = numberArray(rawItem.sourceIds);
       if (!itemSourceIds) {
         violations.push({ code: "draft_schema", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 条目的 sourceIds 必须是数字数组。` });
-        continue;
+        return;
       } else if (itemSourceIds.length === 0) {
         violations.push({ code: "draft_source_empty", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 条目的 sourceIds 不能为空。` });
       }
@@ -380,7 +515,11 @@ export function validateDailyReportDraft(
           violations.push({ code: "draft_source_not_planned", stage: "draft", candidateIds: [sourceId], message: `草稿引用了未纳入计划的候选 ${sourceId}。` });
         }
       }
-      if (typeof rawItem.title !== "string" || !rawItem.title.trim() || typeof rawItem.body !== "string" || !rawItem.body.trim()) {
+      const invalidTitle = typeof rawItem.title !== "string" || !rawItem.title.trim();
+      const invalidBody = templateBlock.item.bodyRequired === false
+        ? rawItem.body !== undefined && typeof rawItem.body !== "string"
+        : typeof rawItem.body !== "string" || !rawItem.body.trim();
+      if (invalidTitle || invalidBody) {
         violations.push({ code: "draft_item_empty", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 存在标题或正文为空的条目。` });
       }
       if (rawItem.notes !== undefined && !Array.isArray(rawItem.notes)) {
@@ -393,10 +532,19 @@ export function validateDailyReportDraft(
           && typeof rawNote.text === "string"
           && rawNote.text.trim().length > 0);
         if (!matched) {
-          violations.push({ code: "draft_required_note_missing", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 条目缺少必填要点 ${note.label}。` });
+          const itemTitle = typeof rawItem.title === "string" && rawItem.title.trim()
+            ? `「${rawItem.title.trim()}」`
+            : "（标题为空）";
+          const sourceSummary = itemSourceIds.length > 0 ? `，来源 ${itemSourceIds.join(", ")}` : "";
+          violations.push({
+            code: "draft_required_note_missing",
+            stage: "draft",
+            blockKey: templateBlock.key,
+            message: `${templateBlock.title} 第 ${itemIndex + 1} 条${itemTitle}${sourceSummary}缺少必填要点 ${note.label}（要求：${note.instruction}）。`,
+          });
         }
       }
-    }
+    });
   }
   for (const block of templateTextBlocks) {
     if (!seenTextTitles.has(block.title)) {

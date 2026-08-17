@@ -8,6 +8,7 @@ import {
 } from "@/lib/daily-report/date";
 import { buildDailyReportDetailMarkdown, buildDailyReportExportMarkdown } from "@/lib/daily-report/export";
 import { normalizeDailyReportContent } from "@/lib/daily-report/content";
+import { renderDailyReportItemBody } from "@/lib/daily-report/item-renderer";
 import { renderDailyReportMarkdown } from "@/lib/daily-report/renderer";
 import {
   buildDailyReportCandidateCoverage,
@@ -407,6 +408,10 @@ describe("daily report utilities", () => {
 
     expect(markdown).not.toContain("## 安全与风险");
     expect(markdown).not.toContain("## 开源与工具");
+  });
+
+  it("renders an omitted optional item body as a compact item", () => {
+    expect(renderDailyReportItemBody({ title: "其他值得看", sourceIds: [1] } as never)).toEqual([]);
   });
 
   it("escapes only link-breaking markdown characters in source link titles", () => {

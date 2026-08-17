@@ -19,7 +19,8 @@ describe("daily report template config", () => {
     expect(prompt).toContain('"headline":"GPT-5.6 有限预览、Mythos 5 白名单恢复"');
     expect(prompt).toContain('"type":"text"');
     expect(prompt).toContain('"title":"摘要"');
-    expect(prompt).toContain('"title":"趋势观察"');
+    expect(prompt).toContain('"title":"其他值得看"');
+    expect(prompt).toContain("正文非空校验：关闭；body 字段可为空");
     expect(prompt).not.toContain('"role"');
     expect(prompt).toContain("section block「热点事件」：条目数非空校验：开启；条目数量：3 至 5 条");
     expect(prompt).toContain("section block「安全与风险」：条目数非空校验：关闭；条目数量：0 至 5 条");
@@ -29,7 +30,7 @@ describe("daily report template config", () => {
     expect(prompt).toContain("items 为空数组时会在渲染时自动隐藏");
     expect(prompt).toContain("headline 字段：基于最终输出的“热点事件”栏目全部条目生成标题主题");
     expect(prompt).toContain("历史主题去重规则：");
-    expect(prompt).toContain("如果候选内容与最近 7 天已写主题只是同一事件的重复报道");
+    expect(prompt).toContain("如果候选内容与历史主题召回窗口内已写主题只是同一事件的重复报道");
     expect(prompt).toContain("每条正文约 120-260 字");
     expect(prompt).toContain("每条正文约 80-180 字");
     expect(prompt).toContain("每个 item 必须包含 title、sourceIds，建议包含 body");
@@ -37,7 +38,7 @@ describe("daily report template config", () => {
     expect(prompt).toContain("body 为空字符串或缺失时会按紧凑模式只展示标题和来源");
     expect(prompt).toContain("无法确定合法编号时不要输出该条");
     expect(prompt).toContain("notes 要求：重点 必填");
-    expect(prompt).toContain("不要复述摘要或逐条回顾事件");
+    expect(prompt).toContain("只保留独立且有明确事实增量");
     expect(prompt).not.toContain("可根据管理员习惯调整");
     expect(prompt).not.toContain("openingLabel");
   });
@@ -88,7 +89,7 @@ describe("daily report template config", () => {
     const template = parseDailyReportTemplateJson(JSON.stringify(oldTemplate))!;
 
     expect(template.headlineInstruction).toContain("MM-DD日报");
-    expect(template.recentTopicRules[0]).toContain("最近 7 天已写主题");
+    expect(template.recentTopicRules[0]).toContain("历史主题召回窗口");
   });
 
   it("updates wording for an untouched official default template only", () => {
@@ -111,6 +112,86 @@ describe("daily report template config", () => {
 
     template.headlineInstruction = "管理员自定义标题规则。";
     expect(upgradeDefaultDailyReportTemplate(template).headlineInstruction).toBe("管理员自定义标题规则。");
+  });
+
+  it("updates the previously seeded v2 default with generated section keys", () => {
+    const template = parseDailyReportTemplateJson(JSON.stringify({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      headlineInstruction:
+        "基于最终输出的“热点事件”栏目全部条目生成标题主题，在 64 字限制内尽量覆盖每个热点事件的核心主体或动作；主题数量不固定，不强行凑数，也不要从其他栏目或趋势观察中提炼抽象主题；用“、”分隔；不要包含日期、年份、日报、AI 日报、Markdown、引号或尾随标点；会与“MM-DD日报 | ”前缀合成最终标题。",
+      recentTopicRules: [
+        "如果候选内容与最近 7 天已写主题只是同一事件的重复报道，不要再次写入。",
+        ...DEFAULT_DAILY_REPORT_TEMPLATE.recentTopicRules.slice(1),
+      ],
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks
+        .filter((block) => !(block.type === "section" && block.title === "其他值得看"))
+        .concat({
+          type: "text",
+          title: "趋势观察",
+          bodyInstruction:
+            "约 80-140 字。不要复述摘要或逐条回顾事件；从本期信息中提炼 1 条后续趋势、潜在影响或需要继续观察的判断，说明它可能如何影响普通用户、开发者、内容创作者、企业采购或日常工作流。只基于输入信息给出谨慎判断，不引入输入之外的新事实。可使用有限 Markdown 行内标记突出关键信息。",
+        })
+        .map((block) => {
+          if (block.type !== "section") return block;
+          const legacyDescriptions: Record<string, string> = {
+            "热点事件": "输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
+            "变更与实践": "输出 2-5 条。聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。",
+            "安全与风险": "可为空；有相关内容时输出 1-5 条。聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。",
+            "开源与工具": "可为空；有相关内容时输出 1-5 条。聚焦值得开发者关注的开源项目、工具链、框架或工程资产。",
+            "数据与洞察": "可为空；有相关内容时输出 1-5 条。聚焦关键数据、趋势、研究结论或生态变化信号。",
+          };
+          const legacyKeys: Record<string, string> = {
+            "热点事件": "section-1e08e0da",
+            "变更与实践": "section-424b7c3c",
+            "安全与风险": "section-8d33ad5b",
+            "开源与工具": "section-ec386769",
+            "数据与洞察": "section-3a8fd4ec",
+          };
+          return {
+            ...block,
+            key: legacyKeys[block.title],
+            description: legacyDescriptions[block.title],
+          };
+        }),
+    }))!;
+
+    expect(upgradeDefaultDailyReportTemplate(template)).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE);
+  });
+
+  it("keeps optional section body instructions empty when cleared", () => {
+    const template = parseDailyReportTemplateJson(JSON.stringify({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks.map((block) =>
+        block.type === "section" && block.title === "其他值得看"
+          ? { ...block, item: { ...block.item, bodyInstruction: "   ", bodyRequired: false } }
+          : block,
+      ),
+    }))!;
+
+    expect(template.blocks.at(-1)).toMatchObject({
+      type: "section",
+      title: "其他值得看",
+      item: { bodyInstruction: "", bodyRequired: false },
+    });
+  });
+
+  it("removes the old default explanation from optional section bodies", () => {
+    const template = parseDailyReportTemplateJson(JSON.stringify({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks.map((block) =>
+        block.type === "section" && block.title === "其他值得看"
+          ? {
+              ...block,
+              item: {
+                ...block.item,
+                bodyInstruction: "不要求输出正文，仅保留条目标题和来源；如确有必要可补充简短说明。",
+              },
+            }
+          : block,
+      ),
+    }))!;
+
+    expect(upgradeDefaultDailyReportTemplate(template)).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE);
   });
 
   it("always compiles empty sections as hidden by render default", () => {

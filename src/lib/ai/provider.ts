@@ -111,11 +111,13 @@ export type AiProvider = {
   assessDailyReportCandidates(input: {
     candidates: DailyReportPlanningCandidate[];
     template: NormalizedDailyReportTemplate;
+    recentTopicLookbackDays?: number;
   }): Promise<DailyReportCandidateAssessment[]>;
   planDailyReport(input: {
     ledger: DailyReportAssessmentLedger;
     topics: DailyReportMergedTopic[];
     template: NormalizedDailyReportTemplate;
+    recentTopicLookbackDays?: number;
   }): Promise<DailyReportPlan>;
   writeDailyReport(input: {
     selectedCandidates: DailyReportPlanningCandidate[];
@@ -182,6 +184,8 @@ const DEFAULT_PARSED_AGGREGATION_MAX_EVENTS = 20;
 const TRANSIENT_MODEL_API_RETRY_COUNT = 1;
 const JSON_PARSE_RETRY_COUNT = 1;
 const MAX_DAILY_REPORT_REPAIR_TOKENS = 8192;
+const DAILY_REPORT_JSON_SYNTAX_RULE =
+  "JSON 语法是硬约束：所有字符串内部的双引号必须转义为 \\\"，换行必须转义为 \\n；字段之间的逗号和所有括号必须完整；不要把自然语言示例或 Markdown 放在 JSON 对象外。";
 
 type ModelApiCircuitState = {
   failures: number[];
@@ -1291,12 +1295,33 @@ export function createAiProvider(
     `输入 JSON：${JSON.stringify(payload.input)}`,
   ].join("\n");
 
-  const buildDailyReportPlanningTemplate = (template: NormalizedDailyReportTemplate) => {
+  const buildDailyReportAssessmentTemplate = (template: NormalizedDailyReportTemplate, recentTopicLookbackDays?: number) => ({
+    schemaVersion: template.schemaVersion,
+    sections: template.blocks
+      .filter((block): block is DailyReportTemplateSectionBlock => block.type === "section")
+      .map((section) => ({
+        blockKey: section.key,
+        blockTitle: section.title,
+        description: section.description,
+        required: section.required === true,
+        minItems: section.minItems ?? 0,
+        maxItems: section.maxItems,
+      })),
+    recentTopicRules: template.recentTopicRules,
+    recentTopicLookbackDays: recentTopicLookbackDays ?? null,
+    globalRules: template.globalRules,
+  });
+
+  const buildDailyReportPlanningTemplate = (template: NormalizedDailyReportTemplate, recentTopicLookbackDays?: number) => {
     const sections = template.blocks.filter(
       (block): block is DailyReportTemplateSectionBlock => block.type === "section",
     );
     return {
       schemaVersion: template.schemaVersion,
+      headlineInstruction: template.headlineInstruction,
+      recentTopicRules: template.recentTopicRules,
+      recentTopicLookbackDays: recentTopicLookbackDays ?? null,
+      globalRules: template.globalRules,
       sections: sections.map((section) => ({
         blockKey: section.key,
         blockTitle: section.title,
@@ -1308,11 +1333,19 @@ export function createAiProvider(
     };
   };
 
+  const buildDailyReportWritingTemplate = (template: NormalizedDailyReportTemplate) => ({
+    schemaVersion: template.schemaVersion,
+    headlineInstruction: template.headlineInstruction,
+    globalRules: template.globalRules,
+    blocks: template.blocks,
+  });
+
   const buildDailyReportStageConfig = (stage: string, contract: string): PromptRuntimeConfig => ({
     ...dailyReportConfig,
     systemPrompt: [
-      dailyReportConfig.systemPrompt.trim(),
-      `当前是日报 ${stage} 阶段，不是旧版一次性日报生成。必须忽略旧版 headline/blocks 输出示例，只遵守本阶段合同。${contract}`,
+      "你是中文 AI 新闻日报流水线的阶段执行器。只基于输入内容工作，不补造事实。",
+      `当前阶段：${stage}。只执行当前阶段职责，不执行其他阶段职责。${contract}`,
+      DAILY_REPORT_JSON_SYNTAX_RULE,
       "最终只输出本阶段合同要求的合法 JSON 对象，不要输出 Markdown、代码块或解释。",
     ].filter(Boolean).join("\n\n"),
   });
@@ -1418,13 +1451,13 @@ export function createAiProvider(
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "ASSESS",
-          "不得写正文、不得合并主题、不得重新编号或遗漏候选；必须逐一返回输入中的每个 candidateId。",
+          "不得写正文、不得合并主题、不得重新编号或遗漏候选；必须逐一返回输入中的每个 candidateId。每个候选必须同时满足：candidateId 为输入中的整数；relevanceScore 为 0 到 100 的数字；isWorthReading 为布尔值；suggestedBlockKey 为字符串或 null；exclusionReason 为字符串或 null；eventHint 为包含 eventType、eventSubject、eventAction、eventObject、eventDate 五个字段的对象，字段值只能是字符串或 null；evidenceSummary 为非空字符串；confidence 为 0 到 1 的数字。没有值时使用 null，不能省略字段。",
         ),
         buildDailyReportStagePrompt(
           "ASSESS",
-          "逐一评估输入中的每个 candidateId。每个候选必须返回一次，不得新增或遗漏 ID。返回 {assessments:[{candidateId,relevanceScore,isWorthReading,suggestedBlockKey,exclusionReason,eventHint,evidenceSummary,confidence}]}。只做选题评估，不写正文，不合并主题。",
+          "逐一评估输入中的每个 candidateId。每个候选必须返回一次，不得新增或遗漏 ID。返回 {assessments:[{candidateId,relevanceScore,isWorthReading,suggestedBlockKey,exclusionReason,eventHint,evidenceSummary,confidence}]}。字段合同：candidateId 为输入中的整数；relevanceScore 为 0 到 100 的数字；isWorthReading 为布尔值；suggestedBlockKey 和 exclusionReason 为字符串或 null；eventHint 的固定结构为 {eventType:string|null,eventSubject:string|null,eventAction:string|null,eventObject:string|null,eventDate:string|null}；evidenceSummary 为非空字符串；confidence 为 0 到 1 的数字。没有值时使用 null，不能省略任何字段。只做选题评估，不写正文，不合并主题。",
           {
-            template: input.template,
+            template: buildDailyReportAssessmentTemplate(input.template, input.recentTopicLookbackDays),
             input: input.candidates.map(compactDailyReportModelCandidate),
           },
         ),
@@ -1436,12 +1469,19 @@ export function createAiProvider(
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "PLAN",
-          "必须返回 schemaVersion=1；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于可规划栏目，绝不能出现在 sections 中；每个 topicId 和 candidateId 最多出现一次；candidateIds 必须来自对应 topicIds；excludedCandidateIds 与已选 candidateIds 不得交集。",
+          "必须返回 schemaVersion=1；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于可规划栏目，绝不能出现在 sections 中；每个 topicId 和 candidateId 最多出现一次；candidateIds 的归属以输入 topics[].candidateIds 为唯一事实，栏目中的每个 candidateId 必须属于该栏目 topicIds 的 candidateIds 并且必须同时列出它的所属 topicId，不能根据标题、编号或 selectionRationale 推断归属；excludedCandidateIds 与已选 candidateIds 不得交集。输出前逐项检查 topicId-candidateId 映射。",
         ),
         buildDailyReportStagePrompt(
           "PLAN",
-          "基于完整评估账本和本地合并主题做全局规划。template.sections 是唯一可规划栏目清单，输出的每个 section.blockKey 必须逐字复制其中一个 blockKey。只返回 {schemaVersion:1,headlineHint,sections:[{blockKey,blockTitle,topicIds,candidateIds}],excludedCandidateIds,selectionRationale}。不得写正文、不得创建输入之外的候选或栏目，不得输出 text block。",
-          { template: buildDailyReportPlanningTemplate(input.template), input: { ledger: input.ledger, topics: input.topics } },
+          "基于完整评估账本和本地合并主题做全局规划。template.sections 是唯一可规划栏目清单，输出的每个 section.blockKey 必须逐字复制其中一个 blockKey。candidateIds 必须按输入的 topicCandidateMap 校验：先选择 topicIds，再从这些 topicId 对应的 candidateIds 中选择候选；如果选择某个候选，必须把包含该候选的 topicId 也放入同一 section，不能只在 selectionRationale 中提及。只返回 {schemaVersion:1,headlineHint,sections:[{blockKey,blockTitle,topicIds,candidateIds}],excludedCandidateIds,selectionRationale}。不得写正文、不得创建输入之外的候选或栏目，不得输出 text block。",
+          {
+            template: buildDailyReportPlanningTemplate(input.template, input.recentTopicLookbackDays),
+            input: {
+              ledger: input.ledger,
+              topics: input.topics,
+              topicCandidateMap: input.topics.map((topic) => ({ topicId: topic.topicId, candidateIds: topic.candidateIds })),
+            },
+          },
         ),
         parsePlanOutput,
       );
@@ -1452,12 +1492,12 @@ export function createAiProvider(
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "WRITE",
-          "只能使用 plan 中的 section、topic 和 candidate；不得重新选题、合并主题、增加栏目或补造事实。",
+          "只能使用 plan 中的 section、topic 和 candidate；不得重新选题、合并主题、增加栏目或补造事实。顶层返回 {headline:string,blocks:Array}；text block 返回 {type:\"text\",title,body}，section block 返回 {type:\"section\",blockKey,title,items}，item 返回 {title,body,notes,sourceIds}；notes 必须是 {label:string,text:string} 数组，模板中的 required 和 instruction 只是规则元数据，绝不能原样输出到 notes；模板中 required=true 的 note 必须按模板 label 原样输出且 text 非空，required=false 的 note 可按内容需要输出；只使用模板中定义的 text block 和已规划的 section block。",
         ),
         buildDailyReportStagePrompt(
           "WRITE",
-          "严格按照全局计划和模板写作，只返回日报 Draft JSON。只能使用计划中的 candidateId/sourceNumber，不得重新选题、合并、增加栏目或补造事实。每个 section block 必须包含与模板一致的 blockKey 和 title；每个 section item 必须包含 title、body、sourceIds。",
-          { template: input.template, input: { plan: input.plan, selectedCandidates: input.selectedCandidates.map(compactDailyReportModelCandidate) } },
+          "严格按照全局计划和模板写作，只返回日报 Draft JSON。只能使用计划中的 candidateId/sourceNumber，不得重新选题、合并、增加栏目或补造事实。每个 section block 必须包含与模板一致的 blockKey 和 title；每个 section item 必须包含 title、body、sourceIds 和 notes；当模板中该栏目 item.bodyRequired=false 时 body 必须为空字符串或省略，不能输出正文，否则 body 必须非空；每个 notes 元素只能是 {label,text}，不要输出 required 或 instruction；notes 中必须包含模板配置的全部 required=true note，label 必须逐字匹配、text 必须非空；每个 text block 必须包含 type、title、body。",
+          { template: buildDailyReportWritingTemplate(input.template), input: { plan: input.plan, selectedCandidates: input.selectedCandidates.map(compactDailyReportModelCandidate) } },
         ),
         parseDraftOutput,
       );
@@ -1467,15 +1507,17 @@ export function createAiProvider(
     async repairDailyReportDraft(input) {
       const output = await completeJsonWithParseRetry(
         {
-          ...dailyReportConfig,
-          systemPrompt: `${dailyReportConfig.systemPrompt}\n你是日报结构修复器，只修复给定违规，不改变事实和计划。`,
+          ...buildDailyReportStageConfig(
+            "REPAIR",
+            "逐条修复输入 violations 中列出的问题，不改变事实、计划允许的候选和栏目；必须按违规中的栏目、第几条、条目标题和来源定位目标 item，不能只修复其中一条。补齐模板要求的 required note 时必须使用模板原始 label 和非空 text，notes 元素只能包含 label 和 text。输出前逐项确认每条 violation 都已消除。",
+          ),
           temperature: 0,
           maxTokens: Math.min(dailyReportConfig.maxTokens ?? 4096, MAX_DAILY_REPORT_REPAIR_TOKENS),
         },
         buildDailyReportStagePrompt(
           "REPAIR",
-          "只修复 violations 中列出的问题。保持 plan 允许的候选和栏目不变，返回完整 Draft JSON。",
-          { template: input.template, input: { draft: input.draft, violations: input.violations, plan: input.plan } },
+          "只修复 violations 中列出的问题。保持 plan 允许的候选和栏目不变，返回完整 Draft JSON；对于缺失的 required note，按违规信息定位到对应的第 N 条 item，按模板要求补齐对应 label 和非空 text，删除 notes 中的 required/instruction 元数据字段；相同栏目出现多个缺失要点时必须逐条补齐，不得遗漏。",
+          { template: buildDailyReportWritingTemplate(input.template), input: { draft: input.draft, violations: input.violations, plan: input.plan } },
         ),
         parseDraftOutput,
       );

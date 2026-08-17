@@ -687,11 +687,23 @@ async function upgradePreviousDefaultItemUnderstandingPrompt() {
 }
 
 async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
+  const hasMigrationAudit = (
+    auditJson: string | null,
+    expected: { from: string; mode: string },
+  ) => {
+    if (!auditJson) return false;
+    try {
+      const audit = JSON.parse(auditJson) as Record<string, unknown>;
+      return audit.from === expected.from && audit.to === 2 && audit.mode === expected.mode;
+    } catch {
+      return false;
+    }
+  };
+
   const defaultDailyReportPrompts = await prisma.promptConfig.findMany({
     where: {
       type: PromptConfigType.daily_report,
       isDefault: true,
-      templateMigrationAuditJson: null,
     },
     select: {
       id: true,
@@ -722,21 +734,17 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
         continue;
       }
       const normalizedJson = stringifyDailyReportTemplate(normalizedTemplate);
-      if (normalizedJson !== config.templateJson || !config.templateMigrationAuditJson) {
+      if (normalizedJson !== config.templateJson) {
         try {
           await prisma.promptConfig.update({
             where: { id: config.id },
             data: {
-              ...(normalizedJson !== config.templateJson
-                ? {
-                    templateJson: normalizedJson,
-                    systemPrompt: compileDailyReportTemplatePrompt(normalizedTemplate),
-                  }
-                : {}),
+              templateJson: normalizedJson,
+              systemPrompt: compileDailyReportTemplatePrompt(normalizedTemplate),
               templateMigrationAuditJson: JSON.stringify({
                 from: "v2-default-wording",
                 to: 2,
-                mode: normalizedJson === config.templateJson ? "verified" : "silent",
+                mode: "silent",
                 migratedAt: new Date().toISOString(),
               }),
             },
@@ -766,6 +774,10 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
         throw error;
       }
     } else if (migrationStatus === "custom_legacy_requires_migration") {
+      if (hasMigrationAudit(config.templateMigrationAuditJson, {
+        from: "legacy-opening-sections-closing",
+        mode: "admin_required",
+      })) continue;
       await prisma.promptConfig.update({
         where: { id: config.id },
         data: {
@@ -778,6 +790,10 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
         },
       });
     } else if (migrationStatus === "invalid") {
+      if (hasMigrationAudit(config.templateMigrationAuditJson, {
+        from: "unknown",
+        mode: "invalid_requires_admin",
+      })) continue;
       await prisma.promptConfig.update({
         where: { id: config.id },
         data: {

@@ -10,6 +10,7 @@ const scheduleUpdateSchema = z.object({
   dailyReportCandidateLimit: z.number().int().min(2).max(500),
   dailyReportPlanningBatchSize: z.number().int().positive().nullable().optional(),
   dailyReportOffsetDays: z.number().int().min(0).max(365),
+  dailyReportRecentTopicLookbackDays: z.number().int().min(1),
   dailyReportAutoPublish: z.boolean(),
   dailyReportChannelIds: z.array(z.string().trim().min(1)).min(1).max(12),
 });

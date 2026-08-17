@@ -81,7 +81,7 @@ export const DEFAULT_CLUSTER_MATCH_USER_PROMPT_TEMPLATE = `当前内容标题：
 
 export const DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE = `日期：{{date}}
 时区：{{timezone}}
-最近 7 天已写主题 JSON：{{recentTopicsJson}}
+历史主题 JSON：{{recentTopicsJson}}
 候选内容 JSON：{{articlesJson}}`;
 
 export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。

@@ -757,7 +757,10 @@ describe("AdminSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "AI 日报" }));
     await user.click(screen.getAllByRole("button", { name: /创建配置/i })[0]);
     dialog = screen.getByRole("dialog", { name: "创建新提示词配置" });
-    expect(within(dialog).getByText(/可使用占位符：\s+\{\{date\}\} \/ \{\{timezone\}\} \/ \{\{articlesJson\}\} \/ \{\{recentTopicsJson\}\}/)).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("系统提示词")).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("提示词模板")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("日报模板")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/这里配置日报的选题/)).not.toBeInTheDocument();
     expect(within(dialog).getByLabelText("标题规则")).toBeInTheDocument();
     expect(within(dialog).getByLabelText("历史主题去重规则")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
@@ -815,24 +818,27 @@ describe("AdminSettingsPanel", () => {
 
     await user.clear(within(dialog).getByLabelText(/配置名称/));
     await user.type(within(dialog).getByLabelText(/配置名称/), "日报拖拽测试");
-    fireEvent.change(within(dialog).getByLabelText(/提示词模板/), {
-      target: { value: "日期：{{date}}\n候选内容 JSON：{{articlesJson}}" },
-    });
     await user.click(within(dialog).getByRole("button", { name: "创建" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/prompt-configs", expect.any(Object));
     });
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    const payload = JSON.parse(String(request.body)) as { templateJson: string };
+    const payload = JSON.parse(String(request.body)) as {
+      prompt: string;
+      systemPrompt: string;
+      templateJson: string;
+    };
+    expect(payload.prompt).toContain("候选内容 JSON：{{articlesJson}}");
+    expect(payload.systemPrompt).toContain("固定输出格式");
     const template = JSON.parse(payload.templateJson) as {
       headlineInstruction: string;
       recentTopicRules: string[];
       blocks: Array<{ title: string }>;
     };
     expect(template.headlineInstruction).toContain("热点事件");
-    expect(template.recentTopicRules[0]).toContain("最近 7 天已写主题");
-    expect(template.blocks[0].title).toBe("趋势观察");
+    expect(template.recentTopicRules[0]).toContain("历史主题召回窗口");
+    expect(template.blocks[0].title).toBe("其他值得看");
   });
 
   it("confirms before deleting a daily report content block", async () => {
@@ -863,6 +869,77 @@ describe("AdminSettingsPanel", () => {
     await user.click(within(screen.getByRole("dialog", { name: "删除内容块" })).getByRole("button", { name: "删除" }));
 
     expect(within(dialog).queryByRole("button", { name: "摘要单段内容收起" })).not.toBeInTheDocument();
+  });
+
+  it("shows the daily report template structure in cards and preview", async () => {
+    const user = userEvent.setup();
+    const dailyReportConfig = {
+      id: "prompt-daily-preview",
+      name: "日报模板预览测试",
+      type: "daily_report" as const,
+      prompt: "日期：{{date}}",
+      systemPrompt: "内部编译提示词",
+      templateJson: JSON.stringify({
+        schemaVersion: 2,
+        headlineInstruction: "生成标题",
+        recentTopicRules: ["避免重复"],
+        globalRules: ["只写事实"],
+        blocks: [
+          { type: "text", title: "摘要", bodyInstruction: "写摘要" },
+          {
+            type: "section",
+            key: "hot-topics",
+            title: "热点事件",
+            description: "选择热点",
+            required: true,
+            minItems: 1,
+            maxItems: 3,
+            item: {
+              bodyInstruction: "写正文",
+              notes: [{ label: "重点", required: true, instruction: "说明重点" }],
+            },
+          },
+        ],
+      }),
+      temperature: null,
+      maxTokens: null,
+      topP: null,
+      modelApiConfigId: null,
+      modelApiConfigName: null,
+      isUsingDefaultModel: true,
+      isEnabled: true,
+      isDefault: false,
+      createdAt: "2026-04-20T11:00:00.000Z",
+      updatedAt: "2026-04-20T11:00:00.000Z",
+    };
+
+    renderWithProviders(
+      <AdminSettingsPanel
+        initialSettings={{
+          ...buildInitialSettings(),
+          promptConfigs: [...buildInitialSettings().promptConfigs, dailyReportConfig],
+        }}
+        activeSection="ai-prompt"
+        initialPromptType="daily_report"
+      />,
+    );
+
+    expect(screen.getByText("日报模板：")).toBeInTheDocument();
+    const blockTitleList = screen.getByRole("list", { name: "内容块标题" });
+    expect(within(blockTitleList).getByText("摘要")).toBeInTheDocument();
+    expect(within(blockTitleList).getByText("热点事件")).toBeInTheDocument();
+    expect(screen.queryByText(/模板 v2/)).not.toBeInTheDocument();
+    expect(screen.queryByText("2 个内容块")).not.toBeInTheDocument();
+
+    await user.click(screen.getByTitle("预览"));
+    const dialog = screen.getByRole("dialog", { name: "提示词预览 - 日报模板预览测试" });
+    expect(within(dialog).queryByText("日报模板预览")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("标题规则")).toBeInTheDocument();
+    expect(within(dialog).getByText("内容全局规则")).toBeInTheDocument();
+    expect(within(dialog).getByText("栏目要求")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("正文要求")).toHaveLength(2);
+    expect(within(dialog).getByText("重点")).toBeInTheDocument();
+    expect(within(dialog).queryByText("固定输出格式")).not.toBeInTheDocument();
   });
 
   it("keeps prompt advanced settings collapsed when editing existing configs", async () => {
@@ -1843,6 +1920,7 @@ describe("AdminSettingsPanel", () => {
     expect(within(taskPanel).queryByText("下次运行")).not.toBeInTheDocument();
     expect(within(taskPanel).getByLabelText("T-")).toHaveValue(0);
     expect(within(taskPanel).getByLabelText("候选内容上限")).toHaveValue(120);
+    expect(within(taskPanel).getByLabelText("历史主题召回天数")).toHaveValue(7);
     expect(within(taskPanel).getByLabelText("日报候选频道")).toHaveValue(["important"]);
 
     await user.click(within(taskPanel).getByLabelText("启用 AI 日报任务"));
@@ -1868,6 +1946,7 @@ describe("AdminSettingsPanel", () => {
           dailyReportCandidateLimit: 80,
           dailyReportPlanningBatchSize: null,
           dailyReportOffsetDays: 1,
+          dailyReportRecentTopicLookbackDays: 7,
           dailyReportAutoPublish: true,
           dailyReportChannelIds: ["important"],
         }),

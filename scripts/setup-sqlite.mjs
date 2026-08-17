@@ -807,6 +807,7 @@ function applyAdditiveSchemaUpgrades() {
 
   addColumnIfMissing("task_schedules", "dailyReportChannelIdsJson", "TEXT NOT NULL DEFAULT '[\"important\"]'");
   addColumnIfMissing("task_schedules", "dailyReportPlanningBatchSize", "INTEGER");
+  addColumnIfMissing("task_schedules", "dailyReportRecentTopicLookbackDays", "INTEGER NOT NULL DEFAULT 7");
   addColumnIfMissing("background_task_runs", "pipelineCheckpointJson", "TEXT");
   addColumnIfMissing("prompt_configs", "templateMigrationAuditJson", "TEXT");
   addColumnIfMissing("daily_reports", "currentRevisionId", "TEXT");
