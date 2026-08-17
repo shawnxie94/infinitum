@@ -94,15 +94,8 @@ function editSimilarity(left: string, right: string) {
   return 1 - levenshteinDistance(left, right) / maxLength;
 }
 
-function tokenOverlap(left: string[], right: string[]) {
-  if (left.length === 0 || right.length === 0) {
-    return 0;
-  }
-
-  const rightSet = new Set(right);
-  const overlap = left.filter((token) => rightSet.has(token)).length;
-
-  return overlap / Math.min(left.length, right.length);
+function containsRelationshipMarker(value: string) {
+  return /[、/&|]|(?:^|[\s([{（【])(?:与|和|及|以及)(?=$|[\s)\]}）】])|[\p{L}\p{N}](?:与|和|及|以及)[\p{L}\p{N}]|(?:^|\s)(?:vs|versus)(?=$|\s)/iu.test(value);
 }
 
 export function calculateEntitySimilarity(left: string, right: string): EntitySimilarityResult | null {
@@ -122,6 +115,13 @@ export function calculateEntitySimilarity(left: string, right: string): EntitySi
     return null;
   }
 
+  // Relationship phrases such as "ChatGPT 与 Gemini" and
+  // "Mark Zuckerberg / Meta" are not entity aliases, even when their
+  // normalized tokens are identical after reordering.
+  if (containsRelationshipMarker(normalizedLeft) || containsRelationshipMarker(normalizedRight)) {
+    return null;
+  }
+
   if (leftCompact === rightCompact) {
     return {
       confidence: 0.99,
@@ -135,14 +135,6 @@ export function calculateEntitySimilarity(left: string, right: string): EntitySi
     return {
       confidence: 0.96,
       reason: "singular_match",
-    };
-  }
-
-  const overlap = tokenOverlap(leftTokens, rightTokens);
-  if (overlap >= 0.8 && Math.max(leftTokens.length, rightTokens.length) > 1) {
-    return {
-      confidence: 0.88,
-      reason: "token_overlap",
     };
   }
 

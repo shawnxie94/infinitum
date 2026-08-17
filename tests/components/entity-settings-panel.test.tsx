@@ -162,11 +162,11 @@ describe("EntitySettingsPanel", () => {
         "系统按名称相似度、别名和内容共现识别可合并实体。合并前需要选择方向；不合并和临时忽略会隐藏当前建议对。",
       ),
     ).not.toBeInTheDocument();
-    expect(within(suggestionDialog).getByLabelText("治理建议排序")).toHaveValue("affected_desc");
+    expect(within(suggestionDialog).getByLabelText("治理建议排序")).toHaveValue("confidence_desc");
     expect(within(suggestionDialog).getByRole("button", { name: "选择合并方向：AI Agents" })).toBeInTheDocument();
     expect(within(suggestionDialog).getByRole("button", { name: "处理治理建议：AI Agents" })).toBeInTheDocument();
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions?sort=affected_desc&page=1&pageSize=10", {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions?sort=confidence_desc&page=1&pageSize=10", {
         method: "GET",
         headers: {
           "content-type": "application/json",
@@ -177,7 +177,7 @@ describe("EntitySettingsPanel", () => {
 
     await user.type(within(suggestionDialog).getByLabelText("治理建议实体筛选"), "Agent");
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions?search=Agent&sort=affected_desc&page=1&pageSize=10", {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions?search=Agent&sort=confidence_desc&page=1&pageSize=10", {
         method: "GET",
         headers: {
           "content-type": "application/json",
@@ -206,7 +206,7 @@ describe("EntitySettingsPanel", () => {
 
     const suggestionDialog = await screen.findByRole("dialog", { name: "治理建议" });
     expect(within(suggestionDialog).getByLabelText("治理建议实体筛选")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions?sort=affected_desc&page=1&pageSize=10", {
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions?sort=confidence_desc&page=1&pageSize=10", {
       body: undefined,
       headers: { "content-type": "application/json" },
       method: "GET",

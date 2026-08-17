@@ -722,7 +722,7 @@ export function EntitySettingsPanel({
   const [suggestions, setSuggestions] = useState<AdminEntitySuggestion[]>([]);
   const [suggestionTotalCount, setSuggestionTotalCount] = useState(0);
   const [suggestionSearch, setSuggestionSearch] = useState("");
-  const [suggestionSort, setSuggestionSort] = useState<AdminEntitySuggestionSort>("affected_desc");
+  const [suggestionSort, setSuggestionSort] = useState<AdminEntitySuggestionSort>("confidence_desc");
   const [suggestionPage, setSuggestionPage] = useState(1);
   const [suggestionPageSize, setSuggestionPageSize] = useState(DEFAULT_SUGGESTION_PAGE_SIZE);
   const [search, setSearch] = useState("");

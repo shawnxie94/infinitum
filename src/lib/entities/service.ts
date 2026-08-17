@@ -30,7 +30,6 @@ const MAX_ENTITY_SUGGESTION_LIMIT = 100;
 const AUTO_CANONICAL_CONFIDENCE_THRESHOLD = 0.98;
 const DEFAULT_AUTO_MERGE_SUGGESTION_LIMIT = 100;
 const SUGGESTION_CONFIDENCE_THRESHOLD = 0.82;
-const DEFAULT_MIN_ENTITY_SUGGESTION_AFFECTED_COUNT = 3;
 const ENTITY_SUGGESTION_CANDIDATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE = 500;
 const MAX_ENTITY_SUGGESTION_CANDIDATE_PAIRS = 20_000;
@@ -198,7 +197,7 @@ function normalizeSuggestionLimit(value: number | null | undefined) {
 }
 
 function normalizeSuggestionSort(value: string | null | undefined): AdminEntitySuggestionSort {
-  return value === "confidence_desc" ? "confidence_desc" : "affected_desc";
+  return value === "affected_desc" ? "affected_desc" : "confidence_desc";
 }
 
 function serializeEntitySummary(entity: EntityCandidate): AdminEntitySuggestion["sourceEntity"] {
@@ -220,7 +219,7 @@ function getSimilarityReasonLabel(reason: EntitySimilarityReason) {
     case "singular_match":
       return "英文单复数或词序差异";
     case "token_overlap":
-      return "关键词高度重叠";
+      return "关键词包含关系，谨慎合并";
     case "edit_distance":
       return "拼写距离接近";
     default:
@@ -406,20 +405,8 @@ function buildSuggestionId(sourceEntity: EntityCandidate, targetEntity: EntityCa
   return `${sourceEntity.id}:${targetEntity.id}`;
 }
 
-function getSuggestionConfidence(
-  sourceEntity: EntityCandidate,
-  targetEntity: EntityCandidate,
-  baseConfidence: number,
-  sharedItemCount: number,
-) {
-  if (sourceEntity._count.items === 0 || sharedItemCount === 0) {
-    return baseConfidence;
-  }
-
-  const overlapRatio = sharedItemCount / sourceEntity._count.items;
-  const overlapBoost = overlapRatio >= 0.8 ? 0.04 : overlapRatio >= 0.5 ? 0.02 : 0;
-
-  return Math.min(0.99, baseConfidence + overlapBoost);
+function getSuggestionConfidence(baseConfidence: number) {
+  return baseConfidence;
 }
 
 type PreparedAutoCanonicalAlias = {
@@ -1013,7 +1000,7 @@ function serializeEntitySuggestionCandidate(candidate: {
   const reasons = [getSimilarityReasonLabel(candidate.reason as EntitySimilarityReason)];
 
   if (candidate.sharedItemCount > 0) {
-    reasons.push(`已有 ${candidate.sharedItemCount} 条内容同时包含两个实体`);
+    reasons.push(`同文共现 ${candidate.sharedItemCount} 条，需谨慎确认是否为同一实体`);
   }
 
   if (candidate.affectedItemCount <= 2) {
@@ -1126,12 +1113,7 @@ async function buildEntitySuggestionCandidateRecords(now: Date): Promise<{
       itemIdsByEntityId.get(suggestion.sourceEntity.id),
       itemIdsByEntityId.get(suggestion.targetEntity.id),
     );
-    const confidence = getSuggestionConfidence(
-      suggestion.sourceEntity,
-      suggestion.targetEntity,
-      suggestion.baseConfidence,
-      sharedItemCount,
-    );
+    const confidence = getSuggestionConfidence(suggestion.baseConfidence);
 
     return {
       pairKey: buildSuggestionId(suggestion.sourceEntity, suggestion.targetEntity),
@@ -1194,13 +1176,9 @@ export async function listAdminEntitySuggestions(input?: {
   const entitySearchWhere = search ? buildEntitySuggestionSearchWhere(rawSearch, search) : null;
   const where: Prisma.EntitySuggestionCandidateWhereInput = {
     status: "active",
-    ...(!entitySearchWhere
-      ? {
-          affectedItemCount: {
-            gte: DEFAULT_MIN_ENTITY_SUGGESTION_AFFECTED_COUNT,
-          },
-        }
-      : {}),
+    reason: {
+      not: "token_overlap",
+    },
     ...(entitySearchWhere
       ? {
           OR: [
@@ -1267,16 +1245,16 @@ export async function autoMergeHighConfidenceEntitySuggestions(input?: {
   limit?: number | null;
 }): Promise<AdminEntityAutoMergeResult> {
   const limit = normalizeSuggestionLimit(input?.limit ?? DEFAULT_AUTO_MERGE_SUGGESTION_LIMIT);
-  const activeCandidateCount = await prisma.entitySuggestionCandidate.count({
-    where: { status: "active" },
-  });
-
-  if (activeCandidateCount === 0) {
-    await precomputeEntitySuggestionCandidates();
-  }
+  // The candidate table can outlive the algorithm version that produced it.
+  // Refresh before any automatic write so stale high-confidence rows cannot
+  // bypass the current relationship and subset guards.
+  await precomputeEntitySuggestionCandidates();
   const plans = await prisma.entitySuggestionCandidate.findMany({
     where: {
       status: "active",
+      reason: {
+        in: ["compact_match", "punctuation_match"],
+      },
       confidence: {
         gte: AUTO_CANONICAL_CONFIDENCE_THRESHOLD,
       },

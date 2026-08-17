@@ -70,7 +70,7 @@ export async function getActionableMonitorSnapshot(
         updatedAt: { gte: since },
       },
     }),
-    listAdminEntitySuggestions({ page: 1, pageSize: 1, sort: "affected_desc" }),
+    listAdminEntitySuggestions({ page: 1, pageSize: 1, sort: "confidence_desc" }),
     prisma.briefingPreferenceSuggestion.count({
       where: { status: "pending" },
     }),

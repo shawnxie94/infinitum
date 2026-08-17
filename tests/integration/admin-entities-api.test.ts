@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/db";
 import { executePrecomputeTask } from "@/lib/precompute/service";
-import { precomputeEntitySuggestionCandidates } from "@/lib/entities/service";
+import {
+  autoMergeHighConfidenceEntitySuggestions,
+  precomputeEntitySuggestionCandidates,
+} from "@/lib/entities/service";
 
 const requireAdmin = vi.fn();
 
@@ -258,6 +261,119 @@ describe("/api/admin/settings/entities", () => {
     expect(suppressedJson.totalCount).toBe(0);
   });
 
+  it("keeps alias-shaped candidates and excludes relation or subset matches", async () => {
+    await createSourceAndItems();
+    await prisma.entity.createMany({
+      data: [
+        {
+          name: "DeepSeek（深度求索）",
+          normalized: "deepseek（深度求索）",
+        },
+        {
+          name: "深度求索（DeepSeek）",
+          normalized: "深度求索（deepseek）",
+        },
+        {
+          name: "Apple Watch",
+          normalized: "apple watch",
+        },
+        {
+          name: "Apple",
+          normalized: "apple",
+        },
+        {
+          name: "ChatGPT 与 Gemini",
+          normalized: "chatgpt 与 gemini",
+        },
+        {
+          name: "Gemini 与 ChatGPT",
+          normalized: "gemini 与 chatgpt",
+        },
+      ],
+    });
+    const deepSeekEntities = await prisma.entity.findMany({
+      where: {
+        normalized: {
+          in: ["deepseek（深度求索）", "深度求索（deepseek）"],
+        },
+      },
+      select: { id: true },
+    });
+    await prisma.itemEntity.createMany({
+      data: deepSeekEntities.map((entity) => ({
+        itemId: "admin-entity-a",
+        entityId: entity.id,
+      })),
+    });
+
+    await precomputeEntitySuggestionCandidates();
+
+    const candidates = await prisma.entitySuggestionCandidate.findMany({
+      select: {
+        sourceEntityNormalized: true,
+        targetEntityNormalized: true,
+        reason: true,
+      },
+    });
+    const candidatePairs = candidates.map((candidate) => [
+      candidate.sourceEntityNormalized,
+      candidate.targetEntityNormalized,
+    ].sort().join("|"));
+
+    expect(candidatePairs).toContain("deepseek（深度求索）|深度求索（deepseek）");
+    expect(candidatePairs).not.toContain("apple|apple watch");
+    expect(candidatePairs).not.toContain("chatgpt 与 gemini|gemini 与 chatgpt");
+    expect(candidates.every((candidate) => candidate.reason !== "token_overlap")).toBe(true);
+    expect(candidates.find((candidate) => candidate.reason === "singular_match")).toBeDefined();
+
+    const { GET } = await import("@/app/api/admin/settings/entities/suggestions/route");
+    const response = await GET(new Request("http://localhost/api/admin/settings/entities/suggestions?page=1&pageSize=10"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.totalCount).toBe(1);
+    expect(json.suggestions[0].confidence).toBe(0.96);
+  });
+
+  it("hides legacy token-overlap candidates before the next precompute", async () => {
+    await createSourceAndItems();
+    const sourceEntity = await prisma.entity.create({
+      data: {
+        name: "Apple Watch",
+        normalized: "apple watch",
+      },
+    });
+    const targetEntity = await prisma.entity.create({
+      data: {
+        name: "Apple",
+        normalized: "apple",
+      },
+    });
+    await prisma.entitySuggestionCandidate.create({
+      data: {
+        pairKey: "legacy-apple-watch:apple",
+        sourceEntityId: sourceEntity.id,
+        targetEntityId: targetEntity.id,
+        sourceEntityNormalized: sourceEntity.normalized,
+        targetEntityNormalized: targetEntity.normalized,
+        confidence: 0.88,
+        affectedItemCount: 3,
+        sharedItemCount: 0,
+        reason: "token_overlap",
+        status: "active",
+        expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+      },
+    });
+
+    const { GET } = await import("@/app/api/admin/settings/entities/suggestions/route");
+    const response = await GET(new Request("http://localhost/api/admin/settings/entities/suggestions?page=1&pageSize=10"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.totalCount).toBe(0);
+    expect(json.suggestions).toEqual([]);
+  });
+
   it("sorts entity governance suggestions by affected item count before pagination", async () => {
     const source = await createSourceAndItems();
     await Promise.all([
@@ -397,6 +513,50 @@ describe("/api/admin/settings/entities", () => {
         ]),
       }),
     ]);
+  });
+
+  it("refreshes candidates before auto-merge so stale high-confidence pairs are ignored", async () => {
+    await createSourceAndItems();
+    const left = await prisma.entity.create({
+      data: {
+        name: "ChatGPT / Gemini",
+        normalized: "chatgpt / gemini",
+      },
+    });
+    const right = await prisma.entity.create({
+      data: {
+        name: "Gemini / ChatGPT",
+        normalized: "gemini / chatgpt",
+      },
+    });
+    await prisma.entitySuggestionCandidate.create({
+      data: {
+        pairKey: "legacy-chatgpt-gemini",
+        sourceEntityId: left.id,
+        targetEntityId: right.id,
+        sourceEntityNormalized: left.normalized,
+        targetEntityNormalized: right.normalized,
+        confidence: 0.99,
+        affectedItemCount: 4,
+        sharedItemCount: 0,
+        reason: "punctuation_match",
+        status: "active",
+        expiresAt: new Date("2030-01-01T00:00:00.000Z"),
+      },
+    });
+
+    const result = await autoMergeHighConfidenceEntitySuggestions();
+
+    expect(result).toMatchObject({
+      scannedCount: 0,
+      mergedCount: 0,
+      failedCount: 0,
+    });
+    await expect(prisma.entity.findMany({
+      where: {
+        id: { in: [left.id, right.id] },
+      },
+    })).resolves.toHaveLength(2);
   });
 
   it("runs generic precompute tasks and stores entity governance candidates", async () => {
