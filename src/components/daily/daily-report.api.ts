@@ -1,5 +1,7 @@
 import type {
   DailyReportDetailDTO,
+  DailyReportRevisionDetailDTO,
+  DailyReportRevisionListItemDTO,
 } from "@/lib/daily-report/types";
 
 type ApiResult<T> = {
@@ -53,5 +55,24 @@ export function deleteDailyReport(date: string) {
 export function getAdminDailyReportDetail(date: string) {
   return requestJsonWithMeta<{ report?: DailyReportDetailDTO | null; error?: string }>(
     `/api/admin/daily-reports/${date}`,
+  );
+}
+
+export function getDailyReportRevisions(date: string) {
+  return requestJsonWithMeta<{ revisions?: DailyReportRevisionListItemDTO[]; error?: string }>(
+    `/api/admin/daily-reports/${date}/revisions`,
+  );
+}
+
+export function getDailyReportRevision(date: string, revisionId: string) {
+  return requestJsonWithMeta<{ revision?: DailyReportRevisionDetailDTO | null; error?: string }>(
+    `/api/admin/daily-reports/${date}/revisions/${revisionId}`,
+  );
+}
+
+export function restoreDailyReportRevision(date: string, revisionId: string) {
+  return requestJsonWithMeta<{ revision?: unknown; error?: string }>(
+    `/api/admin/daily-reports/${date}/revisions/${revisionId}/restore`,
+    { method: "POST" },
   );
 }

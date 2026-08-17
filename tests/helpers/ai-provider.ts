@@ -29,6 +29,10 @@ export function buildAiProviderMock(
     analysisFixture: ReturnType<typeof vi.fn>;
     summarizeCluster: ReturnType<typeof vi.fn>;
     matchClusterCandidate: ReturnType<typeof vi.fn>;
+    assessDailyReportCandidates: ReturnType<typeof vi.fn>;
+    planDailyReport: ReturnType<typeof vi.fn>;
+    writeDailyReport: ReturnType<typeof vi.fn>;
+    repairDailyReportDraft: ReturnType<typeof vi.fn>;
   }>,
 ): AiProvider {
   const summaryFixture = overrides?.summaryFixture ?? vi.fn().mockResolvedValue({ summary: "默认条目摘要", isAggregation: false });
@@ -102,6 +106,10 @@ export function buildAiProviderMock(
     ),
     summarizeCluster: vi.fn().mockResolvedValue(JSON.stringify({ title: "默认聚合标题", summary: "默认聚合摘要" })),
     matchClusterCandidate: vi.fn().mockResolvedValue(null),
+    assessDailyReportCandidates: vi.fn().mockResolvedValue([]),
+    planDailyReport: vi.fn().mockResolvedValue({ schemaVersion: 1, headlineHint: null, sections: [], excludedCandidateIds: [], selectionRationale: "" }),
+    writeDailyReport: vi.fn().mockResolvedValue({ blocks: [] }),
+    repairDailyReportDraft: vi.fn().mockResolvedValue({ blocks: [] }),
   };
 
   return {

@@ -9,6 +9,7 @@ import {
   enqueueTaskRun,
   listRecentTaskRuns,
   requestTaskRunCancellation,
+  resumeTaskRun,
   TASK_RUN_CANCELLED_LABEL,
   TASK_RUN_CANCELLED_MESSAGE,
   updateTaskRun,
@@ -642,6 +643,91 @@ describe("background task persistence", () => {
 
     expect(updatedTaskRun.status).toBe("running");
     expect(updatedTaskRun.cancelRequestedAt).not.toBeNull();
+  });
+
+  it("round-trips a validated daily report pipeline checkpoint", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "running",
+        label: "AI 日报生成",
+        entityId: "2026-04-12",
+      },
+    });
+
+    await updateTaskRun(taskRun.id, {
+      pipelineCheckpoint: {
+        version: 1,
+        pipelineVersion: "daily-report-v2",
+        stage: "assess",
+        completedStages: ["prepare"],
+        inputHash: "input-hash",
+        templateSignature: "template-signature",
+        candidateSnapshotHash: "candidate-hash",
+        resumeEligible: true,
+        data: { completedBatchIds: ["batch-0"] },
+      },
+    });
+
+    const snapshot = await getBackgroundTaskMonitorSnapshot(new Date(), {
+      kind: "daily_report_generate",
+    });
+    const taskSnapshot = snapshot.recentTasks.find((entry) => entry.id === taskRun.id);
+
+    expect(taskSnapshot?.pipelineCheckpoint).toEqual({
+      version: 1,
+      pipelineVersion: "daily-report-v2",
+      stage: "assess",
+      completedStages: ["prepare"],
+      inputHash: "input-hash",
+      templateSignature: "template-signature",
+      candidateSnapshotHash: "candidate-hash",
+      resumeEligible: true,
+      data: { completedBatchIds: ["batch-0"] },
+    });
+  });
+
+  it("requeues the original daily report task for an eligible checkpoint", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "failed",
+        label: "AI 日报生成",
+        entityId: "2026-04-12",
+        errorSummary: "ASSESS 失败",
+      },
+    });
+
+    await updateTaskRun(taskRun.id, {
+      pipelineCheckpoint: {
+        version: 1,
+        pipelineVersion: "daily-report-selection-writing-v1",
+        stage: "assess",
+        completedStages: ["prepare"],
+        inputHash: "input-hash",
+        templateSignature: "template-signature",
+        candidateSnapshotHash: "candidate-hash",
+        resumeEligible: true,
+        failedStage: "assess",
+        failureCode: "stage_failed",
+        stageAttempts: { "ASSESS.batch.0": 1 },
+      },
+    });
+
+    const resumed = await resumeTaskRun(taskRun.id);
+    expect(resumed.id).toBe(taskRun.id);
+    expect(resumed.status).toBe("queued");
+    expect(resumed.errorSummary).toBeNull();
+    expect(resumed.startedAt).toBeNull();
+    expect(JSON.parse(resumed.pipelineCheckpointJson ?? "{}")).toMatchObject({
+      resumeAttempt: 1,
+      failedStage: null,
+      failureCode: null,
+      stageAttempts: { "ASSESS.batch.0": 1 },
+    });
+    await expect(prisma.backgroundTaskRun.count()).resolves.toBe(1);
   });
 
   it("refreshes the scheduler heartbeat while a task is reporting progress", async () => {

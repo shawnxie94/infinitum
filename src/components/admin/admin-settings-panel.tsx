@@ -77,9 +77,7 @@ import {
   MIN_SOURCE_CONCURRENCY,
   MAX_PER_SOURCE_ITEM_LIMIT,
   MAX_DAILY_REPORT_CANDIDATE_LIMIT,
-  MAX_DAILY_REPORT_MAX_RETRIES,
   MIN_DAILY_REPORT_CANDIDATE_LIMIT,
-  MIN_DAILY_REPORT_MAX_RETRIES,
   MIN_PER_SOURCE_ITEM_LIMIT,
 } from "@/lib/tasks/scheduler";
 import { getStableGroupBadgeColor } from "@/lib/groups/badge";
@@ -607,14 +605,16 @@ export function AdminSettingsPanel({
   const [dailyReportCandidateLimit, setDailyReportCandidateLimit] = useState(
     String(initialSettings.dailyReportSchedule.dailyReportCandidateLimit),
   );
+  const [dailyReportPlanningBatchSize, setDailyReportPlanningBatchSize] = useState(
+    initialSettings.dailyReportSchedule.dailyReportPlanningBatchSize == null
+      ? ""
+      : String(initialSettings.dailyReportSchedule.dailyReportPlanningBatchSize),
+  );
   const [dailyReportOffsetDays, setDailyReportOffsetDays] = useState(
     String(initialSettings.dailyReportSchedule.dailyReportOffsetDays),
   );
   const [dailyReportAutoPublish, setDailyReportAutoPublish] = useState(
     initialSettings.dailyReportSchedule.dailyReportAutoPublish,
-  );
-  const [dailyReportMaxRetries, setDailyReportMaxRetries] = useState(
-    String(initialSettings.dailyReportSchedule.dailyReportMaxRetries),
   );
   const [dailyReportChannelIds, setDailyReportChannelIds] = useState(
     initialSettings.dailyReportSchedule.dailyReportChannelIds?.length
@@ -1811,8 +1811,10 @@ export function AdminSettingsPanel({
 
   const saveDailyReportSchedule = () => {
     const parsedDailyReportCandidateLimit = Number.parseInt(dailyReportCandidateLimit.trim(), 10);
+    const parsedDailyReportPlanningBatchSize = dailyReportPlanningBatchSize.trim()
+      ? Number.parseInt(dailyReportPlanningBatchSize.trim(), 10)
+      : null;
     const parsedDailyReportOffsetDays = Number.parseInt(dailyReportOffsetDays.trim(), 10);
-    const parsedDailyReportMaxRetries = Number.parseInt(dailyReportMaxRetries.trim(), 10);
 
     if (
       !Number.isInteger(parsedDailyReportCandidateLimit) ||
@@ -1823,6 +1825,14 @@ export function AdminSettingsPanel({
         `日报候选上限需为 ${MIN_DAILY_REPORT_CANDIDATE_LIMIT}-${MAX_DAILY_REPORT_CANDIDATE_LIMIT} 的整数。`,
         "error",
       );
+      return;
+    }
+
+    if (
+      parsedDailyReportPlanningBatchSize !== null &&
+      (!Number.isInteger(parsedDailyReportPlanningBatchSize) || parsedDailyReportPlanningBatchSize < 1)
+    ) {
+      showToast("规划批次大小需留空或填写正整数。", "error");
       return;
     }
 
@@ -1838,27 +1848,15 @@ export function AdminSettingsPanel({
       return;
     }
 
-    if (
-      !Number.isInteger(parsedDailyReportMaxRetries) ||
-      parsedDailyReportMaxRetries < MIN_DAILY_REPORT_MAX_RETRIES ||
-      parsedDailyReportMaxRetries > MAX_DAILY_REPORT_MAX_RETRIES
-    ) {
-      showToast(
-        `最大重试次数需为 ${MIN_DAILY_REPORT_MAX_RETRIES}-${MAX_DAILY_REPORT_MAX_RETRIES} 的整数。`,
-        "error",
-      );
-      return;
-    }
-
     startTransition(async () => {
       try {
         const schedule = await saveDefaultDailyReportSchedule({
           enabled: dailyReportScheduleEnabled,
           cronExpression: dailyReportScheduleCronExpression,
           dailyReportCandidateLimit: parsedDailyReportCandidateLimit,
+          dailyReportPlanningBatchSize: parsedDailyReportPlanningBatchSize,
           dailyReportOffsetDays: parsedDailyReportOffsetDays,
           dailyReportAutoPublish,
-          dailyReportMaxRetries: parsedDailyReportMaxRetries,
           dailyReportChannelIds,
         });
 
@@ -1866,9 +1864,11 @@ export function AdminSettingsPanel({
         setDailyReportScheduleEnabled(schedule.enabled);
         setDailyReportScheduleCronExpression(schedule.cronExpression);
         setDailyReportCandidateLimit(String(schedule.dailyReportCandidateLimit));
+        setDailyReportPlanningBatchSize(
+          schedule.dailyReportPlanningBatchSize == null ? "" : String(schedule.dailyReportPlanningBatchSize),
+        );
         setDailyReportOffsetDays(String(schedule.dailyReportOffsetDays));
         setDailyReportAutoPublish(schedule.dailyReportAutoPublish);
-        setDailyReportMaxRetries(String(schedule.dailyReportMaxRetries));
         setDailyReportChannelIds(schedule.dailyReportChannelIds?.length
           ? schedule.dailyReportChannelIds
           : [DEFAULT_DAILY_REPORT_CHANNEL_ID]);
@@ -1943,8 +1943,10 @@ export function AdminSettingsPanel({
     dailyReportScheduleEnabled !== dailyReportScheduleSnapshot.enabled ||
     dailyReportScheduleCronExpression.trim() !== dailyReportScheduleSnapshot.cronExpression ||
     dailyReportCandidateLimit.trim() !== String(dailyReportScheduleSnapshot.dailyReportCandidateLimit) ||
+    dailyReportPlanningBatchSize.trim() !== (dailyReportScheduleSnapshot.dailyReportPlanningBatchSize == null
+      ? ""
+      : String(dailyReportScheduleSnapshot.dailyReportPlanningBatchSize)) ||
     dailyReportOffsetDays.trim() !== String(dailyReportScheduleSnapshot.dailyReportOffsetDays) ||
-    dailyReportMaxRetries.trim() !== String(dailyReportScheduleSnapshot.dailyReportMaxRetries) ||
     dailyReportAutoPublish !== dailyReportScheduleSnapshot.dailyReportAutoPublish ||
     !areStringArraysEqual(
       dailyReportChannelIds,
@@ -3820,17 +3822,6 @@ export function AdminSettingsPanel({
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <FormField label="最大重试次数" htmlFor="daily-report-max-retries">
-                  <TextInput
-                    id="daily-report-max-retries"
-                    type="number"
-                    min={MIN_DAILY_REPORT_MAX_RETRIES}
-                    max={MAX_DAILY_REPORT_MAX_RETRIES}
-                    value={dailyReportMaxRetries}
-                    onChange={(event) => setDailyReportMaxRetries(event.target.value)}
-                  />
-                </FormField>
-
                 <FormField label="T-" htmlFor="daily-report-offset-days">
                   <TextInput
                     id="daily-report-offset-days"
@@ -3850,6 +3841,17 @@ export function AdminSettingsPanel({
                     max={MAX_DAILY_REPORT_CANDIDATE_LIMIT}
                     value={dailyReportCandidateLimit}
                     onChange={(event) => setDailyReportCandidateLimit(event.target.value)}
+                  />
+                </FormField>
+
+                <FormField label="规划批次大小" htmlFor="daily-report-planning-batch-size">
+                  <TextInput
+                    id="daily-report-planning-batch-size"
+                    type="number"
+                    min={1}
+                    value={dailyReportPlanningBatchSize}
+                    onChange={(event) => setDailyReportPlanningBatchSize(event.target.value)}
+                    placeholder="留空则完整候选集一次处理"
                   />
                 </FormField>
               </div>

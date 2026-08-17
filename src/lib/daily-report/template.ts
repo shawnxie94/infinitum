@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type DailyReportTemplateNote = {
   label: string;
   required: boolean;
@@ -12,8 +14,13 @@ export type DailyReportTemplateTextBlock = {
 
 export type DailyReportTemplateSectionBlock = {
   type: "section";
+  /** Backend-owned stable identity. Admin does not edit this field. */
+  key?: string;
   title: string;
   description: string;
+  required?: boolean;
+  minItems?: number;
+  maxItems?: number | null;
   item: {
     bodyInstruction: string;
     notes: DailyReportTemplateNote[];
@@ -23,11 +30,16 @@ export type DailyReportTemplateSectionBlock = {
 export type DailyReportTemplateBlock = DailyReportTemplateTextBlock | DailyReportTemplateSectionBlock;
 
 export type DailyReportTemplateConfig = {
+  schemaVersion?: 2;
   headlineInstruction: string;
   recentTopicRules: string[];
   blocks: DailyReportTemplateBlock[];
   globalRules: string[];
 };
+
+export type NormalizedDailyReportTemplate = DailyReportTemplateConfig & { schemaVersion: 2 };
+
+export const DAILY_REPORT_TEMPLATE_SCHEMA_VERSION = 2 as const;
 
 export const DAILY_REPORT_SYSTEM_ROLE_PROMPT =
   "你是中文 AI 新闻日报编辑。请只基于输入候选内容生成一份 Briefing 型 AI 日报。最终响应必须是单个合法 JSON 对象；不要输出代码块、Markdown 文档、前后说明或任何 JSON 之外的文本。JSON 字段内仅在模板规则允许时使用有限行内 Markdown。";
@@ -42,6 +54,7 @@ export const DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES = [
 ];
 
 export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
+  schemaVersion: DAILY_REPORT_TEMPLATE_SCHEMA_VERSION,
   headlineInstruction: DEFAULT_DAILY_REPORT_HEADLINE_INSTRUCTION,
   recentTopicRules: DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES,
   blocks: [
@@ -53,9 +66,13 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     },
     {
       type: "section",
+      key: "hot-topics",
       title: "热点事件",
       description:
-        "输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
+        "优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
+      required: true,
+      minItems: 3,
+      maxItems: 5,
       item: {
         bodyInstruction:
           "每条正文约 120-260 字。覆盖事件主体、动作、结果、背景与影响；可使用有限 Markdown 行内标记：**加粗** 用于主体、关键结果、数字或建议，*斜体* 用于背景或不确定性。",
@@ -70,8 +87,12 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     },
     {
       type: "section",
+      key: "changes-practice",
       title: "变更与实践",
-      description: "输出 2-5 条。聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。",
+      description: "聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。",
+      required: true,
+      minItems: 2,
+      maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。说明变化内容、适用对象、实践价值或可能影响。",
         notes: [],
@@ -79,8 +100,12 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     },
     {
       type: "section",
+      key: "security-risk",
       title: "安全与风险",
-      description: "可为空；有相关内容时输出 1-5 条。聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。",
+      description: "聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。",
+      required: false,
+      minItems: 0,
+      maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。说明风险事件主体、背景和影响范围。",
         notes: [
@@ -91,8 +116,12 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     },
     {
       type: "section",
+      key: "open-source-tools",
       title: "开源与工具",
-      description: "可为空；有相关内容时输出 1-5 条。聚焦值得开发者关注的开源项目、工具链、框架或工程资产。",
+      description: "聚焦值得开发者关注的开源项目、工具链、框架或工程资产。",
+      required: false,
+      minItems: 0,
+      maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。概括工具或项目的核心变化。",
         notes: [
@@ -102,8 +131,12 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     },
     {
       type: "section",
+      key: "data-insights",
       title: "数据与洞察",
-      description: "可为空；有相关内容时输出 1-5 条。聚焦关键数据、趋势、研究结论或生态变化信号。",
+      description: "聚焦关键数据、趋势、研究结论或生态变化信号。",
+      required: false,
+      minItems: 0,
+      maxItems: 5,
       item: {
         bodyInstruction: "每条正文约 80-180 字。概括数据、趋势或研究结论。",
         notes: [
@@ -131,7 +164,37 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
 };
 
 function cloneDefaultTemplate() {
-  return JSON.parse(JSON.stringify(DEFAULT_DAILY_REPORT_TEMPLATE)) as DailyReportTemplateConfig;
+  return JSON.parse(JSON.stringify(DEFAULT_DAILY_REPORT_TEMPLATE)) as NormalizedDailyReportTemplate;
+}
+
+const LEGACY_DEFAULT_SECTION_DESCRIPTIONS: Record<string, string> = {
+  "今日大事":
+    "输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
+  "热点事件":
+    "输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
+  "变更与实践": "输出 2-5 条。聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。",
+  "安全与风险": "可为空；有相关内容时输出 1-5 条。聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。",
+  "开源与工具": "可为空；有相关内容时输出 1-5 条。聚焦值得开发者关注的开源项目、工具链、框架或工程资产。",
+  "数据与洞察": "可为空；有相关内容时输出 1-5 条。聚焦关键数据、趋势、研究结论或生态变化信号。",
+};
+
+const LEGACY_DEFAULT_OPENING_INSTRUCTION =
+  "约 100-180 字。概括当天 AI 领域最关键的事项和主线变化，优先覆盖重大发布、模型/产品进展、产业合作、安全风险、开源工具或关键数据。格式固定为“{{date}} AI 领域呈现...，值得关注的信息：...”，例如：“2026-04-29 AI 领域呈现多线并进格局，值得关注的信息：...”。可使用有限 Markdown 行内标记突出关键信息：用 **加粗** 标注事件主体、关键变化、数字或结论，用 *斜体* 标注必要背景或不确定性；不要使用链接、图片、标题、表格或列表。";
+const LEGACY_DEFAULT_CLOSING_INSTRUCTION =
+  "约 80-140 字。总结当天值得持续关注的主线，说明这些变化可能如何影响普通用户、开发者、内容创作者、企业采购或日常工作流；可基于当天信息给出谨慎判断，但不要引入输入之外的新事实。可使用有限 Markdown 行内标记突出关键信息。";
+
+function getLegacyDefaultDailyReportTemplate() {
+  const template = cloneDefaultTemplate();
+  template.blocks = template.blocks.map((block) => {
+    if (block.type !== "section") return block;
+    const description = LEGACY_DEFAULT_SECTION_DESCRIPTIONS[block.title];
+    return description ? { ...block, description } : block;
+  });
+  return template;
+}
+
+export function getLegacyDefaultDailyReportSystemPrompt() {
+  return compileDailyReportTemplatePrompt(getLegacyDefaultDailyReportTemplate());
 }
 
 function nonEmptyText(value: unknown, fallback: string) {
@@ -142,6 +205,23 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function stableHash(value: string) {
+  let hash = 2166136261;
+  for (const char of value) {
+    hash ^= char.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function generatedSectionKey(title: string) {
+  return `section-${stableHash(title.trim())}`;
+}
+
+function validPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 function normalizeNote(note: Partial<DailyReportTemplateNote>): DailyReportTemplateNote {
   return {
     label: nonEmptyText(note.label, "要点"),
@@ -150,7 +230,7 @@ function normalizeNote(note: Partial<DailyReportTemplateNote>): DailyReportTempl
   };
 }
 
-export function normalizeDailyReportTemplateConfig(value: unknown): DailyReportTemplateConfig {
+export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDailyReportTemplate {
   if (!isObject(value)) {
     return cloneDefaultTemplate();
   }
@@ -161,6 +241,7 @@ export function normalizeDailyReportTemplateConfig(value: unknown): DailyReportT
     : cloneDefaultTemplate().blocks;
 
   return {
+    schemaVersion: DAILY_REPORT_TEMPLATE_SCHEMA_VERSION,
     headlineInstruction: nonEmptyText(input.headlineInstruction, DEFAULT_DAILY_REPORT_TEMPLATE.headlineInstruction),
     recentTopicRules:
       Array.isArray(input.recentTopicRules) && input.recentTopicRules.length > 0
@@ -169,13 +250,28 @@ export function normalizeDailyReportTemplateConfig(value: unknown): DailyReportT
     blocks: sourceBlocks.map((block, index) => {
       const defaultBlock = DEFAULT_DAILY_REPORT_TEMPLATE.blocks[index] ?? DEFAULT_DAILY_REPORT_TEMPLATE.blocks[0];
       if (block.type === "section") {
-        const defaultSection = defaultBlock.type === "section" ? defaultBlock : DEFAULT_DAILY_REPORT_TEMPLATE.blocks.find((entry) => entry.type === "section") as DailyReportTemplateSectionBlock;
+        const defaultSection = DEFAULT_DAILY_REPORT_TEMPLATE.blocks.find(
+          (entry) => entry.type === "section" && entry.title === block.title,
+        ) as DailyReportTemplateSectionBlock | undefined;
+        const minItems = validPositiveInteger(block.minItems)
+          ? block.minItems
+          : defaultSection?.minItems ?? 0;
+        const maxItems = block.maxItems === null
+          ? null
+          : validPositiveInteger(block.maxItems)
+          ? block.maxItems
+          : defaultSection?.maxItems ?? null;
+        const fallbackSectionTitle = defaultSection?.title ?? "自定义栏目";
         return {
           type: "section",
-          title: nonEmptyText(block.title, defaultSection.title),
-          description: nonEmptyText(block.description, defaultSection.description),
+          key: typeof block.key === "string" && block.key.trim() ? block.key.trim() : generatedSectionKey(nonEmptyText(block.title, fallbackSectionTitle)),
+          title: nonEmptyText(block.title, fallbackSectionTitle),
+          description: nonEmptyText(block.description, defaultSection?.description ?? "输出该栏目内容。"),
+          required: typeof block.required === "boolean" ? block.required : defaultSection?.required ?? false,
+          minItems,
+          maxItems: maxItems == null ? null : Math.max(minItems, maxItems),
           item: {
-            bodyInstruction: nonEmptyText(block.item?.bodyInstruction, defaultSection.item.bodyInstruction),
+            bodyInstruction: nonEmptyText(block.item?.bodyInstruction, defaultSection?.item.bodyInstruction ?? "说明条目内容。"),
             notes: Array.isArray(block.item?.notes) ? block.item.notes.map(normalizeNote) : [],
           },
         };
@@ -194,6 +290,23 @@ export function normalizeDailyReportTemplateConfig(value: unknown): DailyReportT
   };
 }
 
+/**
+ * Upgrade only the untouched official default template after wording changes.
+ * A custom template is returned as-is, even if it uses similar section names.
+ */
+export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemplateConfig) {
+  const template = normalizeDailyReportTemplateConfig(templateInput);
+  const defaultTemplate = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
+  const legacyDefaultTemplate = getLegacyDefaultDailyReportTemplate();
+  const isUntouchedDefault = [defaultTemplate, legacyDefaultTemplate].some(
+    (candidate) => JSON.stringify(template) === JSON.stringify(candidate),
+  );
+  if (!isUntouchedDefault) {
+    return template;
+  }
+  return defaultTemplate;
+}
+
 function assertNonEmptyText(value: unknown, label: string) {
   if (typeof value !== "string" || !value.trim()) {
     throw new Error(`${label}不能为空。`);
@@ -203,6 +316,7 @@ function assertNonEmptyText(value: unknown, label: string) {
 function withDailyReportTemplateCompatibilityDefaults(template: Record<string, unknown>): Record<string, unknown> {
   return {
     ...template,
+    schemaVersion: template.schemaVersion ?? DAILY_REPORT_TEMPLATE_SCHEMA_VERSION,
     headlineInstruction: nonEmptyText(template.headlineInstruction, DEFAULT_DAILY_REPORT_TEMPLATE.headlineInstruction),
     recentTopicRules: Array.isArray(template.recentTopicRules)
       ? template.recentTopicRules
@@ -210,11 +324,21 @@ function withDailyReportTemplateCompatibilityDefaults(template: Record<string, u
   };
 }
 
-export function validateDailyReportTemplateConfig(templateInput: unknown): DailyReportTemplateConfig {
+export function validateDailyReportTemplateConfig(
+  templateInput: unknown,
+  options: { allowLegacyFields?: boolean } = {},
+): DailyReportTemplateConfig {
+  const allowLegacyFields = options.allowLegacyFields === true;
   if (!isObject(templateInput)) {
     throw new Error("日报模板配置必须是 JSON 对象。");
   }
   const template = templateInput as DailyReportTemplateConfig;
+  if (
+    (!allowLegacyFields || template.schemaVersion !== undefined) &&
+    template.schemaVersion !== DAILY_REPORT_TEMPLATE_SCHEMA_VERSION
+  ) {
+    throw new Error(`日报模板 schemaVersion 必须是 ${DAILY_REPORT_TEMPLATE_SCHEMA_VERSION}。`);
+  }
   if (!Array.isArray(template.blocks) || template.blocks.length === 0) {
     throw new Error("日报模板至少需要 1 个 block。");
   }
@@ -232,6 +356,24 @@ export function validateDailyReportTemplateConfig(templateInput: unknown): Daily
     if (block.type === "section") {
       assertNonEmptyText(block.title, `${label}栏目名`);
       assertNonEmptyText(block.description, `${block.title}栏目要求`);
+      if ((!allowLegacyFields || block.key !== undefined) && (typeof block.key !== "string" || !block.key.trim())) {
+        throw new Error(`${label} key 不能为空。`);
+      }
+      if ((!allowLegacyFields || block.required !== undefined) && typeof block.required !== "boolean") {
+        throw new Error(`${block.title} required 必须是布尔值。`);
+      }
+      if ((!allowLegacyFields || block.minItems !== undefined) && !validPositiveInteger(block.minItems)) {
+        throw new Error(`${block.title} minItems 必须是非负整数。`);
+      }
+      if ((!allowLegacyFields || block.maxItems !== undefined) && block.maxItems !== null && !validPositiveInteger(block.maxItems)) {
+        throw new Error(`${block.title} maxItems 必须是非负整数或 null。`);
+      }
+      if (validPositiveInteger(block.minItems) && validPositiveInteger(block.maxItems) && block.minItems > block.maxItems) {
+        throw new Error(`${block.title} minItems 不能大于 maxItems。`);
+      }
+      if (block.required === true && validPositiveInteger(block.minItems) && block.minItems < 1) {
+        throw new Error(`${block.title} required=true 时 minItems 至少为 1。`);
+      }
       if (!isObject(block.item)) throw new Error(`${block.title} 缺少条目配置。`);
       assertNonEmptyText(block.item.bodyInstruction, `${block.title}条目正文要求`);
       if (!Array.isArray(block.item.notes)) throw new Error(`${block.title} 要点配置必须是数组。`);
@@ -244,13 +386,20 @@ export function validateDailyReportTemplateConfig(templateInput: unknown): Daily
     }
     throw new Error(`${label} type 必须是 text 或 section。`);
   }
+  const sectionKeys = template.blocks
+    .filter((block): block is DailyReportTemplateSectionBlock => block.type === "section")
+    .map((block) => block.key)
+    .filter((key): key is string => typeof key === "string");
+  if ((!allowLegacyFields && new Set(sectionKeys).size !== sectionKeys.length) || new Set(sectionKeys).size !== sectionKeys.length) {
+    throw new Error("日报模板 section key 必须唯一。");
+  }
   if (!Array.isArray(template.globalRules)) {
     throw new Error("内容全局规则必须是数组。");
   }
   return template;
 }
 
-export function parseDailyReportTemplateJson(value: string | null | undefined): DailyReportTemplateConfig | null {
+export function parseDailyReportTemplateJson(value: string | null | undefined): NormalizedDailyReportTemplate | null {
   if (!value?.trim()) return null;
   let parsed: unknown;
   try {
@@ -262,10 +411,114 @@ export function parseDailyReportTemplateJson(value: string | null | undefined): 
     throw new Error("日报模板 JSON 必须包含 blocks 数组。");
   }
   const input = withDailyReportTemplateCompatibilityDefaults(parsed);
-  validateDailyReportTemplateConfig(input);
+  if (input.schemaVersion !== undefined && input.schemaVersion !== DAILY_REPORT_TEMPLATE_SCHEMA_VERSION) {
+    throw new Error(`日报模板 schemaVersion 必须是 ${DAILY_REPORT_TEMPLATE_SCHEMA_VERSION}。`);
+  }
+  validateDailyReportTemplateConfig(input, { allowLegacyFields: true });
   const template = normalizeDailyReportTemplateConfig(input);
   validateDailyReportTemplateConfig(template);
   return template;
+}
+
+export type DailyReportTemplateMigrationStatus =
+  | "v2"
+  | "official_default_legacy"
+  | "custom_legacy_requires_migration"
+  | "invalid";
+
+function isOfficialLegacyTemplate(value: Record<string, unknown>, systemPrompt?: string | null) {
+  const opening = isObject(value.opening) ? value.opening : null;
+  const closing = isObject(value.closing) ? value.closing : null;
+  const sections = Array.isArray(value.sections) ? value.sections : [];
+  const openingLabel = opening && typeof opening.label === "string" ? opening.label.trim() : "";
+  const rawOpeningInstruction = opening ? opening.instruction ?? opening.bodyInstruction : null;
+  const openingInstruction = typeof rawOpeningInstruction === "string"
+    ? rawOpeningInstruction.trim()
+    : "";
+  const closingLabel = closing && typeof closing.label === "string" ? closing.label.trim() : "";
+  const rawClosingInstruction = closing ? closing.instruction ?? closing.bodyInstruction : null;
+  const closingInstruction = typeof rawClosingInstruction === "string"
+    ? rawClosingInstruction.trim()
+    : "";
+  const officialSectionTitles = ["今日大事", "热点事件", "变更与实践", "安全与风险", "开源与工具", "数据与洞察"];
+  return openingLabel === "摘要"
+    && openingInstruction === LEGACY_DEFAULT_OPENING_INSTRUCTION
+    && ["今日观察", "趋势观察", "收尾观察"].includes(closingLabel)
+    && closingInstruction === LEGACY_DEFAULT_CLOSING_INSTRUCTION
+    && sections.length === officialSectionTitles.length
+    && sections.every((section, index) => {
+      if (!isObject(section) || typeof section.title !== "string" || section.title.trim() !== officialSectionTitles[index]) {
+        return false;
+      }
+      return typeof section.description === "string"
+        && section.description === LEGACY_DEFAULT_SECTION_DESCRIPTIONS[officialSectionTitles[index]!];
+    })
+    && (systemPrompt == null || systemPrompt === getLegacyDefaultDailyReportSystemPrompt());
+}
+
+export function classifyDailyReportTemplateMigration(value: unknown, systemPrompt?: string | null): DailyReportTemplateMigrationStatus {
+  if (!isObject(value)) return "invalid";
+  if (Array.isArray(value.blocks)) {
+    try {
+      parseDailyReportTemplateJson(JSON.stringify(value));
+      return "v2";
+    } catch {
+      return "invalid";
+    }
+  }
+  if ("opening" in value || "sections" in value || "closing" in value) {
+    return isOfficialLegacyTemplate(value, systemPrompt) ? "official_default_legacy" : "custom_legacy_requires_migration";
+  }
+  return "invalid";
+}
+
+export function migrateLegacyDailyReportTemplate(value: unknown): NormalizedDailyReportTemplate {
+  if (!isObject(value)) throw new Error("旧日报模板必须是 JSON 对象。");
+  if (Array.isArray(value.blocks)) {
+    const parsed = parseDailyReportTemplateJson(JSON.stringify(value));
+    if (!parsed) throw new Error("日报模板无法迁移。");
+    return parsed;
+  }
+  const opening = isObject(value.opening) ? value.opening : {};
+  const closing = isObject(value.closing) ? value.closing : {};
+  const sections = Array.isArray(value.sections) ? value.sections : [];
+  const blocks: DailyReportTemplateBlock[] = [
+    {
+      type: "text",
+      title: nonEmptyText(opening.label, "摘要"),
+      bodyInstruction: nonEmptyText(opening.instruction ?? opening.bodyInstruction, "概括本期最重要的信息和主线变化。"),
+    },
+    ...sections.filter(isObject).map((section) => ({
+      type: "section" as const,
+      title: nonEmptyText(section.title, "自定义栏目"),
+      description: nonEmptyText(section.description ?? section.instruction, "输出该栏目内容。"),
+      item: {
+        bodyInstruction: nonEmptyText(
+          isObject(section.item) ? section.item.bodyInstruction : section.bodyInstruction,
+          "说明条目内容、背景和影响。",
+        ),
+        notes: isObject(section.item) && Array.isArray(section.item.notes)
+          ? section.item.notes.map((note) => isObject(note) ? normalizeNote(note as Partial<DailyReportTemplateNote>) : normalizeNote({}))
+          : [],
+      },
+    })),
+    {
+      type: "text",
+      title: nonEmptyText(closing.label, "趋势观察"),
+      bodyInstruction: nonEmptyText(closing.instruction ?? closing.bodyInstruction, "提炼本期信息中的后续趋势和需要继续观察的判断。"),
+    },
+  ];
+  return normalizeDailyReportTemplateConfig({
+    headlineInstruction: DEFAULT_DAILY_REPORT_HEADLINE_INSTRUCTION,
+    recentTopicRules: DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES,
+    blocks,
+    globalRules: DEFAULT_DAILY_REPORT_TEMPLATE.globalRules,
+  });
+}
+
+export function getDailyReportTemplateSignature(templateInput: DailyReportTemplateConfig) {
+  const canonical = JSON.stringify(normalizeDailyReportTemplateConfig(templateInput));
+  return createHash("sha256").update(canonical).digest("hex");
 }
 
 function buildBlockExample(block: DailyReportTemplateBlock) {
@@ -274,6 +527,7 @@ function buildBlockExample(block: DailyReportTemplateBlock) {
   }
   return {
     type: "section",
+    blockKey: block.key,
     title: block.title,
     items: [
       {
@@ -322,7 +576,11 @@ export function compileDailyReportTemplatePrompt(templateInput: DailyReportTempl
         .map((note) => `${note.label}${note.required ? " 必填" : " 可选"}：${note.instruction}`)
         .join("；")
       : "输出空数组";
-    lines.push(`${index}. section block「${block.title}」：${block.description}；body 字段：${block.item.bodyInstruction} notes 要求：${noteRules}`);
+    const itemCountRule = [
+      `条目数非空校验：${block.required ? "开启" : "关闭"}`,
+      `条目数量：${block.minItems ?? 0} 至 ${block.maxItems == null ? "不限" : block.maxItems} 条`,
+    ].join("；");
+    lines.push(`${index}. section block「${block.title}」：${itemCountRule}；栏目要求：${block.description}；body 字段：${block.item.bodyInstruction} notes 要求：${noteRules}`);
     index += 1;
   }
 

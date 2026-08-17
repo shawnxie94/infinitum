@@ -132,6 +132,12 @@ enum DailyReportStatus {
   failed
 }
 
+enum DailyReportRevisionAction {
+  baseline
+  generated
+  restored
+}
+
 model Source {
   id                          String       @id @default(cuid())
   groupId                     String?
@@ -417,9 +423,9 @@ model TaskSchedule {
   perSourceItemLimit        Int                   @default(20)
   aggregationSplitMaxEvents Int                   @default(20)
   dailyReportCandidateLimit Int                   @default(120)
+  dailyReportPlanningBatchSize Int?
   dailyReportOffsetDays     Int                   @default(0)
   dailyReportAutoPublish    Boolean               @default(false)
-  dailyReportMaxRetries     Int                   @default(0)
   dailyReportChannelIdsJson String                @default("[\"important\"]")
   cleanupRetentionDays      Int                   @default(365)
   processingStartAt         DateTime?
@@ -569,6 +575,7 @@ model BackgroundTaskRun {
   errorSummary         String?
   stageTimingsJson     String?
   taskTimelineJson     String?
+  pipelineCheckpointJson String?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   fetchRuns            FetchRun[]
@@ -593,18 +600,98 @@ model DailyReport {
   modelName         String?
   taskRunId         String?
   candidateSnapshot String?
+  currentRevisionId String?
   errorMessage      String?
   publishedAt       DateTime?
   generatedAt       DateTime            @default(now())
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   taskRun           BackgroundTaskRun?  @relation(fields: [taskRunId], references: [id], onDelete: SetNull)
+  currentRevision   DailyReportRevision?  @relation("DailyReportCurrentRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
   sources           DailyReportSource[]
+  revisions         DailyReportRevision[] @relation("DailyReportRevisions")
 
   @@unique([date, timezone])
   @@index([status, date])
   @@index([taskRunId])
+  @@index([currentRevisionId])
   @@map("daily_reports")
+}
+
+model DailyReportRevision {
+  id                     String                      @id @default(cuid())
+  dailyReportId          String
+  revisionNo             Int
+  action                 DailyReportRevisionAction
+  status                 DailyReportStatus
+  title                  String
+  openingSummary         String
+  closingThought         String
+  summaryJson            String
+  renderedMarkdown       String
+  inputHash              String
+  modelName              String?
+  templateSignature      String?
+  pipelineVersion        String?
+  taskRunId              String?
+  candidateSnapshot      String?
+  idempotencyKey         String?                     @unique
+  actorType              String                      @default("system")
+  actorId                String?
+  actorLabel             String?
+  restoredFromRevisionId String?
+  createdAt              DateTime                    @default(now())
+  dailyReport            DailyReport                 @relation("DailyReportRevisions", fields: [dailyReportId], references: [id], onDelete: Cascade)
+  restoredFromRevision   DailyReportRevision?        @relation("DailyReportRevisionRestore", fields: [restoredFromRevisionId], references: [id], onDelete: SetNull)
+  restoredRevisions      DailyReportRevision[]       @relation("DailyReportRevisionRestore")
+  sources                DailyReportRevisionSource[]
+  currentFor             DailyReport[]               @relation("DailyReportCurrentRevision")
+
+  @@unique([dailyReportId, revisionNo])
+  @@index([dailyReportId, createdAt])
+  @@map("daily_report_revisions")
+}
+
+model DailyReportRevisionSource {
+  id                 String              @id @default(cuid())
+  revisionId         String
+  sourceNumber       Int?
+  sourceKey          String?
+  itemId             String?
+  clusterId          String?
+  sourceName         String
+  title              String
+  url                String
+  sourceSummary      String?
+  sourcePublishedAt  DateTime?
+  sourceQualityScore Int?
+  eventType          String?
+  eventSubject       String?
+  eventAction        String?
+  eventObject        String?
+  eventDate          String?
+  sectionName        String?
+  topic              String?
+  createdAt          DateTime            @default(now())
+  revision           DailyReportRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@index([revisionId])
+  @@map("daily_report_revision_sources")
+}
+
+model DailyReportOperationLock {
+  id        String   @id @default(cuid())
+  date      String
+  timezone  String
+  operation String
+  ownerId   String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, timezone])
+  @@index([expiresAt])
+  @@map("daily_report_operation_locks")
 }
 
 model DailyReportSource {
@@ -770,6 +857,7 @@ model PromptConfig {
   modelApiConfigId String?
   isEnabled        Boolean          @default(true)
   isDefault        Boolean          @default(false)
+  templateMigrationAuditJson String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   modelApiConfig   ModelApiConfig?  @relation(fields: [modelApiConfigId], references: [id], onDelete: SetNull)

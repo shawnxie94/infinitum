@@ -2,21 +2,22 @@ import { createHash } from "node:crypto";
 
 import type { BackgroundTaskRun } from "@prisma/client";
 
+import type { RuntimeConfig } from "@/config/runtime";
 import { createAiProvider, type AiEventSignature } from "@/lib/ai/provider";
 import { prisma } from "@/lib/db";
 import { getDailyReportDateRange, getTodayDailyReportDate, normalizeDailyReportDate } from "@/lib/daily-report/date";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
-import {
-  getDailyReportClosingThought,
-  getDailyReportOpeningSummary,
-  getDailyReportSectionBlocks,
-} from "@/lib/daily-report/content";
+import { withDailyReportLock } from "@/lib/daily-report/history";
+import { DailyReportCancellationError, DailyReportGenerationError } from "@/lib/daily-report/errors";
+import { getDailyReportSectionBlocks } from "@/lib/daily-report/content";
+import { getDailyReportAttemptLimit, isDailyReportContextOverflowError } from "@/lib/daily-report/attempts";
 import {
   listDailyReportCandidates,
   listRecentDailyReportSourceSnapshots,
   type RecentDailyReportSourceSnapshot,
 } from "@/lib/daily-report/repository";
 import { renderDailyReportMarkdown } from "@/lib/daily-report/renderer";
+import { persistDailyReport } from "@/lib/daily-report/persistence";
 import {
   formatDailyReportTitle,
   normalizeDailyReportHeadline,
@@ -26,21 +27,49 @@ import {
   type DailyReportCandidate,
   type DailyReportCandidateCoverageDTO,
   type DailyReportCandidateSnapshotEntry,
+  type DailyReportCandidateAssessment,
+  type DailyReportMergedTopic,
+  type DailyReportPlan,
+  type DailyReportPlanningCandidate,
   type DailyReportContent,
   type DailyReportItem,
   type DailyReportSourceRegistryEntry,
   type RecentDailyReportTopic,
 } from "@/lib/daily-report/types";
-import { parseDailyReportContent } from "@/lib/daily-report/validator";
+import {
+  mergeDailyReportTopics,
+  splitDailyReportCandidates,
+  toDailyReportPlanningCandidate,
+  validateDailyReportAssessments,
+  validateDailyReportDraft,
+  validateDailyReportPlan,
+} from "@/lib/daily-report/planning";
+import {
+  DEFAULT_DAILY_REPORT_TEMPLATE,
+  classifyDailyReportTemplateMigration,
+  getDailyReportTemplateSignature,
+  normalizeDailyReportTemplateConfig,
+  parseDailyReportTemplateJson,
+} from "@/lib/daily-report/template";
 import { normalizeEventSignatureForStorage } from "@/lib/clusters/normalization";
 import { listEventBriefingEntriesForDailyReport, resolveDailyReportChannelSourceGroupIds } from "@/lib/events/service";
 import type { EventBriefingEntryDTO, EventBriefingItemDTO } from "@/lib/events/types";
 import { getDisplaySummary, getDisplayTitle } from "@/lib/feed/presentation";
 import { getIngestionRuntimeConfig } from "@/lib/settings/runtime-service";
-import { DEFAULT_DAILY_REPORT_TASK_LABEL, type TaskTimelineNodeSnapshot } from "@/lib/tasks/types";
+import { DEFAULT_DAILY_REPORT_TASK_LABEL, type TaskPipelineCheckpoint } from "@/lib/tasks/types";
 import type { TaskAiCallBreakdownSnapshot } from "@/lib/tasks/types";
-import { enqueueTaskRun, ensureDefaultDailyReportSchedule, parseDailyReportChannelIdsJson, updateTaskRun } from "@/lib/tasks/service";
-import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/ai-usage";
+import { parseTaskPipelineCheckpointJson } from "@/lib/tasks/checkpoint";
+import {
+  enqueueTaskRun,
+  ensureDefaultDailyReportSchedule,
+  isTaskRunCancellationRequested,
+  parseDailyReportChannelIdsJson,
+  TASK_RUN_CANCELLED_LABEL,
+  TASK_RUN_CANCELLED_MESSAGE,
+  updateTaskRun,
+} from "@/lib/tasks/service";
+import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
+import { buildDailyReportTaskTimeline, type DailyReportPipelineStage } from "@/lib/daily-report/timeline";
 
 const MIN_CANDIDATE_COUNT = 2;
 const DAILY_REPORT_RECENT_SOURCE_LOOKBACK_DAYS = 7;
@@ -48,16 +77,6 @@ const DAILY_REPORT_RECENT_TOPIC_CONTEXT_LIMIT = 120;
 const MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE = 5;
 const MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE = 3;
 const DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES = ["allowed", "restored"] as const;
-
-class DailyReportGenerationError extends Error {
-  aiUsage: TaskAiUsageSnapshot;
-
-  constructor(error: unknown, aiUsage: TaskAiUsageSnapshot) {
-    super(error instanceof Error ? error.message : "AI 日报生成失败。");
-    this.name = "DailyReportGenerationError";
-    this.aiUsage = aiUsage;
-  }
-}
 
 function getFallbackDailyReportHeadline(content: DailyReportContent) {
   const sectionTitles = getDailyReportSectionBlocks(content)
@@ -79,11 +98,13 @@ function buildInputHash(
   candidates: DailyReportCandidate[],
   channelIds: string[] = [],
   recentTopics: RecentDailyReportTopic[] = [],
+  generationSignature = "legacy",
 ) {
   const hash = createHash("sha256");
   hash.update(date);
   hash.update(JSON.stringify([...channelIds].sort()));
   hash.update(JSON.stringify(recentTopics));
+  hash.update(generationSignature);
   for (const candidate of candidates) {
     hash.update(JSON.stringify({
       sourceKey: candidate.sourceKey,
@@ -104,6 +125,38 @@ function buildInputHash(
   return hash.digest("hex");
 }
 
+function buildDailyReportGenerationSignature(input: {
+  runtimeConfig: RuntimeConfig;
+  templateSignature: string;
+  planningBatchSize: number | null;
+}) {
+  const prompt = input.runtimeConfig.selectedPromptConfigs?.dailyReport;
+  const modelApi = prompt?.modelApi ?? input.runtimeConfig.modelApi;
+  return createHash("sha256")
+    .update(JSON.stringify({
+      pipelineVersion: "daily-report-selection-writing-v1",
+      templateSignature: input.templateSignature,
+      planningBatchSize: input.planningBatchSize,
+      modelApi: {
+        baseURL: modelApi.baseURL,
+        model: modelApi.model,
+        apiKeyConfigured: Boolean(modelApi.apiKey),
+        customHeaderNames: Object.keys(modelApi.customHeaders ?? {}).sort(),
+      },
+      prompt: prompt
+        ? {
+            name: prompt.name,
+            systemPrompt: prompt.systemPrompt,
+            promptTemplate: prompt.promptTemplate,
+            temperature: prompt.temperature ?? null,
+            maxTokens: prompt.maxTokens ?? null,
+            topP: prompt.topP ?? null,
+          }
+        : null,
+    }))
+    .digest("hex");
+}
+
 function getSectionSourceIds(content: DailyReportContent) {
   const rows: Array<{ sectionName: string; topic: string; sourceId: number }> = [];
 
@@ -121,7 +174,9 @@ function getSectionSourceIds(content: DailyReportContent) {
 export function deduplicateDailyReportContentByCandidate(
   content: DailyReportContent,
   candidates: DailyReportCandidate[],
+  options: { refillEmptySections?: boolean } = {},
 ) {
+  const refillEmptySections = options.refillEmptySections !== false;
   const identityBySourceId = new Map(
     candidates.map((candidate) => [candidate.id, buildDailyReportContentDuplicateIdentities(candidate)]),
   );
@@ -162,11 +217,12 @@ export function deduplicateDailyReportContentByCandidate(
 
     if (items.length === 0) {
       emptySectionTitles.push(block.title);
-      const fallbackCandidate = candidates.find((candidate) => {
-        const identities = identityBySourceId.get(candidate.id);
-        return identities && ![...identities].some((identity) => seen.has(identity));
-      });
-
+      const fallbackCandidate = refillEmptySections
+        ? candidates.find((candidate) => {
+            const identities = identityBySourceId.get(candidate.id);
+            return identities && ![...identities].some((identity) => seen.has(identity));
+          })
+        : null;
       if (fallbackCandidate) {
         const identities = identityBySourceId.get(fallbackCandidate.id);
         if (identities) {
@@ -972,57 +1028,7 @@ async function countExistingSelectedDailyReportCandidates(dailyReportId: string)
   return new Set(rows.map((row) => row.sourceNumber ?? row.itemId ?? row.clusterId ?? row.url)).size;
 }
 
-function getDailyReportTaskFinishedLabel(status: "succeeded" | "failed" | "skipped") {
-  if (status === "failed") return "失败";
-  if (status === "skipped") return "已跳过";
-  return "已完成";
-}
-
-function buildDailyReportTaskTimeline(input: {
-  taskRun: BackgroundTaskRun;
-  status: "running" | "succeeded" | "failed" | "skipped";
-  candidateCount?: number | null;
-  selectedCount?: number | null;
-  finishedAt?: Date | null;
-}): TaskTimelineNodeSnapshot[] {
-  const taskStartedAt = input.taskRun.startedAt ?? input.taskRun.createdAt;
-  const startedAt = taskStartedAt.toISOString();
-  const finishedAt = input.finishedAt?.toISOString() ?? null;
-  const durationMs = input.finishedAt ? input.finishedAt.getTime() - taskStartedAt.getTime() : null;
-
-  const generationNode: TaskTimelineNodeSnapshot = {
-    key: "daily_report_generate",
-    label: "AI 日报生成",
-    status: input.status === "running" ? "running" : input.status === "failed" ? "failed" : "succeeded",
-    startedAt,
-    finishedAt: input.status === "running" ? null : finishedAt,
-    durationMs: input.status === "running" ? null : durationMs,
-    metrics: [
-      { label: "总候选数", value: input.candidateCount ?? 0 },
-    ],
-  };
-
-  if (input.status === "running") {
-    return [generationNode];
-  }
-
-  return [
-    generationNode,
-    {
-      key: "task_finished",
-      label: getDailyReportTaskFinishedLabel(input.status),
-      status: input.status === "failed" ? "failed" : input.status === "skipped" ? "skipped" : "succeeded",
-      startedAt: finishedAt,
-      finishedAt,
-      durationMs: null,
-      metrics: [
-        { label: "最后入选数", value: input.selectedCount ?? 0 },
-      ],
-    },
-  ];
-}
-
-async function markDailyScheduleRunFinished(taskRun: BackgroundTaskRun, status: "succeeded" | "failed" | "partial") {
+async function markDailyScheduleRunFinished(taskRun: BackgroundTaskRun, status: "succeeded" | "failed" | "partial" | "cancelled") {
   if (taskRun.triggerType !== "scheduled") {
     return;
   }
@@ -1063,11 +1069,14 @@ export async function enqueueDailyReportGeneration(date: string, triggerType: "m
   });
 }
 
-export async function generateDailyReport(input: {
+async function generateDailyReportInternal(input: {
   date: string;
   taskRunId?: string | null;
   force?: boolean;
   onCandidatesLoaded?: (candidateCount: number) => Promise<void>;
+  onStageUpdate?: (stage: DailyReportPipelineStage) => Promise<void>;
+  onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
+  resumeCheckpoint?: TaskPipelineCheckpoint | null;
 }) {
   const { date } = getDailyReportDateRange(input.date);
   const schedule = await ensureDefaultDailyReportSchedule();
@@ -1086,7 +1095,39 @@ export async function generateDailyReport(input: {
   const excludedRecentDuplicates = buildDailyReportExcludedRecentDuplicateSnapshots(rawCandidates, recentSources);
   const candidates = filterRecentDailyReportDuplicates(rawCandidates, recentSources, schedule.dailyReportCandidateLimit);
   await input.onCandidatesLoaded?.(candidates.length);
-  const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics);
+  await input.onStageUpdate?.("prepare");
+  const runtimeConfig = await getIngestionRuntimeConfig();
+  let template;
+  const templateJson = runtimeConfig.selectedPromptConfigs?.dailyReport.templateJson;
+  if (!templateJson) {
+    template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
+  } else {
+    try {
+      template = parseDailyReportTemplateJson(templateJson);
+    } catch (error) {
+      let migrationStatus: ReturnType<typeof classifyDailyReportTemplateMigration> = "invalid";
+      try {
+        migrationStatus = classifyDailyReportTemplateMigration(
+          JSON.parse(templateJson) as unknown,
+          runtimeConfig.selectedPromptConfigs?.dailyReport.systemPrompt,
+        );
+      } catch {
+        // Keep the original parse error for invalid JSON.
+      }
+      if (migrationStatus === "custom_legacy_requires_migration") {
+        throw new Error("日报模板仍是旧版 opening/sections/closing 结构，请先在 Admin 中迁移为模板 v2。", { cause: error });
+      }
+      throw error;
+    }
+  }
+  if (!template) throw new Error("日报模板未配置。");
+  const templateSignature = getDailyReportTemplateSignature(template);
+  const generationSignature = buildDailyReportGenerationSignature({
+    runtimeConfig,
+    templateSignature,
+    planningBatchSize: schedule.dailyReportPlanningBatchSize ?? null,
+  });
+  const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics, generationSignature);
   const existing = await prisma.dailyReport.findUnique({
     where: {
       date_timezone: {
@@ -1103,6 +1144,13 @@ export async function generateDailyReport(input: {
       reason: "日报输入未变化，已跳过生成。",
       candidateCount: candidates.length,
       selectedCount: await countExistingSelectedDailyReportCandidates(existing.id),
+      mergedTopicCount: 0,
+      planSectionCount: 0,
+      planSelectedCount: 0,
+      planViolationCount: 0,
+      repairCount: 0,
+      batchCount: 0,
+      batchSize: schedule.dailyReportPlanningBatchSize ?? null,
       aiUsage: { actual: 0, estimated: 0, breakdown: [] },
     };
   }
@@ -1114,40 +1162,368 @@ export async function generateDailyReport(input: {
       reason: `候选内容不足 ${MIN_CANDIDATE_COUNT} 条，已跳过生成。`,
       candidateCount: candidates.length,
       selectedCount: 0,
+      mergedTopicCount: 0,
+      planSectionCount: 0,
+      planSelectedCount: 0,
+      planViolationCount: 0,
+      repairCount: 0,
+      batchCount: 0,
+      batchSize: schedule.dailyReportPlanningBatchSize ?? null,
       aiUsage: { actual: 0, estimated: 0, breakdown: [] },
     };
   }
 
-  const runtimeConfig = await getIngestionRuntimeConfig();
   const baseProvider = createAiProvider(runtimeConfig.modelApi, runtimeConfig.selectedPromptConfigs);
   // Track every AI call made during generation (main call + repair fallback)
   // so the background task run records accurate `aiCallCountActual` / breakdown.
   const aiUsage = createTaskAiUsageTracker(0, "daily_report");
   const provider = aiUsage.wrapProvider(baseProvider);
   let content: DailyReportContent;
-  try {
-    const rawOutput = await provider.generateDailyReport({
-      date,
-      timezone: DAILY_REPORT_TIMEZONE,
-      articles: candidates,
-      recentTopics,
-    });
-
-    if (!rawOutput) {
-      throw new Error("模型未返回日报内容。");
+  let finalizationPlan: DailyReportPlan | null = null;
+  let finalizationSelectedCandidates: DailyReportPlanningCandidate[] = [];
+  let finalizationTemplate: ReturnType<typeof normalizeDailyReportTemplateConfig> | null = null;
+  finalizationTemplate = template;
+  let planningBatchCount = 0;
+  let mergedTopicCount = 0;
+  let planSectionCount = 0;
+  let planSelectedCount = 0;
+  let planViolationCount = 0;
+  let repairCount = 0;
+  let validationViolationCount = 0;
+  let latestCheckpoint: TaskPipelineCheckpoint | null = input.resumeCheckpoint ?? null;
+  const stageAttempts: Record<string, number> = { ...(input.resumeCheckpoint?.stageAttempts ?? {}) };
+  let currentStage: DailyReportPipelineStage = "prepare";
+  let currentBatchIndex: number | null = null;
+  let currentAttemptKey = "PREPARE";
+  let latestPlanAttempt: Awaited<ReturnType<typeof provider.planDailyReport>> | null = null;
+  let latestPlanViolations: ReturnType<typeof validateDailyReportPlan> | null = null;
+  const buildFailureCheckpoint = (error: unknown) => {
+    if (!latestCheckpoint) return null;
+    const contextOverflow = isDailyReportContextOverflowError(error);
+    const matrixStage = currentAttemptKey.startsWith("ASSESS.") ? "ASSESS" : currentAttemptKey;
+    const maxAttempts = getDailyReportAttemptLimit(matrixStage);
+    const currentAttempt = stageAttempts[currentAttemptKey] ?? 0;
+    const assessmentBatches = latestCheckpoint.assessmentBatches?.map((batch) =>
+      currentBatchIndex === batch.index
+        ? { ...batch, status: "failed" as const, attempt: currentAttempt, error: error instanceof Error ? error.message : String(error) }
+        : batch,
+    );
+    const planFailureContext = currentStage === "plan_validate"
+      ? {
+          ...(latestPlanAttempt ? { plan: latestPlanAttempt } : {}),
+          ...(latestPlanViolations ? { violations: latestPlanViolations } : {}),
+        }
+      : {};
+    return {
+      ...latestCheckpoint,
+      stage: currentStage,
+      failedStage: currentStage,
+      failureCode: contextOverflow ? "context_overflow" : "stage_failed",
+      resumeEligible: !contextOverflow && currentAttempt < maxAttempts,
+      stageAttempts: { ...stageAttempts },
+      ...(assessmentBatches ? { assessmentBatches } : {}),
+      ...planFailureContext,
+    } satisfies TaskPipelineCheckpoint;
+  };
+  const buildCancellationCheckpoint = () => {
+    if (!latestCheckpoint) return null;
+    const assessmentBatches = latestCheckpoint.assessmentBatches?.map((batch) =>
+      currentBatchIndex === batch.index && batch.status !== "succeeded"
+        ? { ...batch, status: "failed" as const, error: TASK_RUN_CANCELLED_MESSAGE }
+        : batch,
+    );
+    return {
+      ...latestCheckpoint,
+      stage: currentStage,
+      failedStage: currentStage,
+      failureCode: "cancelled",
+      resumeEligible: true,
+      stageAttempts: { ...stageAttempts },
+      ...(assessmentBatches ? { assessmentBatches } : {}),
+    } satisfies TaskPipelineCheckpoint;
+  };
+  const throwIfCancellationRequested = async () => {
+    if (input.taskRunId && await isTaskRunCancellationRequested(input.taskRunId)) {
+      throw new DailyReportCancellationError(aiUsage.snapshot(), buildCancellationCheckpoint());
     }
-
-    try {
-      content = parseDailyReportContent(rawOutput, candidates.length);
-    } catch (error) {
-      const repairedOutput = await provider.repairDailyReportJson(rawOutput);
-      if (!repairedOutput) {
-        throw error;
+  };
+  const saveCheckpoint = async (checkpoint: TaskPipelineCheckpoint) => {
+    latestCheckpoint = checkpoint;
+    await input.onCheckpoint?.(checkpoint);
+    await throwIfCancellationRequested();
+  };
+  const runStageWithAttempts = async <T>(
+    stage: DailyReportPipelineStage,
+    operation: (attempt: number) => Promise<T>,
+    options: { attemptKey?: string; matrixStage?: string } = {},
+  ) => {
+    const matrixStage = options.matrixStage ?? stage.toUpperCase();
+    const attemptKey = options.attemptKey ?? matrixStage;
+    const maxAttempts = getDailyReportAttemptLimit(matrixStage);
+    let lastError: unknown = null;
+    const firstAttempt = (stageAttempts[attemptKey] ?? 0) + 1;
+    currentStage = stage;
+    currentAttemptKey = attemptKey;
+    for (let attempt = firstAttempt; attempt <= maxAttempts; attempt += 1) {
+      stageAttempts[attemptKey] = attempt;
+      try {
+        await throwIfCancellationRequested();
+        const result = await operation(attempt);
+        await throwIfCancellationRequested();
+        return result;
+      } catch (error) {
+        if (error instanceof DailyReportCancellationError) throw error;
+        await throwIfCancellationRequested();
+        lastError = error;
+        if (isDailyReportContextOverflowError(error) || attempt === maxAttempts) break;
+        console.warn(`[daily-report] ${stage} attempt ${attempt} failed; retrying same input`, error);
       }
-      content = parseDailyReportContent(repairedOutput, candidates.length);
     }
+    const stageError = lastError instanceof Error ? lastError : new Error(`${stage} 阶段失败。`);
+    throw new DailyReportGenerationError(stageError, aiUsage.snapshot(), buildFailureCheckpoint(stageError));
+  };
+  try {
+    const planningCandidates = candidates.map(toDailyReportPlanningCandidate);
+    const batchSize = schedule.dailyReportPlanningBatchSize ?? null;
+    const batches = splitDailyReportCandidates(planningCandidates, batchSize);
+    planningBatchCount = batches.length;
+    const candidateSnapshotHash = createHash("sha256").update(JSON.stringify(candidates.map(toCandidateSnapshotEntry))).digest("hex");
+    const checkpoint = input.resumeCheckpoint;
+    const canResume = Boolean(
+      checkpoint?.resumeEligible &&
+      checkpoint.inputHash === inputHash &&
+      checkpoint.candidateSnapshotHash === candidateSnapshotHash &&
+      checkpoint.templateSignature === templateSignature &&
+      checkpoint.pipelineVersion === "daily-report-selection-writing-v1",
+    );
+    if (input.resumeCheckpoint && !canResume) {
+      throw new DailyReportGenerationError(
+        new Error("日报输入、模板或 Pipeline 版本已变化，旧 checkpoint 不可继续执行，请重新生成。"),
+        aiUsage.snapshot(),
+        {
+          ...input.resumeCheckpoint,
+          stage: "prepare",
+          failedStage: "prepare",
+          failureCode: "checkpoint_mismatch",
+          resumeEligible: false,
+        },
+      );
+    }
+    await saveCheckpoint({
+      version: 1,
+      pipelineVersion: "daily-report-selection-writing-v1",
+      stage: "prepare",
+      completedStages: canResume ? checkpoint?.completedStages ?? ["prepare"] : ["prepare"],
+      lastCompletedStage: "prepare",
+      failedStage: null,
+      failureCode: null,
+      resumeAttempt: checkpoint?.resumeAttempt ?? 0,
+      stageAttempts: { ...stageAttempts },
+      inputHash,
+      templateSignature,
+      candidateSnapshotHash,
+      candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+      resumeEligible: true,
+      data: { batchCount: batches.length, batchSize },
+      ...(canResume && checkpoint?.assessmentBatches
+        ? { assessmentBatches: checkpoint.assessmentBatches }
+        : { assessmentBatches: batches.map((batch, index) => ({ index, candidateIds: batch.map((candidate) => candidate.id), status: "pending" as const, attempt: 0 })) }),
+      ...(canResume && checkpoint?.ledger ? { ledger: checkpoint.ledger } : {}),
+      ...(canResume && checkpoint?.mergedTopics ? { mergedTopics: checkpoint.mergedTopics } : {}),
+      ...(canResume && checkpoint?.plan ? { plan: checkpoint.plan } : {}),
+      ...(canResume && checkpoint?.draft ? { draft: checkpoint.draft } : {}),
+    });
+    await input.onStageUpdate?.("assess");
+    const assessments: DailyReportCandidateAssessment[] = [];
+    for (const [batchIndex, batch] of batches.entries()) {
+      const checkpointBatch = canResume ? checkpoint?.assessmentBatches?.find((entry) => entry.index === batchIndex && entry.status === "succeeded") : null;
+      currentBatchIndex = batchIndex;
+      const batchAssessments = checkpointBatch?.assessments
+        ? validateDailyReportAssessments(batch, checkpointBatch.assessments)
+        : await runStageWithAttempts("assess", async () => validateDailyReportAssessments(batch, await provider.assessDailyReportCandidates({ candidates: batch, template })), {
+          attemptKey: `ASSESS.batch.${batchIndex}`,
+          matrixStage: "ASSESS",
+        });
+      assessments.push(...batchAssessments);
+      await saveCheckpoint({
+        version: 1,
+        pipelineVersion: "daily-report-selection-writing-v1",
+        stage: "assess",
+        completedStages: ["prepare", "assess"],
+        lastCompletedStage: "assess",
+        failedStage: null,
+        failureCode: null,
+        resumeAttempt: checkpoint?.resumeAttempt ?? 0,
+        stageAttempts: { ...stageAttempts },
+        inputHash,
+        templateSignature: getDailyReportTemplateSignature(template),
+        candidateSnapshotHash,
+        candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+        resumeEligible: true,
+        assessmentBatches: batches.map((currentBatch, index) => ({
+          index,
+          candidateIds: currentBatch.map((candidate) => candidate.id),
+          status: index < batches.indexOf(batch) + 1 ? "succeeded" : "pending",
+          attempt: index < batches.indexOf(batch) + 1 ? stageAttempts[`ASSESS.batch.${index}`] ?? 1 : 0,
+          ...(index <= batchIndex
+            ? { assessments: assessments.filter((assessment) => currentBatch.some((candidate) => candidate.id === assessment.candidateId)) }
+            : {}),
+        })),
+        data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
+      });
+    }
+    currentBatchIndex = null;
+    await input.onStageUpdate?.("merge");
+    const topics = canResume && Array.isArray(checkpoint?.mergedTopics)
+      ? checkpoint.mergedTopics as DailyReportMergedTopic[]
+      : mergeDailyReportTopics(
+          planningCandidates,
+          assessments,
+          new Map(batches.flatMap((batch, index) => batch.map((candidate) => [candidate.id, index] as const))),
+        );
+    mergedTopicCount = topics.length;
+    const ledger = {
+      schemaVersion: 1 as const,
+      candidateCount: planningCandidates.length,
+      assessedCount: assessments.length,
+      unassessedCandidateIds: planningCandidates
+        .map((candidate) => candidate.id)
+        .filter((candidateId) => !assessments.some((assessment) => assessment.candidateId === candidateId)),
+      assessments,
+      batchCount: batches.length,
+      recentTopics,
+    };
+    await saveCheckpoint({
+      version: 1,
+      pipelineVersion: "daily-report-selection-writing-v1",
+      stage: "merge",
+      completedStages: ["prepare", "assess", "merge"],
+      lastCompletedStage: "merge",
+      failedStage: null,
+      failureCode: null,
+      resumeAttempt: checkpoint?.resumeAttempt ?? 0,
+      stageAttempts: { ...stageAttempts },
+      inputHash,
+      templateSignature: getDailyReportTemplateSignature(template),
+      candidateSnapshotHash,
+      candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+      resumeEligible: true,
+      data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
+      ledger,
+      mergedTopics: topics,
+    });
+    await input.onStageUpdate?.("plan");
+    const planFromProvider = canResume && checkpoint?.plan
+      ? checkpoint.plan as Awaited<ReturnType<typeof provider.planDailyReport>>
+      : await runStageWithAttempts("plan", async () => provider.planDailyReport({ ledger, topics, template }));
+    const plan = canResume && checkpoint?.plan && checkpoint.completedStages.includes("plan_validate")
+      ? planFromProvider
+      : await runStageWithAttempts("plan_validate", async (attempt) => {
+        await input.onStageUpdate?.("plan_validate");
+        const candidatePlan = attempt === 1
+          ? planFromProvider
+          : await provider.planDailyReport({ ledger, topics, template });
+        const violations = validateDailyReportPlan(candidatePlan, topics, planningCandidates, template);
+        latestPlanAttempt = candidatePlan;
+        latestPlanViolations = violations;
+        if (violations.length > 0) throw new Error(`PLAN 校验失败：${violations.map((violation) => violation.message).slice(0, 5).join("；")}`);
+        return candidatePlan;
+      }, { attemptKey: "PLAN_VALIDATE", matrixStage: "PLAN_VALIDATE" });
+    const planViolations = validateDailyReportPlan(plan, topics, planningCandidates, template);
+    planSectionCount = plan.sections.length;
+    planSelectedCount = plan.sections.reduce((total, section) => total + section.candidateIds.length, 0);
+    planViolationCount = planViolations.length;
+    if (planViolations.length > 0) {
+      throw new Error(`PLAN 校验失败：${planViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
+    }
+    await saveCheckpoint({
+      version: 1,
+      pipelineVersion: "daily-report-selection-writing-v1",
+      stage: "plan_validate",
+      completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
+      lastCompletedStage: "plan_validate",
+      failedStage: null,
+      failureCode: null,
+      resumeAttempt: checkpoint?.resumeAttempt ?? 0,
+      stageAttempts: { ...stageAttempts },
+      inputHash,
+      templateSignature: getDailyReportTemplateSignature(template),
+      candidateSnapshotHash,
+      candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+      resumeEligible: true,
+      data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
+      assessmentBatches: batches.map((batch, index) => ({
+        index,
+        candidateIds: batch.map((candidate) => candidate.id),
+        status: "succeeded" as const,
+        attempt: stageAttempts[`ASSESS.batch.${index}`] ?? 1,
+        assessments: assessments.filter((assessment) => batch.some((candidate) => candidate.id === assessment.candidateId)),
+      })),
+      ledger,
+      mergedTopics: topics,
+      plan,
+      violations: [],
+    });
+    const selectedIds = new Set(plan.sections.flatMap((section) => section.candidateIds));
+    const selectedCandidates = planningCandidates.filter((candidate) => selectedIds.has(candidate.id));
+    finalizationPlan = plan;
+    finalizationSelectedCandidates = selectedCandidates;
+    await input.onStageUpdate?.("write");
+    let draft = canResume && checkpoint?.draft
+      ? checkpoint.draft as Awaited<ReturnType<typeof provider.writeDailyReport>>
+      : await runStageWithAttempts("write", async () => provider.writeDailyReport({ selectedCandidates, plan, template }));
+    let draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
+    stageAttempts.VALIDATE = Math.min(getDailyReportAttemptLimit("VALIDATE"), 1);
+    validationViolationCount = draftViolations.length;
+    await input.onStageUpdate?.("validate");
+    if (latestCheckpoint) {
+      await saveCheckpoint({
+        ...latestCheckpoint,
+        stage: "validate",
+        completedStages: draftViolations.length > 0
+          ? [...new Set([...latestCheckpoint.completedStages, "write"])]
+          : [...new Set([...latestCheckpoint.completedStages, "write", "validate"])],
+        lastCompletedStage: draftViolations.length > 0 ? "write" : "validate",
+        failedStage: null,
+        failureCode: null,
+        resumeEligible: true,
+        stageAttempts: { ...stageAttempts },
+        draft,
+        violations: draftViolations,
+      });
+    }
+    if (draftViolations.length > 0) {
+      repairCount = 1;
+      await input.onStageUpdate?.("repair");
+      draft = await runStageWithAttempts("repair", async () => provider.repairDailyReportDraft({ draft, violations: draftViolations, plan, template }), {
+        matrixStage: "REPAIR",
+      });
+      draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
+      validationViolationCount = draftViolations.length;
+      if (latestCheckpoint) {
+        await saveCheckpoint({
+          ...latestCheckpoint,
+          stage: "repair",
+          completedStages: draftViolations.length > 0
+            ? [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])].filter((stage) => stage !== "validate")
+            : [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])],
+          lastCompletedStage: draftViolations.length > 0 ? "repair" : "repair",
+          failedStage: null,
+          failureCode: null,
+          resumeEligible: draftViolations.length === 0,
+          stageAttempts: { ...stageAttempts },
+          draft,
+          violations: draftViolations,
+        });
+      }
+    }
+    if (draftViolations.length > 0) {
+      throw new Error(`WRITE 校验失败：${draftViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
+    }
+    content = draft;
   } catch (error) {
-    throw new DailyReportGenerationError(error, aiUsage.snapshot());
+    if (error instanceof DailyReportGenerationError || error instanceof DailyReportCancellationError) throw error;
+    throw new DailyReportGenerationError(error, aiUsage.snapshot(), buildFailureCheckpoint(error));
   }
   assertDailyReportSourceIdsExist(content, candidates.map((candidate) => ({
     sourceNumber: candidate.id,
@@ -1168,9 +1544,34 @@ export async function generateDailyReport(input: {
   })));
   let deduplication: ReturnType<typeof deduplicateDailyReportContentByCandidate>;
   try {
-    deduplication = deduplicateDailyReportContentByCandidate(content, candidates);
+    deduplication = deduplicateDailyReportContentByCandidate(content, finalizationSelectedCandidates, { refillEmptySections: false });
+    if (finalizationPlan && finalizationTemplate) {
+      currentStage = "validate";
+      currentAttemptKey = "VALIDATE";
+      const finalViolations = validateDailyReportDraft(
+        deduplication.content,
+        finalizationPlan,
+        finalizationSelectedCandidates,
+        finalizationTemplate,
+      );
+      validationViolationCount = finalViolations.length;
+      if (finalViolations.length > 0) {
+        latestCheckpoint = latestCheckpoint
+          ? {
+              ...latestCheckpoint,
+              stage: "validate",
+              failedStage: "validate",
+              failureCode: "stage_failed",
+              resumeEligible: false,
+              violations: finalViolations,
+            }
+          : latestCheckpoint;
+        throw new Error(`日报最终校验失败：${finalViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
+      }
+    }
   } catch (error) {
-    throw new DailyReportGenerationError(error, aiUsage.snapshot());
+    if (error instanceof DailyReportGenerationError || error instanceof DailyReportCancellationError) throw error;
+    throw new DailyReportGenerationError(error, aiUsage.snapshot(), buildFailureCheckpoint(error));
   }
   content = deduplication.content;
   const sourceRows = getSectionSourceIds(content);
@@ -1208,79 +1609,29 @@ export async function generateDailyReport(input: {
   });
   const shouldAutoPublish = schedule.dailyReportAutoPublish;
   const publishedAt = shouldAutoPublish ? new Date() : null;
+  const persistIdempotencyKey = `generated:${input.taskRunId ?? `direct-${Date.now()}`}:${inputHash}`;
 
-  const report = await prisma.$transaction(async (tx) => {
-    const saved = await tx.dailyReport.upsert({
-      where: {
-        date_timezone: {
-          date,
-          timezone: DAILY_REPORT_TIMEZONE,
-        },
-      },
-      update: {
-        status: shouldAutoPublish ? "published" : "draft",
-        title,
-        openingSummary: getDailyReportOpeningSummary(content),
-        closingThought: getDailyReportClosingThought(content),
-        summaryJson: JSON.stringify(content),
-        renderedMarkdown,
-        inputHash,
-        modelName: runtimeConfig.modelApi.model,
-        taskRunId: input.taskRunId ?? null,
-        candidateSnapshot,
-        errorMessage: null,
-        publishedAt,
-        generatedAt: new Date(),
-      },
-      create: {
-        date,
-        timezone: DAILY_REPORT_TIMEZONE,
-        status: shouldAutoPublish ? "published" : "draft",
-        title,
-        openingSummary: getDailyReportOpeningSummary(content),
-        closingThought: getDailyReportClosingThought(content),
-        summaryJson: JSON.stringify(content),
-        renderedMarkdown,
-        inputHash,
-        modelName: runtimeConfig.modelApi.model,
-        taskRunId: input.taskRunId ?? null,
-        candidateSnapshot,
-        publishedAt,
-      },
-    });
-
-    await tx.dailyReportSource.deleteMany({
-      where: { dailyReportId: saved.id },
-    });
-    await tx.dailyReportSource.createMany({
-      data: sourceRows.flatMap((row) => {
-        const sources = expandedSourcesByNumber.get(row.sourceId);
-        if (!sources) return [];
-        return sources.map((source) => ({
-          dailyReportId: saved.id,
-          sourceNumber: source.sourceNumber,
-          sourceKey: source.sourceKey,
-          itemId: source.itemId,
-          clusterId: source.clusterId,
-          sourceName: source.sourceName,
-          title: source.title,
-          url: source.url,
-          sourceSummary: source.summary,
-          sourcePublishedAt: source.publishedAt ? new Date(source.publishedAt) : null,
-          sourceQualityScore: source.qualityScore,
-          eventType: source.eventType,
-          eventSubject: source.eventSubject,
-          eventAction: source.eventAction,
-          eventObject: source.eventObject,
-          eventDate: source.eventDate,
-          sectionName: row.sectionName,
-          topic: row.topic,
-        }));
-      }),
-    });
-
-    return saved;
-  });
+  await throwIfCancellationRequested();
+  await input.onStageUpdate?.("persist_publish");
+  const report = await runStageWithAttempts("persist_publish", async () => persistDailyReport({
+    date,
+    existing,
+    taskRunId: input.taskRunId,
+    content,
+    title,
+    renderedMarkdown,
+    inputHash,
+    candidateSnapshot,
+    modelName: runtimeConfig.modelApi.model,
+    templateSignature,
+    sourceRows,
+    expandedSourcesByNumber,
+    shouldAutoPublish,
+    publishedAt,
+    idempotencyKey: persistIdempotencyKey,
+    aiUsage: aiUsage.snapshot(),
+    buildCancellationCheckpoint,
+  }), { matrixStage: "PERSIST_PUBLISH" });
 
   invalidateDailyReportCache();
 
@@ -1290,8 +1641,45 @@ export async function generateDailyReport(input: {
     reason: null,
     candidateCount: candidates.length,
     selectedCount,
-    aiUsage: aiUsage.snapshot(),
+    batchCount: planningBatchCount,
+    mergedTopicCount,
+    planSectionCount,
+    planSelectedCount,
+    planViolationCount,
+    repairCount,
+      validationViolationCount,
+      batchSize: schedule.dailyReportPlanningBatchSize ?? null,
+      aiUsage: aiUsage.snapshot(),
   };
+}
+
+export async function generateDailyReport(input: {
+  date: string;
+  taskRunId?: string | null;
+  force?: boolean;
+  onCandidatesLoaded?: (candidateCount: number) => Promise<void>;
+  onStageUpdate?: (stage: DailyReportPipelineStage) => Promise<void>;
+  onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
+  resumeCheckpoint?: TaskPipelineCheckpoint | null;
+}) {
+  const normalizedDate = normalizeDailyReportDate(input.date);
+  return withDailyReportLock(normalizedDate, "generate", async ({ assertLock }) => {
+    return generateDailyReportInternal({
+      ...input,
+      onCandidatesLoaded: async (candidateCount) => {
+        await assertLock();
+        await input.onCandidatesLoaded?.(candidateCount);
+      },
+      onStageUpdate: async (stage) => {
+        await assertLock();
+        await input.onStageUpdate?.(stage);
+      },
+      onCheckpoint: async (checkpoint) => {
+        await assertLock();
+        await input.onCheckpoint?.(checkpoint);
+      },
+    });
+  });
 }
 
 export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
@@ -1299,6 +1687,20 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     ? taskRun.entityId
     : getTodayDailyReportDate();
   let candidateCount = 0;
+  let mergedTopicCount = 0;
+  let planSectionCount = 0;
+  let planSelectedCount = 0;
+  let planViolationCount = 0;
+  let repairCount = 0;
+  let validationViolationCount = 0;
+  let batchCount = 0;
+  let batchSize: number | null = null;
+  let activeStage: DailyReportPipelineStage | null = "prepare";
+  let resumeCheckpoint: TaskPipelineCheckpoint | null = null;
+  if (taskRun.pipelineCheckpointJson) {
+    const parsed = parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson);
+    if (parsed?.resumeEligible) resumeCheckpoint = parsed;
+  }
 
   try {
     await updateTaskRun(taskRun.id, {
@@ -1309,6 +1711,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       taskTimeline: buildDailyReportTaskTimeline({
         taskRun,
         status: "running",
+        activeStage,
       }),
       aiCallCountEstimated: 1,
       aiCallBreakdown: [
@@ -1327,9 +1730,45 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
             taskRun,
             status: "running",
             candidateCount,
+            batchCount,
+            batchSize,
+            activeStage,
           }),
         });
       },
+      onStageUpdate: async (stage) => {
+        activeStage = stage;
+        if (stage === "repair") repairCount = 1;
+        await updateTaskRun(taskRun.id, {
+          taskTimeline: buildDailyReportTaskTimeline({
+            taskRun,
+            status: "running",
+            candidateCount,
+            batchCount,
+            batchSize,
+            activeStage,
+          }),
+        });
+      },
+      onCheckpoint: async (checkpoint) => {
+        if (checkpoint.mergedTopics) mergedTopicCount = checkpoint.mergedTopics.length;
+        if (typeof checkpoint.data?.batchCount === "number") batchCount = checkpoint.data.batchCount;
+        if (checkpoint.data && Object.prototype.hasOwnProperty.call(checkpoint.data, "batchSize")) {
+          batchSize = typeof checkpoint.data.batchSize === "number" ? checkpoint.data.batchSize : null;
+        }
+        const checkpointPlan = checkpoint.plan as DailyReportPlan | undefined;
+        if (checkpointPlan?.sections) {
+          planSectionCount = checkpointPlan.sections.length;
+          planSelectedCount = checkpointPlan.sections.reduce((total, section) => total + section.candidateIds.length, 0);
+          planViolationCount = checkpoint.violations?.length ?? 0;
+        }
+        if (checkpoint.stage === "validate" || checkpoint.stage === "repair") {
+          validationViolationCount = checkpoint.violations?.length ?? 0;
+        }
+        await updateTaskRun(taskRun.id, { pipelineCheckpoint: checkpoint });
+        resumeCheckpoint = checkpoint;
+      },
+      resumeCheckpoint,
     });
 
     const finishedAt = new Date();
@@ -1358,38 +1797,42 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         status: result.skipped ? "skipped" : "succeeded",
         candidateCount: result.candidateCount,
         selectedCount: result.selectedCount,
+        mergedTopicCount: result.mergedTopicCount,
+        planSectionCount: result.planSectionCount,
+        planSelectedCount: result.planSelectedCount,
+        planViolationCount: result.planViolationCount,
+        validationViolationCount: result.validationViolationCount,
+        repairCount: result.repairCount,
+        batchCount: result.batchCount,
+        batchSize: result.batchSize,
+        activeStage: result.skipped ? null : "persist_publish",
         finishedAt,
       }),
+      pipelineCheckpoint: null,
       finishedAt,
     });
     await markDailyScheduleRunFinished(taskRun, "succeeded");
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 日报生成失败。";
-    const failedAiUsage = error instanceof DailyReportGenerationError ? error.aiUsage : null;
-    const existingReport = await prisma.dailyReport.findUnique({
-      where: {
-        date_timezone: {
-          date,
-          timezone: DAILY_REPORT_TIMEZONE,
-        },
-      },
-    });
-
-    if (existingReport) {
-      await prisma.dailyReport.update({
-        where: { id: existingReport.id },
-        data: {
-          errorMessage: message,
-          taskRunId: taskRun.id,
-        },
-      });
+    const cancelled = error instanceof DailyReportCancellationError;
+    const failedAiUsage = error instanceof DailyReportGenerationError || cancelled ? error.aiUsage : null;
+    const failedCheckpoint = error instanceof DailyReportGenerationError || cancelled ? error.checkpoint : null;
+    if (failedCheckpoint?.failedStage) activeStage = failedCheckpoint.failedStage as DailyReportPipelineStage;
+    if (failedCheckpoint?.data && typeof failedCheckpoint.data.batchCount === "number") batchCount = failedCheckpoint.data.batchCount;
+    if (failedCheckpoint?.data && Object.prototype.hasOwnProperty.call(failedCheckpoint.data, "batchSize")) {
+      batchSize = typeof failedCheckpoint.data.batchSize === "number" ? failedCheckpoint.data.batchSize : null;
     }
-    invalidateDailyReportCache();
+    const failedPlan = failedCheckpoint?.plan as DailyReportPlan | undefined;
+    if (failedPlan?.sections) {
+      planSectionCount = failedPlan.sections.length;
+      planSelectedCount = failedPlan.sections.reduce((total, section) => total + section.candidateIds.length, 0);
+      planViolationCount = failedCheckpoint?.violations?.length ?? 0;
+    }
     const finishedAt = new Date();
     await updateTaskRun(taskRun.id, {
-      status: "failed",
-      progressLabel: message,
-      errorSummary: message,
+      status: cancelled ? "cancelled" : "failed",
+      progressLabel: cancelled ? TASK_RUN_CANCELLED_LABEL : message,
+      errorSummary: cancelled ? TASK_RUN_CANCELLED_MESSAGE : message,
       ...(failedAiUsage ? {
         aiCallCountActual: failedAiUsage.actual,
         aiCallCountEstimated: failedAiUsage.estimated,
@@ -1397,33 +1840,23 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       } : {}),
       taskTimeline: buildDailyReportTaskTimeline({
         taskRun,
-        status: "failed",
+        status: cancelled ? "cancelled" : "failed",
         candidateCount,
+        mergedTopicCount,
+        planSectionCount,
+        planSelectedCount,
+        planViolationCount,
+        validationViolationCount,
+        repairCount,
+        batchCount,
+        batchSize,
+        activeStage,
         finishedAt,
       }),
+      ...(failedCheckpoint ? { pipelineCheckpoint: failedCheckpoint } : {}),
       finishedAt,
     });
-    await markDailyScheduleRunFinished(taskRun, "failed");
-
-    // 自动重试：检查重试次数是否未达上限
-    const schedule = await ensureDefaultDailyReportSchedule();
-    const maxRetries = schedule.dailyReportMaxRetries ?? 0;
-    if (maxRetries > 0) {
-      const existingAttempts = await prisma.backgroundTaskRun.count({
-        where: {
-          kind: "daily_report_generate",
-          entityId: date,
-        },
-      });
-      if (existingAttempts <= maxRetries) {
-        await enqueueTaskRun({
-          kind: "daily_report_generate",
-          triggerType: taskRun.triggerType,
-          label: `${DEFAULT_DAILY_REPORT_TASK_LABEL} ${date} (自动重试)`,
-          entityId: date,
-        });
-      }
-    }
+    await markDailyScheduleRunFinished(taskRun, cancelled ? "cancelled" : "failed");
   }
 }
 

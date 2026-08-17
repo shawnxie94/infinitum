@@ -138,16 +138,28 @@ export function createTaskAiUsageTracker(
           syncEstimateFloor();
           return aiProvider.mergeClusters(clustersJson);
         },
-        async generateDailyReport(input) {
+        async assessDailyReportCandidates(input) {
           incrementActual("daily_report");
           incrementEstimated("daily_report");
           syncEstimateFloor();
-          return aiProvider.generateDailyReport(input);
+          return aiProvider.assessDailyReportCandidates(input);
         },
-        async repairDailyReportJson(rawContent) {
+        async planDailyReport(input) {
+          incrementActual("daily_report");
+          incrementEstimated("daily_report");
+          syncEstimateFloor();
+          return aiProvider.planDailyReport(input);
+        },
+        async writeDailyReport(input) {
+          incrementActual("daily_report");
+          incrementEstimated("daily_report");
+          syncEstimateFloor();
+          return aiProvider.writeDailyReport(input);
+        },
+        async repairDailyReportDraft(input) {
           incrementActual("daily_report");
           syncEstimateFloor();
-          return aiProvider.repairDailyReportJson(rawContent);
+          return aiProvider.repairDailyReportDraft(input);
         },
       };
     },

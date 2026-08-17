@@ -54,6 +54,7 @@ export type RuntimeConfig = {
       name: string;
       systemPrompt: string;
       promptTemplate: string;
+      templateJson?: string | null;
       temperature?: number | null;
       maxTokens?: number | null;
       topP?: number | null;
@@ -63,6 +64,7 @@ export type RuntimeConfig = {
       name: string;
       systemPrompt: string;
       promptTemplate: string;
+      templateJson?: string | null;
       temperature?: number | null;
       maxTokens?: number | null;
       topP?: number | null;
@@ -90,6 +92,7 @@ export type RuntimeConfig = {
       name: string;
       systemPrompt: string;
       promptTemplate: string;
+      templateJson?: string | null;
       temperature?: number | null;
       maxTokens?: number | null;
       topP?: number | null;

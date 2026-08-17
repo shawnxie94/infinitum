@@ -52,6 +52,7 @@ next-env.d.ts
 /prisma/prisma/*.db-journal
 /prisma/prisma/*.db-shm
 /prisma/prisma/*.db-wal
+/prisma/schema.sql
 /.env.docker
 
 # local runtime / deployment files

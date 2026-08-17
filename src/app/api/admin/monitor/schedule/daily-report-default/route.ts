@@ -8,9 +8,9 @@ const scheduleUpdateSchema = z.object({
   enabled: z.boolean(),
   cronExpression: z.string().trim().min(1),
   dailyReportCandidateLimit: z.number().int().min(2).max(500),
+  dailyReportPlanningBatchSize: z.number().int().positive().nullable().optional(),
   dailyReportOffsetDays: z.number().int().min(0).max(365),
   dailyReportAutoPublish: z.boolean(),
-  dailyReportMaxRetries: z.number().int().min(0).max(5),
   dailyReportChannelIds: z.array(z.string().trim().min(1)).min(1).max(12),
 });
 

@@ -12,7 +12,7 @@ import {
 import { normalizeText } from "@/lib/utils/text";
 
 export async function listModelApiConfigs() {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const configs = await prisma.modelApiConfig.findMany({
     orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
@@ -22,7 +22,7 @@ export async function listModelApiConfigs() {
 }
 
 export async function getModelApiConfig(id: string) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const config = await prisma.modelApiConfig.findUnique({
     where: { id },
@@ -39,7 +39,7 @@ export async function getModelApiConfig(id: string) {
 }
 
 export async function createModelApiConfig(input: SaveModelApiConfigInput) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
   validateModelApiInput(input);
 
   return prisma.$transaction(async (tx) => {
@@ -72,7 +72,7 @@ export async function createModelApiConfig(input: SaveModelApiConfigInput) {
 }
 
 export async function updateModelApiConfig(id: string, input: SaveModelApiConfigInput) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const current = await prisma.modelApiConfig.findUnique({
     where: { id },
@@ -126,7 +126,7 @@ export async function updateModelApiConfig(id: string, input: SaveModelApiConfig
 }
 
 export async function deleteModelApiConfig(id: string) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const config = await prisma.modelApiConfig.findUnique({
     where: { id },
@@ -146,7 +146,7 @@ export async function deleteModelApiConfig(id: string) {
 }
 
 export async function fetchModelApiModels(input: FetchModelApiModelsInput) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const baseUrl = normalizeText(input.baseUrl);
   let apiKey = normalizeText(input.apiKey);
@@ -223,7 +223,7 @@ export async function testModelApiConfig(
     maxTokens?: number;
   },
 ) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const config = await prisma.modelApiConfig.findUnique({
     where: { id },

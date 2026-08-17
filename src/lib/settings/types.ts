@@ -140,9 +140,9 @@ export type AdminSettingsSnapshot = {
     perSourceItemLimit: number;
     aggregationSplitMaxEvents: number;
     dailyReportCandidateLimit: number;
+    dailyReportPlanningBatchSize?: number | null;
     dailyReportOffsetDays: number;
     dailyReportAutoPublish: boolean;
-    dailyReportMaxRetries: number;
     dailyReportChannelIds?: string[];
     processingStartAt?: string | null;
     cleanupRetentionDays: number;
@@ -163,9 +163,9 @@ export type AdminSettingsSnapshot = {
     perSourceItemLimit: number;
     aggregationSplitMaxEvents: number;
     dailyReportCandidateLimit: number;
+    dailyReportPlanningBatchSize?: number | null;
     dailyReportOffsetDays: number;
     dailyReportAutoPublish: boolean;
-    dailyReportMaxRetries: number;
     dailyReportChannelIds: string[];
     processingStartAt?: string | null;
     cleanupRetentionDays: number;

@@ -28,7 +28,7 @@ import type { AdminSettingsSnapshot } from "@/lib/settings/types";
 import { ensureDefaultDailyReportSchedule, ensureDefaultIngestionSchedule, ensureDefaultItemCleanupSchedule, toTaskScheduleSnapshot } from "@/lib/tasks/service";
 
 export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const [sources, blacklist, defaultModelConfig, promptConfigs, taskSchedule, contentExtractionConfig] = await Promise.all([
     prisma.source.findMany({
@@ -100,7 +100,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
 }
 
 export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const [
     modelApiConfigs,

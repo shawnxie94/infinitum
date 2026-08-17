@@ -19,7 +19,7 @@ async function getDefaultModelConfigSummary(reader: DefaultModelConfigReader = p
 }
 
 export async function listPromptConfigs() {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const [configs, defaultModelConfig] = await Promise.all([
     prisma.promptConfig.findMany({
@@ -39,7 +39,7 @@ export async function listPromptConfigs() {
 }
 
 export async function getPromptConfig(id: string) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const [config, defaultModelConfig] = await Promise.all([
     prisma.promptConfig.findUnique({
@@ -63,7 +63,7 @@ export async function getPromptConfig(id: string) {
 }
 
 export async function createPromptConfig(input: SavePromptConfigInput) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
   await validatePromptConfigInput(input);
   const templateSave = resolveTemplateJsonForSave(input);
 
@@ -108,7 +108,7 @@ export async function createPromptConfig(input: SavePromptConfigInput) {
 }
 
 export async function updatePromptConfig(id: string, input: SavePromptConfigInput) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const current = await prisma.promptConfig.findUnique({
     where: { id },
@@ -164,7 +164,7 @@ export async function updatePromptConfig(id: string, input: SavePromptConfigInpu
 }
 
 export async function deletePromptConfig(id: string) {
-  await ensureRuntimeConfigSeeded();
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const config = await prisma.promptConfig.findUnique({
     where: { id },

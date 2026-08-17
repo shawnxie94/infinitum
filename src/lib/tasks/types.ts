@@ -53,6 +53,15 @@ export type TaskStageTimingSnapshot = {
 
 export type TaskTimelineNodeKey =
   | "daily_report_generate"
+  | "daily_report_prepare"
+  | "daily_report_assess"
+  | "daily_report_merge"
+  | "daily_report_plan"
+  | "daily_report_plan_validate"
+  | "daily_report_validate"
+  | "daily_report_write"
+  | "daily_report_repair"
+  | "daily_report_persist_publish"
   | "task_finished"
   | "source_fetch"
   | "rule_filter"
@@ -67,6 +76,7 @@ export type TaskTimelineNodeStatus =
   | "succeeded"
   | "failed"
   | "partial"
+  | "cancelled"
   | "skipped";
 
 export type TaskTimelineMetricSnapshot = {
@@ -83,6 +93,37 @@ export type TaskTimelineNodeSnapshot = {
   durationMs: number | null;
   modelName?: string | null;
   metrics: TaskTimelineMetricSnapshot[];
+};
+
+export type TaskPipelineCheckpoint = {
+  version: 1;
+  pipelineVersion: string;
+  stage: string;
+  completedStages: string[];
+  inputHash: string;
+  templateSignature: string | null;
+  candidateSnapshotHash: string;
+  resumeEligible: boolean;
+  lastCompletedStage?: string;
+  failedStage?: string | null;
+  failureCode?: string | null;
+  resumeAttempt?: number;
+  stageAttempts?: Record<string, number>;
+  candidateSnapshot?: unknown;
+  assessmentBatches?: Array<{
+    index: number;
+    candidateIds: number[];
+    status: "pending" | "running" | "succeeded" | "failed";
+    attempt: number;
+    assessments?: unknown[];
+    error?: string;
+  }>;
+  ledger?: unknown;
+  mergedTopics?: unknown[];
+  plan?: unknown;
+  draft?: unknown;
+  violations?: unknown[];
+  data?: Record<string, unknown>;
 };
 
 export type TaskAiCallBreakdownKey =
@@ -121,6 +162,7 @@ export type TaskRunSnapshot = {
   errorSummary: string | null;
   stageTimings: TaskStageTimingSnapshot[];
   taskTimeline?: TaskTimelineNodeSnapshot[];
+  pipelineCheckpoint?: TaskPipelineCheckpoint | null;
 };
 
 export type TaskScheduleSnapshot = {
@@ -132,9 +174,9 @@ export type TaskScheduleSnapshot = {
   perSourceItemLimit: number;
   aggregationSplitMaxEvents: number;
   dailyReportCandidateLimit: number;
+  dailyReportPlanningBatchSize?: number | null;
   dailyReportOffsetDays: number;
   dailyReportAutoPublish: boolean;
-  dailyReportMaxRetries: number;
   dailyReportChannelIds?: string[];
   cleanupRetentionDays: number;
   processingStartAt?: string | null;

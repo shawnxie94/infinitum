@@ -14,16 +14,13 @@ import {
   DEFAULT_CLEANUP_RETENTION_DAYS,
   DEFAULT_AGGREGATION_SPLIT_MAX_EVENTS,
   DEFAULT_DAILY_REPORT_CANDIDATE_LIMIT,
-  DEFAULT_DAILY_REPORT_MAX_RETRIES,
   DEFAULT_DAILY_REPORT_OFFSET_DAYS,
   isSchedulerHeartbeatStale,
   MAX_CLEANUP_RETENTION_DAYS,
   MAX_DAILY_REPORT_CANDIDATE_LIMIT,
-  MAX_DAILY_REPORT_MAX_RETRIES,
   MAX_DAILY_REPORT_OFFSET_DAYS,
   MIN_CLEANUP_RETENTION_DAYS,
   MIN_DAILY_REPORT_CANDIDATE_LIMIT,
-  MIN_DAILY_REPORT_MAX_RETRIES,
   MIN_DAILY_REPORT_OFFSET_DAYS,
   normalizeScheduleInput,
 } from "@/lib/tasks/scheduler";
@@ -40,12 +37,14 @@ import {
   type TaskTimelineNodeKey,
   type TaskTimelineNodeSnapshot,
   type TaskTimelineNodeStatus,
+  type TaskPipelineCheckpoint,
   type TaskRunSnapshot,
   type TaskScheduleSnapshot,
   type BackgroundTaskRunKind,
   type BackgroundTaskRunStatus,
 } from "@/lib/tasks/types";
 import { prisma } from "@/lib/db";
+import { parseTaskPipelineCheckpointJson, serializeTaskPipelineCheckpoint } from "@/lib/tasks/checkpoint";
 
 export const TASK_RUN_CANCELLED_MESSAGE = "管理员手动终止任务。";
 export const TASK_RUN_CANCELLED_LABEL = "任务已终止";
@@ -226,6 +225,15 @@ function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnap
   const status = maybeNode.status;
   const supportedKeys = new Set<TaskTimelineNodeKey>([
     "daily_report_generate",
+    "daily_report_prepare",
+    "daily_report_assess",
+    "daily_report_merge",
+    "daily_report_plan",
+    "daily_report_plan_validate",
+    "daily_report_validate",
+    "daily_report_write",
+    "daily_report_repair",
+    "daily_report_persist_publish",
     "task_finished",
     "source_fetch",
     "rule_filter",
@@ -240,6 +248,7 @@ function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnap
     "succeeded",
     "failed",
     "partial",
+    "cancelled",
     "skipped",
   ]);
 
@@ -433,10 +442,11 @@ export async function updateTaskRun(
     errorSummary?: string | null;
     stageTimings?: TaskStageTimingSnapshot[] | null;
     taskTimeline?: TaskTimelineNodeSnapshot[] | null;
+    pipelineCheckpoint?: TaskPipelineCheckpoint | null;
   },
 ) {
   const now = new Date();
-  const { stageTimings, aiCallBreakdown, taskTimeline, ...taskRunData } = data;
+  const { stageTimings, aiCallBreakdown, taskTimeline, pipelineCheckpoint, ...taskRunData } = data;
   const taskRun = await prisma.$transaction(async (tx) => {
     const updatedTaskRun = await tx.backgroundTaskRun.update({
       where: { id },
@@ -448,6 +458,8 @@ export async function updateTaskRun(
           stageTimings === undefined ? undefined : serializeTaskStageTimings(stageTimings),
         taskTimelineJson:
           taskTimeline === undefined ? undefined : serializeTaskTimeline(taskTimeline),
+        pipelineCheckpointJson:
+          pipelineCheckpoint === undefined ? undefined : serializeTaskPipelineCheckpoint(pipelineCheckpoint),
       },
     });
 
@@ -485,6 +497,7 @@ export function toTaskRunSnapshot(taskRun: {
   errorSummary: string | null;
   stageTimingsJson: string | null;
   taskTimelineJson: string | null;
+  pipelineCheckpointJson?: string | null;
 }): TaskRunSnapshot {
   return {
     id: taskRun.id,
@@ -507,6 +520,7 @@ export function toTaskRunSnapshot(taskRun: {
     errorSummary: taskRun.errorSummary,
     stageTimings: parseTaskStageTimingsJson(taskRun.stageTimingsJson),
     taskTimeline: parseTaskTimelineJson(taskRun.taskTimelineJson),
+    pipelineCheckpoint: parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson),
   };
 }
 
@@ -519,9 +533,9 @@ export function toTaskScheduleSnapshot(schedule: {
   perSourceItemLimit: number | null;
   aggregationSplitMaxEvents?: number | null;
   dailyReportCandidateLimit: number | null;
+  dailyReportPlanningBatchSize?: number | null;
   dailyReportOffsetDays: number | null;
   dailyReportAutoPublish: boolean | null;
-  dailyReportMaxRetries: number | null;
   dailyReportChannelIdsJson?: string | null;
   cleanupRetentionDays: number | null;
   processingStartAt: Date | null;
@@ -541,9 +555,9 @@ export function toTaskScheduleSnapshot(schedule: {
     perSourceItemLimit: schedule.perSourceItemLimit ?? 20,
     aggregationSplitMaxEvents: schedule.aggregationSplitMaxEvents ?? DEFAULT_AGGREGATION_SPLIT_MAX_EVENTS,
     dailyReportCandidateLimit: schedule.dailyReportCandidateLimit ?? DEFAULT_DAILY_REPORT_CANDIDATE_LIMIT,
+    dailyReportPlanningBatchSize: schedule.dailyReportPlanningBatchSize ?? null,
     dailyReportOffsetDays: schedule.dailyReportOffsetDays ?? DEFAULT_DAILY_REPORT_OFFSET_DAYS,
     dailyReportAutoPublish: schedule.dailyReportAutoPublish ?? false,
-    dailyReportMaxRetries: schedule.dailyReportMaxRetries ?? DEFAULT_DAILY_REPORT_MAX_RETRIES,
     dailyReportChannelIds: parseDailyReportChannelIdsJson(schedule.dailyReportChannelIdsJson),
     cleanupRetentionDays: schedule.cleanupRetentionDays ?? DEFAULT_CLEANUP_RETENTION_DAYS,
     processingStartAt: schedule.processingStartAt?.toISOString() ?? null,
@@ -599,9 +613,9 @@ export async function updateDefaultDailyReportSchedule(input: {
   enabled: boolean;
   cronExpression: string;
   dailyReportCandidateLimit: number;
+  dailyReportPlanningBatchSize?: number | null;
   dailyReportOffsetDays: number;
   dailyReportAutoPublish: boolean;
-  dailyReportMaxRetries: number;
   dailyReportChannelIds?: string[];
 }) {
   const cronExpression = input.cronExpression.trim();
@@ -627,22 +641,20 @@ export async function updateDefaultDailyReportSchedule(input: {
   }
 
   if (
+    input.dailyReportPlanningBatchSize !== null &&
+    input.dailyReportPlanningBatchSize !== undefined &&
+    (!Number.isInteger(input.dailyReportPlanningBatchSize) || input.dailyReportPlanningBatchSize < 1)
+  ) {
+    throw new Error("Daily report planning batch size must be null or a positive integer.");
+  }
+
+  if (
     !Number.isInteger(input.dailyReportOffsetDays) ||
     input.dailyReportOffsetDays < MIN_DAILY_REPORT_OFFSET_DAYS ||
     input.dailyReportOffsetDays > MAX_DAILY_REPORT_OFFSET_DAYS
   ) {
     throw new Error(
       `Daily report T- days must be an integer between ${MIN_DAILY_REPORT_OFFSET_DAYS} and ${MAX_DAILY_REPORT_OFFSET_DAYS}.`,
-    );
-  }
-
-  if (
-    !Number.isInteger(input.dailyReportMaxRetries) ||
-    input.dailyReportMaxRetries < MIN_DAILY_REPORT_MAX_RETRIES ||
-    input.dailyReportMaxRetries > MAX_DAILY_REPORT_MAX_RETRIES
-  ) {
-    throw new Error(
-      `Daily report max retries must be an integer between ${MIN_DAILY_REPORT_MAX_RETRIES} and ${MAX_DAILY_REPORT_MAX_RETRIES}.`,
     );
   }
 
@@ -666,9 +678,9 @@ export async function updateDefaultDailyReportSchedule(input: {
       enabled: input.enabled,
       cronExpression,
       dailyReportCandidateLimit: input.dailyReportCandidateLimit,
+      dailyReportPlanningBatchSize: input.dailyReportPlanningBatchSize ?? null,
       dailyReportOffsetDays: input.dailyReportOffsetDays,
       dailyReportAutoPublish: input.dailyReportAutoPublish,
-      dailyReportMaxRetries: input.dailyReportMaxRetries,
       dailyReportChannelIdsJson: serializeDailyReportChannelIds(dailyReportChannelIds),
       nextRunAt,
     },
@@ -726,6 +738,40 @@ export async function getTaskRun(id: string) {
   return prisma.backgroundTaskRun.findUnique({
     where: { id },
   });
+}
+
+export async function resumeTaskRun(id: string) {
+  const taskRun = await getTaskRun(id);
+  if (!taskRun) throw new Error("Task run not found.");
+  if (taskRun.kind !== "daily_report_generate") throw new Error("只有日报任务支持断点恢复。");
+  if (!["failed", "partial", "cancelled"].includes(taskRun.status)) throw new Error("只有失败或部分完成的日报任务支持断点恢复。");
+  if (!taskRun.pipelineCheckpointJson) throw new Error("该任务没有可恢复的 checkpoint，请重新生成。");
+  const checkpoint = parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson);
+  if (!checkpoint) throw new Error("任务 checkpoint 已损坏，无法恢复。");
+  if (!checkpoint.resumeEligible) throw new Error("该任务 checkpoint 不满足恢复条件。");
+  checkpoint.resumeAttempt = (checkpoint.resumeAttempt ?? 0) + 1;
+  checkpoint.failedStage = null;
+  checkpoint.failureCode = null;
+  const updated = await prisma.backgroundTaskRun.updateMany({
+    where: {
+      id,
+      status: { in: ["failed", "partial", "cancelled"] },
+    },
+    data: {
+      triggerType: "admin_action",
+      status: "queued",
+      progressCurrent: 0,
+      progressTotal: 1,
+      progressLabel: "等待断点恢复",
+      errorSummary: null,
+      cancelRequestedAt: null,
+      startedAt: null,
+      finishedAt: null,
+      pipelineCheckpointJson: JSON.stringify(checkpoint),
+    },
+  });
+  if (updated.count !== 1) throw new Error("任务状态已变化，请刷新后再试。");
+  return prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id } });
 }
 
 export async function isTaskRunCancellationRequested(id: string) {

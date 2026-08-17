@@ -24,7 +24,6 @@ function buildMonitorSnapshot(): BackgroundTaskMonitorSnapshot {
       dailyReportCandidateLimit: 120,
       dailyReportOffsetDays: 0,
       dailyReportAutoPublish: false,
-      dailyReportMaxRetries: 0,
       timezone: "Asia/Shanghai",
       lastHeartbeatAt: null,
       lastRunStartedAt: null,

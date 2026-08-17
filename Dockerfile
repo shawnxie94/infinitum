@@ -17,7 +17,7 @@ RUN npm ci
 
 COPY . .
 RUN npm run prisma:generate \
-  && ./node_modules/.bin/prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/schema.sql \
+  && npm run schema:generate \
   && npm run build \
   && npm run build:worker \
   && cp -R node_modules/.prisma/client .next/standalone/node_modules/.prisma/client
@@ -52,7 +52,7 @@ ENV DATABASE_URL=file:/app/data/dev.db
 
 COPY --from=worker-deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist/worker.cjs ./worker.cjs
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma/schema.sql ./prisma/schema.sql
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/node_modules/.prisma/client ./node_modules/.prisma/client
 COPY --from=builder /app/scripts/setup-sqlite.mjs ./scripts/setup-sqlite.mjs
@@ -69,7 +69,7 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 ENV DATABASE_URL=file:/app/data/dev.db
 
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma/schema.sql ./prisma/schema.sql
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
 COPY --from=builder /app/scripts/setup-sqlite.mjs ./scripts/setup-sqlite.mjs

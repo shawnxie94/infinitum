@@ -9,6 +9,7 @@ import {
 import { prisma } from "@/lib/db";
 import {
   DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
+  getLegacyDefaultDailyReportSystemPrompt,
   parseDailyReportTemplateJson,
   stringifyDailyReportTemplate,
 } from "@/lib/daily-report/template";
@@ -690,17 +691,19 @@ describe("admin settings service", () => {
     const legacyTemplateJson = JSON.stringify({
       opening: {
         label: "摘要",
-        instruction: "旧版摘要要求",
+        instruction: "约 100-180 字。概括当天 AI 领域最关键的事项和主线变化，优先覆盖重大发布、模型/产品进展、产业合作、安全风险、开源工具或关键数据。格式固定为“{{date}} AI 领域呈现...，值得关注的信息：...”，例如：“2026-04-29 AI 领域呈现多线并进格局，值得关注的信息：...”。可使用有限 Markdown 行内标记突出关键信息：用 **加粗** 标注事件主体、关键变化、数字或结论，用 *斜体* 标注必要背景或不确定性；不要使用链接、图片、标题、表格或列表。",
       },
       sections: [
-        {
-          title: "今日大事",
-          description: "旧版栏目要求",
-        },
+        { title: "今日大事", description: "输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。" },
+        { title: "热点事件", description: "输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。" },
+        { title: "变更与实践", description: "输出 2-5 条。聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。" },
+        { title: "安全与风险", description: "可为空；有相关内容时输出 1-5 条。聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。" },
+        { title: "开源与工具", description: "可为空；有相关内容时输出 1-5 条。聚焦值得开发者关注的开源项目、工具链、框架或工程资产。" },
+        { title: "数据与洞察", description: "可为空；有相关内容时输出 1-5 条。聚焦关键数据、趋势、研究结论或生态变化信号。" },
       ],
       closing: {
         label: "今日观察",
-        instruction: "旧版收尾要求",
+        instruction: "约 80-140 字。总结当天值得持续关注的主线，说明这些变化可能如何影响普通用户、开发者、内容创作者、企业采购或日常工作流；可基于当天信息给出谨慎判断，但不要引入输入之外的新事实。可使用有限 Markdown 行内标记突出关键信息。",
       },
       globalRules: ["旧版规则"],
     });
@@ -708,7 +711,7 @@ describe("admin settings service", () => {
     await prisma.promptConfig.updateMany({
       where: { type: "daily_report", isDefault: true },
       data: {
-        systemPrompt: "旧版日报系统提示词",
+        systemPrompt: getLegacyDefaultDailyReportSystemPrompt(),
         templateJson: legacyTemplateJson,
         maxTokens: 40960,
       },
@@ -723,6 +726,25 @@ describe("admin settings service", () => {
     expect(config?.systemPrompt).toContain("固定输出格式：");
     expect(config?.systemPrompt).toContain('"blocks"');
     expect(config?.maxTokens).toBe(40960);
+  });
+
+  it("keeps custom legacy daily report templates visible without breaking runtime config loading", async () => {
+    await getIngestionRuntimeConfig();
+    const customSystemPrompt = "自定义旧日报提示词";
+    const customTemplateJson = JSON.stringify({
+      opening: { label: "自定义开场", instruction: "只写自定义摘要。" },
+      sections: [{ title: "核心动态", description: "只写自定义栏目。" }],
+      closing: { label: "自定义收尾", instruction: "只写自定义收尾。" },
+    });
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report", isDefault: true },
+      data: { systemPrompt: customSystemPrompt, templateJson: customTemplateJson },
+    });
+
+    const runtimeConfig = await getIngestionRuntimeConfig();
+    expect(runtimeConfig.selectedPromptConfigs?.dailyReport.systemPrompt).toBe(customSystemPrompt);
+    await expect(prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } }))
+      .resolves.toMatchObject({ templateJson: customTemplateJson });
   });
 
   it("preserves null daily_report systemPrompts when reseeding", async () => {

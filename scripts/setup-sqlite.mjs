@@ -37,35 +37,14 @@ const removedPromptConfigTypes = [
   "item_aggregation",
 ];
 
-function resolvePrismaCliPath() {
-  const cliFileName = process.platform === "win32" ? "prisma.cmd" : "prisma";
-  const cliPath = path.resolve(root, "node_modules", ".bin", cliFileName);
-
-  if (!existsSync(cliPath)) {
-    throw new Error(`Prisma CLI not found at ${cliPath}`);
-  }
-
-  return cliPath;
-}
-
 function loadSchemaSql() {
   const prebuiltSchemaSqlPath = path.resolve(root, "prisma", "schema.sql");
 
-  if (existsSync(prebuiltSchemaSqlPath)) {
-    return readFileSync(prebuiltSchemaSqlPath, "utf8");
+  if (!existsSync(prebuiltSchemaSqlPath)) {
+    throw new Error(`Missing SQLite schema snapshot at ${prebuiltSchemaSqlPath}; run npm run schema:generate first.`);
   }
 
-  const prismaSchemaPath = path.resolve(root, "prisma", "schema.prisma");
-
-  return execFileSync(
-    resolvePrismaCliPath(),
-    ["migrate", "diff", "--from-empty", "--to-schema-datamodel", prismaSchemaPath, "--script"],
-    {
-      cwd: root,
-      encoding: "utf8",
-      env: process.env,
-    },
-  );
+  return readFileSync(prebuiltSchemaSqlPath, "utf8");
 }
 
 function makeSqliteSchemaIdempotent(sql) {
@@ -79,6 +58,10 @@ function makeSqliteSchemaIdempotent(sql) {
     // applyAdditiveSchemaUpgrades() ensures the columns exist on older volumes.
     .replace(/^CREATE INDEX "items_nextProcessingRetryAt_status_moderationStatus_idx".*;\n?/gm, "")
     .replace(/^CREATE INDEX "items_aggregationParseStatus_nextProcessingRetryAt_idx".*;\n?/gm, "")
+    // currentRevisionId is additive for existing daily_reports tables. Create
+    // its index after applyAdditiveSchemaUpgrades() so legacy volumes do not
+    // fail before the column can be added.
+    .replace(/^CREATE INDEX "daily_reports_currentRevisionId_idx".*;\n?/gm, "")
     .replace(/^CREATE TABLE /gm, "CREATE TABLE IF NOT EXISTS ")
     .replace(/^CREATE UNIQUE INDEX /gm, "CREATE UNIQUE INDEX IF NOT EXISTS ")
     .replace(/^CREATE INDEX /gm, "CREATE INDEX IF NOT EXISTS ");
@@ -91,7 +74,10 @@ function runSqlite(commandArgs, options = {}) {
     : input;
 
   return execFileSync("sqlite3", commandArgs, {
-    stdio: ["pipe", "inherit", "inherit"],
+    // All callers use this helper for DDL/pragmas; query helpers use a
+    // separate function below. Suppress SQLite's echoed pragma values so
+    // container startup logs remain actionable.
+    stdio: ["pipe", "ignore", "inherit"],
     ...execOptions,
     input: sqliteInput,
   });
@@ -126,6 +112,10 @@ function indexStatsExist(indexName) {
 }
 
 function applyRuntimeSqliteObjects() {
+  if (!ftsTableExists("items")) {
+    return;
+  }
+
   if (!indexStatsExist(itemAdminClusterIndexName)) {
     runSqlite([dbPath], {
       input: `ANALYZE "items";\n`,
@@ -187,6 +177,23 @@ function tableColumnExists(tableName, columnName) {
   return Number(result) > 0;
 }
 
+function hasForeignKey(tableName, targetTableName, fromColumn, targetColumn) {
+  if (!ftsTableExists(tableName)) {
+    return false;
+  }
+
+  const result = execFileSync(
+    "sqlite3",
+    ["-separator", "|", dbPath, `PRAGMA foreign_key_list("${tableName.replace(/"/g, '""')}")`],
+    { encoding: "utf8" },
+  ).trim();
+
+  return result.split("\n").some((row) => {
+    const [, , table, from, to] = row.split("|");
+    return table === targetTableName && from === fromColumn && to === targetColumn;
+  });
+}
+
 function addColumnIfMissing(tableName, columnName, definition) {
   if (!ftsTableExists(tableName) || tableColumnExists(tableName, columnName)) {
     return false;
@@ -214,6 +221,155 @@ function dropColumnIfPresent(tableName, columnName, options = {}) {
     `,
   });
   return true;
+}
+
+function ensureDailyReportRevisionRestoreForeignKey() {
+  if (
+    !ftsTableExists("daily_report_revisions")
+    || !tableColumnExists("daily_report_revisions", "restoredFromRevisionId")
+    || hasForeignKey("daily_report_revisions", "daily_report_revisions", "restoredFromRevisionId", "id")
+  ) {
+    return;
+  }
+
+  runSqlite([dbPath], {
+    input: `
+      PRAGMA foreign_keys=OFF;
+      BEGIN IMMEDIATE;
+      UPDATE "daily_report_revisions"
+      SET "restoredFromRevisionId" = NULL
+      WHERE "restoredFromRevisionId" IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "daily_report_revisions" AS parent
+          WHERE parent."id" = "daily_report_revisions"."restoredFromRevisionId"
+        );
+
+      DROP TABLE IF EXISTS "_daily_report_revisions_restore_fk_upgrade";
+      CREATE TABLE "_daily_report_revisions_restore_fk_upgrade" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "dailyReportId" TEXT NOT NULL,
+        "revisionNo" INTEGER NOT NULL,
+        "action" TEXT NOT NULL,
+        "status" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "openingSummary" TEXT NOT NULL,
+        "closingThought" TEXT NOT NULL,
+        "summaryJson" TEXT NOT NULL,
+        "renderedMarkdown" TEXT NOT NULL,
+        "inputHash" TEXT NOT NULL,
+        "modelName" TEXT,
+        "templateSignature" TEXT,
+        "pipelineVersion" TEXT,
+        "taskRunId" TEXT,
+        "candidateSnapshot" TEXT,
+        "idempotencyKey" TEXT,
+        "actorType" TEXT NOT NULL DEFAULT 'system',
+        "actorId" TEXT,
+        "actorLabel" TEXT,
+        "restoredFromRevisionId" TEXT,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "daily_report_revisions_dailyReportId_fkey"
+          FOREIGN KEY ("dailyReportId") REFERENCES "daily_reports" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT "daily_report_revisions_restoredFromRevisionId_fkey"
+          FOREIGN KEY ("restoredFromRevisionId") REFERENCES "daily_report_revisions" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+      );
+      INSERT INTO "_daily_report_revisions_restore_fk_upgrade" (
+        "id", "dailyReportId", "revisionNo", "action", "status", "title", "openingSummary",
+        "closingThought", "summaryJson", "renderedMarkdown", "inputHash", "modelName",
+        "templateSignature", "pipelineVersion", "taskRunId", "candidateSnapshot", "idempotencyKey",
+        "actorType", "actorId", "actorLabel", "restoredFromRevisionId", "createdAt"
+      )
+      SELECT
+        "id", "dailyReportId", "revisionNo", "action", "status", "title", "openingSummary",
+        "closingThought", "summaryJson", "renderedMarkdown", "inputHash", "modelName",
+        "templateSignature", "pipelineVersion", "taskRunId", "candidateSnapshot", "idempotencyKey",
+        "actorType", "actorId", "actorLabel", "restoredFromRevisionId", "createdAt"
+      FROM "daily_report_revisions";
+      DROP TABLE "daily_report_revisions";
+      ALTER TABLE "_daily_report_revisions_restore_fk_upgrade" RENAME TO "daily_report_revisions";
+      CREATE INDEX IF NOT EXISTS "daily_report_revisions_dailyReportId_createdAt_idx"
+        ON "daily_report_revisions"("dailyReportId", "createdAt");
+      CREATE UNIQUE INDEX IF NOT EXISTS "daily_report_revisions_dailyReportId_revisionNo_key"
+        ON "daily_report_revisions"("dailyReportId", "revisionNo");
+      CREATE UNIQUE INDEX IF NOT EXISTS "daily_report_revisions_idempotencyKey_key"
+        ON "daily_report_revisions"("idempotencyKey");
+      COMMIT;
+      PRAGMA foreign_keys=ON;
+    `,
+  });
+}
+
+function ensureDailyReportCurrentRevisionForeignKey() {
+  if (
+    !ftsTableExists("daily_reports")
+    || !tableColumnExists("daily_reports", "currentRevisionId")
+    || hasForeignKey("daily_reports", "daily_report_revisions", "currentRevisionId", "id")
+  ) {
+    return;
+  }
+
+  runSqlite([dbPath], {
+    input: `
+      PRAGMA foreign_keys=OFF;
+      BEGIN IMMEDIATE;
+      UPDATE "daily_reports"
+      SET "currentRevisionId" = NULL
+      WHERE "currentRevisionId" IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "daily_report_revisions" AS revision
+          WHERE revision."id" = "daily_reports"."currentRevisionId"
+        );
+
+      DROP TABLE IF EXISTS "_daily_reports_current_revision_fk_upgrade";
+      CREATE TABLE "_daily_reports_current_revision_fk_upgrade" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "date" TEXT NOT NULL,
+        "timezone" TEXT NOT NULL DEFAULT 'Asia/Shanghai',
+        "status" TEXT NOT NULL DEFAULT 'draft',
+        "title" TEXT NOT NULL,
+        "openingSummary" TEXT NOT NULL,
+        "closingThought" TEXT NOT NULL,
+        "summaryJson" TEXT NOT NULL,
+        "renderedMarkdown" TEXT NOT NULL,
+        "inputHash" TEXT NOT NULL,
+        "modelName" TEXT,
+        "taskRunId" TEXT,
+        "candidateSnapshot" TEXT,
+        "currentRevisionId" TEXT,
+        "errorMessage" TEXT,
+        "publishedAt" DATETIME,
+        "generatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL,
+        CONSTRAINT "daily_reports_taskRunId_fkey"
+          FOREIGN KEY ("taskRunId") REFERENCES "background_task_runs" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+        CONSTRAINT "daily_reports_currentRevisionId_fkey"
+          FOREIGN KEY ("currentRevisionId") REFERENCES "daily_report_revisions" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+      );
+      INSERT INTO "_daily_reports_current_revision_fk_upgrade" (
+        "id", "date", "timezone", "status", "title", "openingSummary", "closingThought",
+        "summaryJson", "renderedMarkdown", "inputHash", "modelName", "taskRunId",
+        "candidateSnapshot", "currentRevisionId", "errorMessage", "publishedAt", "generatedAt",
+        "createdAt", "updatedAt"
+      )
+      SELECT
+        "id", "date", "timezone", "status", "title", "openingSummary", "closingThought",
+        "summaryJson", "renderedMarkdown", "inputHash", "modelName", "taskRunId",
+        "candidateSnapshot", "currentRevisionId", "errorMessage", "publishedAt", "generatedAt",
+        "createdAt", "updatedAt"
+      FROM "daily_reports";
+      DROP TABLE "daily_reports";
+      ALTER TABLE "_daily_reports_current_revision_fk_upgrade" RENAME TO "daily_reports";
+      CREATE INDEX IF NOT EXISTS "daily_reports_status_date_idx" ON "daily_reports"("status", "date");
+      CREATE INDEX IF NOT EXISTS "daily_reports_taskRunId_idx" ON "daily_reports"("taskRunId");
+      CREATE INDEX IF NOT EXISTS "daily_reports_currentRevisionId_idx" ON "daily_reports"("currentRevisionId");
+      CREATE UNIQUE INDEX IF NOT EXISTS "daily_reports_date_timezone_key" ON "daily_reports"("date", "timezone");
+      COMMIT;
+      PRAGMA foreign_keys=ON;
+    `,
+  });
 }
 
 function renameColumnIfPresent(tableName, oldColumnName, newColumnName, options = {}) {
@@ -650,6 +806,26 @@ function applyAdditiveSchemaUpgrades() {
   }
 
   addColumnIfMissing("task_schedules", "dailyReportChannelIdsJson", "TEXT NOT NULL DEFAULT '[\"important\"]'");
+  addColumnIfMissing("task_schedules", "dailyReportPlanningBatchSize", "INTEGER");
+  addColumnIfMissing("background_task_runs", "pipelineCheckpointJson", "TEXT");
+  addColumnIfMissing("prompt_configs", "templateMigrationAuditJson", "TEXT");
+  addColumnIfMissing("daily_reports", "currentRevisionId", "TEXT");
+  runSqlite([dbPath], {
+    input: 'CREATE INDEX IF NOT EXISTS "daily_reports_currentRevisionId_idx" ON "daily_reports"("currentRevisionId");\n',
+  });
+  addColumnIfMissing("daily_report_revisions", "idempotencyKey", "TEXT");
+  addColumnIfMissing("daily_report_revisions", "actorType", "TEXT NOT NULL DEFAULT 'system'");
+  addColumnIfMissing("daily_report_revisions", "actorId", "TEXT");
+  addColumnIfMissing("daily_report_revisions", "actorLabel", "TEXT");
+  addColumnIfMissing("daily_report_revisions", "restoredFromRevisionId", "TEXT");
+  ensureDailyReportRevisionRestoreForeignKey();
+  ensureDailyReportCurrentRevisionForeignKey();
+  dropColumnIfPresent("task_schedules", "dailyReportMaxRetries");
+  if (ftsTableExists("daily_report_revisions")) {
+    runSqlite([dbPath], {
+      input: 'CREATE UNIQUE INDEX IF NOT EXISTS "daily_report_revisions_idempotencyKey_key" ON "daily_report_revisions"("idempotencyKey");\n',
+    });
+  }
   dropColumnIfPresent("task_schedules", "dailyReportGroupIdsJson");
 
   if (!ftsTableExists("entities")) {
@@ -937,8 +1113,6 @@ try {
     || (ftsTableExists("content_clusters") && tableColumnExists("content_clusters", "feedTagsJson"))
   );
 
-  // For existing volumes, ensure recovery columns exist before any schema SQL
-  // that might reference them indirectly after partial upgrades.
   if (existsSync(dbPath)) {
     addColumnIfMissing("items", "processingAttemptCount", "INTEGER NOT NULL DEFAULT 0");
     addColumnIfMissing("items", "nextProcessingRetryAt", "DATETIME");
@@ -956,6 +1130,7 @@ try {
   }
   cleanupLegacyTagSchema();
   cleanupRemovedPromptConfigTypes();
+
   applyRuntimeSqliteObjects();
 
   if (testHoldMs > 0) {

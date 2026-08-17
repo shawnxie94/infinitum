@@ -7,8 +7,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } 
 import {
   deleteDailyReport,
   getAdminDailyReportDetail,
+  getDailyReportRevision,
+  getDailyReportRevisions,
   publishDailyReport,
   requestDailyReportGeneration,
+  restoreDailyReportRevision,
   unpublishDailyReport,
 } from "@/components/daily/daily-report.api";
 import { Button } from "@/components/ui/button";
@@ -16,6 +19,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { useClientAdminSessionState } from "@/components/ui/use-client-admin-session";
 import {
   IconArrowDown,
+  IconClock,
   IconEye,
   IconEyeOff,
   IconList,
@@ -28,6 +32,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { formatDailyReportDateTime } from "@/lib/daily-report/date";
 import { buildDailyReportDetailMarkdown } from "@/lib/daily-report/export";
 import type { DailyReportDetailDTO } from "@/lib/daily-report/types";
+import type { DailyReportRevisionDetailDTO, DailyReportRevisionListItemDTO } from "@/lib/daily-report/types";
 import { renderSafeMarkdown } from "@/lib/markdown/safe-html";
 import { cx } from "@/lib/ui/cx";
 
@@ -56,6 +61,127 @@ type TocItem = {
 
 type CandidateReview = NonNullable<DailyReportDetailDTO["candidateReview"]>;
 type CandidateReviewMode = "candidates" | "excluded";
+
+function stripRevisionTitle(markdown: string, title: string) {
+  const lines = markdown.replace(/^\uFEFF/, "").split(/\r?\n/);
+  if (lines[0]?.trim() !== `# ${title.trim()}`) return markdown;
+  return lines.slice(1).join("\n").replace(/^\s*\n/, "");
+}
+
+function DailyReportHistoryModal({
+  isOpen,
+  date,
+  currentStatus,
+  onClose,
+  onRestored,
+}: {
+  isOpen: boolean;
+  date: string;
+  currentStatus: DailyReportDetailDTO["status"];
+  onClose: () => void;
+  onRestored: () => void;
+}) {
+  const [revisions, setRevisions] = useState<DailyReportRevisionListItemDTO[]>([]);
+  const [selected, setSelected] = useState<DailyReportRevisionDetailDTO | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      if (cancelled) return;
+      setLoading(true);
+      setFeedback(null);
+      const result = await getDailyReportRevisions(date);
+      if (cancelled) return;
+      if (!result.ok || result.data.error) setFeedback(result.data.error ?? "历史版本加载失败。");
+      setRevisions(result.data.revisions ?? []);
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [date, isOpen]);
+
+  const selectRevision = (revision: DailyReportRevisionListItemDTO) => {
+    void getDailyReportRevision(date, revision.id).then((result) => {
+      if (!result.ok || result.data.error) {
+        setFeedback(result.data.error ?? "版本详情加载失败。");
+        return;
+      }
+      setSelected(result.data.revision ?? null);
+    });
+  };
+
+  const restore = () => {
+    if (!selected?.canRestore || currentStatus !== "draft") return;
+    setRestoring(true);
+    setFeedback(null);
+    void restoreDailyReportRevision(date, selected.id).then((result) => {
+      setRestoring(false);
+      if (!result.ok || result.data.error) {
+        setFeedback(result.data.error ?? "历史版本恢复失败。");
+        return;
+      }
+      onRestored();
+      onClose();
+    });
+  };
+
+  return (
+    <ModalShell
+      isOpen={isOpen}
+      onClose={onClose}
+      title="日报生成历史"
+      widthClassName="max-w-4xl"
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose}>关闭</Button>
+            <Button variant="primary" onClick={restore} disabled={restoring || currentStatus !== "draft" || !selected?.canRestore}>
+              {restoring ? "恢复中..." : "恢复"}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      {feedback ? <div className="mb-3 rounded-sm bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">{feedback}</div> : null}
+      {currentStatus !== "draft" ? <div className="mb-3 rounded-sm bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">已发布日报不能恢复历史版本，请先撤回为草稿。</div> : null}
+      {loading ? <p className="text-sm text-[var(--text-2)]">加载中...</p> : (
+        <div className="grid gap-4 md:grid-cols-[15rem_1fr]">
+          <div className="space-y-1">
+            {revisions.length === 0 ? <p className="text-sm text-[var(--text-2)]">暂无生成历史。</p> : revisions.map((revision) => (
+              <button
+                key={revision.id}
+                type="button"
+                onClick={() => selectRevision(revision)}
+                className={cx("w-full rounded-sm border px-3 py-2 text-left text-sm", selected?.id === revision.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[color:var(--line)] hover:bg-[var(--bg-muted)]")}
+              >
+                <span className="block font-medium">#{revision.revisionNo} {revision.action === "baseline" ? "基线" : revision.action === "restored" ? "恢复" : "生成"}</span>
+                <span className="mt-1 block truncate text-xs text-[var(--text-2)]">{revision.title}</span>
+                <span className="mt-1 block text-[11px] text-[var(--text-3)]">{formatDailyReportDateTime(revision.createdAt)}{revision.isCurrent ? " · 当前" : ""}</span>
+              </button>
+            ))}
+          </div>
+          <div className="min-h-40 rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] p-4">
+            {selected ? (
+              <>
+                <h3 className="font-semibold leading-6 text-[var(--text-1)]">{selected.title}</h3>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs text-[var(--text-3)]">
+                  <span>版本 #{selected.revisionNo}</span><span>{selected.status === "published" ? "已发布" : "草稿"}</span><span>{selected.sources.length} 个来源</span>
+                </div>
+                <div
+                  className="article-prose prose prose-sm mt-4 max-h-[32rem] max-w-none overflow-y-auto border-t border-[color:var(--line)] pt-4"
+                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(stripRevisionTitle(selected.renderedMarkdown, selected.title), { headingIdPrefix: `revision-${selected.id}` }) }}
+                />
+              </>
+            ) : <p className="text-sm text-[var(--text-2)]">选择左侧版本查看正文和恢复资格。</p>}
+          </div>
+        </div>
+      )}
+    </ModalShell>
+  );
+}
 
 const candidateReviewPageSize = 8;
 
@@ -356,6 +482,7 @@ function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentP
   const [feedback, setFeedback] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [candidateReviewOpen, setCandidateReviewOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTocId, setActiveTocId] = useState("top");
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -571,6 +698,17 @@ function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentP
                   <IconList className="h-4 w-4" />
                 </IconButton>
               ) : null}
+              {isAdmin ? (
+                <IconButton
+                  onClick={() => setHistoryOpen(true)}
+                  variant="ghost"
+                  size="md"
+                  title="查看生成历史"
+                  className="rounded-sm"
+                >
+                  <IconClock className="h-4 w-4" />
+                </IconButton>
+              ) : null}
               <IconButton onClick={exportMarkdown} variant="ghost" size="md" title="导出 Markdown" className="rounded-sm">
                 <IconArrowDown className="h-4 w-4" />
               </IconButton>
@@ -686,6 +824,16 @@ function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentP
           isOpen={candidateReviewOpen}
           onClose={() => setCandidateReviewOpen(false)}
           review={report.candidateReview}
+        />
+      ) : null}
+
+      {isAdmin ? (
+        <DailyReportHistoryModal
+          isOpen={historyOpen}
+          date={report.date}
+          currentStatus={report.status}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={() => router.refresh()}
         />
       ) : null}
 

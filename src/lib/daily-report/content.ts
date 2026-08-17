@@ -134,6 +134,7 @@ function normalizeBlock(value: unknown): DailyReportBlock | null {
     if (!title) return null;
     return {
       type: "section",
+      ...(typeof block.blockKey === "string" && block.blockKey.trim() ? { blockKey: block.blockKey.trim() } : {}),
       title,
       items,
     };

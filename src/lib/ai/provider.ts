@@ -22,7 +22,19 @@ import {
 import type { RuntimeConfig } from "@/config/runtime";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
-import { buildDailyReportRuntimeFallbackInstructionLines } from "@/lib/daily-report/runtime-rules";
+import type {
+  DailyReportAssessmentLedger,
+  DailyReportCandidateAssessment,
+  DailyReportDraft,
+  DailyReportMergedTopic,
+  DailyReportPlan,
+  DailyReportPlanningCandidate,
+  DailyReportViolation,
+} from "@/lib/daily-report/types";
+import type {
+  DailyReportTemplateSectionBlock,
+  NormalizedDailyReportTemplate,
+} from "@/lib/daily-report/template";
 import { normalizeOptionalText } from "@/lib/utils/text";
 
 export type AiEventSignature = {
@@ -96,10 +108,26 @@ export type AiProvider = {
     metadata: { title: string; candidates: Array<{ id: string; title: string; summary: string }> },
   ): Promise<string | null>;
   mergeClusters(clustersJson: string): Promise<MergeGroup[]>;
-  generateDailyReport(
-    input: { date: string; timezone: string; articles: unknown[]; recentTopics?: unknown[] },
-  ): Promise<string | null>;
-  repairDailyReportJson(rawContent: string): Promise<string | null>;
+  assessDailyReportCandidates(input: {
+    candidates: DailyReportPlanningCandidate[];
+    template: NormalizedDailyReportTemplate;
+  }): Promise<DailyReportCandidateAssessment[]>;
+  planDailyReport(input: {
+    ledger: DailyReportAssessmentLedger;
+    topics: DailyReportMergedTopic[];
+    template: NormalizedDailyReportTemplate;
+  }): Promise<DailyReportPlan>;
+  writeDailyReport(input: {
+    selectedCandidates: DailyReportPlanningCandidate[];
+    plan: DailyReportPlan;
+    template: NormalizedDailyReportTemplate;
+  }): Promise<DailyReportDraft>;
+  repairDailyReportDraft(input: {
+    draft: DailyReportDraft;
+    violations: DailyReportViolation[];
+    plan: DailyReportPlan;
+    template: NormalizedDailyReportTemplate;
+  }): Promise<DailyReportDraft>;
 };
 
 type CompletionResponse = {
@@ -359,31 +387,6 @@ function compactDailyReportModelCandidate(article: unknown) {
   }
 
   return candidate;
-}
-
-function buildDailyReportUserPrompt(config: {
-  systemPrompt: string;
-  promptTemplate: string;
-}, input: {
-  date: string;
-  timezone: string;
-  articles: unknown[];
-  recentTopics?: unknown[];
-}) {
-  const recentTopicsJson = JSON.stringify(input.recentTopics ?? []);
-  const rendered = renderPromptTemplate(config.promptTemplate, {
-    date: input.date,
-    timezone: input.timezone,
-    articlesJson: JSON.stringify(input.articles.map(compactDailyReportModelCandidate)),
-    recentTopicsJson,
-  });
-  const extraInstructions = buildDailyReportRuntimeFallbackInstructionLines({
-    systemPrompt: config.systemPrompt,
-    promptTemplate: config.promptTemplate,
-    recentTopicsJson,
-  });
-
-  return [rendered, ...extraInstructions].join("\n");
 }
 
 function getFallbackEnrichment(
@@ -1258,24 +1261,73 @@ export function createAiProvider(
     return null;
   };
 
-  const parseDailyReportJsonOutput = (output: string) => {
+  const parseDailyReportStageObject = (output: string) => {
     const normalized = normalizeModelResponseText(output);
     if (!normalized) {
-      throw new InvalidJsonModelResponseError("日报模型未返回最终 JSON 内容。");
+      throw new InvalidJsonModelResponseError("日报阶段模型未返回 JSON 内容。");
     }
-
     try {
       const parsed = JSON.parse(normalized) as unknown;
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error("顶层必须是 JSON 对象");
       }
-      return normalized;
+      return parsed as Record<string, unknown>;
     } catch (error) {
       throw new InvalidJsonModelResponseError(
-        `日报模型返回了无法解析的 JSON（${normalized.length} 字符）：${getJsonParseErrorMessage(error)}`,
+        `日报阶段模型返回了无法解析的 JSON：${getJsonParseErrorMessage(error)}`,
       );
     }
   };
+
+  const buildDailyReportStagePrompt = (
+    stage: string,
+    instructions: string,
+    payload: Record<string, unknown>,
+  ) => [
+    `阶段：${stage}`,
+    instructions,
+    "只输出一个合法 JSON 对象，不要输出 Markdown、代码块或解释。",
+    `模板 JSON：${JSON.stringify(payload.template)}`,
+    `输入 JSON：${JSON.stringify(payload.input)}`,
+  ].join("\n");
+
+  const buildDailyReportPlanningTemplate = (template: NormalizedDailyReportTemplate) => {
+    const sections = template.blocks.filter(
+      (block): block is DailyReportTemplateSectionBlock => block.type === "section",
+    );
+    return {
+      schemaVersion: template.schemaVersion,
+      sections: sections.map((section) => ({
+        blockKey: section.key,
+        blockTitle: section.title,
+        description: section.description,
+        required: section.required === true,
+        minItems: section.minItems ?? 0,
+        maxItems: section.maxItems,
+      })),
+    };
+  };
+
+  const buildDailyReportStageConfig = (stage: string, contract: string): PromptRuntimeConfig => ({
+    ...dailyReportConfig,
+    systemPrompt: [
+      dailyReportConfig.systemPrompt.trim(),
+      `当前是日报 ${stage} 阶段，不是旧版一次性日报生成。必须忽略旧版 headline/blocks 输出示例，只遵守本阶段合同。${contract}`,
+      "最终只输出本阶段合同要求的合法 JSON 对象，不要输出 Markdown、代码块或解释。",
+    ].filter(Boolean).join("\n\n"),
+  });
+
+  const parseAssessmentOutput = (output: string): DailyReportCandidateAssessment[] => {
+    const parsed = parseDailyReportStageObject(output);
+    const raw = Array.isArray(parsed.assessments) ? parsed.assessments : parsed;
+    if (!Array.isArray(raw)) {
+      throw new InvalidJsonModelResponseError("ASSESS 返回必须是 assessments 数组。");
+    }
+    return raw as unknown as DailyReportCandidateAssessment[];
+  };
+
+  const parsePlanOutput = (output: string): DailyReportPlan => parseDailyReportStageObject(output) as unknown as DailyReportPlan;
+  const parseDraftOutput = (output: string): DailyReportDraft => parseDailyReportStageObject(output) as unknown as DailyReportDraft;
 
   return {
     async understandItem(inputText, metadata) {
@@ -1362,24 +1414,73 @@ export function createAiProvider(
 
       return groups ?? [];
     },
-    async generateDailyReport(input) {
-      return completeJsonWithParseRetry(
-        dailyReportConfig,
-        buildDailyReportUserPrompt(dailyReportConfig, input),
-        parseDailyReportJsonOutput,
+    async assessDailyReportCandidates(input) {
+      const output = await completeJsonWithParseRetry(
+        buildDailyReportStageConfig(
+          "ASSESS",
+          "不得写正文、不得合并主题、不得重新编号或遗漏候选；必须逐一返回输入中的每个 candidateId。",
+        ),
+        buildDailyReportStagePrompt(
+          "ASSESS",
+          "逐一评估输入中的每个 candidateId。每个候选必须返回一次，不得新增或遗漏 ID。返回 {assessments:[{candidateId,relevanceScore,isWorthReading,suggestedBlockKey,exclusionReason,eventHint,evidenceSummary,confidence}]}。只做选题评估，不写正文，不合并主题。",
+          {
+            template: input.template,
+            input: input.candidates.map(compactDailyReportModelCandidate),
+          },
+        ),
+        parseAssessmentOutput,
       );
+      return output ?? [];
     },
-    async repairDailyReportJson(rawContent) {
-      return completeJsonWithParseRetry(
+    async planDailyReport(input) {
+      const output = await completeJsonWithParseRetry(
+        buildDailyReportStageConfig(
+          "PLAN",
+          "必须返回 schemaVersion=1；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于可规划栏目，绝不能出现在 sections 中；每个 topicId 和 candidateId 最多出现一次；candidateIds 必须来自对应 topicIds；excludedCandidateIds 与已选 candidateIds 不得交集。",
+        ),
+        buildDailyReportStagePrompt(
+          "PLAN",
+          "基于完整评估账本和本地合并主题做全局规划。template.sections 是唯一可规划栏目清单，输出的每个 section.blockKey 必须逐字复制其中一个 blockKey。只返回 {schemaVersion:1,headlineHint,sections:[{blockKey,blockTitle,topicIds,candidateIds}],excludedCandidateIds,selectionRationale}。不得写正文、不得创建输入之外的候选或栏目，不得输出 text block。",
+          { template: buildDailyReportPlanningTemplate(input.template), input: { ledger: input.ledger, topics: input.topics } },
+        ),
+        parsePlanOutput,
+      );
+      if (!output) throw new Error("PLAN 阶段没有返回结果。");
+      return output;
+    },
+    async writeDailyReport(input) {
+      const output = await completeJsonWithParseRetry(
+        buildDailyReportStageConfig(
+          "WRITE",
+          "只能使用 plan 中的 section、topic 和 candidate；不得重新选题、合并主题、增加栏目或补造事实。",
+        ),
+        buildDailyReportStagePrompt(
+          "WRITE",
+          "严格按照全局计划和模板写作，只返回日报 Draft JSON。只能使用计划中的 candidateId/sourceNumber，不得重新选题、合并、增加栏目或补造事实。每个 section block 必须包含与模板一致的 blockKey 和 title；每个 section item 必须包含 title、body、sourceIds。",
+          { template: input.template, input: { plan: input.plan, selectedCandidates: input.selectedCandidates.map(compactDailyReportModelCandidate) } },
+        ),
+        parseDraftOutput,
+      );
+      if (!output) throw new Error("WRITE 阶段没有返回结果。");
+      return output;
+    },
+    async repairDailyReportDraft(input) {
+      const output = await completeJsonWithParseRetry(
         {
           ...dailyReportConfig,
-          systemPrompt: "你是 JSON 修复器。请把用户提供的内容修复为合法 JSON 对象，只输出修复后的 JSON，不要输出 Markdown、代码块或解释。不要补充新事实，不要改写字段含义。",
+          systemPrompt: `${dailyReportConfig.systemPrompt}\n你是日报结构修复器，只修复给定违规，不改变事实和计划。`,
           temperature: 0,
           maxTokens: Math.min(dailyReportConfig.maxTokens ?? 4096, MAX_DAILY_REPORT_REPAIR_TOKENS),
         },
-        `待修复内容：\n${rawContent}`,
-        parseDailyReportJsonOutput,
+        buildDailyReportStagePrompt(
+          "REPAIR",
+          "只修复 violations 中列出的问题。保持 plan 允许的候选和栏目不变，返回完整 Draft JSON。",
+          { template: input.template, input: { draft: input.draft, violations: input.violations, plan: input.plan } },
+        ),
+        parseDraftOutput,
       );
+      if (!output) throw new Error("REPAIR 阶段没有返回结果。");
+      return output;
     },
   };
 }

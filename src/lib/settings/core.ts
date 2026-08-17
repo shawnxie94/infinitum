@@ -11,9 +11,11 @@ import type { RuntimeConfig } from "@/config/runtime";
 import { prisma } from "@/lib/db";
 import {
   compileDailyReportTemplatePrompt,
+  classifyDailyReportTemplateMigration,
   DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
   parseDailyReportTemplateJson,
   stringifyDailyReportTemplate,
+  upgradeDefaultDailyReportTemplate,
 } from "@/lib/daily-report/template";
 import type { SourceConfig } from "@/lib/feed/types";
 import { getDefaultPromptConfigName, getDefaultPromptSampling, getDefaultPromptTemplate } from "@/lib/settings/ai-config";
@@ -338,9 +340,14 @@ export function resolvePromptSystemPrompt(config: {
   templateJson?: string | null;
 }) {
   if (config.type === PromptConfigType.daily_report && config.templateJson) {
-    const template = parseDailyReportTemplateJson(config.templateJson);
-    if (template) {
-      return compileDailyReportTemplatePrompt(template);
+    try {
+      const template = parseDailyReportTemplateJson(config.templateJson);
+      if (template) {
+        return compileDailyReportTemplatePrompt(template);
+      }
+    } catch {
+      // Legacy or invalid templates are surfaced by the daily-report pipeline.
+      // They must not prevent ingestion and unrelated task runtime config from loading.
     }
   }
 
@@ -474,24 +481,6 @@ async function deleteRemovedPromptConfigTypes() {
   );
 }
 
-function isLegacyDailyReportTemplateJson(templateJson: string) {
-  try {
-    const parsed = JSON.parse(templateJson) as unknown;
-
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return false;
-    }
-
-    const candidate = parsed as Record<string, unknown>;
-    return (
-      !Array.isArray(candidate.blocks) &&
-      ("opening" in candidate || "sections" in candidate || "closing" in candidate)
-    );
-  } catch {
-    return false;
-  }
-}
-
 function resolveSystemPromptByType(type: PromptConfigType, fileConfig: RuntimeConfig): string {
   switch (type) {
     case PromptConfigType.item_understanding:
@@ -507,7 +496,11 @@ function resolveSystemPromptByType(type: PromptConfigType, fileConfig: RuntimeCo
   }
 }
 
-async function ensureModelAndPromptConfigsSeeded() {
+export type RuntimeConfigSeedOptions = {
+  migrateDailyReportTemplates?: boolean;
+};
+
+async function ensureModelAndPromptConfigsSeeded(options: RuntimeConfigSeedOptions = {}) {
   await deleteRemovedPromptConfigTypes();
 
   const fileConfig = getRuntimeConfig();
@@ -520,7 +513,9 @@ async function ensureModelAndPromptConfigsSeeded() {
 
   await upgradeLegacyItemUnderstandingPrompt();
   await upgradePreviousDefaultItemUnderstandingPrompt();
-  await upgradeLegacyDailyReportPrompt(fileConfig);
+  if (options.migrateDailyReportTemplates !== false) {
+    await upgradeLegacyDailyReportPrompt(fileConfig);
+  }
   await upgradeLegacyClusterSummaryTokenBudget();
 
   if (
@@ -696,31 +691,102 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
     where: {
       type: PromptConfigType.daily_report,
       isDefault: true,
+      templateMigrationAuditJson: null,
     },
     select: {
       id: true,
       systemPrompt: true,
       templateJson: true,
+      templateMigrationAuditJson: true,
     },
   });
 
   for (const config of defaultDailyReportPrompts) {
-    let shouldUpgradeTemplate = false;
+    if (!config.templateJson) continue;
 
-    if (config.templateJson) {
-      try {
-        parseDailyReportTemplateJson(config.templateJson);
-      } catch {
-        shouldUpgradeTemplate = isLegacyDailyReportTemplateJson(config.templateJson);
-      }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(config.templateJson) as unknown;
+    } catch {
+      // Invalid JSON remains untouched and is surfaced when the daily report pipeline runs.
+      continue;
     }
 
-    if (shouldUpgradeTemplate) {
+    const migrationStatus = classifyDailyReportTemplateMigration(parsed, config.systemPrompt);
+    if (migrationStatus === "v2") {
+      let normalizedTemplate;
+      try {
+        normalizedTemplate = upgradeDefaultDailyReportTemplate(parseDailyReportTemplateJson(config.templateJson)!);
+      } catch {
+        // Invalid v2 templates remain untouched and must be fixed in Admin.
+        continue;
+      }
+      const normalizedJson = stringifyDailyReportTemplate(normalizedTemplate);
+      if (normalizedJson !== config.templateJson || !config.templateMigrationAuditJson) {
+        try {
+          await prisma.promptConfig.update({
+            where: { id: config.id },
+            data: {
+              ...(normalizedJson !== config.templateJson
+                ? {
+                    templateJson: normalizedJson,
+                    systemPrompt: compileDailyReportTemplatePrompt(normalizedTemplate),
+                  }
+                : {}),
+              templateMigrationAuditJson: JSON.stringify({
+                from: "v2-default-wording",
+                to: 2,
+                mode: normalizedJson === config.templateJson ? "verified" : "silent",
+                migratedAt: new Date().toISOString(),
+              }),
+            },
+          });
+        } catch (error) {
+          console.error("[settings] 日报模板静默迁移写入失败", { configId: config.id, migrationStatus, error });
+          throw error;
+        }
+      }
+    } else if (migrationStatus === "official_default_legacy") {
+      try {
+        await prisma.promptConfig.update({
+          where: { id: config.id },
+          data: {
+            systemPrompt: resolveSystemPromptByType(PromptConfigType.daily_report, fileConfig),
+            templateJson: DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
+            templateMigrationAuditJson: JSON.stringify({
+              from: "legacy-opening-sections-closing",
+              to: 2,
+              mode: "silent",
+              migratedAt: new Date().toISOString(),
+            }),
+          },
+        });
+      } catch (error) {
+        console.error("[settings] 日报旧模板静默迁移写入失败", { configId: config.id, migrationStatus, error });
+        throw error;
+      }
+    } else if (migrationStatus === "custom_legacy_requires_migration") {
       await prisma.promptConfig.update({
         where: { id: config.id },
         data: {
-          systemPrompt: resolveSystemPromptByType(PromptConfigType.daily_report, fileConfig),
-          templateJson: DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
+          templateMigrationAuditJson: JSON.stringify({
+            from: "legacy-opening-sections-closing",
+            to: 2,
+            mode: "admin_required",
+            migratedAt: new Date().toISOString(),
+          }),
+        },
+      });
+    } else if (migrationStatus === "invalid") {
+      await prisma.promptConfig.update({
+        where: { id: config.id },
+        data: {
+          templateMigrationAuditJson: JSON.stringify({
+            from: "unknown",
+            to: 2,
+            mode: "invalid_requires_admin",
+            migratedAt: new Date().toISOString(),
+          }),
         },
       });
     }
@@ -738,12 +804,18 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
     data: {
       systemPrompt: resolveSystemPromptByType(PromptConfigType.daily_report, fileConfig),
       templateJson: DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
+      templateMigrationAuditJson: JSON.stringify({
+        from: "legacy-daily-report-prompt-marker",
+        to: 2,
+        mode: "silent",
+        migratedAt: new Date().toISOString(),
+      }),
     },
   });
 }
 
-export async function ensureRuntimeConfigSeeded() {
-  await ensureModelAndPromptConfigsSeeded();
+export async function ensureRuntimeConfigSeeded(options: RuntimeConfigSeedOptions = {}) {
+  await ensureModelAndPromptConfigsSeeded(options);
 }
 
 export function serializeSelectedPromptConfig(
@@ -769,6 +841,7 @@ export function serializeSelectedPromptConfig(
     name: config.name,
     systemPrompt: resolvePromptSystemPrompt(config),
     promptTemplate: config.prompt,
+    templateJson: config.templateJson ?? null,
     temperature: config.temperature,
     maxTokens: config.maxTokens,
     topP: config.topP,

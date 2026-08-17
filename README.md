@@ -107,6 +107,12 @@ npm run dev      # 终端 1：Next.js 开发服务
 npm run worker   # 终端 2：后台任务 Worker
 ```
 
+数据库结构由 `prisma/schema.prisma` 定义，SQLite schema snapshot 由
+`npm run schema:generate` 生成。`setup-sqlite.mjs` 会幂等初始化业务表、执行已验证的
+旧库结构升级，再初始化 WAL/FTS 等运行时对象。数据库升级直接集成在普通的
+`docker compose up -d` 启动链路中，不使用 Prisma migration history，也不需要额外的
+迁移容器或发布前命令。
+
 本地默认访问 <http://localhost:3000>，管理后台登录入口 <http://localhost:3000/login>。
 
 ## FAQ

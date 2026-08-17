@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -25,33 +25,20 @@ afterEach(() => {
 });
 
 describe("sqlite setup", () => {
-  it("keeps Prisma migration history replayable from an empty shadow database", () => {
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-prisma-shadow-"));
-    const shadowDbPath = path.join(tempDir, "shadow.db");
+  it("initializes the current schema and runtime objects from the Prisma snapshot", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-snapshot-"));
+    const dbPath = path.join(tempDir, "fresh.db");
 
     tempDirs.push(tempDir);
 
-    const output = execFileSync(
-      "npx",
-      [
-        "prisma",
-        "migrate",
-        "diff",
-        "--from-migrations",
-        "prisma/migrations",
-        "--to-schema-datamodel",
-        "prisma/schema.prisma",
-        "--shadow-database-url",
-        `file:${shadowDbPath}`,
-        "--script",
-      ],
-      {
-        cwd: process.cwd(),
-        encoding: "utf8",
-      },
-    ).trim();
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath, "--reset"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
 
-    expect(output).toBe("-- This is an empty migration.");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'items'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'items_fts'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = '_prisma_migrations'`)).toBe("0");
   }, 30_000);
 
   it("serializes concurrent setup runs with a lock", { timeout: 30000 }, async () => {
@@ -97,10 +84,14 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'sourceConcurrency'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'fullTextFetchThreshold'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'aggregationSplitMaxEvents'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'dailyReportPlanningBatchSize'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'dailyReportMaxRetries'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('background_task_runs') WHERE "name" = 'fullTextFetchedCount'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('background_task_runs') WHERE "name" = 'aiCallBreakdownJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('background_task_runs') WHERE "name" = 'stageTimingsJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('background_task_runs') WHERE "name" = 'taskTimelineJson'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('background_task_runs') WHERE "name" = 'pipelineCheckpointJson'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('prompt_configs') WHERE "name" = 'templateMigrationAuditJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'content_extraction_configs'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'entity_aliases'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'entity_suggestion_candidates'`)).toBe("1");
@@ -116,6 +107,11 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_reports') WHERE "name" = 'candidateSnapshot'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_reports') WHERE "name" = 'currentRevisionId'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'daily_report_revisions'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'daily_report_revision_sources'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'daily_report_operation_locks'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_foreign_key_list('daily_report_revisions') WHERE "table" = 'daily_report_revisions' AND "from" = 'restoredFromRevisionId' AND "to" = 'id'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('sources') WHERE "name" = 'healthStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'displayItemCount'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'displaySourceCount'`)).toBe("1");
@@ -202,61 +198,6 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('daily_report_refinement_chat', 'daily_report_refinement_generate')`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('item_summary', 'item_analysis', 'item_aggregation')`)).toBe("0");
   }, 15_000);
-
-  it("cleans legacy tag search text and preference rules during the Prisma migration", () => {
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-prisma-entity-migration-"));
-    const dbPath = path.join(tempDir, "migration.db");
-    const migrationRoot = path.join(process.cwd(), "prisma", "migrations");
-    const finalMigration = "20260731150000_replace_tags_with_entities";
-
-    tempDirs.push(tempDir);
-
-    for (const migrationName of readdirSync(migrationRoot)
-      .filter((migrationName) => migrationName !== "migration_lock.toml")
-      .sort()) {
-      if (migrationName === finalMigration) {
-        continue;
-      }
-
-      execFileSync("sqlite3", [dbPath], {
-        input: `${readFileSync(path.join(migrationRoot, migrationName, "migration.sql"), "utf8")}\n`,
-        encoding: "utf8",
-      });
-    }
-
-    runSqlite(
-      dbPath,
-      `
-      INSERT INTO "content_clusters" (
-        "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status",
-        "fingerprint", "feedSearchText", "updatedAt"
-      ) VALUES (
-        'cluster-legacy-search', 'topic', 'Legacy title', 'Legacy summary', 50, 1, CURRENT_TIMESTAMP,
-        'active', 'legacy-search-fingerprint', 'Legacy title Legacy summary OldTag', CURRENT_TIMESTAMP
-      );
-      INSERT INTO "briefing_preference_configs" (
-        "id", "weightedRulesJson", "maxCuratorBoost", "maxCuratorPenalty", "updatedAt"
-      ) VALUES (
-        'preference-legacy-tag',
-        '[{"type":"tag","value":"oldtag","weight":8},{"type":"entity","value":"openai","weight":5}]',
-        15, 20, CURRENT_TIMESTAMP
-      );
-      `,
-    );
-
-    execFileSync("sqlite3", [dbPath], {
-      input: `${readFileSync(path.join(migrationRoot, finalMigration, "migration.sql"), "utf8")}\n`,
-      encoding: "utf8",
-    });
-
-    expect(runSqlite(dbPath, `SELECT "feedSearchText" FROM "content_clusters" WHERE "id" = 'cluster-legacy-search'`)).toBe(
-      "Legacy title Legacy summary",
-    );
-    expect(runSqlite(dbPath, `SELECT "weightedRulesJson" FROM "briefing_preference_configs" WHERE "id" = 'preference-legacy-tag'`)).toBe(
-      '[{"type":"entity","value":"openai","weight":5}]',
-    );
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'tags'`)).toBe("0");
-  }, 30_000);
 
   it("cleans legacy tag search text and preference rules during Docker SQLite setup", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-entity-cleanup-"));
@@ -420,6 +361,61 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='item_dedupe_history_dedupeSignature_idx'`)).toBe("0");
   }, 20_000);
 
+  it("drops the retired daily report retry column without dropping the schedule", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-daily-report-retry-cleanup-"));
+    const dbPath = path.join(tempDir, "daily-report-retry-cleanup.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    runSqlite(
+      dbPath,
+      `
+      ALTER TABLE "task_schedules" ADD COLUMN "dailyReportMaxRetries" INTEGER NOT NULL DEFAULT 0;
+      UPDATE "task_schedules" SET "dailyReportMaxRetries" = 9;
+      `,
+    );
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'task_schedules'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'dailyReportMaxRetries'`)).toBe("0");
+  }, 20_000);
+
+  it("adds the restore-source foreign key to legacy daily report revision tables", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-daily-report-revision-fk-"));
+    const dbPath = path.join(tempDir, "daily-report-revision-fk.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    runSqlite(dbPath, `
+      PRAGMA foreign_keys=OFF;
+      ALTER TABLE "daily_report_revisions" RENAME TO "legacy_daily_report_revisions";
+      CREATE TABLE "daily_report_revisions" AS SELECT * FROM "legacy_daily_report_revisions";
+      DROP TABLE "legacy_daily_report_revisions";
+      PRAGMA foreign_keys=ON;
+    `);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_foreign_key_list('daily_report_revisions') WHERE "table" = 'daily_report_revisions' AND "from" = 'restoredFromRevisionId' AND "to" = 'id'`)).toBe("1");
+  }, 20_000);
+
   it("does not rerun cluster feed stats backfill or earliestCreatedAt backfill after clusters have been initialized", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-cluster-backfill-"));
     const dbPath = path.join(tempDir, "cluster-backfill.db");
@@ -530,7 +526,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT "displayItemCount" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("2");
     expect(runSqlite(dbPath, `SELECT "displayQualityScore" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("70");
     expect(runSqlite(dbPath, `SELECT "latestCreatedAt" FROM "content_clusters" WHERE id = 'cluster-stale-backfilled'`)).toBe("2026-04-11T10:05:00.000Z");
-  }, 20_000);
+  }, 30_000);
 
   it("backfills the latest 500 historical item entities once during the entity upgrade", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-entity-backfill-"));

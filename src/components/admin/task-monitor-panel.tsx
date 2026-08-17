@@ -76,6 +76,19 @@ function getTaskKindLabel(kind: string) {
   return kindLabels[kind as TaskRunSnapshot["kind"]] ?? kind;
 }
 
+function canResumeDailyReportTask(task: TaskRunSnapshot | null) {
+  return Boolean(
+    task?.kind === "daily_report_generate" &&
+    ["failed", "partial", "cancelled"].includes(task.status) &&
+    task.pipelineCheckpoint?.version === 1 &&
+    task.pipelineCheckpoint.resumeEligible,
+  );
+}
+
+function getTaskRetryActionLabel(task: TaskRunSnapshot | null) {
+  return canResumeDailyReportTask(task) ? "继续执行" : "重新生成";
+}
+
 const triggerLabels: Record<TaskRunSnapshot["triggerType"], string> = {
   scheduled: "定时调度",
   manual: "手动触发",
@@ -203,6 +216,33 @@ function buildIngestionSummaryDetail(task: TaskRunSnapshot) {
   return `${leftSide} = ${parts.join(" + ")}${sourceFailureDetail}`;
 }
 
+function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
+  if (task.kind !== "daily_report_generate" || !task.pipelineCheckpoint) return null;
+  const checkpoint = task.pipelineCheckpoint;
+
+  if (label === "主题数" && Array.isArray(checkpoint.mergedTopics)) {
+    return checkpoint.mergedTopics.length;
+  }
+
+  const plan = checkpoint.plan as { sections?: Array<{ candidateIds?: unknown[] }> } | undefined;
+  if (plan && Array.isArray(plan.sections)) {
+    if (label === "计划栏目") return plan.sections.length;
+    if (label === "计划入选") {
+      return plan.sections.reduce((total, section) => total + (Array.isArray(section.candidateIds) ? section.candidateIds.length : 0), 0);
+    }
+  }
+
+  if (label === "违规数" && Array.isArray(checkpoint.violations)) {
+    return checkpoint.violations.length;
+  }
+
+  if (label === "批次大小" && checkpoint.data && Object.prototype.hasOwnProperty.call(checkpoint.data, "batchSize")) {
+    return typeof checkpoint.data.batchSize === "number" ? checkpoint.data.batchSize : 0;
+  }
+
+  return null;
+}
+
 function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskRunSnapshot["taskTimeline"]>[number]) {
   const metricMap = new Map(node.metrics.map((metric) => [metric.label, metric.value]));
   const getValue = (label: string | string[]) => {
@@ -212,6 +252,10 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
       if (value !== undefined) {
         return value;
       }
+      const checkpointValue = getDailyReportCheckpointMetric(task, currentLabel);
+      if (checkpointValue !== null) {
+        return checkpointValue;
+      }
     }
     return 0;
   };
@@ -219,6 +263,26 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
   switch (node.key) {
     case "daily_report_generate":
       return `总候选数 ${getValue("总候选数")}`;
+    case "daily_report_prepare":
+      return `候选快照 ${getValue("总候选数")}`;
+    case "daily_report_assess":
+      return `固定批次 ${getValue("批次大小") > 0 ? `${getValue("批次大小")} 条` : "整批"} · ${getValue("批次数")} 个`;
+    case "daily_report_merge":
+      return `合并为 ${getValue("主题数")} 个主题`;
+    case "daily_report_plan":
+      return `规划 ${getValue("计划栏目")} 个栏目 · 入选 ${getValue("计划入选")} 条`;
+    case "daily_report_plan_validate":
+      return `计划结构校验 · 违规 ${getValue("违规数")} 条`;
+    case "daily_report_validate":
+      return `草稿结构校验 · 违规 ${getValue("违规数")} 条`;
+    case "daily_report_write":
+      return `按计划写作 ${getValue("入选数")} 条`;
+    case "daily_report_repair":
+      return node.status === "skipped"
+        ? "无违规，跳过语义修复"
+        : `语义修复 ${getValue("修复次数")} 次`;
+    case "daily_report_persist_publish":
+      return `持久化/发布完成`;
     case "task_finished":
       return `最后入选数 ${getValue("最后入选数")}`;
     case "source_fetch": {
@@ -445,7 +509,7 @@ function TaskDetailModal({
               disabled={isRetriggering}
             >
               <IconRotateCw className={cx("h-4 w-4 mr-1", isRetriggering && "animate-spin")} />
-              重新触发
+              {getTaskRetryActionLabel(task)}
             </Button>
           )}
           <Button onClick={onClose} variant="secondary">
@@ -814,6 +878,8 @@ export function TaskMonitorPanel({
 
   const handleRetrigger = async (taskId: string) => {
     setRetriggeringTaskId(taskId);
+    const targetTask = allTasks.find((task) => task.id === taskId) ?? null;
+    const actionLabel = getTaskRetryActionLabel(targetTask);
 
     try {
       const response = await fetch(`/api/admin/monitor/tasks/${taskId}/retrigger`, {
@@ -827,7 +893,7 @@ export function TaskMonitorPanel({
         return;
       }
 
-      showToast("任务已重新触发", "success");
+      showToast(`任务已${actionLabel}`, "success");
 
       // Refresh the task list after a short delay
       setTimeout(() => {
@@ -1008,7 +1074,7 @@ export function TaskMonitorPanel({
                           onClick={() => handleOpenConfirm(task, "retrigger")}
                           variant="ghost"
                           size="sm"
-                          title="重新触发"
+                          title={getTaskRetryActionLabel(task)}
                           disabled={retriggeringTaskId === task.id}
                         >
                           <IconRotateCw className={cx("h-4 w-4", retriggeringTaskId === task.id && "animate-spin")} />
@@ -1055,7 +1121,7 @@ export function TaskMonitorPanel({
       <ModalShell
         isOpen={isConfirmOpen}
         onClose={handleCloseConfirm}
-        title={confirmAction === "retrigger" ? "确认重新触发" : "确认停止任务"}
+        title={confirmAction === "retrigger" ? `确认${getTaskRetryActionLabel(confirmTask)}` : "确认停止任务"}
         widthClassName="max-w-md"
         headerClassName="border-b border-[color:var(--line)] p-4"
         bodyClassName="p-4"
@@ -1069,14 +1135,14 @@ export function TaskMonitorPanel({
               onClick={handleConfirmAction}
               variant={confirmAction === "cancel" ? "danger" : "primary"}
             >
-              {confirmAction === "retrigger" ? "重新触发" : "停止任务"}
+              {confirmAction === "retrigger" ? getTaskRetryActionLabel(confirmTask) : "停止任务"}
             </Button>
           </div>
         }
       >
         <p className="text-sm text-[var(--text-2)]">
           {confirmAction === "retrigger"
-            ? `确定要重新触发任务 "${confirmTask?.label}" 吗？`
+            ? `确定要${getTaskRetryActionLabel(confirmTask)}任务 "${confirmTask?.label}" 吗？`
             : `确定要停止任务 "${confirmTask?.label}" 吗？`}
         </p>
       </ModalShell>

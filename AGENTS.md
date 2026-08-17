@@ -18,7 +18,8 @@ npm run worker           # 后台任务 worker
 npm run db:setup         # 初始化/升级 dev SQLite
 npm run db:test:setup    # 重置并初始化 test DB
 npm run prisma:generate
-npm run prisma:migrate
+# Docker/production SQLite uses the generated schema snapshot and idempotent
+# runtime schema upgrades; no Prisma migration history is shipped or executed.
 
 # Test / lint / build
 npm test                 # 全量测试 + coverage（会重置 test DB）
@@ -36,7 +37,7 @@ npm run build
 |---|---|
 | Feed 查询/时间窗/缓存 | `vitest run tests/integration/feed-api.test.ts tests/unit/feed-range.test.ts` |
 | Ingestion / 任务 | `vitest run tests/integration/ingestion-service.test.ts tests/integration/background-task-service.test.ts` |
-| DB schema / setup | `vitest run tests/integration/sqlite-setup-migration.test.ts` |
+| DB schema / setup | `npm run schema:generate && vitest run tests/integration/sqlite-setup.test.ts` |
 | 宽改动 / 收工 | `npm test` 与/或 `npm run lint` |
 
 ## Layout
@@ -59,7 +60,8 @@ src/lib/
   ai/              OpenAI 兼容客户端
   tags/ events/ aggregation/  标签、事件、聚合等
 prisma/schema.prisma
-scripts/setup-sqlite.mjs
+scripts/generate-sqlite-schema.mjs # compile current Prisma schema to SQLite DDL snapshot
+scripts/setup-sqlite.mjs     # SQLite schema snapshot/runtime setup and small legacy upgrades
 config/infinitum.config.json   # 首次导入模板；运行时配置在 DB
 tests/{unit,integration}/
 ```
@@ -74,7 +76,7 @@ tests/{unit,integration}/
 1. **Feed 时间过滤用 `items.createdAt`，不要改成 `publishedAt`**  
    语义是「系统入库时间窗」，不是源站发布时间。
 2. **影响公共 feed 的写操作必须 `invalidateFeedCache()`**（`src/lib/feed/cache.ts`）。
-3. **Schema 只改 `prisma/schema.prisma`**，不要手写旁路 SQL 当主路径。
+3. **Schema 只改 `prisma/schema.prisma`，并同步维护 `scripts/setup-sqlite.mjs` 的升级逻辑和测试**；Docker 和本地初始化基于生成的 schema snapshot 幂等执行，不使用 Prisma migration history。
 4. **后台任务有双路径**：Admin 同步执行 + worker 队列；改 handler 两边都要考虑。
 5. **Ingestion 优化优先总耗时**，不是盲目加并发；减少串行步骤与无效 DB 写。
 6. **改 feed 查询时核对**：cluster/单条混排、分组计数、标题搜索、时区日界。

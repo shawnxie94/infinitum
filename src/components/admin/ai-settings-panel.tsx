@@ -1326,6 +1326,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             <DailyReportTemplateEditor
               key={`${promptModalMode}-${editingPromptConfig?.id ?? "new"}`}
               value={promptForm.templateJson}
+              systemPrompt={promptForm.systemPrompt}
               onChange={(next) =>
                 setPromptForm((current) => ({
                   ...current,

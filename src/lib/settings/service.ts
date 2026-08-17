@@ -1,4 +1,5 @@
 export { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
+export type { RuntimeConfigSeedOptions } from "@/lib/settings/core";
 export type {
   FetchModelApiModelsInput,
   ImportSourcesFromOpmlOptions,

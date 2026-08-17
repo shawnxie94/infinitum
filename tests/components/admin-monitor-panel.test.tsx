@@ -44,7 +44,6 @@ describe("AdminMonitorPanel", () => {
       dailyReportCandidateLimit: 120,
       dailyReportOffsetDays: 0,
       dailyReportAutoPublish: false,
-      dailyReportMaxRetries: 0,
       timezone: "Asia/Shanghai",
       lastHeartbeatAt: "2026-04-12T00:00:00.000Z",
       lastRunStartedAt: null,

@@ -38,6 +38,82 @@ export type DailyReportCandidate = {
   evidenceItems?: DailyReportCandidateEvidenceItem[];
 };
 
+export type DailyReportPlanningCandidate = DailyReportCandidate & {
+  sourceNumber: number;
+  evidence: DailyReportCandidateEvidenceItem[];
+};
+
+export type DailyReportCandidateAssessment = {
+  candidateId: number;
+  relevanceScore: number;
+  isWorthReading: boolean;
+  suggestedBlockKey: string | null;
+  exclusionReason: string | null;
+  eventHint: {
+    eventType: string | null;
+    eventSubject: string | null;
+    eventAction: string | null;
+    eventObject: string | null;
+    eventDate: string | null;
+  };
+  evidenceSummary: string;
+  confidence: number;
+};
+
+export type DailyReportAssessmentLedger = {
+  schemaVersion: 1;
+  candidateCount: number;
+  assessedCount: number;
+  unassessedCandidateIds: number[];
+  assessments: DailyReportCandidateAssessment[];
+  batchCount: number;
+  recentTopics?: RecentDailyReportTopic[];
+};
+
+export type DailyReportMergedTopic = {
+  topicId: string;
+  candidateIds: number[];
+  sourceBatchIndexes?: number[];
+  identitySource: "cluster" | "event-identity" | "source-key" | "standalone";
+  titleHint: string;
+  evidenceCount: number;
+  sourceKeys: string[];
+  relevanceScore: number;
+  ambiguity: { candidateIds: number[]; reason: string } | null;
+};
+
+export type DailyReportPlanSection = {
+  blockKey: string;
+  blockTitle: string;
+  topicIds: string[];
+  candidateIds: number[];
+};
+
+export type DailyReportPlan = {
+  schemaVersion: 1;
+  headlineHint: string | null;
+  sections: DailyReportPlanSection[];
+  excludedCandidateIds: number[];
+  selectionRationale: string;
+};
+
+export type DailyReportViolation = {
+  code: string;
+  stage: "plan" | "draft";
+  message: string;
+  blockKey?: string;
+  candidateIds?: number[];
+};
+
+export type DailyReportDraft = DailyReportContent & {
+  metadata?: {
+    planSchemaVersion: 1;
+    selectedCandidateIds: number[];
+    selectedSourceNumbers: number[];
+    writerModel: string | null;
+  };
+};
+
 export type DailyReportCandidateEvidenceItem = {
   title: string;
   sourceName: string;
@@ -82,6 +158,8 @@ export type DailyReportItem = {
 
 export type DailyReportSectionBlock = {
   type: "section";
+  /** Stable template identity when produced by the new writing pipeline. */
+  blockKey?: string;
   title: string;
   items: DailyReportItem[];
 };
@@ -200,6 +278,32 @@ export type DailyReportDetailDTO = DailyReportListItemDTO & {
   previous: { date: string; title: string } | null;
   next: { date: string; title: string } | null;
   candidateReview?: DailyReportCandidateReviewDTO | null;
+};
+
+export type DailyReportRevisionListItemDTO = {
+  id: string;
+  revisionNo: number;
+  action: "baseline" | "generated" | "restored";
+  status: DailyReportStatus;
+  title: string;
+  createdAt: string;
+  isCurrent: boolean;
+  canRestore: boolean;
+};
+
+export type DailyReportRevisionDetailDTO = DailyReportRevisionListItemDTO & {
+  openingSummary: string;
+  closingThought: string;
+  content: DailyReportContent;
+  renderedMarkdown: string;
+  inputHash: string;
+  modelName: string | null;
+  templateSignature: string | null;
+  pipelineVersion: string | null;
+  sources: DailyReportSourceDTO[];
+  restoredFromRevisionId: string | null;
+  actorType: string;
+  actorLabel: string | null;
 };
 
 export type DailyReportArchiveWeekDTO = {

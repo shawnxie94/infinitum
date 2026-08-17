@@ -8,25 +8,38 @@ import {
 } from "@/lib/daily-report/service";
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
 import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
+import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
 
 const {
-  generateDailyReportMock,
-  repairDailyReportJsonMock,
+  assessDailyReportCandidatesMock,
+  planDailyReportMock,
+  writeDailyReportMock,
+  repairDailyReportDraftMock,
 } = vi.hoisted(() => ({
-  generateDailyReportMock: vi.fn(),
-  repairDailyReportJsonMock: vi.fn(),
+  assessDailyReportCandidatesMock: vi.fn(),
+  planDailyReportMock: vi.fn(),
+  writeDailyReportMock: vi.fn(),
+  repairDailyReportDraftMock: vi.fn(),
 }));
 
 vi.mock("@/lib/ai/provider", () => ({
   createAiProvider: vi.fn(() => ({
-    generateDailyReport: generateDailyReportMock,
-    repairDailyReportJson: repairDailyReportJsonMock,
+    assessDailyReportCandidates: assessDailyReportCandidatesMock,
+    planDailyReport: planDailyReportMock,
+    writeDailyReport: async (input: unknown) => {
+      const output = await writeDailyReportMock(input);
+      return typeof output === "string" ? JSON.parse(output) : output;
+    },
+    repairDailyReportDraft: async (input: unknown) => {
+      const output = await repairDailyReportDraftMock(input);
+      return typeof output === "string" ? JSON.parse(output) : output;
+    },
   })),
 }));
 
 const REPORT_DATE = "2026-04-24";
 
-function buildDailyReportOutput() {
+function buildDailyReportOutput(candidateCount = 2) {
   return JSON.stringify({
     headline: "OpenAI 发布新模型、开发者工具更新",
     blocks: [
@@ -37,22 +50,29 @@ function buildDailyReportOutput() {
       },
       {
         type: "section",
-        title: "今日大事",
-        items: [{
-          title: "OpenAI 发布新模型",
-          body: "OpenAI 发布新模型，带来更强的推理和工具调用能力，短期内会影响开发者选型和产品功能设计。",
-          notes: [{ label: "重点", text: "模型能力继续上探" }],
-          sourceIds: [1],
-        }],
+        title: "热点事件",
+        items: [
+          {
+            title: "OpenAI 发布新模型",
+            body: "OpenAI 发布新模型，带来更强的推理和工具调用能力，短期内会影响开发者选型和产品功能设计。",
+            notes: [{ label: "重点", text: "模型能力继续上探" }],
+            sourceIds: [1],
+          },
+          ...(candidateCount >= 5 ? [{ title: "模型能力继续增强", body: "模型能力继续增强，开发者需要结合实际工作流评估其影响。", sourceIds: [3] }] : []),
+          ...(candidateCount >= 5 ? [{ title: "产业应用保持活跃", body: "产业应用保持活跃，相关团队需要关注产品落地和使用成本。", sourceIds: [4] }] : []),
+        ],
       },
       {
         type: "section",
         title: "变更与实践",
-        items: [{
-          title: "开发者工具更新",
-          body: "开发者工具更新后，团队需要关注 CLI 与 IDE 工作流是否需要调整，以降低后续迁移成本。",
-          sourceIds: [2],
-        }],
+        items: [
+          {
+            title: "开发者工具更新",
+            body: "开发者工具更新后，团队需要关注 CLI 与 IDE 工作流是否需要调整，以降低后续迁移成本。",
+            sourceIds: [2],
+          },
+          ...(candidateCount >= 5 ? [{ title: "工程实践同步调整", body: "工程实践同步调整，团队需要评估工具链和协作流程的后续变化。", sourceIds: [5] }] : []),
+        ],
       },
       {
         type: "text",
@@ -100,7 +120,13 @@ function getLastGeneratedDailyReportArticles() {
 }
 
 function getLastGeneratedDailyReportInput() {
-  return generateDailyReportMock.mock.calls.at(-1)?.[0] as {
+  const selectedCandidates = writeDailyReportMock.mock.calls.at(-1)?.[0]?.selectedCandidates;
+  const recentTopics = planDailyReportMock.mock.calls.at(-1)?.[0]?.ledger?.recentTopics;
+  if (!selectedCandidates) return undefined;
+  return {
+    articles: selectedCandidates,
+    recentTopics,
+  } as {
     articles: Array<{
       id: number;
       itemId: string;
@@ -666,7 +692,7 @@ async function createHistoricalDailyReportSource(input: {
   });
 }
 
-async function createDailyReportSchedule(input: { autoPublish: boolean }) {
+async function createDailyReportSchedule(input: { autoPublish: boolean; planningBatchSize?: number | null }) {
   return prisma.taskSchedule.create({
     data: {
       key: "daily_report_default",
@@ -678,6 +704,7 @@ async function createDailyReportSchedule(input: { autoPublish: boolean }) {
       dailyReportCandidateLimit: 120,
       dailyReportOffsetDays: 0,
       dailyReportAutoPublish: input.autoPublish,
+      dailyReportPlanningBatchSize: input.planningBatchSize ?? null,
       timezone: "Asia/Shanghai",
       nextRunAt: new Date("2026-04-25T00:30:00.000Z"),
     },
@@ -686,8 +713,50 @@ async function createDailyReportSchedule(input: { autoPublish: boolean }) {
 
 describe("daily report service", () => {
   beforeEach(async () => {
-    generateDailyReportMock.mockReset();
-    repairDailyReportJsonMock.mockReset();
+    assessDailyReportCandidatesMock.mockReset();
+    planDailyReportMock.mockReset();
+    writeDailyReportMock.mockReset();
+    repairDailyReportDraftMock.mockReset();
+    assessDailyReportCandidatesMock.mockImplementation(async ({ candidates }: { candidates: Array<{ id: number; eventType: string | null; eventSubject: string | null; eventAction: string | null; eventObject: string | null; eventDate: string | null }> }) => candidates.map((candidate) => ({
+      candidateId: candidate.id,
+      relevanceScore: 90,
+      isWorthReading: true,
+      suggestedBlockKey: "changes-practice",
+      exclusionReason: null,
+      eventHint: {
+        eventType: candidate.eventType,
+        eventSubject: candidate.eventSubject,
+        eventAction: candidate.eventAction,
+        eventObject: candidate.eventObject,
+        eventDate: candidate.eventDate,
+      },
+      evidenceSummary: "测试证据",
+      confidence: 0.9,
+    })));
+    planDailyReportMock.mockImplementation(async ({ ledger, topics }: { ledger: { assessments: Array<{ candidateId: number }>; recentTopics?: unknown[] }; topics: Array<{ topicId: string; candidateIds: number[] }> }) => ({
+      schemaVersion: 1,
+      headlineHint: "测试日报",
+      sections: (() => {
+        const candidateIds = ledger.assessments.map((assessment) => assessment.candidateId);
+        const topicIdsFor = (ids: number[]) => topics.filter((topic) => ids.some((id) => topic.candidateIds.includes(id))).map((topic) => topic.topicId);
+        if (candidateIds.length >= 2) {
+          const hotTopicCount = Math.min(3, candidateIds.length - 1);
+          return [
+            { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: topicIdsFor(candidateIds.slice(0, hotTopicCount)), candidateIds: candidateIds.slice(0, hotTopicCount) },
+            { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: topicIdsFor(candidateIds.slice(hotTopicCount)), candidateIds: candidateIds.slice(hotTopicCount) },
+          ];
+        }
+        return [{ blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: topicIdsFor(candidateIds), candidateIds }];
+      })(),
+      excludedCandidateIds: [],
+      selectionRationale: "测试计划",
+    }));
+    writeDailyReportMock.mockImplementation(async ({ selectedCandidates }: { selectedCandidates: Array<{ id: number }> }) => {
+      return buildDailyReportOutput(selectedCandidates.length);
+    });
+    repairDailyReportDraftMock.mockImplementation(async ({ draft }: { draft: Record<string, unknown> }) => {
+      return draft;
+    });
     await prisma.dailyReportSource.deleteMany();
     await prisma.dailyReport.deleteMany();
     await prisma.item.deleteMany();
@@ -702,12 +771,37 @@ describe("daily report service", () => {
     await prisma.taskSchedule.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
     await prisma.briefingPreferenceConfig.deleteMany();
+
+    // These service tests focus on candidate/source/persistence behavior. Use a
+    // deliberately permissive v2 template fixture so small synthetic pools do
+    // not fail before reaching the behavior under test; cardinality itself is
+    // covered by the planning contract tests.
+    await ensureRuntimeConfigSeeded();
+    const dailyReportPrompt = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report", isDefault: true },
+    });
+    const testTemplate = JSON.parse(dailyReportPrompt.templateJson ?? "{}");
+    testTemplate.blocks = testTemplate.blocks.map((block: Record<string, unknown>) => block.type === "section"
+      ? {
+          ...block,
+          required: false,
+          minItems: 0,
+          item: { ...(block.item as Record<string, unknown>), notes: [] },
+        }
+      : block);
+    await prisma.promptConfig.update({
+      where: { id: dailyReportPrompt.id },
+      data: { templateJson: JSON.stringify(testTemplate) },
+    });
+    await prisma.source.deleteMany();
+    await prisma.sourceGroup.deleteMany();
+    await prisma.taskSchedule.deleteMany();
   });
 
   it("turns an existing published report into a clean draft when regenerated", async () => {
     await createReportCandidates();
     await createPublishedReport();
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -762,7 +856,7 @@ describe("daily report service", () => {
 
   it("persists stable source numbers and source snapshots when generating a report", async () => {
     await createReportCandidates();
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     const result = await generateDailyReport({ date: REPORT_DATE, force: true });
     const sources = await prisma.dailyReportSource.findMany({
@@ -809,23 +903,19 @@ describe("daily report service", () => {
     });
   });
 
-  it("reports sourceCount as distinct referenced items", async () => {
+  it("rejects duplicate source references before persistence", async () => {
     await createReportCandidates();
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutputWithRepeatedSources());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutputWithRepeatedSources());
 
-    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
-    const rows = await prisma.dailyReportSource.count({
-      where: { dailyReportId: result.report?.id },
-    });
-    const detail = await getDailyReportByDate(REPORT_DATE, true);
-
-    expect(rows).toBe(2);
-    expect(detail?.sourceCount).toBe(2);
+    await expect(generateDailyReport({ date: REPORT_DATE, force: true })).rejects.toThrow("候选 1 在草稿中被重复引用");
+    await expect(prisma.dailyReport.findUnique({
+      where: { date_timezone: { date: REPORT_DATE, timezone: "Asia/Shanghai" } },
+    })).resolves.toBeNull();
   });
 
   it("counts expanded cluster items as report sources", async () => {
     await createClusteredReportCandidates();
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       blocks: [
         {
           type: "text",
@@ -834,20 +924,11 @@ describe("daily report service", () => {
         },
         {
           type: "section",
-          title: "今日大事",
+          title: "热点事件",
           items: [{
             title: "多来源模型发布",
             body: "多家来源确认同一个模型发布事件，可以用于观察聚合候选展开后的来源数量是否准确。",
             notes: [{ label: "重点", text: "多源确认" }],
-            sourceIds: [1],
-          }],
-        },
-        {
-          type: "section",
-          title: "变更与实践",
-          items: [{
-            title: "引用计数口径调整",
-            body: "按展开后的实际单条内容核算日报来源数量，避免把一个聚合候选误读为一个来源。",
             sourceIds: [1],
           }],
         },
@@ -865,8 +946,8 @@ describe("daily report service", () => {
     });
     const detail = await getDailyReportByDate(REPORT_DATE, true);
 
-    expect(rows).toBe(4);
-    expect(detail?.sourceCount).toBe(4);
+    expect(rows).toBe(3);
+    expect(detail?.sourceCount).toBe(3);
   });
 
   it("ranks daily report candidates by daily composite score and collapses clustered items", async () => {
@@ -981,7 +1062,7 @@ describe("daily report service", () => {
       maxCuratorBoost: 30,
       maxCuratorPenalty: 20,
     });
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       headline: "安全事件优先",
       blocks: [
         {
@@ -991,7 +1072,7 @@ describe("daily report service", () => {
         },
         {
           type: "section",
-          title: "今日大事",
+          title: "热点事件",
           items: [{
             title: "安全事件需要优先进入日报",
             body: "该事件命中事件速览偏好规则，即使质量分不是最高，也应作为日报候选。",
@@ -1041,7 +1122,7 @@ describe("daily report service", () => {
       where: { id: schedule.id },
       data: { dailyReportCandidateLimit: 2 },
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1051,10 +1132,10 @@ describe("daily report service", () => {
     ]);
   });
 
-  it("removes the same candidate from later report sections deterministically", async () => {
+  it("rejects a candidate repeated across report sections", async () => {
     await createReportCandidates();
     await createDailyReportSchedule({ autoPublish: false });
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       headline: "同一候选只保留一次",
       blocks: [
         {
@@ -1064,7 +1145,7 @@ describe("daily report service", () => {
         },
         {
           type: "section",
-          title: "今日大事",
+          title: "热点事件",
           items: [{
             title: "OpenAI 发布新模型",
             body: "OpenAI 发布新模型，带来新的能力变化。",
@@ -1083,31 +1164,18 @@ describe("daily report service", () => {
       ],
     }));
 
-    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
-    const sources = await prisma.dailyReportSource.findMany({
-      where: { dailyReportId: result.report?.id },
-      orderBy: { sourceNumber: "asc" },
-    });
-    const summary = JSON.parse(result.report?.summaryJson ?? "{}") as {
-      blocks: Array<{ type: string; items?: Array<{ sourceIds: number[] }> }>;
-    };
-
-    expect(sources.map((source) => source.sourceNumber)).toEqual([1, 2]);
-    expect(summary.blocks.filter((block) => block.type === "section").flatMap((block) => block.items ?? []).map((item) => item.sourceIds)).toEqual([
-      [1],
-      [2],
-    ]);
+    await expect(generateDailyReport({ date: REPORT_DATE, force: true })).rejects.toThrow("候选 1 在草稿中被重复引用");
   });
 
-  it("refills only a section emptied by duplicate removal", async () => {
+  it("does not refill a section after duplicate validation fails", async () => {
     await createReportCandidates();
     await createDailyReportSchedule({ autoPublish: false });
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       headline: "空栏目确定性补位",
       blocks: [
         {
           type: "section",
-          title: "今日大事",
+          title: "热点事件",
           items: [{
             title: "OpenAI 发布新模型",
             body: "OpenAI 发布新模型，带来新的能力变化。",
@@ -1126,45 +1194,18 @@ describe("daily report service", () => {
       ],
     }));
 
-    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
-    const summary = JSON.parse(result.report?.summaryJson ?? "{}") as {
-      blocks: Array<{ type: string; title: string; items?: Array<{ title: string; sourceIds: number[] }> }>;
-    };
-    const snapshot = JSON.parse(result.report?.candidateSnapshot ?? "{}") as {
-      emptySectionsAfterDeduplication?: string[];
-      refilledEmptySections?: string[];
-      removedEmptySections?: string[];
-    };
-
-    expect(summary.blocks.filter((block) => block.type === "section").map((block) => ({
-      title: block.title,
-      items: block.items?.map((item) => ({ title: item.title, sourceIds: item.sourceIds })),
-    }))).toEqual([
-      {
-        title: "今日大事",
-        items: [{ title: "OpenAI 发布新模型", sourceIds: [1] }],
-      },
-      {
-        title: "变更与实践",
-        items: [{ title: "开发者工具更新", sourceIds: [2] }],
-      },
-    ]);
-    expect(snapshot).toMatchObject({
-      emptySectionsAfterDeduplication: ["变更与实践"],
-      refilledEmptySections: ["变更与实践"],
-      removedEmptySections: [],
-    });
+    await expect(generateDailyReport({ date: REPORT_DATE, force: true })).rejects.toThrow("候选 1 在草稿中被重复引用");
   });
 
-  it("removes an empty section when duplicate removal leaves no unused candidate", async () => {
+  it("does not remove an empty section after duplicate validation fails", async () => {
     await createReportCandidates();
     await createDailyReportSchedule({ autoPublish: false });
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       headline: "空栏目删除",
       blocks: [
         {
           type: "section",
-          title: "今日大事",
+        title: "热点事件",
           items: [{
             title: "多条内容汇总",
             body: "这一栏目已经使用候选池中的全部内容，因此后续空栏目没有可补位候选。",
@@ -1183,22 +1224,7 @@ describe("daily report service", () => {
       ],
     }));
 
-    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
-    const summary = JSON.parse(result.report?.summaryJson ?? "{}") as {
-      blocks: Array<{ type: string; title: string }>;
-    };
-    const snapshot = JSON.parse(result.report?.candidateSnapshot ?? "{}") as {
-      emptySectionsAfterDeduplication?: string[];
-      refilledEmptySections?: string[];
-      removedEmptySections?: string[];
-    };
-
-    expect(summary.blocks.filter((block) => block.type === "section").map((block) => block.title)).toEqual(["今日大事"]);
-    expect(snapshot).toMatchObject({
-      emptySectionsAfterDeduplication: ["变更与实践"],
-      refilledEmptySections: [],
-      removedEmptySections: ["变更与实践"],
-    });
+    await expect(generateDailyReport({ date: REPORT_DATE, force: true })).rejects.toThrow("候选 1 在草稿中被重复引用");
   });
 
   it("keeps a same-cluster follow-up when the current day adds new cluster items", async () => {
@@ -1229,7 +1255,7 @@ describe("daily report service", () => {
       title: "多来源确认的模型发布",
     });
     await createDailyReportSchedule({ autoPublish: false });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1244,7 +1270,7 @@ describe("daily report service", () => {
   it("passes current multi-source evidence into daily report candidates", async () => {
     const { cluster } = await createClusteredReportCandidates();
     await createDailyReportSchedule({ autoPublish: false });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1259,7 +1285,7 @@ describe("daily report service", () => {
 
   it("expands selected clustered candidates into all clustered source links", async () => {
     const { cluster } = await createClusteredReportCandidates();
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     const result = await generateDailyReport({ date: REPORT_DATE, force: true });
     const clusteredSources = await prisma.dailyReportSource.findMany({
@@ -1284,12 +1310,12 @@ describe("daily report service", () => {
 
   it("limits expanded clustered source links per selected candidate", async () => {
     const { cluster } = await createLargeClusteredReportCandidates();
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       blocks: [
         { type: "text", title: "摘要", body: "今天多来源模型发布事件集中出现，日报只展示代表性来源，避免相似引用过多影响阅读。" },
         {
           type: "section",
-          title: "今日大事",
+          title: "热点事件",
           items: [{
             title: "大型聚合模型发布",
             body: "多家来源报道同一模型发布事件，保存和渲染时应限制代表性来源数量。",
@@ -1439,7 +1465,7 @@ describe("daily report service", () => {
         nextRunAt: new Date("2026-04-25T00:30:00.000Z"),
       },
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     const result = await generateDailyReport({ date: REPORT_DATE, force: true });
     const articleTitles = getLastGeneratedDailyReportArticles().map((article) => article.title);
@@ -1462,7 +1488,7 @@ describe("daily report service", () => {
       sourceKey: `cluster:${cluster.id}`,
       title: "多来源确认的模型发布",
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1484,7 +1510,7 @@ describe("daily report service", () => {
       eventObject: "Claude 4",
       eventDate: "2026-04-20",
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1521,7 +1547,7 @@ describe("daily report service", () => {
       eventSubject: "Old",
       eventObject: "Topic",
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1549,7 +1575,7 @@ describe("daily report service", () => {
       eventObject: "Jalapeño推理芯片",
       eventDate: "2026-04-20",
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1572,7 +1598,7 @@ describe("daily report service", () => {
       eventObject: "Claude 4",
       eventDate: "2026-04-20",
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1600,7 +1626,7 @@ describe("daily report service", () => {
       eventObject: "Claude 4",
       eventDate: "2026-04-20",
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1619,7 +1645,7 @@ describe("daily report service", () => {
       eventObject: "Claude 4",
       eventDate: "2026-04-20",
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1629,7 +1655,7 @@ describe("daily report service", () => {
   it("publishes the report immediately when daily report auto publish is enabled", async () => {
     await createDailyReportSchedule({ autoPublish: true });
     await createReportCandidates();
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await generateDailyReport({ date: REPORT_DATE, force: true });
 
@@ -1651,7 +1677,7 @@ describe("daily report service", () => {
         entityId: REPORT_DATE,
       },
     });
-    generateDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
 
     await executeDailyReportTask(taskRun);
 
@@ -1664,18 +1690,243 @@ describe("daily report service", () => {
       metrics: Array<{ label: string; value: number }>;
     }>;
 
-    expect(timeline).toMatchObject([
-      {
+    expect(timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
         key: "daily_report_generate",
-        label: "AI 日报生成",
+        metrics: [
+          { label: "总候选数", value: 4 },
+          { label: "批次数", value: 1 },
+          { label: "批次大小", value: 0 },
+          { label: "最后入选数", value: 2 },
+        ],
+      }),
+      expect.objectContaining({
+        key: "daily_report_prepare",
+        label: "准备候选",
         metrics: [{ label: "总候选数", value: 4 }],
-      },
-      {
+      }),
+      expect.objectContaining({
+        key: "daily_report_assess",
+        label: "分批选题评估",
+        metrics: [
+          { label: "批次数", value: 1 },
+          { label: "批次大小", value: 0 },
+        ],
+      }),
+      expect.objectContaining({
+        key: "daily_report_merge",
+        metrics: [{ label: "主题数", value: 4 }],
+      }),
+      expect.objectContaining({
+        key: "daily_report_plan",
+        metrics: [
+          { label: "计划栏目", value: 2 },
+          { label: "计划入选", value: 4 },
+        ],
+      }),
+      expect.objectContaining({
+        key: "daily_report_plan_validate",
+        metrics: [{ label: "违规数", value: 0 }],
+      }),
+      expect.objectContaining({
+        key: "daily_report_persist_publish",
+      }),
+      expect.objectContaining({
+        key: "daily_report_repair",
+        metrics: [{ label: "修复次数", value: 0 }],
+        status: "skipped",
+      }),
+      expect.objectContaining({
         key: "task_finished",
         label: "已完成",
         metrics: [{ label: "最后入选数", value: 2 }],
+      }),
+    ]));
+  });
+
+  it("invalidates an existing report when the configured planning batch size changes", async () => {
+    await createDailyReportSchedule({ autoPublish: false, planningBatchSize: 2 });
+    await createReportCandidates();
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+
+    await generateDailyReport({ date: REPORT_DATE });
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(1);
+
+    await prisma.taskSchedule.update({
+      where: { key: "daily_report_default" },
+      data: { dailyReportPlanningBatchSize: 3 },
+    });
+    writeDailyReportMock.mockClear();
+
+    const result = await generateDailyReport({ date: REPORT_DATE });
+
+    expect(result.skipped).toBe(false);
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the PLAN_VALIDATE budget for an invalid plan before retrying the planner", async () => {
+    await createDailyReportSchedule({ autoPublish: false });
+    await createReportCandidates();
+    writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
+    planDailyReportMock.mockImplementationOnce(async () => ({
+      schemaVersion: 1,
+      headlineHint: null,
+      sections: [{ blockKey: "text", blockTitle: "摘要", topicIds: [], candidateIds: [] }],
+      excludedCandidateIds: [],
+      selectionRationale: "invalid first plan",
+    }));
+    const checkpoints: Array<{ stage: string; stageAttempts?: Record<string, number> }> = [];
+
+    await generateDailyReport({
+      date: REPORT_DATE,
+      force: true,
+      onCheckpoint: async (checkpoint) => {
+        checkpoints.push({ stage: checkpoint.stage, stageAttempts: checkpoint.stageAttempts });
       },
-    ]);
+    });
+
+    expect(planDailyReportMock).toHaveBeenCalledTimes(2);
+    expect(checkpoints.find((checkpoint) => checkpoint.stage === "plan_validate")?.stageAttempts).toMatchObject({
+      PLAN: 1,
+      PLAN_VALIDATE: 2,
+    });
+  });
+
+  it("keeps the invalid plan and violations in the failed checkpoint", async () => {
+    await createDailyReportSchedule({ autoPublish: false });
+    await createReportCandidates();
+    const invalidPlan = {
+      schemaVersion: 1,
+      headlineHint: null,
+      sections: [{ blockKey: "text", blockTitle: "摘要", topicIds: [], candidateIds: [] }],
+      excludedCandidateIds: [],
+      selectionRationale: "invalid plan",
+    };
+    planDailyReportMock.mockResolvedValue(invalidPlan);
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+
+    await executeDailyReportTask(taskRun);
+
+    const failedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const checkpoint = JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}");
+    expect(checkpoint).toMatchObject({
+      failedStage: "plan_validate",
+      plan: invalidPlan,
+      violations: expect.arrayContaining([
+        expect.objectContaining({ code: "unknown_block" }),
+      ]),
+    });
+    expect(JSON.parse(failedTaskRun.taskTimelineJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: "daily_report_plan",
+        metrics: expect.arrayContaining([
+          { label: "计划栏目", value: 1 },
+          { label: "计划入选", value: 0 },
+        ]),
+      }),
+      expect.objectContaining({
+        key: "daily_report_plan_validate",
+        status: "failed",
+        metrics: expect.arrayContaining([
+          { label: "违规数", value: expect.any(Number) },
+        ]),
+      }),
+    ]));
+  });
+
+  it("stops a cancelled task before persisting or publishing the report", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+    assessDailyReportCandidatesMock.mockImplementationOnce(async ({ candidates }: { candidates: Array<{ id: number; eventType: string | null; eventSubject: string | null; eventAction: string | null; eventObject: string | null; eventDate: string | null }> }) => {
+      await prisma.backgroundTaskRun.update({
+        where: { id: taskRun.id },
+        data: { cancelRequestedAt: new Date() },
+      });
+      return candidates.map((candidate) => ({
+        candidateId: candidate.id,
+        relevanceScore: 90,
+        isWorthReading: true,
+        suggestedBlockKey: "changes-practice",
+        exclusionReason: null,
+        eventHint: {
+          eventType: candidate.eventType,
+          eventSubject: candidate.eventSubject,
+          eventAction: candidate.eventAction,
+          eventObject: candidate.eventObject,
+          eventDate: candidate.eventDate,
+        },
+        evidenceSummary: "测试证据",
+        confidence: 0.9,
+      }));
+    });
+
+    await executeDailyReportTask(taskRun);
+
+    const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(storedTaskRun.status).toBe("cancelled");
+    expect(storedTaskRun.errorSummary).toBe("管理员手动终止任务。");
+    expect(JSON.parse(storedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
+      failedStage: "assess",
+      failureCode: "cancelled",
+      resumeEligible: true,
+    });
+    expect(JSON.parse(storedTaskRun.taskTimelineJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "task_finished", label: "已取消", status: "cancelled" }),
+    ]));
+    await expect(prisma.dailyReport.findUnique({
+      where: { date_timezone: { date: REPORT_DATE, timezone: "Asia/Shanghai" } },
+    })).resolves.toBeNull();
+  });
+
+  it("does not retry or resume an assessment batch after context overflow", async () => {
+    await createDailyReportSchedule({ autoPublish: false, planningBatchSize: 2 });
+    await createReportCandidates();
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+    assessDailyReportCandidatesMock.mockRejectedValue(new Error("context length exceeded"));
+
+    await executeDailyReportTask(taskRun);
+
+    expect(assessDailyReportCandidatesMock).toHaveBeenCalledTimes(1);
+    const failedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
+      failedStage: "assess",
+      failureCode: "context_overflow",
+      resumeEligible: false,
+      data: { batchCount: 2, batchSize: 2 },
+      assessmentBatches: expect.arrayContaining([
+        expect.objectContaining({ status: "failed", attempt: 1 }),
+      ]),
+    });
+    const timeline = JSON.parse(failedTaskRun.taskTimelineJson ?? "[]") as Array<{ key: string; status: string; startedAt: string | null; finishedAt: string | null }>;
+    expect(timeline.find((node) => node.key === "daily_report_prepare")).toMatchObject({ status: "succeeded" });
+    expect(timeline.find((node) => node.key === "daily_report_assess")).toMatchObject({ status: "failed" });
+    expect(timeline.find((node) => node.key === "daily_report_merge")).toMatchObject({ status: "pending", startedAt: null, finishedAt: null });
+    expect(timeline.find((node) => node.key === "daily_report_persist_publish")).toMatchObject({ status: "pending", startedAt: null, finishedAt: null });
   });
 
   it("preserves an existing report status and content when regeneration fails", async () => {
@@ -1690,12 +1941,12 @@ describe("daily report service", () => {
         entityId: REPORT_DATE,
       },
     });
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       openingSummary: "太短",
       sections: {},
       closingThought: "太短",
     }));
-    repairDailyReportJsonMock.mockResolvedValue(null);
+    repairDailyReportDraftMock.mockResolvedValue(null);
 
     await executeDailyReportTask(taskRun);
 
@@ -1705,8 +1956,8 @@ describe("daily report service", () => {
     expect(report.id).toBe(existing.id);
     expect(report.status).toBe("published");
     expect(report.renderedMarkdown).toBe("# 已发布日报\n");
-    expect(report.errorMessage).toContain("日报输出校验失败");
-    expect(report.taskRunId).toBe(taskRun.id);
+    expect(report.errorMessage).toBeNull();
+    expect(report.taskRunId).toBe(existing.taskRunId);
   });
 
   it("does not create a failed report placeholder when first generation fails", async () => {
@@ -1720,12 +1971,12 @@ describe("daily report service", () => {
         entityId: REPORT_DATE,
       },
     });
-    generateDailyReportMock.mockResolvedValue(JSON.stringify({
+    writeDailyReportMock.mockResolvedValue(JSON.stringify({
       openingSummary: "太短",
       sections: {},
       closingThought: "太短",
     }));
-    repairDailyReportJsonMock.mockResolvedValue(null);
+    repairDailyReportDraftMock.mockResolvedValue(null);
 
     await executeDailyReportTask(taskRun);
 
@@ -1737,12 +1988,17 @@ describe("daily report service", () => {
     });
     expect(failedTaskRun).toMatchObject({
       status: "failed",
-      errorSummary: expect.stringContaining("日报输出校验失败"),
-      aiCallCountActual: 2,
-      aiCallCountEstimated: 2,
+      errorSummary: expect.stringContaining("WRITE 校验失败"),
+      aiCallCountActual: 4,
+      aiCallCountEstimated: 4,
     });
     expect(JSON.parse(failedTaskRun.aiCallBreakdownJson ?? "[]")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: "daily_report", actual: 2, estimated: 2 }),
+      expect.objectContaining({ key: "daily_report", actual: 4, estimated: 4 }),
     ]));
+    expect(JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
+      failedStage: "repair",
+      failureCode: "stage_failed",
+      resumeEligible: false,
+    });
   });
 });

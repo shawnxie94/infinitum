@@ -1,6 +1,6 @@
 import { adminErrorResponse } from "@/lib/admin/http";
 import { requireAdmin } from "@/lib/admin/session";
-import { enqueueTaskRun, getTaskRun, toTaskRunSnapshot } from "@/lib/tasks/service";
+import { enqueueTaskRun, getTaskRun, resumeTaskRun, toTaskRunSnapshot } from "@/lib/tasks/service";
 
 export async function POST(_request: Request, context: RouteContext<"/api/admin/monitor/tasks/[id]/retrigger">) {
   try {
@@ -14,13 +14,27 @@ export async function POST(_request: Request, context: RouteContext<"/api/admin/
       throw new Error("Task not found");
     }
 
-    // Create a new task with the same kind and label
-    const newTask = await enqueueTaskRun({
-      kind: originalTask.kind,
-      triggerType: "admin_action",
-      label: `${originalTask.label} (重新触发)`,
-      entityId: originalTask.entityId,
-    });
+    const checkpoint = originalTask.pipelineCheckpointJson
+      ? (() => {
+          try {
+            return JSON.parse(originalTask.pipelineCheckpointJson) as { version?: number; resumeEligible?: boolean };
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+    const canResume = originalTask.kind === "daily_report_generate"
+      && ["failed", "partial", "cancelled"].includes(originalTask.status)
+      && checkpoint?.version === 1
+      && checkpoint.resumeEligible === true;
+    const newTask = canResume
+      ? await resumeTaskRun(id)
+      : await enqueueTaskRun({
+        kind: originalTask.kind,
+        triggerType: "admin_action",
+        label: `${originalTask.label} (重新触发)`,
+        entityId: originalTask.entityId,
+      });
 
     return Response.json({
       task: toTaskRunSnapshot(newTask),

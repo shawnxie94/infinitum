@@ -11,7 +11,9 @@ import { TextArea } from "@/components/ui/text-area";
 import { TextInput } from "@/components/ui/text-input";
 import {
   compileDailyReportTemplatePrompt,
+  classifyDailyReportTemplateMigration,
   DEFAULT_DAILY_REPORT_TEMPLATE,
+  migrateLegacyDailyReportTemplate,
   normalizeDailyReportTemplateConfig,
   parseDailyReportTemplateJson,
   stringifyDailyReportTemplate,
@@ -21,6 +23,7 @@ import { cx } from "@/lib/ui/cx";
 
 type DailyReportTemplateEditorProps = {
   value: string;
+  systemPrompt?: string | null;
   onChange: (next: { templateJson: string; systemPrompt: string }) => void;
   onError: (message: string) => void;
 };
@@ -67,7 +70,7 @@ function FormBlock({
   );
 }
 
-export function DailyReportTemplateEditor({ value, onChange, onError }: DailyReportTemplateEditorProps) {
+export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onError }: DailyReportTemplateEditorProps) {
   const [expandedBlockIndexes, setExpandedBlockIndexes] = useState<Set<number>>(() => new Set([0]));
   const [draggingBlockIndex, setDraggingBlockIndex] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ index: number; title: string } | null>(null);
@@ -78,6 +81,16 @@ export function DailyReportTemplateEditor({ value, onChange, onError }: DailyRep
   } catch {
     template = cloneDailyReportTemplate(DEFAULT_DAILY_REPORT_TEMPLATE);
   }
+  let migrationStatus: ReturnType<typeof classifyDailyReportTemplateMigration> = "v2";
+  try {
+    migrationStatus = classifyDailyReportTemplateMigration(
+      value.trim() ? JSON.parse(value) : DEFAULT_DAILY_REPORT_TEMPLATE,
+      systemPrompt,
+    );
+  } catch {
+    migrationStatus = "invalid";
+  }
+  const needsMigration = migrationStatus === "official_default_legacy" || migrationStatus === "custom_legacy_requires_migration";
 
   const updateTemplate = (mutator: (template: DailyReportTemplateConfig) => void) => {
     try {
@@ -157,6 +170,25 @@ export function DailyReportTemplateEditor({ value, onChange, onError }: DailyRep
 
   return (
     <div className="space-y-4 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] p-4">
+      {needsMigration ? (
+        <div className="flex flex-col gap-3 rounded-sm border border-[color:var(--warning-border,var(--line))] bg-[var(--bg-muted)] px-3 py-3 text-sm text-[var(--text-2)] sm:flex-row sm:items-center sm:justify-between">
+          <span>{migrationStatus === "official_default_legacy" ? "检测到旧版官方日报模板，将按默认规则静默迁移为模板 v2。" : "检测到自定义旧版 opening/sections/closing 模板，请确认映射后迁移为模板 v2。"}</span>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              try {
+                const migrated = migrateLegacyDailyReportTemplate(JSON.parse(value));
+                onChange({ templateJson: stringifyDailyReportTemplate(migrated), systemPrompt: compileDailyReportTemplatePrompt(migrated) });
+              } catch (error) {
+                onError(error instanceof Error ? error.message : "旧模板迁移失败。");
+              }
+            }}
+          >
+            迁移为模板 v2
+          </Button>
+        </div>
+      ) : null}
       <FormBlock label="标题规则">
         <TextArea
           rows={3}
@@ -357,6 +389,42 @@ export function DailyReportTemplateEditor({ value, onChange, onError }: DailyRep
                     }
                   />
                 </FormBlock>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <label className="flex items-center gap-2 text-sm text-[var(--text-2)]">
+                    <input
+                      className={checkboxInputClassName}
+                      type="checkbox"
+                      checked={block.required === true}
+                      onChange={(event) => updateTemplate((draft) => {
+                        const target = draft.blocks[blockIndex];
+                        if (target?.type === "section") target.required = event.target.checked;
+                      })}
+                    />
+                    条目数非空校验
+                  </label>
+                  <FormBlock label="最少条数">
+                    <TextInput
+                      type="number"
+                      min={0}
+                      value={block.minItems ?? 0}
+                      onChange={(event) => updateTemplate((draft) => {
+                        const target = draft.blocks[blockIndex];
+                        if (target?.type === "section") target.minItems = Number.parseInt(event.target.value, 10) || 0;
+                      })}
+                    />
+                  </FormBlock>
+                  <FormBlock label="最多条数（留空不限）">
+                    <TextInput
+                      type="number"
+                      min={0}
+                      value={block.maxItems == null ? "" : block.maxItems}
+                      onChange={(event) => updateTemplate((draft) => {
+                        const target = draft.blocks[blockIndex];
+                        if (target?.type === "section") target.maxItems = event.target.value.trim() ? Number.parseInt(event.target.value, 10) || 0 : null;
+                      })}
+                    />
+                  </FormBlock>
+                </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-medium text-[var(--text-2)]">条目要点</div>
