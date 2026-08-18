@@ -38,6 +38,7 @@ import {
 } from "@/lib/daily-report/types";
 import {
   mergeDailyReportTopics,
+  buildDailyReportTopicBriefs,
   normalizeDailyReportDraftForTemplate,
   normalizeDailyReportPlanForValidation,
   splitDailyReportCandidates,
@@ -137,7 +138,7 @@ function buildDailyReportGenerationSignature(input: {
   const modelApi = prompt?.modelApi ?? input.runtimeConfig.modelApi;
   return createHash("sha256")
     .update(JSON.stringify({
-      pipelineVersion: "daily-report-selection-writing-v1",
+      pipelineVersion: "daily-report-selection-writing-v3",
       templateSignature: input.templateSignature,
       planningBatchSize: input.planningBatchSize,
       recentTopicLookbackDays: input.recentTopicLookbackDays,
@@ -1297,7 +1298,7 @@ async function generateDailyReportInternal(input: {
       checkpoint.inputHash === inputHash &&
       checkpoint.candidateSnapshotHash === candidateSnapshotHash &&
       checkpoint.templateSignature === templateSignature &&
-      checkpoint.pipelineVersion === "daily-report-selection-writing-v1",
+      checkpoint.pipelineVersion === "daily-report-selection-writing-v3",
     );
     if (input.resumeCheckpoint && !canResume) {
       throw new DailyReportGenerationError(
@@ -1314,7 +1315,7 @@ async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-selection-writing-v1",
+      pipelineVersion: "daily-report-selection-writing-v3",
       stage: "prepare",
       completedStages: canResume ? checkpoint?.completedStages ?? ["prepare"] : ["prepare"],
       lastCompletedStage: "prepare",
@@ -1350,7 +1351,7 @@ async function generateDailyReportInternal(input: {
       assessments.push(...batchAssessments);
       await saveCheckpoint({
         version: 1,
-        pipelineVersion: "daily-report-selection-writing-v1",
+        pipelineVersion: "daily-report-selection-writing-v3",
         stage: "assess",
         completedStages: ["prepare", "assess"],
         lastCompletedStage: "assess",
@@ -1392,13 +1393,17 @@ async function generateDailyReportInternal(input: {
       unassessedCandidateIds: planningCandidates
         .map((candidate) => candidate.id)
         .filter((candidateId) => !assessments.some((assessment) => assessment.candidateId === candidateId)),
-      assessments,
+      excludedCandidateIds: assessments
+        .filter((assessment) => !assessment.isWorthReading)
+        .map((assessment) => assessment.candidateId),
+      assessments: assessments.filter((assessment) => assessment.isWorthReading),
       batchCount: batches.length,
       recentTopics,
     };
+    const topicBriefs = buildDailyReportTopicBriefs(topics, planningCandidates, assessments);
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-selection-writing-v1",
+      pipelineVersion: "daily-report-selection-writing-v3",
       stage: "merge",
       completedStages: ["prepare", "assess", "merge"],
       lastCompletedStage: "merge",
@@ -1411,6 +1416,13 @@ async function generateDailyReportInternal(input: {
       candidateSnapshotHash,
       candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
       resumeEligible: true,
+      assessmentBatches: batches.map((batch, index) => ({
+        index,
+        candidateIds: batch.map((candidate) => candidate.id),
+        status: "succeeded" as const,
+        attempt: stageAttempts[`ASSESS.batch.${index}`] ?? 1,
+        assessments: assessments.filter((assessment) => batch.some((candidate) => candidate.id === assessment.candidateId)),
+      })),
       data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
       ledger,
       mergedTopics: topics,
@@ -1418,14 +1430,14 @@ async function generateDailyReportInternal(input: {
     await input.onStageUpdate?.("plan");
     const planFromProvider = canResume && checkpoint?.plan
       ? checkpoint.plan as Awaited<ReturnType<typeof provider.planDailyReport>>
-      : await runStageWithAttempts("plan", async () => provider.planDailyReport({ ledger, topics, template, recentTopicLookbackDays }));
+      : await runStageWithAttempts("plan", async () => provider.planDailyReport({ ledger, topicBriefs, template, recentTopicLookbackDays }));
     const plan = canResume && checkpoint?.plan && checkpoint.completedStages.includes("plan_validate")
       ? planFromProvider
       : await runStageWithAttempts("plan_validate", async (attempt) => {
         await input.onStageUpdate?.("plan_validate");
         const rawCandidatePlan = attempt === 1
           ? planFromProvider
-          : await provider.planDailyReport({ ledger, topics, template, recentTopicLookbackDays });
+          : await provider.planDailyReport({ ledger, topicBriefs, template, recentTopicLookbackDays });
         const candidatePlan = normalizeDailyReportPlanForValidation(rawCandidatePlan, topics, template);
         const violations = validateDailyReportPlan(candidatePlan, topics, planningCandidates, template);
         latestPlanAttempt = candidatePlan;
@@ -1442,7 +1454,7 @@ async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-selection-writing-v1",
+      pipelineVersion: "daily-report-selection-writing-v3",
       stage: "plan_validate",
       completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
       lastCompletedStage: "plan_validate",

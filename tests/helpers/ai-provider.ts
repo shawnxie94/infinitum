@@ -107,7 +107,7 @@ export function buildAiProviderMock(
     summarizeCluster: vi.fn().mockResolvedValue(JSON.stringify({ title: "默认聚合标题", summary: "默认聚合摘要" })),
     matchClusterCandidate: vi.fn().mockResolvedValue(null),
     assessDailyReportCandidates: vi.fn().mockResolvedValue([]),
-    planDailyReport: vi.fn().mockResolvedValue({ schemaVersion: 1, headlineHint: null, sections: [], excludedCandidateIds: [], selectionRationale: "" }),
+    planDailyReport: vi.fn().mockResolvedValue({ schemaVersion: 1, sections: [] }),
     writeDailyReport: vi.fn().mockResolvedValue({ blocks: [] }),
     repairDailyReportDraft: vi.fn().mockResolvedValue({ blocks: [] }),
   };

@@ -4,6 +4,7 @@ import { DEFAULT_DAILY_REPORT_TEMPLATE } from "@/lib/daily-report/template";
 import { normalizeDailyReportTemplateConfig } from "@/lib/daily-report/template";
 import {
   mergeDailyReportTopics,
+  buildDailyReportTopicBriefs,
   normalizeDailyReportDraftForTemplate,
   normalizeDailyReportPlanForValidation,
   splitDailyReportCandidates,
@@ -47,10 +48,6 @@ function assessment(id: number, overrides: Partial<DailyReportCandidateAssessmen
     relevanceScore: 80,
     isWorthReading: true,
     suggestedBlockKey: "hot-topics",
-    exclusionReason: null,
-    eventHint: { eventType: "release", eventSubject: "主体", eventAction: "发布", eventObject: `对象-${id}`, eventDate: "2026-08-14" },
-    evidenceSummary: "有明确来源证据",
-    confidence: 0.9,
     ...overrides,
   };
 }
@@ -81,23 +78,73 @@ describe("daily report planning contracts", () => {
     expect(topics[1]?.candidateIds).toEqual([3]);
   });
 
+  it("builds bounded topic briefs with complete membership and representative summaries", () => {
+    const candidates = [
+      candidate(1, {
+        clusterId: "cluster-a",
+        summary: "候选一的摘要。".repeat(100),
+      }),
+      candidate(2, {
+        clusterId: "cluster-a",
+        summary: "候选二的摘要。".repeat(100),
+      }),
+      candidate(3, { eventObject: "独立对象" }),
+    ];
+    const assessments = [
+      assessment(1, { relevanceScore: 70 }),
+      assessment(2, { relevanceScore: 95 }),
+      assessment(3, { relevanceScore: 80 }),
+    ];
+    const topics = mergeDailyReportTopics(candidates, assessments);
+
+    const briefs = buildDailyReportTopicBriefs(topics, candidates, assessments);
+
+    expect(briefs).toHaveLength(2);
+    expect(briefs[0]).toMatchObject({
+      candidateIds: [1, 2],
+      candidateBriefs: [
+        expect.objectContaining({ candidateId: 2, relevanceScore: 95 }),
+        expect.objectContaining({ candidateId: 1, relevanceScore: 70 }),
+      ],
+    });
+    expect(briefs[0]?.candidateBriefs[0]?.summaryExcerpt).toHaveLength(320);
+    expect(briefs[0]?.candidateBriefs[1]?.summaryExcerpt).toBeNull();
+    expect(briefs[1]?.candidateBriefs[0]?.summaryExcerpt).toBe("候选摘要");
+    expect(JSON.stringify(briefs)).not.toContain("https://example.com/");
+  });
+
+  it("keeps the serialized PLAN brief within a hard budget for the maximum candidate pool", () => {
+    const candidates = Array.from({ length: 500 }, (_, index) => candidate(index + 1, {
+      title: `超长候选标题 ${"标题".repeat(100)}`,
+      sourceName: `超长来源 ${"来源".repeat(60)}`,
+      summary: "超长摘要。".repeat(200),
+      eventObject: `独立对象-${index}-${"对象".repeat(80)}`,
+    }));
+    const assessments = candidates.map((item) => assessment(item.id, { relevanceScore: item.id % 100 }));
+
+    const briefs = buildDailyReportTopicBriefs(
+      mergeDailyReportTopics(candidates, assessments),
+      candidates,
+      assessments,
+    );
+
+    expect(briefs).toHaveLength(500);
+    expect(JSON.stringify(briefs).length).toBeLessThanOrEqual(220_000);
+    expect(briefs.every((brief) => brief.candidateIds.length === 1)).toBe(true);
+  });
+
   it("validates the complete ASSESS DTO before merging", () => {
     const batch = [candidate(1), candidate(2)];
-    expect(validateDailyReportAssessments(batch, [assessment(1), assessment(2)])).toHaveLength(2);
-    expect(() => validateDailyReportAssessments(batch, [assessment(1, { confidence: 2 }), assessment(2)])).toThrow("confidence");
-    expect(() => validateDailyReportAssessments(batch, [assessment(1, { isWorthReading: false }), assessment(2)])).toThrow("exclusionReason");
-    expect(() => validateDailyReportAssessments(batch, [{ ...assessment(1), eventHint: null }, assessment(2)])).toThrow("eventHint");
-    expect(() => validateDailyReportAssessments(batch, [assessment(1, { evidenceSummary: "" }), assessment(2)])).toThrow("evidenceSummary");
+    expect(validateDailyReportAssessments(batch, [assessment(1), assessment(2)])).toEqual([assessment(1), assessment(2)]);
+    expect(validateDailyReportAssessments(batch, [{ ...assessment(1), evidenceSummary: "冗余字段" }, assessment(2)])).toEqual([assessment(1), assessment(2)]);
+    expect(() => validateDailyReportAssessments(batch, [assessment(1, { suggestedBlockKey: "" }), assessment(2)])).toThrow("suggestedBlockKey");
   });
 
   it("rejects plan references outside the complete candidate/topic ledger", () => {
     const topics = mergeDailyReportTopics([candidate(1)], [assessment(1)]);
     const plan = {
       schemaVersion: 1 as const,
-      headlineHint: null,
-      sections: [{ blockKey: "missing", blockTitle: "不存在", topicIds: ["topic-404"], candidateIds: [404] }],
-      excludedCandidateIds: [],
-      selectionRationale: "",
+      sections: [{ blockKey: "missing", topicIds: ["topic-404"], candidateIds: [404] }],
     };
     const violations = validateDailyReportPlan(plan, topics, [candidate(1)], normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE));
     expect(violations.map((violation) => violation.code)).toEqual(expect.arrayContaining(["unknown_block", "unknown_topic", "unknown_candidate"]));
@@ -109,10 +156,7 @@ describe("daily report planning contracts", () => {
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
     const violations = validateDailyReportPlan({
       schemaVersion: 1,
-      headlineHint: null,
-      sections: [{ blockKey: "hot-topics", blockTitle: "热点事件", topicIds: ["topic-1"], candidateIds: [2] }],
-      excludedCandidateIds: [],
-      selectionRationale: "",
+      sections: [{ blockKey: "hot-topics", topicIds: ["topic-1"], candidateIds: [2] }],
     }, topics, candidates, template);
     expect(violations.map((violation) => violation.code)).toEqual(expect.arrayContaining([
       "candidate_topic_mismatch",
@@ -135,19 +179,15 @@ describe("daily report planning contracts", () => {
     });
     const normalized = normalizeDailyReportPlanForValidation({
       schemaVersion: 1,
-      headlineHint: null,
       sections: [
-        { blockKey: "other-worth-reading", blockTitle: "其他值得看", topicIds: ["topic-1", "topic-1"], candidateIds: [1, 2, 3] },
-        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: ["topic-1"], candidateIds: [1, 4] },
+        { blockKey: "other-worth-reading", topicIds: ["topic-1", "topic-1"], candidateIds: [1, 2, 3] },
+        { blockKey: "changes-practice", topicIds: ["topic-1"], candidateIds: [1, 4] },
       ],
-      excludedCandidateIds: [1, 1, 5],
-      selectionRationale: "",
     }, topics, template);
 
     expect(normalized.sections[0]?.topicIds).toEqual(["topic-1"]);
     expect(normalized.sections[0]?.candidateIds).toEqual([1, 2]);
     expect(normalized.sections[1]?.candidateIds).toEqual([4]);
-    expect(normalized.excludedCandidateIds).toEqual([5]);
     expect(validateDailyReportPlan(normalized, topics, candidates, template)).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: "duplicate_topic" }),
@@ -183,13 +223,10 @@ describe("daily report planning contracts", () => {
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
     const violations = validateDailyReportPlan({
       schemaVersion: 1,
-      headlineHint: null,
       sections: [
-        { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: ["topic-1", "topic-2", "topic-3"], candidateIds: [1, 2, 3] },
-        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: ["topic-4"], candidateIds: [4] },
+        { blockKey: "hot-topics", topicIds: ["topic-1", "topic-2", "topic-3"], candidateIds: [1, 2, 3] },
+        { blockKey: "changes-practice", topicIds: ["topic-4"], candidateIds: [4] },
       ],
-      excludedCandidateIds: [],
-      selectionRationale: "",
     }, topics, candidates, template);
     expect(violations.map((violation) => violation.code)).toContain("insufficient_required_candidates");
     expect(violations.map((violation) => violation.code)).toContain("section_min_items");
@@ -200,13 +237,10 @@ describe("daily report planning contracts", () => {
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
     const plan = {
       schemaVersion: 1 as const,
-      headlineHint: null,
       sections: [
-        { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: [], candidateIds: [1] },
-        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: [], candidateIds: [2] },
+        { blockKey: "hot-topics", topicIds: [], candidateIds: [1] },
+        { blockKey: "changes-practice", topicIds: [], candidateIds: [2] },
       ],
-      excludedCandidateIds: [],
-      selectionRationale: "",
     };
     const violations = validateDailyReportDraft({
       blocks: [
@@ -231,13 +265,10 @@ describe("daily report planning contracts", () => {
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
     const plan = {
       schemaVersion: 1 as const,
-      headlineHint: null,
       sections: [
-        { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: [], candidateIds: [1, 2, 3] },
-        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: [], candidateIds: [4, 5] },
+        { blockKey: "hot-topics", topicIds: [], candidateIds: [1, 2, 3] },
+        { blockKey: "changes-practice", topicIds: [], candidateIds: [4, 5] },
       ],
-      excludedCandidateIds: [],
-      selectionRationale: "",
     };
     const violations = validateDailyReportDraft({
       blocks: [
@@ -255,14 +286,11 @@ describe("daily report planning contracts", () => {
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
     const plan = {
       schemaVersion: 1 as const,
-      headlineHint: null,
       sections: [
-        { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: [], candidateIds: [1, 2, 3] },
-        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: [], candidateIds: [4, 5] },
-        { blockKey: "other-worth-reading", blockTitle: "其他值得看", topicIds: [], candidateIds: [6] },
+        { blockKey: "hot-topics", topicIds: [], candidateIds: [1, 2, 3] },
+        { blockKey: "changes-practice", topicIds: [], candidateIds: [4, 5] },
+        { blockKey: "other-worth-reading", topicIds: [], candidateIds: [6] },
       ],
-      excludedCandidateIds: [],
-      selectionRationale: "",
     };
     const violations = validateDailyReportDraft({
       blocks: [
@@ -288,13 +316,10 @@ describe("daily report planning contracts", () => {
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
     const plan = {
       schemaVersion: 1 as const,
-      headlineHint: null,
       sections: [
-        { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: [], candidateIds: [1, 2, 3] },
-        { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: [], candidateIds: [4, 5] },
+        { blockKey: "hot-topics", topicIds: [], candidateIds: [1, 2, 3] },
+        { blockKey: "changes-practice", topicIds: [], candidateIds: [4, 5] },
       ],
-      excludedCandidateIds: [],
-      selectionRationale: "",
     };
     const draft: DailyReportDraft = {
       blocks: [

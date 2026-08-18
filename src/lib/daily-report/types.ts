@@ -48,16 +48,6 @@ export type DailyReportCandidateAssessment = {
   relevanceScore: number;
   isWorthReading: boolean;
   suggestedBlockKey: string | null;
-  exclusionReason: string | null;
-  eventHint: {
-    eventType: string | null;
-    eventSubject: string | null;
-    eventAction: string | null;
-    eventObject: string | null;
-    eventDate: string | null;
-  };
-  evidenceSummary: string;
-  confidence: number;
 };
 
 export type DailyReportAssessmentLedger = {
@@ -65,6 +55,7 @@ export type DailyReportAssessmentLedger = {
   candidateCount: number;
   assessedCount: number;
   unassessedCandidateIds: number[];
+  excludedCandidateIds: number[];
   assessments: DailyReportCandidateAssessment[];
   batchCount: number;
   recentTopics?: RecentDailyReportTopic[];
@@ -82,19 +73,49 @@ export type DailyReportMergedTopic = {
   ambiguity: { candidateIds: number[]; reason: string } | null;
 };
 
+export type DailyReportTopicBriefCandidate = {
+  candidateId: number;
+  title: string;
+  sourceName?: string;
+  summaryExcerpt?: string | null;
+  qualityScore?: number;
+  candidateScore: number;
+  relevanceScore: number;
+  suggestedBlockKey?: string | null;
+  sourceCount: number;
+  itemCount: number;
+  publishedAt: string;
+  publishedAtKnown?: boolean;
+  eventType?: string | null;
+  eventSubject?: string | null;
+  eventAction?: string | null;
+  eventObject?: string | null;
+  eventDate?: string | null;
+  isFollowUp?: boolean;
+  newItemCountOnDate?: number;
+  newSourceCountOnDate?: number;
+};
+
+export type DailyReportTopicBrief = {
+  topicId: string;
+  candidateIds: number[];
+  identitySource: DailyReportMergedTopic["identitySource"];
+  titleHint: string;
+  evidenceCount: number;
+  relevanceScore: number;
+  ambiguity: DailyReportMergedTopic["ambiguity"];
+  candidateBriefs: DailyReportTopicBriefCandidate[];
+};
+
 export type DailyReportPlanSection = {
   blockKey: string;
-  blockTitle: string;
   topicIds: string[];
   candidateIds: number[];
 };
 
 export type DailyReportPlan = {
   schemaVersion: 1;
-  headlineHint: string | null;
   sections: DailyReportPlanSection[];
-  excludedCandidateIds: number[];
-  selectionRationale: string;
 };
 
 export type DailyReportViolation = {

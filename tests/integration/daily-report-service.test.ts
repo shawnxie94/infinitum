@@ -723,34 +723,21 @@ describe("daily report service", () => {
       relevanceScore: 90,
       isWorthReading: true,
       suggestedBlockKey: "changes-practice",
-      exclusionReason: null,
-      eventHint: {
-        eventType: candidate.eventType,
-        eventSubject: candidate.eventSubject,
-        eventAction: candidate.eventAction,
-        eventObject: candidate.eventObject,
-        eventDate: candidate.eventDate,
-      },
-      evidenceSummary: "测试证据",
-      confidence: 0.9,
     })));
-    planDailyReportMock.mockImplementation(async ({ ledger, topics }: { ledger: { assessments: Array<{ candidateId: number }>; recentTopics?: unknown[] }; topics: Array<{ topicId: string; candidateIds: number[] }> }) => ({
+    planDailyReportMock.mockImplementation(async ({ ledger, topicBriefs }: { ledger: { assessments: Array<{ candidateId: number }>; recentTopics?: unknown[] }; topicBriefs: Array<{ topicId: string; candidateIds: number[] }> }) => ({
       schemaVersion: 1,
-      headlineHint: "测试日报",
       sections: (() => {
         const candidateIds = ledger.assessments.map((assessment) => assessment.candidateId);
-        const topicIdsFor = (ids: number[]) => topics.filter((topic) => ids.some((id) => topic.candidateIds.includes(id))).map((topic) => topic.topicId);
+        const topicIdsFor = (ids: number[]) => topicBriefs.filter((topic) => ids.some((id) => topic.candidateIds.includes(id))).map((topic) => topic.topicId);
         if (candidateIds.length >= 2) {
           const hotTopicCount = Math.min(3, candidateIds.length - 1);
           return [
-            { blockKey: "hot-topics", blockTitle: "热点事件", topicIds: topicIdsFor(candidateIds.slice(0, hotTopicCount)), candidateIds: candidateIds.slice(0, hotTopicCount) },
-            { blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: topicIdsFor(candidateIds.slice(hotTopicCount)), candidateIds: candidateIds.slice(hotTopicCount) },
+            { blockKey: "hot-topics", topicIds: topicIdsFor(candidateIds.slice(0, hotTopicCount)), candidateIds: candidateIds.slice(0, hotTopicCount) },
+            { blockKey: "changes-practice", topicIds: topicIdsFor(candidateIds.slice(hotTopicCount)), candidateIds: candidateIds.slice(hotTopicCount) },
           ];
         }
-        return [{ blockKey: "changes-practice", blockTitle: "变更与实践", topicIds: topicIdsFor(candidateIds), candidateIds }];
+        return [{ blockKey: "changes-practice", topicIds: topicIdsFor(candidateIds), candidateIds }];
       })(),
-      excludedCandidateIds: [],
-      selectionRationale: "测试计划",
     }));
     writeDailyReportMock.mockImplementation(async ({ selectedCandidates }: { selectedCandidates: Array<{ id: number }> }) => {
       return buildDailyReportOutput(selectedCandidates.length);
@@ -1807,10 +1794,7 @@ describe("daily report service", () => {
     writeDailyReportMock.mockResolvedValue(buildDailyReportOutput());
     planDailyReportMock.mockImplementationOnce(async () => ({
       schemaVersion: 1,
-      headlineHint: null,
-      sections: [{ blockKey: "text", blockTitle: "摘要", topicIds: [], candidateIds: [] }],
-      excludedCandidateIds: [],
-      selectionRationale: "invalid first plan",
+      sections: [{ blockKey: "text", topicIds: [], candidateIds: [] }],
     }));
     const checkpoints: Array<{ stage: string; stageAttempts?: Record<string, number> }> = [];
 
@@ -1834,10 +1818,7 @@ describe("daily report service", () => {
     await createReportCandidates();
     const invalidPlan = {
       schemaVersion: 1,
-      headlineHint: null,
-      sections: [{ blockKey: "text", blockTitle: "摘要", topicIds: [], candidateIds: [] }],
-      excludedCandidateIds: [],
-      selectionRationale: "invalid plan",
+      sections: [{ blockKey: "text", topicIds: [], candidateIds: [] }],
     };
     planDailyReportMock.mockResolvedValue(invalidPlan);
     const taskRun = await prisma.backgroundTaskRun.create({
@@ -1901,16 +1882,6 @@ describe("daily report service", () => {
         relevanceScore: 90,
         isWorthReading: true,
         suggestedBlockKey: "changes-practice",
-        exclusionReason: null,
-        eventHint: {
-          eventType: candidate.eventType,
-          eventSubject: candidate.eventSubject,
-          eventAction: candidate.eventAction,
-          eventObject: candidate.eventObject,
-          eventDate: candidate.eventDate,
-        },
-        evidenceSummary: "测试证据",
-        confidence: 0.9,
       }));
     });
 
@@ -1964,6 +1935,47 @@ describe("daily report service", () => {
     expect(timeline.find((node) => node.key === "daily_report_assess")).toMatchObject({ status: "failed" });
     expect(timeline.find((node) => node.key === "daily_report_merge")).toMatchObject({ status: "pending", startedAt: null, finishedAt: null });
     expect(timeline.find((node) => node.key === "daily_report_persist_publish")).toMatchObject({ status: "pending", startedAt: null, finishedAt: null });
+  });
+
+  it("keeps full ASSESS checkpoint coverage while sending only eligible candidates to PLAN", async () => {
+    await createDailyReportSchedule({ autoPublish: false });
+    await createReportCandidates();
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+    const excludedCandidateId = 1;
+    assessDailyReportCandidatesMock.mockImplementationOnce(async ({ candidates }: { candidates: Array<{ id: number }> }) => candidates.map((candidate) => ({
+      candidateId: candidate.id,
+      relevanceScore: candidate.id === excludedCandidateId ? 10 : 90,
+      isWorthReading: candidate.id !== excludedCandidateId,
+      suggestedBlockKey: "changes-practice",
+    })));
+    let planInput: {
+      ledger: { assessments: Array<{ candidateId: number }>; excludedCandidateIds: number[] };
+      topicBriefs: Array<{ candidateIds: number[] }>;
+    } | undefined;
+    planDailyReportMock.mockImplementation(async (input: typeof planInput) => {
+      planInput = input as typeof planInput;
+      throw new Error("stop after PLAN input inspection");
+    });
+
+    await executeDailyReportTask(taskRun);
+
+    expect(planInput?.ledger.assessments.map((item) => item.candidateId)).not.toContain(excludedCandidateId);
+    expect(planInput?.ledger.excludedCandidateIds).toContain(excludedCandidateId);
+    expect(planInput?.topicBriefs.flatMap((topic) => topic.candidateIds)).not.toContain(excludedCandidateId);
+
+    const failedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const checkpoint = JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}") as {
+      assessmentBatches?: Array<{ assessments?: Array<{ candidateId: number }> }>;
+    };
+    expect(checkpoint.assessmentBatches?.[0]?.assessments?.map((item) => item.candidateId)).toEqual([1, 2, 3, 4]);
   });
 
   it("preserves an existing report status and content when regeneration fails", async () => {
