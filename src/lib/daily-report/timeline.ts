@@ -18,6 +18,7 @@ type DailyReportTaskTimelineInput = {
   taskRun: BackgroundTaskRun;
   status: "running" | "succeeded" | "failed" | "cancelled" | "skipped";
   candidateCount?: number | null;
+  historyFilteredCount?: number | null;
   selectedCount?: number | null;
   planningCandidateCount?: number | null;
   planSectionCount?: number | null;
@@ -92,6 +93,7 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
         ...(index === 1 ? [
           { label: "批次数", value: input.batchCount ?? 0 },
           { label: "批次大小", value: input.batchSize ?? 0 },
+          { label: "历史重复过滤", value: input.historyFilteredCount ?? 0 },
         ] : []),
         ...(index === 2 ? [{ label: "可规划候选", value: input.planningCandidateCount ?? 0 }] : []),
         ...(index === 3 ? [

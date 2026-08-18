@@ -145,7 +145,7 @@ function buildDailyReportGenerationSignature(input: {
   const modelApi = prompt?.modelApi ?? input.runtimeConfig.modelApi;
   return createHash("sha256")
     .update(JSON.stringify({
-      pipelineVersion: "daily-report-topic-first-v1",
+      pipelineVersion: "daily-report-topic-first-v2",
       templateSignature: input.templateSignature,
       planningBatchSize: input.planningBatchSize,
       recentTopicLookbackDays: input.recentTopicLookbackDays,
@@ -1175,6 +1175,7 @@ async function generateDailyReportInternal(input: {
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
+      historyFilteredCount: 0,
       batchCount: 0,
       batchSize: schedule.dailyReportPlanningBatchSize ?? null,
       aiUsage: { actual: 0, estimated: 0, breakdown: [] },
@@ -1194,6 +1195,7 @@ async function generateDailyReportInternal(input: {
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
+      historyFilteredCount: 0,
       batchCount: 0,
       batchSize: schedule.dailyReportPlanningBatchSize ?? null,
       aiUsage: { actual: 0, estimated: 0, breakdown: [] },
@@ -1217,6 +1219,7 @@ async function generateDailyReportInternal(input: {
   let planSelectedCount = 0;
   let planViolationCount = 0;
   let repairCount = 0;
+  let historyFilteredCount = 0;
   let validationViolationCount = 0;
   let latestCheckpoint: TaskPipelineCheckpoint | null = input.resumeCheckpoint ?? null;
   const stageAttempts: Record<string, number> = { ...(input.resumeCheckpoint?.stageAttempts ?? {}) };
@@ -1324,7 +1327,7 @@ async function generateDailyReportInternal(input: {
       checkpoint.inputHash === inputHash &&
       checkpoint.candidateSnapshotHash === candidateSnapshotHash &&
       checkpoint.templateSignature === templateSignature &&
-      checkpoint.pipelineVersion === "daily-report-topic-first-v1",
+      checkpoint.pipelineVersion === "daily-report-topic-first-v2",
     );
     if (input.resumeCheckpoint && !canResume) {
       throw new DailyReportGenerationError(
@@ -1341,7 +1344,7 @@ async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-topic-first-v1",
+      pipelineVersion: "daily-report-topic-first-v2",
       stage: "prepare",
       completedStages: canResume ? checkpoint?.completedStages ?? ["prepare"] : ["prepare"],
       lastCompletedStage: "prepare",
@@ -1366,19 +1369,23 @@ async function generateDailyReportInternal(input: {
     });
     await input.onStageUpdate?.("assess");
     const assessments: DailyReportCandidateAssessment[] = [];
+    const getHistoryFilteredCount = () => assessments.filter(
+      (assessment) => assessment.historyDecision === "duplicate",
+    ).length;
     for (const [batchIndex, batch] of batches.entries()) {
       const checkpointBatch = canResume ? checkpoint?.assessmentBatches?.find((entry) => entry.index === batchIndex && entry.status === "succeeded") : null;
       currentBatchIndex = batchIndex;
       const batchAssessments = checkpointBatch?.assessments
         ? validateDailyReportAssessments(batch, checkpointBatch.assessments)
-        : await runStageWithAttempts("assess", async () => validateDailyReportAssessments(batch, await provider.assessDailyReportCandidates({ candidates: batch, template, recentTopicLookbackDays })), {
+        : await runStageWithAttempts("assess", async () => validateDailyReportAssessments(batch, await provider.assessDailyReportCandidates({ candidates: batch, template, recentTopics, recentTopicLookbackDays })), {
           attemptKey: `ASSESS.batch.${batchIndex}`,
           matrixStage: "ASSESS",
         });
       assessments.push(...batchAssessments);
+      historyFilteredCount = getHistoryFilteredCount();
       await saveCheckpoint({
         version: 1,
-        pipelineVersion: "daily-report-topic-first-v1",
+        pipelineVersion: "daily-report-topic-first-v2",
         stage: "assess",
         completedStages: ["prepare", "assess"],
         lastCompletedStage: "assess",
@@ -1400,7 +1407,12 @@ async function generateDailyReportInternal(input: {
             ? { assessments: assessments.filter((assessment) => currentBatch.some((candidate) => candidate.id === assessment.candidateId)) }
             : {}),
         })),
-        data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
+        data: {
+          batchCount: batches.length,
+          batchSize,
+          assessedCount: assessments.length,
+          historyFilteredCount: getHistoryFilteredCount(),
+        },
       });
     }
     currentBatchIndex = null;
@@ -1415,6 +1427,10 @@ async function generateDailyReportInternal(input: {
       excludedCandidateIds: assessments
         .filter((assessment) => !assessment.isWorthReading)
         .map((assessment) => assessment.candidateId),
+      historyFilteredCandidateIds: assessments
+        .filter((assessment) => assessment.historyDecision === "duplicate")
+        .map((assessment) => assessment.candidateId),
+      historyFilteredCount: getHistoryFilteredCount(),
       assessments: assessments.filter((assessment) => assessment.isWorthReading),
       batchCount: batches.length,
       recentTopics,
@@ -1425,7 +1441,7 @@ async function generateDailyReportInternal(input: {
     planningCandidateCount = candidateBriefs.length;
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-topic-first-v1",
+      pipelineVersion: "daily-report-topic-first-v2",
       stage: "merge",
       completedStages: ["prepare", "assess", "merge"],
       lastCompletedStage: "merge",
@@ -1445,7 +1461,12 @@ async function generateDailyReportInternal(input: {
         attempt: stageAttempts[`ASSESS.batch.${index}`] ?? 1,
         assessments: assessments.filter((assessment) => batch.some((candidate) => candidate.id === assessment.candidateId)),
       })),
-      data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
+      data: {
+        batchCount: batches.length,
+        batchSize,
+        assessedCount: assessments.length,
+        historyFilteredCount: getHistoryFilteredCount(),
+      },
       ledger,
       planningCandidateBriefs: candidateBriefs,
     });
@@ -1493,7 +1514,7 @@ async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-topic-first-v1",
+      pipelineVersion: "daily-report-topic-first-v2",
       stage: "plan_validate",
       completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
       lastCompletedStage: "plan_validate",
@@ -1506,7 +1527,12 @@ async function generateDailyReportInternal(input: {
       candidateSnapshotHash,
       candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
       resumeEligible: true,
-      data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
+      data: {
+        batchCount: batches.length,
+        batchSize,
+        assessedCount: assessments.length,
+        historyFilteredCount: getHistoryFilteredCount(),
+      },
       assessmentBatches: batches.map((batch, index) => ({
         index,
         candidateIds: batch.map((candidate) => candidate.id),
@@ -1707,9 +1733,10 @@ async function generateDailyReportInternal(input: {
     planSelectedCount,
     planViolationCount,
     repairCount,
-      validationViolationCount,
-      batchSize: schedule.dailyReportPlanningBatchSize ?? null,
-      aiUsage: aiUsage.snapshot(),
+    historyFilteredCount,
+    validationViolationCount,
+    batchSize: schedule.dailyReportPlanningBatchSize ?? null,
+    aiUsage: aiUsage.snapshot(),
   };
 }
 
@@ -1747,6 +1774,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     ? taskRun.entityId
     : getTodayDailyReportDate();
   let candidateCount = 0;
+  let historyFilteredCount = 0;
   let planningCandidateCount = 0;
   let planSectionCount = 0;
   let planSelectedCount = 0;
@@ -1792,6 +1820,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
             taskRun,
             status: "running",
             candidateCount,
+            historyFilteredCount,
             batchCount,
             batchSize,
             activeStage,
@@ -1806,6 +1835,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
             taskRun,
             status: "running",
             candidateCount,
+            historyFilteredCount,
             batchCount,
             batchSize,
             activeStage,
@@ -1814,6 +1844,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       },
       onCheckpoint: async (checkpoint) => {
         if (typeof checkpoint.data?.batchCount === "number") batchCount = checkpoint.data.batchCount;
+        if (typeof checkpoint.data?.historyFilteredCount === "number") historyFilteredCount = checkpoint.data.historyFilteredCount;
         if (checkpoint.data && Object.prototype.hasOwnProperty.call(checkpoint.data, "batchSize")) {
           batchSize = typeof checkpoint.data.batchSize === "number" ? checkpoint.data.batchSize : null;
         }
@@ -1865,6 +1896,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         taskRun,
         status: result.skipped ? "skipped" : "succeeded",
         candidateCount: result.candidateCount,
+        historyFilteredCount: result.historyFilteredCount,
         selectedCount: result.selectedCount,
         planningCandidateCount: result.planningCandidateCount,
         planSectionCount: result.planSectionCount,
@@ -1890,6 +1922,9 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     const failedCheckpoint = error instanceof DailyReportGenerationError || cancelled ? error.checkpoint : null;
     if (failedCheckpoint?.failedStage) activeStage = failedCheckpoint.failedStage as DailyReportPipelineStage;
     if (failedCheckpoint?.data && typeof failedCheckpoint.data.batchCount === "number") batchCount = failedCheckpoint.data.batchCount;
+    if (failedCheckpoint?.data && typeof failedCheckpoint.data.historyFilteredCount === "number") {
+      historyFilteredCount = failedCheckpoint.data.historyFilteredCount;
+    }
     if (failedCheckpoint?.data && Object.prototype.hasOwnProperty.call(failedCheckpoint.data, "batchSize")) {
       batchSize = typeof failedCheckpoint.data.batchSize === "number" ? failedCheckpoint.data.batchSize : null;
     }
@@ -1918,6 +1953,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         taskRun,
         status: cancelled ? "cancelled" : "failed",
         candidateCount,
+        historyFilteredCount,
         planningCandidateCount,
         planSectionCount,
         planSelectedCount,

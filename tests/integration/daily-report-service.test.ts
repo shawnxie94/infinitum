@@ -700,6 +700,7 @@ describe("daily report service", () => {
       relevanceScore: 90,
       isWorthReading: true,
       suggestedBlockKey: "changes-practice",
+      historyDecision: "new",
     })));
     planDailyReportMock.mockImplementation(async ({ candidateBriefs }: { candidateBriefs: Array<{ candidateId: number; clusterId?: string | null }> }) => ({
       schemaVersion: 2,
@@ -1617,6 +1618,57 @@ describe("daily report service", () => {
     expect(report.publishedAt).toBeInstanceOf(Date);
   });
 
+  it("passes the full recent topic set to ASSESS and records model history filtering", async () => {
+    await createReportCandidates();
+    await createHistoricalDailyReportSource({
+      date: "2026-04-20",
+      title: "历史日报已写主题",
+      eventType: "research",
+      eventSubject: "历史主体",
+      eventAction: "研究",
+      eventObject: "历史对象",
+      eventDate: "2026-04-20",
+    });
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+    assessDailyReportCandidatesMock.mockImplementationOnce(async ({
+      candidates,
+      recentTopics,
+    }: {
+      candidates: Array<{ id: number }>;
+      recentTopics: Array<{ title: string }>;
+    }) => {
+      expect(recentTopics).toEqual([expect.objectContaining({ title: "历史日报已写主题" })]);
+      return candidates.map((candidate) => ({
+        candidateId: candidate.id,
+        relevanceScore: 90,
+        isWorthReading: true,
+        suggestedBlockKey: "changes-practice",
+        historyDecision: candidate.id === 1 ? "duplicate" : "new",
+      }));
+    });
+    writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => buildDailyReportOutput(selectedTopics));
+
+    await executeDailyReportTask(taskRun);
+
+    expect(getLastGeneratedDailyReportArticles().map((article) => article.id)).toEqual([2, 3, 4]);
+    const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const timeline = JSON.parse(storedTaskRun.taskTimelineJson ?? "[]") as Array<{
+      key: string;
+      metrics: Array<{ label: string; value: number }>;
+    }>;
+    expect(timeline.find((node) => node.key === "daily_report_assess")).toMatchObject({
+      metrics: expect.arrayContaining([{ label: "历史重复过滤", value: 1 }]),
+    });
+  });
+
   it("records candidate and selected counts in the daily report task timeline", async () => {
     await createReportCandidates();
     const taskRun = await prisma.backgroundTaskRun.create({
@@ -1663,6 +1715,7 @@ describe("daily report service", () => {
         metrics: [
           { label: "批次数", value: 1 },
           { label: "批次大小", value: 0 },
+          { label: "历史重复过滤", value: 0 },
         ],
       }),
       expect.objectContaining({
@@ -1866,6 +1919,7 @@ describe("daily report service", () => {
         relevanceScore: 90,
         isWorthReading: true,
         suggestedBlockKey: "changes-practice",
+        historyDecision: "new",
       }));
     });
 
@@ -1939,6 +1993,7 @@ describe("daily report service", () => {
       relevanceScore: candidate.id === excludedCandidateId ? 10 : 90,
       isWorthReading: candidate.id !== excludedCandidateId,
       suggestedBlockKey: "changes-practice",
+      historyDecision: "new",
     })));
     let planInput: { candidateBriefs: Array<{ candidateId: number }>; recentTopics?: unknown[] } | undefined;
     planDailyReportMock.mockImplementation(async (input: typeof planInput) => {

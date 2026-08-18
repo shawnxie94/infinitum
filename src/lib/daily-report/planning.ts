@@ -20,6 +20,7 @@ import type {
   DailyReportTopicPriorityComponents,
   DailyReportViolation,
 } from "@/lib/daily-report/types";
+import { DAILY_REPORT_HISTORY_DECISIONS } from "@/lib/daily-report/types";
 
 export type { NormalizedDailyReportTemplate } from "@/lib/daily-report/template";
 
@@ -96,13 +97,23 @@ export function validateDailyReportAssessments(
       || (typeof rawAssessment.suggestedBlockKey === "string" && !rawAssessment.suggestedBlockKey.trim())) {
       throw new Error(`ASSESS 候选 ${candidateId} 的 suggestedBlockKey 必须是非空字符串或 null。`);
     }
+    if (
+      typeof rawAssessment.historyDecision !== "string" ||
+      !DAILY_REPORT_HISTORY_DECISIONS.includes(rawAssessment.historyDecision as typeof DAILY_REPORT_HISTORY_DECISIONS[number])
+    ) {
+      throw new Error(`ASSESS 候选 ${candidateId} 的 historyDecision 必须是 new、duplicate、follow_up 或 uncertain。`);
+    }
+    const historyDecision = rawAssessment.historyDecision as typeof DAILY_REPORT_HISTORY_DECISIONS[number];
     assessments.push({
       candidateId,
       relevanceScore: rawAssessment.relevanceScore as number,
-      isWorthReading: rawAssessment.isWorthReading as boolean,
+      // A duplicate decision is a hard local boundary after the model has
+      // compared the candidate with the supplied recent topics.
+      isWorthReading: historyDecision === "duplicate" ? false : rawAssessment.isWorthReading as boolean,
       suggestedBlockKey: rawAssessment.suggestedBlockKey === null
         ? null
         : (rawAssessment.suggestedBlockKey as string).trim(),
+      historyDecision,
     });
   }
   if (returnedIds.size !== batchIds.size) throw new Error("ASSESS 未覆盖当前批次全部候选。");
@@ -219,6 +230,7 @@ export function buildDailyReportCandidateBriefs(
         isFollowUp: candidate.isFollowUp,
         newItemCountOnDate: candidate.newItemCountOnDate,
         newSourceCountOnDate: candidate.newSourceCountOnDate,
+        historyDecision: assessment?.historyDecision ?? "new",
       } satisfies DailyReportPlanningCandidateBrief;
     });
 

@@ -135,6 +135,7 @@ export type AiProvider = {
   assessDailyReportCandidates(input: {
     candidates: DailyReportPlanningCandidate[];
     template: NormalizedDailyReportTemplate;
+    recentTopics: RecentDailyReportTopic[];
     recentTopicLookbackDays?: number;
   }): Promise<DailyReportCandidateAssessment[]>;
   planDailyReport(input: {
@@ -425,8 +426,10 @@ const DAILY_REPORT_CANDIDATE_FIELD_GUIDE = [
 const DAILY_REPORT_ASSESSMENT_FIELD_GUIDE = [
   "candidateId：输入候选的 id；isWorthReading：是否进入 PLAN；relevanceScore：0 到 100 的选题相关性分。",
   "suggestedBlockKey：建议的 section blockKey，必须来自模板 sections，无法判断时为 null；它只是软提示，最终以 PLAN 和本地校验为准。",
+  "historyDecision：与 recentTopics 比较后的历史关系，只能是 new、duplicate、follow_up 或 uncertain。duplicate 表示近期开过的日报已覆盖同一事件；follow_up 表示同一事件有新的动作、事实、数据或影响；new 表示新事件；uncertain 表示无法确定。",
   "template.sections 中 blockKey 是稳定栏目键，blockTitle 只是展示名，description 是选题方向；只根据栏目语义判断 suggestedBlockKey。",
-  "只返回上述四个字段，不附带其他解释字段。",
+  "recentTopics 是完整的近期已发布日报主题集合。逐一将每个候选与整个集合比较，不要假设代码已经提供了候选与历史主题的关联关系；不要因为主体、来源或 cluster 相同就直接判定重复。",
+  "只返回上述五个字段，不附带其他解释字段。",
 ].join("\n");
 
 const DAILY_REPORT_PLAN_FIELD_GUIDE = [
@@ -435,6 +438,7 @@ const DAILY_REPORT_PLAN_FIELD_GUIDE = [
   "candidateBriefs[].clusterId：上游事件聚合编号，只表示已有来源聚合，不等于最终日报主题；PLAN 可以跨 cluster 合并相关候选，也可以只选择其中一部分。",
   "candidateBriefs[].sourceName/evidenceItems：代表来源和有限证据线索；candidateScore/qualityScore/relevanceScore/sourceCount/itemCount：排序、质量、相关性、互证来源数和聚合条目数，都是判断信号，不是事实。",
   "candidateBriefs[].publishedAt/publishedAtKnown：源站时间及其可靠性；isFollowUp/newItemCountOnDate/newSourceCountOnDate：后续进展及日报日期新增量信号。",
+  "candidateBriefs[].historyDecision：ASSESS 对历史日报的判断；new、follow_up 是可规划候选，duplicate 不应出现在 candidateBriefs，uncertain 需要结合其他字段判断。",
   "candidateBriefs[].eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索，只用于理解和比较；不得补造输入之外的事实。预算压缩时可选字段可能省略，但 candidateId、title、candidateScore、relevanceScore、sourceCount、itemCount 和 publishedAt 会保留。",
   "recentTopics：近期开过的日报条目，仅用于识别重复事件或后续进展；不要把它们当作本期候选。输入中的 candidateBriefs 已经是 ASSESS 通过的候选全集。",
   "template.sections[].blockKey 是唯一栏目键；blockTitle 仅用于理解栏目，description 是栏目意图，required/minItems/maxItems 是主题数量约束；正常情况下每个 section 的 topics 数量必须满足 minItems/maxItems，不能为了凑数选择低价值候选。",
@@ -1570,14 +1574,17 @@ export function createAiProvider(
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "ASSESS",
-          "不得写正文、不得合并主题、不得重新编号或遗漏候选；必须逐一返回输入中的每个 candidateId。只返回 candidateId、isWorthReading、relevanceScore、suggestedBlockKey 四个字段。suggestedBlockKey 必须来自模板 sections 或为 null。",
+          "不得写正文、不得合并主题、不得重新编号或遗漏候选；必须逐一返回输入中的每个 candidateId。只返回 candidateId、isWorthReading、relevanceScore、suggestedBlockKey、historyDecision 五个字段。suggestedBlockKey 必须来自模板 sections 或为 null；historyDecision 必须是 new、duplicate、follow_up、uncertain 之一。若 historyDecision=duplicate，isWorthReading 必须为 false。",
         ),
         buildDailyReportStagePrompt(
           "ASSESS",
-          "逐一评估输入中的每个 candidateId。每个候选必须返回一次，不得新增或遗漏 ID。返回 {assessments:[{candidateId,isWorthReading,relevanceScore,suggestedBlockKey}]}。只做选题评估，不写正文，不合并主题。",
+          "逐一评估输入中的每个 candidateId。每个候选必须返回一次，不得新增或遗漏 ID。返回 {assessments:[{candidateId,isWorthReading,relevanceScore,suggestedBlockKey,historyDecision}]}。只做选题评估和历史重复判断，不写正文，不合并主题。",
           {
             template: buildDailyReportAssessmentTemplate(input.template, input.recentTopicLookbackDays),
-            input: input.candidates.map(compactDailyReportModelCandidate),
+            input: {
+              candidates: input.candidates.map(compactDailyReportModelCandidate),
+              recentTopics: input.recentTopics,
+            },
           },
           `${DAILY_REPORT_CANDIDATE_FIELD_GUIDE}\n${DAILY_REPORT_ASSESSMENT_FIELD_GUIDE}`,
         ),

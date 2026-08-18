@@ -38,6 +38,9 @@ export type DailyReportCandidate = {
   evidenceItems?: DailyReportCandidateEvidenceItem[];
 };
 
+export const DAILY_REPORT_HISTORY_DECISIONS = ["new", "duplicate", "follow_up", "uncertain"] as const;
+export type DailyReportHistoryDecision = typeof DAILY_REPORT_HISTORY_DECISIONS[number];
+
 export type DailyReportPlanningCandidate = DailyReportCandidate & {
   sourceNumber: number;
   evidence: DailyReportCandidateEvidenceItem[];
@@ -48,6 +51,7 @@ export type DailyReportCandidateAssessment = {
   relevanceScore: number;
   isWorthReading: boolean;
   suggestedBlockKey: string | null;
+  historyDecision: DailyReportHistoryDecision;
 };
 
 export type DailyReportAssessmentLedger = {
@@ -56,6 +60,8 @@ export type DailyReportAssessmentLedger = {
   assessedCount: number;
   unassessedCandidateIds: number[];
   excludedCandidateIds: number[];
+  historyFilteredCandidateIds: number[];
+  historyFilteredCount: number;
   assessments: DailyReportCandidateAssessment[];
   batchCount: number;
   recentTopics?: RecentDailyReportTopic[];
@@ -89,6 +95,7 @@ export type DailyReportPlanningCandidateBrief = {
   isFollowUp?: boolean;
   newItemCountOnDate?: number;
   newSourceCountOnDate?: number;
+  historyDecision?: DailyReportHistoryDecision;
 };
 
 export type DailyReportPlanTopicSelection = {

@@ -54,6 +54,7 @@ function assessment(id: number, overrides: Partial<DailyReportCandidateAssessmen
     relevanceScore: 80,
     isWorthReading: true,
     suggestedBlockKey: "hot-topics",
+    historyDecision: "new",
     ...overrides,
   };
 }
@@ -328,6 +329,22 @@ describe("daily report planning contracts", () => {
       template(),
     );
     expect(violations.map((violation) => violation.code)).toContain("ineligible_candidate");
+  });
+
+  it("forces history duplicates out of the planning ledger", () => {
+    const assessments = validateDailyReportAssessments([candidate(1)], [{
+      candidateId: 1,
+      relevanceScore: 95,
+      isWorthReading: true,
+      suggestedBlockKey: "hot-topics",
+      historyDecision: "duplicate",
+    }]);
+
+    expect(assessments).toEqual([expect.objectContaining({
+      candidateId: 1,
+      isWorthReading: false,
+      historyDecision: "duplicate",
+    })]);
   });
 
   it("requires exactly one final draft item for every selected topic", () => {

@@ -32,7 +32,7 @@ const candidate: DailyReportPlanningCandidate = {
 describe("daily report staged provider", () => {
   it("exposes assess, plan, write and repair as separate JSON calls", async () => {
     const create = vi.fn()
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ assessments: [{ candidateId: 1, relevanceScore: 90, isWorthReading: true, suggestedBlockKey: "hot-topics" }] }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ assessments: [{ candidateId: 1, relevanceScore: 90, isWorthReading: true, suggestedBlockKey: "hot-topics", historyDecision: "new" }] }) } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ schemaVersion: 2, sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: [1] }] }] }) } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "正文", sourceIds: [1] }] }] }) } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "修复正文", sourceIds: [1] }] }] }) } }] });
@@ -42,7 +42,23 @@ describe("daily report staged provider", () => {
       { chat: { completions: { create } } },
     );
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
-    const assessments = await provider.assessDailyReportCandidates({ candidates: [candidate], template, recentTopicLookbackDays: 10 });
+    const assessments = await provider.assessDailyReportCandidates({
+      candidates: [candidate],
+      template,
+      recentTopics: [{
+        date: "2026-08-13",
+        sourceNumber: 1,
+        sectionName: "热点事件",
+        topic: "旧主题",
+        title: "旧主题",
+        eventType: "release",
+        eventSubject: "旧主体",
+        eventAction: "发布",
+        eventObject: "旧对象",
+        eventDate: null,
+      }],
+      recentTopicLookbackDays: 10,
+    });
     const candidateBriefs: DailyReportPlanningCandidateBrief[] = [{
       candidateId: 1,
       clusterId: null,
@@ -90,8 +106,10 @@ describe("daily report staged provider", () => {
     expect(assessSystemPrompt).not.toContain("旧版");
     expect(assessSystemPrompt).not.toContain("一次性日报");
     expect(assessUserPrompt).toContain("candidateScore");
-    expect(assessUserPrompt).toContain("只返回上述四个字段");
+    expect(assessUserPrompt).toContain("只返回上述五个字段");
     expect(assessUserPrompt).toContain("不附带其他解释字段");
+    expect(assessUserPrompt).toContain('"recentTopics"');
+    expect(assessUserPrompt).toContain("historyDecision");
     expect(assessUserPrompt).toContain('"recentTopicLookbackDays":10');
     expect(assessUserPrompt).not.toContain('"required"');
     expect(assessUserPrompt).not.toContain('"minItems"');

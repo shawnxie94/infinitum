@@ -248,6 +248,10 @@ function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
     return typeof checkpoint.data.batchSize === "number" ? checkpoint.data.batchSize : 0;
   }
 
+  if (label === "历史重复过滤" && checkpoint.data && Object.prototype.hasOwnProperty.call(checkpoint.data, "historyFilteredCount")) {
+    return typeof checkpoint.data.historyFilteredCount === "number" ? checkpoint.data.historyFilteredCount : 0;
+  }
+
   return null;
 }
 
@@ -274,7 +278,7 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
     case "daily_report_prepare":
       return `候选快照 ${getValue("总候选数")}`;
     case "daily_report_assess":
-      return `固定批次 ${getValue("批次大小") > 0 ? `${getValue("批次大小")} 条` : "整批"} · ${getValue("批次数")} 个`;
+      return `固定批次 ${getValue("批次大小") > 0 ? `${getValue("批次大小")} 条` : "整批"} · ${getValue("批次数")} 个 · 历史重复过滤 ${getValue("历史重复过滤")} 条`;
     case "daily_report_merge":
       return `准备 ${getValue("可规划候选")} 个候选供全局规划`;
     case "daily_report_plan":
