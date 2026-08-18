@@ -285,6 +285,9 @@ function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnap
         .map(normalizeTaskTimelineMetricSnapshot)
         .filter((metric): metric is TaskTimelineMetricSnapshot => metric !== null)
     : [];
+  const audit = maybeNode.audit && typeof maybeNode.audit === "object" && !Array.isArray(maybeNode.audit)
+    ? maybeNode.audit as Record<string, unknown>
+    : undefined;
 
   return {
     key: key as TaskTimelineNodeKey,
@@ -295,6 +298,7 @@ function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnap
     durationMs,
     modelName,
     metrics,
+    ...(audit ? { audit } : {}),
   };
 }
 

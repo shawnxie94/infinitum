@@ -7,10 +7,17 @@ import type {
   DailyReportCandidate,
   DailyReportCandidateAssessment,
   DailyReportDraft,
-  DailyReportMergedTopic,
+  DailyReportModelDraft,
   DailyReportPlan,
+  DailyReportPlanTopic,
+  DailyReportPlanSelection,
   DailyReportPlanningCandidate,
-  DailyReportTopicBrief,
+  DailyReportPlanningCandidateBrief,
+  DailyReportPlanningAudit,
+  DailyReportPlanningAuditSection,
+  DailyReportPlanningAuditTopic,
+  DailyReportSelectedTopic,
+  DailyReportTopicPriorityComponents,
   DailyReportViolation,
 } from "@/lib/daily-report/types";
 
@@ -102,64 +109,6 @@ export function validateDailyReportAssessments(
   return assessments;
 }
 
-function normalized(value: string | null | undefined) {
-  return (value ?? "").trim().toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
-}
-
-function topicIdentity(candidate: DailyReportPlanningCandidate): { key: string; source: DailyReportMergedTopic["identitySource"] } {
-  if (candidate.clusterId) return { key: `cluster:${candidate.clusterId}`, source: "cluster" };
-  if (candidate.eventSubject && candidate.eventObject) {
-    return {
-      key: [candidate.eventType, candidate.eventSubject, candidate.eventAction, candidate.eventObject, candidate.eventDate]
-        .map(normalized)
-        .join("\u0000"),
-      source: "event-identity",
-    };
-  }
-  if (candidate.sourceKey) return { key: `source:${candidate.sourceKey}`, source: "source-key" };
-  return { key: `candidate:${candidate.id}`, source: "standalone" };
-}
-
-export function mergeDailyReportTopics(
-  candidates: DailyReportPlanningCandidate[],
-  assessments: DailyReportCandidateAssessment[],
-  sourceBatchIndexByCandidateId: ReadonlyMap<number, number> = new Map(),
-): DailyReportMergedTopic[] {
-  const assessmentById = new Map(assessments.map((assessment) => [assessment.candidateId, assessment]));
-  const groups = new Map<string, DailyReportMergedTopic>();
-  for (const candidate of candidates) {
-    const assessment = assessmentById.get(candidate.id);
-    if (!assessment?.isWorthReading) continue;
-    const identity = topicIdentity(candidate);
-    const existing = groups.get(identity.key);
-    if (existing) {
-      existing.candidateIds.push(candidate.id);
-      const sourceBatchIndex = sourceBatchIndexByCandidateId.get(candidate.id);
-      if (sourceBatchIndex !== undefined && !existing.sourceBatchIndexes?.includes(sourceBatchIndex)) {
-        existing.sourceBatchIndexes = [...(existing.sourceBatchIndexes ?? []), sourceBatchIndex];
-      }
-      existing.evidenceCount += Math.max(1, candidate.sourceCount);
-      existing.sourceKeys.push(candidate.sourceKey);
-      existing.relevanceScore = Math.max(existing.relevanceScore, assessment.relevanceScore);
-      continue;
-    }
-    groups.set(identity.key, {
-      topicId: `topic-${groups.size + 1}`,
-      candidateIds: [candidate.id],
-      ...(sourceBatchIndexByCandidateId.has(candidate.id)
-        ? { sourceBatchIndexes: [sourceBatchIndexByCandidateId.get(candidate.id)!] }
-        : {}),
-      identitySource: identity.source,
-      titleHint: candidate.title,
-      evidenceCount: Math.max(1, candidate.sourceCount),
-      sourceKeys: [candidate.sourceKey],
-      relevanceScore: assessment.relevanceScore,
-      ambiguity: null,
-    });
-  }
-  return [...groups.values()];
-}
-
 const DAILY_REPORT_PLAN_TOPIC_TITLE_MAX_CHARS = 160;
 const DAILY_REPORT_PLAN_SOURCE_NAME_MAX_CHARS = 80;
 const DAILY_REPORT_PLAN_TOPIC_SUMMARY_MAX_CHARS = 320;
@@ -172,144 +121,421 @@ function truncateDailyReportPromptText(value: string | null | undefined, maxChar
   return `${normalized.slice(0, Math.max(0, maxChars - 1))}…`;
 }
 
-function fitDailyReportTopicBriefsToBudget(briefs: DailyReportTopicBrief[]) {
+function fitDailyReportCandidateBriefsToBudget(briefs: DailyReportPlanningCandidateBrief[]) {
   if (JSON.stringify(briefs).length <= DAILY_REPORT_PLAN_MAX_BRIEF_CHARS) return briefs;
 
-  const withoutEventDetails = briefs.map((topic) => ({
-    ...topic,
-    candidateBriefs: topic.candidateBriefs.map((candidate) => ({
-      ...candidate,
-      eventType: null,
-      eventSubject: null,
-      eventAction: null,
-      eventObject: null,
-      eventDate: null,
-    })),
+  const withoutEventDetails = briefs.map((candidate) => ({
+    ...candidate,
+    eventType: null,
+    eventSubject: null,
+    eventAction: null,
+    eventObject: null,
+    eventDate: null,
   }));
   if (JSON.stringify(withoutEventDetails).length <= DAILY_REPORT_PLAN_MAX_BRIEF_CHARS) return withoutEventDetails;
 
   const withShortSummaries = withoutEventDetails.map((topic) => ({
     ...topic,
-    candidateBriefs: topic.candidateBriefs.map((candidate) => ({
-      ...candidate,
-      summaryExcerpt: truncateDailyReportPromptText(candidate.summaryExcerpt, 160) || null,
+    summaryExcerpt: truncateDailyReportPromptText(topic.summaryExcerpt, 160) || null,
+    evidenceItems: topic.evidenceItems?.map((item) => ({
+      ...item,
+      summaryExcerpt: truncateDailyReportPromptText(item.summaryExcerpt, 100) || null,
     })),
   }));
   if (JSON.stringify(withShortSummaries).length <= DAILY_REPORT_PLAN_MAX_BRIEF_CHARS) return withShortSummaries;
 
   const compact = withShortSummaries.map((topic) => ({
     ...topic,
-    titleHint: truncateDailyReportPromptText(topic.titleHint, 100),
-    ambiguity: topic.ambiguity
-      ? { ...topic.ambiguity, reason: truncateDailyReportPromptText(topic.ambiguity.reason, 120) }
-      : null,
-    candidateBriefs: topic.candidateBriefs.map((candidate) => ({
-      ...candidate,
-      title: truncateDailyReportPromptText(candidate.title, 80),
-      sourceName: truncateDailyReportPromptText(candidate.sourceName, 48),
-      summaryExcerpt: null,
+    title: truncateDailyReportPromptText(topic.title, 80),
+    sourceName: truncateDailyReportPromptText(topic.sourceName, 48),
+    summaryExcerpt: null,
+    evidenceItems: topic.evidenceItems?.map((item) => ({
+      title: truncateDailyReportPromptText(item.title, 60),
+      sourceName: truncateDailyReportPromptText(item.sourceName, 36),
+      publishedAt: item.publishedAt,
     })),
   }));
   if (JSON.stringify(compact).length <= DAILY_REPORT_PLAN_MAX_BRIEF_CHARS) return compact;
 
   return compact.map((topic) => ({
     ...topic,
-    titleHint: truncateDailyReportPromptText(topic.titleHint, 64),
-    ambiguity: topic.ambiguity
-      ? { ...topic.ambiguity, reason: truncateDailyReportPromptText(topic.ambiguity.reason, 64) }
-      : null,
-    candidateBriefs: topic.candidateBriefs.map((candidate) => ({
-      candidateId: candidate.candidateId,
-      title: truncateDailyReportPromptText(candidate.title, 24),
-      candidateScore: candidate.candidateScore,
-      relevanceScore: candidate.relevanceScore,
-      sourceCount: candidate.sourceCount,
-      itemCount: candidate.itemCount,
-      publishedAt: candidate.publishedAt,
-      isFollowUp: candidate.isFollowUp,
-      newItemCountOnDate: candidate.newItemCountOnDate,
-      newSourceCountOnDate: candidate.newSourceCountOnDate,
-    })),
+    title: truncateDailyReportPromptText(topic.title, 40),
+    sourceName: undefined,
+    summaryExcerpt: null,
+    evidenceItems: undefined,
+    eventType: null,
+    eventSubject: null,
+    eventAction: null,
+    eventObject: null,
+    eventDate: null,
   }));
 }
 
 /**
- * Build the content-bearing but bounded view that PLAN needs for global
- * selection. Full candidates remain available to WRITE; PLAN gets only
- * compact summaries and ranking/event signals for candidates that survived
- * ASSESS.
+ * Build the bounded candidate view that PLAN needs for global topic
+ * synthesis. Full candidates remain available to WRITE; PLAN receives every
+ * candidate that survived ASSESS, without a rule-generated topic grouping.
  */
-export function buildDailyReportTopicBriefs(
-  topics: DailyReportMergedTopic[],
+export function buildDailyReportCandidateBriefs(
   candidates: DailyReportPlanningCandidate[],
   assessments: DailyReportCandidateAssessment[],
-): DailyReportTopicBrief[] {
-  const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+): DailyReportPlanningCandidateBrief[] {
   const assessmentById = new Map(assessments.map((assessment) => [assessment.candidateId, assessment]));
   let remainingSummaryChars = DAILY_REPORT_PLAN_TOTAL_SUMMARY_CHARS;
 
-  const briefs = topics.map((topic) => {
+  const briefs = candidates
+    .filter((candidate) => assessmentById.get(candidate.id)?.isWorthReading)
+    .map((candidate) => {
+      const assessment = assessmentById.get(candidate.id);
+      const summaryExcerpt = remainingSummaryChars > 0
+        ? truncateDailyReportPromptText(candidate.summary, Math.min(DAILY_REPORT_PLAN_TOPIC_SUMMARY_MAX_CHARS, remainingSummaryChars))
+        : null;
+      if (summaryExcerpt !== null) remainingSummaryChars -= summaryExcerpt.length;
+      return {
+        candidateId: candidate.id,
+        title: truncateDailyReportPromptText(candidate.title, DAILY_REPORT_PLAN_TOPIC_TITLE_MAX_CHARS),
+        clusterId: candidate.clusterId,
+        sourceName: truncateDailyReportPromptText(candidate.sourceName, DAILY_REPORT_PLAN_SOURCE_NAME_MAX_CHARS),
+        summaryExcerpt,
+        evidenceItems: candidate.evidence.slice(0, 3).map((item) => ({
+          title: truncateDailyReportPromptText(item.title, 120),
+          sourceName: truncateDailyReportPromptText(item.sourceName, DAILY_REPORT_PLAN_SOURCE_NAME_MAX_CHARS),
+          summaryExcerpt: truncateDailyReportPromptText(item.summary, 160) || null,
+          publishedAt: item.publishedAt,
+        })),
+        qualityScore: candidate.qualityScore,
+        candidateScore: candidate.candidateScore,
+        relevanceScore: assessment?.relevanceScore ?? 0,
+        suggestedBlockKey: assessment?.suggestedBlockKey ?? null,
+        sourceCount: candidate.sourceCount,
+        itemCount: candidate.itemCount,
+        publishedAt: candidate.publishedAt,
+        publishedAtKnown: candidate.publishedAtKnown,
+        eventType: truncateDailyReportPromptText(candidate.eventType, 80) || null,
+        eventSubject: truncateDailyReportPromptText(candidate.eventSubject, 120) || null,
+        eventAction: truncateDailyReportPromptText(candidate.eventAction, 120) || null,
+        eventObject: truncateDailyReportPromptText(candidate.eventObject, 160) || null,
+        eventDate: candidate.eventDate,
+        isFollowUp: candidate.isFollowUp,
+        newItemCountOnDate: candidate.newItemCountOnDate,
+        newSourceCountOnDate: candidate.newSourceCountOnDate,
+      } satisfies DailyReportPlanningCandidateBrief;
+    });
+
+  return fitDailyReportCandidateBriefsToBudget(briefs);
+}
+
+export function materializeDailyReportPlan(
+  selection: DailyReportPlanSelection,
+): DailyReportPlan {
+  let topicSequence = 0;
+  return {
+    schemaVersion: 2,
+    sections: Array.isArray(selection?.sections)
+      ? selection.sections.map((section) => ({
+          blockKey: typeof section?.blockKey === "string" ? section.blockKey.trim() : "",
+          topics: Array.isArray(section?.topics)
+            ? section.topics.map((topic) => ({
+                topicId: `topic-${++topicSequence}`,
+                candidateIds: Array.isArray(topic?.candidateIds) ? [...topic.candidateIds] : [],
+              }))
+            : [],
+        }))
+      : [],
+  };
+}
+
+export function toDailyReportModelDraft(draft: DailyReportDraft | DailyReportModelDraft): DailyReportModelDraft {
+  if (!draft || typeof draft !== "object" || !Array.isArray(draft.blocks)) {
+    return draft as DailyReportModelDraft;
+  }
+  return {
+    ...draft,
+    blocks: draft.blocks.map((block) => block.type === "section"
+      ? {
+          ...block,
+          items: block.items.map((item) => {
+            const modelItem = { ...item } as typeof item & { sourceIds?: number[] };
+            delete modelItem.sourceIds;
+            return modelItem;
+          }),
+        }
+      : block),
+  } as DailyReportModelDraft;
+}
+
+export function buildDailyReportSelectedTopics(
+  plan: DailyReportPlan,
+  candidates: DailyReportPlanningCandidate[],
+  assessments: DailyReportCandidateAssessment[],
+): DailyReportSelectedTopic[] {
+  const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const assessmentById = new Map(assessments.map((assessment) => [assessment.candidateId, assessment]));
+  return plan.sections.flatMap((section) => section.topics.map((topic) => {
     const topicCandidates = topic.candidateIds
       .map((candidateId) => candidateById.get(candidateId))
-      .filter((candidate): candidate is DailyReportPlanningCandidate => Boolean(candidate))
-      .sort((left, right) => {
-        const leftAssessment = assessmentById.get(left.id);
-        const rightAssessment = assessmentById.get(right.id);
-        return (rightAssessment?.relevanceScore ?? 0) - (leftAssessment?.relevanceScore ?? 0)
-          || right.candidateScore - left.candidateScore
-          || right.sourceCount - left.sourceCount
-          || left.id - right.id;
-      });
-    const representativeCandidateId = topicCandidates[0]?.id ?? null;
-
+      .filter((candidate): candidate is DailyReportPlanningCandidate => Boolean(candidate));
+    const representative = [...topicCandidates].sort((left, right) => (
+      (assessmentById.get(right.id)?.relevanceScore ?? 0) - (assessmentById.get(left.id)?.relevanceScore ?? 0)
+      || right.candidateScore - left.candidateScore
+      || right.sourceCount - left.sourceCount
+      || left.id - right.id
+    ))[0];
     return {
       topicId: topic.topicId,
+      blockKey: section.blockKey,
       candidateIds: [...topic.candidateIds],
-      identitySource: topic.identitySource,
-      titleHint: truncateDailyReportPromptText(topic.titleHint, DAILY_REPORT_PLAN_TOPIC_TITLE_MAX_CHARS),
-      evidenceCount: topic.evidenceCount,
-      relevanceScore: topic.relevanceScore,
-      ambiguity: topic.ambiguity
-        ? {
-            candidateIds: [...topic.ambiguity.candidateIds],
-            reason: truncateDailyReportPromptText(topic.ambiguity.reason, 240),
-          }
-        : null,
-      candidateBriefs: topicCandidates.map((candidate) => {
-        const assessment = assessmentById.get(candidate.id);
-        const isRepresentative = candidate.id === representativeCandidateId;
-        const includeSummary = isRepresentative && remainingSummaryChars > 0;
-        const summaryExcerpt = includeSummary
-          ? truncateDailyReportPromptText(candidate.summary, Math.min(DAILY_REPORT_PLAN_TOPIC_SUMMARY_MAX_CHARS, remainingSummaryChars))
-          : null;
-        if (summaryExcerpt !== null) remainingSummaryChars -= summaryExcerpt.length;
-        return {
-          candidateId: candidate.id,
-          title: truncateDailyReportPromptText(candidate.title, DAILY_REPORT_PLAN_TOPIC_TITLE_MAX_CHARS),
-          sourceName: truncateDailyReportPromptText(candidate.sourceName, DAILY_REPORT_PLAN_SOURCE_NAME_MAX_CHARS),
-          summaryExcerpt,
-          qualityScore: candidate.qualityScore,
-          candidateScore: candidate.candidateScore,
-          relevanceScore: assessment?.relevanceScore ?? 0,
-          suggestedBlockKey: assessment?.suggestedBlockKey ?? null,
-          sourceCount: candidate.sourceCount,
-          itemCount: candidate.itemCount,
-          publishedAt: candidate.publishedAt,
-          publishedAtKnown: candidate.publishedAtKnown,
-          eventType: isRepresentative ? truncateDailyReportPromptText(candidate.eventType, 80) || null : null,
-          eventSubject: isRepresentative ? truncateDailyReportPromptText(candidate.eventSubject, 120) || null : null,
-          eventAction: isRepresentative ? truncateDailyReportPromptText(candidate.eventAction, 120) || null : null,
-          eventObject: isRepresentative ? truncateDailyReportPromptText(candidate.eventObject, 160) || null : null,
-          eventDate: isRepresentative ? candidate.eventDate : null,
-          isFollowUp: candidate.isFollowUp,
-          newItemCountOnDate: candidate.newItemCountOnDate,
-          newSourceCountOnDate: candidate.newSourceCountOnDate,
-        };
-      }),
+      representativeCandidateId: representative?.id ?? topic.candidateIds[0]!,
+      candidates: topicCandidates,
     };
-  });
+  }));
+}
 
-  return fitDailyReportTopicBriefsToBudget(briefs);
+function maxTopicSignal(
+  topic: DailyReportPlanTopic,
+  candidatesById: ReadonlyMap<number, DailyReportPlanningCandidate>,
+  assessmentsById: ReadonlyMap<number, DailyReportCandidateAssessment>,
+  selector: (candidate: DailyReportPlanningCandidate, assessment: DailyReportCandidateAssessment | undefined) => number,
+) {
+  return topic.candidateIds.reduce((maximum, candidateId) => {
+    const candidate = candidatesById.get(candidateId);
+    if (!candidate) return maximum;
+    return Math.max(maximum, selector(candidate, assessmentsById.get(candidateId)));
+  }, 0);
+}
+
+function getDailyReportTopicPriorityComponents(
+  topic: DailyReportPlanTopic,
+  candidates: DailyReportPlanningCandidate[],
+  assessments: DailyReportCandidateAssessment[],
+): DailyReportTopicPriorityComponents | null {
+  const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const assessmentsById = new Map(assessments.map((assessment) => [assessment.candidateId, assessment]));
+  const topicCandidates = topic.candidateIds
+    .map((candidateId) => candidatesById.get(candidateId))
+    .filter((candidate): candidate is DailyReportPlanningCandidate => Boolean(candidate));
+  if (topicCandidates.length === 0) return null;
+
+  const candidateScore = maxTopicSignal(topic, candidatesById, assessmentsById, (candidate) => candidate.candidateScore);
+  const relevanceScore = maxTopicSignal(topic, candidatesById, assessmentsById, (_, assessment) => assessment?.relevanceScore ?? 0);
+  const qualityScore = maxTopicSignal(topic, candidatesById, assessmentsById, (candidate) => candidate.qualityScore);
+  const evidenceCount = topicCandidates.reduce((total, candidate) => total + Math.max(0, candidate.sourceCount), 0);
+  const freshnessSignal = Math.max(...topicCandidates.map((candidate) => (
+    Math.max(0, candidate.newItemCountOnDate ?? 0) + Math.max(0, candidate.newSourceCountOnDate ?? 0)
+  )), 0);
+
+  return {
+    candidateScore,
+    relevanceScore,
+    qualityScore,
+    evidenceBonus: Math.min(6, Math.max(0, evidenceCount - 1) * 1.5),
+    freshnessBonus: Math.min(4, freshnessSignal),
+    followUpBonus: topicCandidates.some((candidate) => candidate.isFollowUp) ? 2 : 0,
+  };
+}
+
+/**
+ * Calculate one shared editorial priority for a final topic.
+ *
+ * The score intentionally uses the strongest member signals and bounded
+ * evidence/freshness bonuses. It is only a local ordering signal; it is not
+ * exposed to PLAN and does not change the Topic-Candidate mapping.
+ */
+export function getDailyReportTopicPriority(
+  topic: DailyReportPlanTopic,
+  candidates: DailyReportPlanningCandidate[],
+  assessments: DailyReportCandidateAssessment[],
+) {
+  const components = getDailyReportTopicPriorityComponents(topic, candidates, assessments);
+  if (!components) return Number.NEGATIVE_INFINITY;
+
+  return Number((
+    components.candidateScore * 0.45
+    + components.relevanceScore * 0.35
+    + components.qualityScore * 0.10
+    + components.evidenceBonus
+    + components.freshnessBonus
+    + components.followUpBonus
+  ).toFixed(4));
+}
+
+function compareDailyReportTopics(
+  left: DailyReportPlanTopic,
+  right: DailyReportPlanTopic,
+  candidates: DailyReportPlanningCandidate[],
+  assessments: DailyReportCandidateAssessment[],
+) {
+  const priorityDifference = getDailyReportTopicPriority(right, candidates, assessments)
+    - getDailyReportTopicPriority(left, candidates, assessments);
+  if (priorityDifference !== 0) return priorityDifference;
+  return Math.min(...left.candidateIds) - Math.min(...right.candidateIds);
+}
+
+/**
+ * Apply deterministic template ordering and the local maxItems guard before
+ * PLAN validation. Overflow is intentionally truncated instead of causing an
+ * extra model repair call; all other plan violations remain visible to the
+ * validator.
+ */
+export function orderAndLimitDailyReportPlanWithAudit(
+  plan: DailyReportPlan,
+  template: NormalizedDailyReportTemplate,
+  candidates: DailyReportPlanningCandidate[],
+  assessments: DailyReportCandidateAssessment[],
+): { plan: DailyReportPlan; audit: DailyReportPlanningAudit } {
+  const sectionBlocksByTemplate = sectionBlocks(template);
+  const blockOrder = new Map(
+    sectionBlocksByTemplate
+      .map((block, index) => [block.key ?? `__missing_key_${index}`, index] as const),
+  );
+  const fallbackBlockOrder = blockOrder.size;
+  let topicSequence = 0;
+  const audits: DailyReportPlanningAuditSection[] = [];
+  const sections = plan.sections
+    .map((section, index) => ({ section, index }))
+    .sort((left, right) => (
+      (blockOrder.get(left.section.blockKey) ?? fallbackBlockOrder) - (blockOrder.get(right.section.blockKey) ?? fallbackBlockOrder)
+      || left.index - right.index
+    ))
+    .map(({ section }) => {
+      const block = sectionBlocksByTemplate.find((candidate) => candidate.key === section.blockKey);
+      const topics = [...section.topics].sort((left, right) => compareDailyReportTopics(left, right, candidates, assessments));
+      const retainedTopics = block?.maxItems != null ? topics.slice(0, block.maxItems) : topics;
+      const truncatedTopics = block?.maxItems != null ? topics.slice(block.maxItems) : [];
+      const topicAudit = (topic: DailyReportPlanTopic, retained: boolean, topicId: string | null): DailyReportPlanningAuditTopic => ({
+        topicId,
+        candidateIds: [...topic.candidateIds],
+        topicPriority: getDailyReportTopicPriority(topic, candidates, assessments),
+        priorityComponents: getDailyReportTopicPriorityComponents(topic, candidates, assessments) ?? {
+          candidateScore: 0,
+          relevanceScore: 0,
+          qualityScore: 0,
+          evidenceBonus: 0,
+          freshnessBonus: 0,
+          followUpBonus: 0,
+        },
+        retained,
+      });
+      const sectionTopics = retainedTopics.map((topic) => ({
+        ...topic,
+        topicId: `topic-${++topicSequence}`,
+      }));
+      audits.push({
+        blockKey: section.blockKey,
+        maxItems: block?.maxItems ?? null,
+        inputTopicCount: topics.length,
+        outputTopicCount: sectionTopics.length,
+        truncatedTopicCount: truncatedTopics.length,
+        topics: [
+          ...sectionTopics.map((topic) => topicAudit(topic, true, topic.topicId)),
+          ...truncatedTopics.map((topic) => topicAudit(topic, false, null)),
+        ],
+      });
+      return {
+        ...section,
+        topics: sectionTopics,
+      };
+    });
+  return {
+    plan: { ...plan, sections },
+    audit: {
+      schemaVersion: 1,
+      topicPriorityVersion: "v1",
+      inputTopicCount: audits.reduce((total, section) => total + section.inputTopicCount, 0),
+      outputTopicCount: audits.reduce((total, section) => total + section.outputTopicCount, 0),
+      truncatedTopicCount: audits.reduce((total, section) => total + section.truncatedTopicCount, 0),
+      sections: audits,
+    },
+  };
+}
+
+export function orderAndLimitDailyReportPlan(
+  plan: DailyReportPlan,
+  template: NormalizedDailyReportTemplate,
+  candidates: DailyReportPlanningCandidate[],
+  assessments: DailyReportCandidateAssessment[],
+): DailyReportPlan {
+  return orderAndLimitDailyReportPlanWithAudit(plan, template, candidates, assessments).plan;
+}
+
+/**
+ * Reconcile model draft order with the deterministic PLAN/template order.
+ * Unknown blocks and topics stay at the end so validation can still report
+ * them instead of silently dropping malformed model output.
+ */
+export function orderDailyReportDraft(
+  draft: DailyReportDraft,
+  plan: DailyReportPlan,
+  template: NormalizedDailyReportTemplate,
+): DailyReportDraft {
+  if (!draft || typeof draft !== "object" || !Array.isArray(draft.blocks)) return draft as DailyReportDraft;
+  const blockOrder = new Map<string, number>();
+  template.blocks.forEach((block, index) => {
+    blockOrder.set(block.title, index);
+    if (block.type === "section" && block.key) blockOrder.set(block.key, index);
+  });
+  const topicOrder = new Map(
+    getDailyReportPlanTopics(plan).map((topic, index) => [topic.topicId, index]),
+  );
+  return {
+    ...draft,
+    blocks: draft.blocks
+      .map((block, index) => ({ block, index }))
+      .sort((left, right) => (
+        (blockOrder.get(left.block.type === "section" ? left.block.blockKey ?? left.block.title : left.block.title) ?? Number.MAX_SAFE_INTEGER)
+        - (blockOrder.get(right.block.type === "section" ? right.block.blockKey ?? right.block.title : right.block.title) ?? Number.MAX_SAFE_INTEGER)
+        || left.index - right.index
+      ))
+      .map(({ block }) => block.type === "section"
+        ? {
+            ...block,
+            items: block.items
+              .map((item, index) => ({ item, index }))
+              .sort((left, right) => (
+                (topicOrder.get(left.item.topicId ?? "") ?? Number.MAX_SAFE_INTEGER)
+                - (topicOrder.get(right.item.topicId ?? "") ?? Number.MAX_SAFE_INTEGER)
+                || left.index - right.index
+              ))
+              .map(({ item }) => item),
+          }
+        : block),
+  } as DailyReportDraft;
+}
+
+/**
+ * Rebuild source references from the validated topic mapping. Model output is
+ * allowed to contain sourceIds for backward compatibility, but those values
+ * are never authoritative and are always replaced here.
+ */
+export function attachDailyReportTopicSources(
+  draft: DailyReportModelDraft | DailyReportDraft,
+  plan: DailyReportPlan,
+): DailyReportDraft {
+  if (!draft || typeof draft !== "object" || !Array.isArray(draft.blocks)) return draft as DailyReportDraft;
+  const topicById = new Map(getDailyReportPlanTopics(plan).map((topic) => [topic.topicId, topic]));
+  return {
+    ...draft,
+    blocks: draft.blocks.map((block) => block.type === "section"
+      ? {
+          ...block,
+          items: block.items.map((item) => ({
+            ...item,
+            sourceIds: topicById.get(item.topicId ?? "")?.candidateIds.slice() ?? [],
+          })),
+        }
+      : block),
+  } as DailyReportDraft;
+}
+
+export function getDailyReportPlanTopics(plan: DailyReportPlan) {
+  return plan.sections.flatMap((section) => section.topics.map((topic) => ({
+    ...topic,
+    blockKey: section.blockKey,
+  })));
+}
+
+export function getDailyReportPlanCandidateIds(plan: DailyReportPlan) {
+  return getDailyReportPlanTopics(plan).flatMap((topic) => topic.candidateIds);
 }
 
 function sectionBlocks(template: NormalizedDailyReportTemplate) {
@@ -379,94 +605,20 @@ function numberArray(value: unknown) {
     : null;
 }
 
-function stringArray(value: unknown) {
-  return Array.isArray(value) && value.every((item) => typeof item === "string")
-    ? value as string[]
-    : null;
-}
-
-/**
- * Remove only deterministic plan conflicts before applying the hard validator.
- * Unknown references and ownership mismatches are intentionally preserved so
- * they still fail validation instead of being silently hidden.
- */
-export function normalizeDailyReportPlanForValidation(
-  plan: DailyReportPlan,
-  topics: DailyReportMergedTopic[],
-  template: NormalizedDailyReportTemplate,
-): DailyReportPlan {
-  if (!isRecord(plan) || !Array.isArray(plan.sections)) {
-    return plan;
-  }
-
-  const sectionBlocksByKey = new Map(
-    sectionBlocks(template)
-      .filter((block) => block.key)
-      .map((block) => [block.key!, block]),
-  );
-  const assignedTopicIds = new Set<string>();
-  const assignedCandidateIds = new Set<number>();
-
-  const sections = plan.sections.map((rawSection) => {
-    if (!isRecord(rawSection)) return rawSection;
-
-    const rawTopicIds = stringArray(rawSection.topicIds);
-    const rawCandidateIds = numberArray(rawSection.candidateIds);
-    if (!rawTopicIds || !rawCandidateIds) return rawSection;
-
-    const topicIds = rawTopicIds.filter((topicId) => {
-      if (assignedTopicIds.has(topicId)) return false;
-      assignedTopicIds.add(topicId);
-      return true;
-    });
-    const blockKey = typeof rawSection.blockKey === "string" ? rawSection.blockKey.trim() : "";
-    const maxItems = sectionBlocksByKey.get(blockKey)?.maxItems;
-    const candidateIds: number[] = [];
-
-    for (const candidateId of rawCandidateIds) {
-      if (assignedCandidateIds.has(candidateId)) continue;
-
-      // Keep unknown candidates and ownership mismatches for the validator to
-      // report. Only discard duplicates that can be proven redundant locally.
-      const ownerTopicIds = topics
-        .filter((topic) => topic.candidateIds.includes(candidateId))
-        .map((topic) => topic.topicId);
-      const hasCurrentOwner = ownerTopicIds.some((topicId) => topicIds.includes(topicId));
-      const hasPreviouslyAssignedOwner = ownerTopicIds.some(
-        (topicId) => assignedTopicIds.has(topicId) && !topicIds.includes(topicId),
-      );
-      if (!hasCurrentOwner && hasPreviouslyAssignedOwner) continue;
-
-      assignedCandidateIds.add(candidateId);
-      candidateIds.push(candidateId);
-      if (maxItems != null && candidateIds.length >= maxItems) break;
-    }
-
-    return {
-      ...rawSection,
-      topicIds,
-      candidateIds,
-    };
-  }) as DailyReportPlan["sections"];
-
-  return {
-    ...plan,
-    sections,
-  };
-}
-
 export function validateDailyReportPlan(
   plan: DailyReportPlan,
-  topics: DailyReportMergedTopic[],
   candidates: DailyReportPlanningCandidate[],
+  assessments: DailyReportCandidateAssessment[],
   template: NormalizedDailyReportTemplate,
 ): DailyReportViolation[] {
   const violations: DailyReportViolation[] = [];
-  if (!plan || plan.schemaVersion !== 1 || !Array.isArray(plan.sections)) {
-    return [{ code: "plan_schema", stage: "plan", message: "计划必须是 schemaVersion=1 的对象。" }];
+  if (!plan || plan.schemaVersion !== 2 || !Array.isArray(plan.sections)) {
+    return [{ code: "plan_schema", stage: "plan", message: "计划必须是 schemaVersion=2 的对象。" }];
   }
 
-  const topicById = new Map(topics.map((topic) => [topic.topicId, topic]));
+  const eligibleCandidateIds = new Set(
+    assessments.filter((assessment) => assessment.isWorthReading).map((assessment) => assessment.candidateId),
+  );
   const candidateById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
   const selected = new Set<number>();
   const assignedTopics = new Set<string>();
@@ -475,12 +627,11 @@ export function validateDailyReportPlan(
   const requiredMinimum = templateSectionBlocks
     .filter((block) => block.required)
     .reduce((total, block) => total + (block.minItems ?? 0), 0);
-  const availableCandidateIds = new Set(topics.flatMap((topic) => topic.candidateIds));
-  if (availableCandidateIds.size < requiredMinimum) {
+  if (eligibleCandidateIds.size < requiredMinimum) {
     violations.push({
       code: "insufficient_required_candidates",
       stage: "plan",
-      message: `可写候选仅 ${availableCandidateIds.size} 条，无法满足必需栏目最少 ${requiredMinimum} 条，任务不能发布。`,
+      message: `可规划候选仅 ${eligibleCandidateIds.size} 条，无法满足必需栏目最少 ${requiredMinimum} 条，任务不能发布。`,
     });
   }
   const blocks = new Map(templateSectionBlocks.filter((block) => block.key).map((block) => [block.key!, block]));
@@ -490,10 +641,9 @@ export function validateDailyReportPlan(
       continue;
     }
     const blockKey = typeof rawSection.blockKey === "string" ? rawSection.blockKey.trim() : "";
-    const topicIds = stringArray(rawSection.topicIds);
-    const candidateIds = numberArray(rawSection.candidateIds);
-    if (!blockKey || !topicIds || !candidateIds) {
-      violations.push({ code: "plan_schema", stage: "plan", blockKey: blockKey || undefined, message: "计划栏目必须包含 blockKey、topicIds 和 candidateIds。" });
+    const topics = Array.isArray(rawSection.topics) ? rawSection.topics : null;
+    if (!blockKey || !topics) {
+      violations.push({ code: "plan_schema", stage: "plan", blockKey: blockKey || undefined, message: "计划栏目必须包含 blockKey 和 topics 数组。" });
       continue;
     }
     const block = blocks.get(blockKey);
@@ -506,32 +656,36 @@ export function validateDailyReportPlan(
       assignedBlocks.add(blockKey);
     }
 
-    for (const topicId of topicIds) {
-      const topic = topicById.get(topicId);
-      if (!topic) violations.push({ code: "unknown_topic", stage: "plan", message: `计划引用未知主题 ${topicId}。` });
+    for (const rawTopic of topics) {
+      if (!isRecord(rawTopic)) {
+        violations.push({ code: "plan_schema", stage: "plan", blockKey, message: "计划主题必须是对象。" });
+        continue;
+      }
+      const topicId = typeof rawTopic.topicId === "string" ? rawTopic.topicId.trim() : "";
+      const candidateIds = numberArray(rawTopic.candidateIds);
+      if (!topicId || !candidateIds) {
+        violations.push({ code: "plan_schema", stage: "plan", blockKey, message: "计划主题必须包含 topicId 和 candidateIds 数组。" });
+        continue;
+      }
+      if (candidateIds.length === 0) {
+        violations.push({ code: "empty_topic", stage: "plan", blockKey, topicId, message: `主题 ${topicId} 不能没有候选。` });
+      }
       if (assignedTopics.has(topicId)) violations.push({ code: "duplicate_topic", stage: "plan", message: `主题 ${topicId} 被重复分配。` });
       assignedTopics.add(topicId);
-    }
-    for (const candidateId of candidateIds) {
-      const candidate = candidateById.get(candidateId);
-      if (!candidate) violations.push({ code: "unknown_candidate", stage: "plan", candidateIds: [candidateId], message: `计划引用未知候选 ${candidateId}。` });
-      if (selected.has(candidateId)) violations.push({ code: "duplicate_candidate", stage: "plan", candidateIds: [candidateId], message: `候选 ${candidateId} 被重复选择。` });
-      selected.add(candidateId);
-      const matchingTopics = topics.filter((topic) => topic.candidateIds.includes(candidateId));
-      if (candidate && (!matchingTopics.length || !matchingTopics.some((topic) => topicIds.includes(topic.topicId)))) {
-        const ownerTopicIds = matchingTopics.map((topic) => topic.topicId).join(", ") || "无";
-        violations.push({
-          code: "candidate_topic_mismatch",
-          stage: "plan",
-          blockKey,
-          candidateIds: [candidateId],
-          message: `候选 ${candidateId} 不属于栏目引用的主题（候选所属主题：${ownerTopicIds}，栏目引用主题：${topicIds.join(", ")}）。`,
-        });
+      for (const candidateId of candidateIds) {
+        const candidate = candidateById.get(candidateId);
+        if (!candidate) {
+          violations.push({ code: "unknown_candidate", stage: "plan", topicId, candidateIds: [candidateId], message: `主题 ${topicId} 引用未知候选 ${candidateId}。` });
+        } else if (!eligibleCandidateIds.has(candidateId)) {
+          violations.push({ code: "ineligible_candidate", stage: "plan", topicId, candidateIds: [candidateId], message: `主题 ${topicId} 引用了未通过 ASSESS 的候选 ${candidateId}。` });
+        }
+        if (selected.has(candidateId)) violations.push({ code: "duplicate_candidate", stage: "plan", topicId, candidateIds: [candidateId], message: `候选 ${candidateId} 被多个主题选择。` });
+        selected.add(candidateId);
       }
     }
     if (block) {
-      if (candidateIds.length < (block.minItems ?? 0)) violations.push({ code: "section_min_items", stage: "plan", blockKey, message: `${block.title} 未达到最小条数。` });
-      if (block.maxItems != null && candidateIds.length > block.maxItems) violations.push({ code: "section_max_items", stage: "plan", blockKey, message: `${block.title} 超过最大条数。` });
+      if (topics.length < (block.minItems ?? 0)) violations.push({ code: "section_min_items", stage: "plan", blockKey, message: `${block.title} 未达到最小主题数。` });
+      if (block.maxItems != null && topics.length > block.maxItems) violations.push({ code: "section_max_items", stage: "plan", blockKey, message: `${block.title} 超过最大主题数。` });
     }
   }
   for (const block of sectionBlocks(template)) {
@@ -539,7 +693,7 @@ export function validateDailyReportPlan(
       violations.push({ code: "missing_required_block", stage: "plan", blockKey: block.key, message: `计划缺少必需栏目 ${block.title}。` });
     }
   }
-  if (selected.size === 0 && topics.length > 0 && assignedBlocks.size > 0) violations.push({ code: "empty_selection", stage: "plan", message: "有可写主题时计划不能完全为空。" });
+  if (selected.size === 0 && eligibleCandidateIds.size > 0 && assignedBlocks.size > 0) violations.push({ code: "empty_selection", stage: "plan", message: "有可规划候选时计划不能完全为空。" });
   return violations;
 }
 
@@ -553,13 +707,16 @@ export function validateDailyReportDraft(
   const blocks = Array.isArray(draft?.blocks) ? draft.blocks as unknown[] : null;
   if (!blocks) return [{ code: "draft_schema", stage: "draft", message: "草稿必须包含 blocks 数组。" }];
   const selectedIds = new Set(selectedCandidates.map((candidate) => candidate.id));
-  const plannedIds = new Set(plan.sections.flatMap((section) => section.candidateIds));
+  const plannedIds = new Set(getDailyReportPlanCandidateIds(plan));
+  const planTopics = getDailyReportPlanTopics(plan);
+  const planTopicById = new Map(planTopics.map((topic) => [topic.topicId, topic]));
   const templateSections = sectionBlocks(template);
   const templateTextBlocks = textBlocks(template);
   const templateSectionByKey = new Map(templateSections.filter((block) => block.key).map((block) => [block.key!, block]));
   const planSectionByKey = new Map(plan.sections.map((section) => [section.blockKey, section]));
   const seenBlockKeys = new Set<string>();
   const seenTextTitles = new Set<string>();
+  const seenTopicIds = new Set<string>();
   const sourceIds = new Set<number>();
   for (const rawBlock of blocks) {
     if (!isRecord(rawBlock) || typeof rawBlock.type !== "string") {
@@ -618,6 +775,21 @@ export function validateDailyReportDraft(
         return;
       }
       const itemSourceIds = numberArray(rawItem.sourceIds);
+      const topicId = typeof rawItem.topicId === "string" ? rawItem.topicId.trim() : "";
+      const planTopic = topicId ? planTopicById.get(topicId) : undefined;
+      if (!topicId) {
+        violations.push({ code: "draft_topic_missing", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 条目必须包含 topicId。` });
+      } else if (!planTopic) {
+        violations.push({ code: "draft_topic_not_planned", stage: "draft", blockKey: templateBlock.key, topicId, message: `草稿条目引用了未纳入计划的主题 ${topicId}。` });
+      } else {
+        if (planTopic.blockKey !== templateBlock.key) {
+          violations.push({ code: "draft_topic_block_mismatch", stage: "draft", blockKey: templateBlock.key, topicId, message: `主题 ${topicId} 不属于栏目 ${templateBlock.title}。` });
+        }
+        if (seenTopicIds.has(topicId)) {
+          violations.push({ code: "draft_duplicate_topic", stage: "draft", blockKey: templateBlock.key, topicId, message: `主题 ${topicId} 在草稿中生成了多个条目。` });
+        }
+        seenTopicIds.add(topicId);
+      }
       if (!itemSourceIds) {
         violations.push({ code: "draft_schema", stage: "draft", blockKey: templateBlock.key, message: `${templateBlock.title} 条目的 sourceIds 必须是数字数组。` });
         return;
@@ -631,6 +803,9 @@ export function validateDailyReportDraft(
         sourceIds.add(sourceId);
         if (!selectedIds.has(sourceId) || !plannedIds.has(sourceId)) {
           violations.push({ code: "draft_source_not_planned", stage: "draft", candidateIds: [sourceId], message: `草稿引用了未纳入计划的候选 ${sourceId}。` });
+        }
+        if (planTopic && !planTopic.candidateIds.includes(sourceId)) {
+          violations.push({ code: "draft_source_topic_mismatch", stage: "draft", blockKey: templateBlock.key, topicId, candidateIds: [sourceId], message: `候选 ${sourceId} 不属于主题 ${topicId}。` });
         }
       }
       const invalidTitle = typeof rawItem.title !== "string" || !rawItem.title.trim();
@@ -672,6 +847,11 @@ export function validateDailyReportDraft(
   for (const block of templateSections) {
     if (block.required && block.key && !seenBlockKeys.has(block.key)) {
       violations.push({ code: "missing_required_block", stage: "draft", blockKey: block.key, message: `草稿缺少必需栏目 ${block.title}。` });
+    }
+  }
+  for (const topic of planTopics) {
+    if (!seenTopicIds.has(topic.topicId)) {
+      violations.push({ code: "draft_topic_missing", stage: "draft", blockKey: topic.blockKey, topicId: topic.topicId, message: `草稿缺少主题 ${topic.topicId} 对应的日报条目。` });
     }
   }
   if (sourceIds.size === 0) violations.push({ code: "draft_empty", stage: "draft", message: "草稿没有合法来源引用。" });

@@ -23,13 +23,16 @@ import type { RuntimeConfig } from "@/config/runtime";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import type {
-  DailyReportAssessmentLedger,
   DailyReportCandidateAssessment,
   DailyReportDraft,
+  DailyReportModelDraft,
   DailyReportPlan,
+  DailyReportPlanSelection,
   DailyReportPlanningCandidate,
-  DailyReportTopicBrief,
+  DailyReportPlanningCandidateBrief,
+  DailyReportSelectedTopic,
   DailyReportViolation,
+  RecentDailyReportTopic,
 } from "@/lib/daily-report/types";
 import type {
   DailyReportTemplateSectionBlock,
@@ -95,16 +98,26 @@ export type ItemUnderstandingResult = AiEnrichment & {
   };
 };
 
-export type MergeGroup = string[];
-
 export type ClusterMergeDecisionVerdict = "approved" | "declined" | "ambiguous";
+
+export const CLUSTER_MERGE_REASON_CODES = [
+  "same_event",
+  "insufficient_evidence",
+  "different_event",
+  "object_conflict",
+  "action_conflict",
+  "date_conflict",
+  "subject_conflict",
+] as const;
+
+export type ClusterMergeReasonCode = typeof CLUSTER_MERGE_REASON_CODES[number];
 
 export type ClusterMergeDecision = {
   leftClusterId: string;
   rightClusterId: string;
   verdict: ClusterMergeDecisionVerdict;
   confidence: number | null;
-  reasonCode: string | null;
+  reasonCode: ClusterMergeReasonCode | null;
   reasonText: string | null;
 };
 
@@ -118,30 +131,30 @@ export type AiProvider = {
     inputText: string,
     metadata: { title: string; candidates: Array<{ id: string; title: string; summary: string }> },
   ): Promise<string | null>;
-  assessClusterMergePairs?(clustersJson: string): Promise<ClusterMergeDecision[]>;
-  mergeClusters(clustersJson: string): Promise<MergeGroup[]>;
+  assessClusterMergePairs(clustersJson: string): Promise<ClusterMergeDecision[]>;
   assessDailyReportCandidates(input: {
     candidates: DailyReportPlanningCandidate[];
     template: NormalizedDailyReportTemplate;
     recentTopicLookbackDays?: number;
   }): Promise<DailyReportCandidateAssessment[]>;
   planDailyReport(input: {
-    ledger: DailyReportAssessmentLedger;
-    topicBriefs: DailyReportTopicBrief[];
+    candidateBriefs: DailyReportPlanningCandidateBrief[];
     template: NormalizedDailyReportTemplate;
+    recentTopics?: RecentDailyReportTopic[];
     recentTopicLookbackDays?: number;
-  }): Promise<DailyReportPlan>;
+    previousPlan?: DailyReportPlan;
+    planViolations?: DailyReportViolation[];
+  }): Promise<DailyReportPlanSelection>;
   writeDailyReport(input: {
-    selectedCandidates: DailyReportPlanningCandidate[];
-    plan: DailyReportPlan;
+    selectedTopics: DailyReportSelectedTopic[];
     template: NormalizedDailyReportTemplate;
-  }): Promise<DailyReportDraft>;
+  }): Promise<DailyReportModelDraft>;
   repairDailyReportDraft(input: {
-    draft: DailyReportDraft;
+    draft: DailyReportModelDraft;
     violations: DailyReportViolation[];
     plan: DailyReportPlan;
     template: NormalizedDailyReportTemplate;
-  }): Promise<DailyReportDraft>;
+  }): Promise<DailyReportModelDraft>;
 };
 
 type CompletionResponse = {
@@ -360,6 +373,7 @@ function renderPromptTemplate(template: string, values: Record<string, string | 
 
 const DAILY_REPORT_MODEL_CANDIDATE_KEYS = [
   "id",
+  "clusterId",
   "title",
   "summary",
   "sourceName",
@@ -368,6 +382,23 @@ const DAILY_REPORT_MODEL_CANDIDATE_KEYS = [
   "sourceCount",
   "itemCount",
   "createdAt",
+  "publishedAt",
+  "publishedAtKnown",
+  "eventType",
+  "eventSubject",
+  "eventAction",
+  "eventObject",
+  "eventDate",
+  "isFollowUp",
+  "newItemCountOnDate",
+  "newSourceCountOnDate",
+] as const;
+
+const DAILY_REPORT_WRITE_CANDIDATE_KEYS = [
+  "id",
+  "title",
+  "summary",
+  "sourceName",
   "publishedAt",
   "publishedAtKnown",
   "eventType",
@@ -392,42 +423,41 @@ const DAILY_REPORT_CANDIDATE_FIELD_GUIDE = [
 ].join("\n");
 
 const DAILY_REPORT_ASSESSMENT_FIELD_GUIDE = [
-  "candidateId：输入候选的 id；isWorthReading：是否进入后续主题合并；relevanceScore：0 到 100 的选题相关性分。",
+  "candidateId：输入候选的 id；isWorthReading：是否进入 PLAN；relevanceScore：0 到 100 的选题相关性分。",
   "suggestedBlockKey：建议的 section blockKey，必须来自模板 sections，无法判断时为 null；它只是软提示，最终以 PLAN 和本地校验为准。",
-  "template.sections 中 blockKey 是稳定栏目键，blockTitle 只是展示名，description 是选题方向，required/minItems/maxItems 是栏目数量约束。",
-  "只返回上述四个字段；不要生成 eventHint、evidenceSummary、exclusionReason、confidence 或其他解释字段。",
+  "template.sections 中 blockKey 是稳定栏目键，blockTitle 只是展示名，description 是选题方向；只根据栏目语义判断 suggestedBlockKey。",
+  "只返回上述四个字段，不附带其他解释字段。",
 ].join("\n");
 
 const DAILY_REPORT_PLAN_FIELD_GUIDE = [
-  "ledger.candidateCount/assessedCount/unassessedCandidateIds/excludedCandidateIds/batchCount：评估覆盖统计；assessedCount 包含被排除候选，unassessedCandidateIds 不能选择；不要据此创建候选或补写评估。",
-  "ledger.assessments：只包含 isWorthReading=true 的可规划候选；relevanceScore 和 suggestedBlockKey 是选题信号，不是事实；excludedCandidateIds 中的候选明确不得选择。",
-  "topicBriefs[].topicId：系统生成的主题引用；candidateIds：该主题的完整候选成员，不能拆分或跨主题重组。",
-  "topicBriefs[].identitySource：主题由 cluster、event-identity、source-key 或 standalone 哪种已有身份线索形成；evidenceCount：聚合证据量。",
-  "topicBriefs[].titleHint：主题标题线索；relevanceScore：该主题成员中的最高相关性分；ambiguity：主题存在身份歧义时的候选编号和原因，不能把歧义当成确定事实。",
-  "topicBriefs[].candidateBriefs：该主题全部成员的有界内容线索和排序信号；summaryExcerpt 可能只出现在代表候选上，candidateIds 才是完整归属事实。",
-  "candidateBriefs[].candidateId/title/sourceName/summaryExcerpt：候选引用、标题、代表来源和摘要片段；摘要片段可能为空且不是全文，不得补造未提供的事实。",
-  "candidateBriefs[].candidateScore/qualityScore/relevanceScore/sourceCount/itemCount：本地排序、质量、模型相关性、互证来源数和聚合条目数；综合使用，不要把分数当作事实；极端预算压缩时 qualityScore 可能省略。",
+  "candidateBriefs[]：每个元素对应一个通过 ASSESS 的候选；PLAN 必须基于这些候选重新归纳最终日报主题，不要沿用或假设任何预先主题分组。",
+  "candidateBriefs[].candidateId：候选编号，输出时必须原样引用；title：候选标题；summaryExcerpt：有界摘要片段，可能为空且不是全文。",
+  "candidateBriefs[].clusterId：上游事件聚合编号，只表示已有来源聚合，不等于最终日报主题；PLAN 可以跨 cluster 合并相关候选，也可以只选择其中一部分。",
+  "candidateBriefs[].sourceName/evidenceItems：代表来源和有限证据线索；candidateScore/qualityScore/relevanceScore/sourceCount/itemCount：排序、质量、相关性、互证来源数和聚合条目数，都是判断信号，不是事实。",
   "candidateBriefs[].publishedAt/publishedAtKnown：源站时间及其可靠性；isFollowUp/newItemCountOnDate/newSourceCountOnDate：后续进展及日报日期新增量信号。",
-  "candidateBriefs[].eventType/eventSubject/eventAction/eventObject/eventDate：代表候选的已有事件线索，其他成员可能为空；suggestedBlockKey 是软栏目建议。只用于比较、归类和去重，不得补造输入之外的事实。极端预算压缩时，sourceName/summaryExcerpt/suggestedBlockKey/event* 和 qualityScore 等可选内容字段可能省略，但 candidateId、title、candidateScore、relevanceScore、来源数、条目数、publishedAt 和 follow-up 信号会保留。",
-  "recentTopics：近期开过的主题历史（含日期、标题和事件线索），仅用于减少重复；不要把它们当作本期候选。",
-  "template.schemaVersion/recentTopicLookbackDays/recentTopicRules：模板版本、历史主题召回窗口和去重规则；sections 是唯一可规划栏目清单。",
-  "template.sections[].blockKey 是唯一输出键；blockTitle 仅用于理解栏目，description 是栏目意图，required/minItems/maxItems 是硬约束。",
+  "candidateBriefs[].eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索，只用于理解和比较；不得补造输入之外的事实。预算压缩时可选字段可能省略，但 candidateId、title、candidateScore、relevanceScore、sourceCount、itemCount 和 publishedAt 会保留。",
+  "recentTopics：近期开过的日报条目，仅用于识别重复事件或后续进展；不要把它们当作本期候选。输入中的 candidateBriefs 已经是 ASSESS 通过的候选全集。",
+  "template.sections[].blockKey 是唯一栏目键；blockTitle 仅用于理解栏目，description 是栏目意图，required/minItems/maxItems 是主题数量约束；正常情况下每个 section 的 topics 数量必须满足 minItems/maxItems，不能为了凑数选择低价值候选。",
+  "输出 sections[].topics[]：每个 topic 的 candidateIds 表示同一个最终日报主题的全部候选来源；一个候选只能属于一个主题。topicId 由代码生成，不要输出。",
 ].join("\n");
 
 const DAILY_REPORT_WRITE_FIELD_GUIDE = [
-  "plan.sections：已经确定的栏目和候选归属；WRITE 不得重新选题、换栏目或新增候选。",
-  "selectedCandidates：已经被 PLAN 选中的候选；id/sourceNumber 是引用编号，title/itemTitle 是标题，summary 是已有摘要，sourceName/url 是来源信息。",
-  "selectedCandidates[].qualityScore/candidateScore/sourceCount/itemCount：质量、排序、互证来源数和聚合条目数；createdAt/publishedAt/publishedAtKnown 是系统入库时间、源站时间及其可靠性。",
-  "selectedCandidates[].eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索；isFollowUp/newItemCountOnDate/newSourceCountOnDate 是后续进展信号；evidenceItems 是可核对的简短来源证据。",
-  "selectedCandidates 的所有字段只用于基于事实写作；url、evidenceItems 和摘要不是补充搜索入口，不得引入输入之外的信息。",
+  "selectedTopics[]：每个元素对应一个最终日报条目；topicId 是内部主题编号，blockKey 是唯一栏目键，candidateIds 是只读的主题候选编号，representativeCandidateId 是代码选出的代表候选。WRITE 不得改变这些映射。",
+  "selectedTopics[].candidates：只包含写作所需事实；id 是只读候选编号，title 是标题，summary 是已有摘要，sourceName 是代表来源。",
+  "selectedTopics[].candidates[].publishedAt/publishedAtKnown：源站时间及其可靠性；eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索；isFollowUp/newItemCountOnDate/newSourceCountOnDate：后续进展信号。",
+  "selectedTopics[].candidates[].evidenceItems：有限来源证据，包含标题、来源、摘要片段和发布时间；只用于核对事实，不逐条复述。",
+  "候选字段只用于基于事实写作；不要把内部编号、来源名、时间或事件线索扩写成输入之外的事实。",
+  "每个 selectedTopics[] 必须生成一个 section item；item.topicId 必须原样复制对应 topicId；不要输出 sourceIds、candidateIds 或其他来源映射字段，来源关系由代码根据 Topic 映射生成。",
   "template.blocks：完整栏目与正文规则；text block 只写模板定义的文本块，section block 按 type/key/title、item.bodyInstruction/bodyRequired 和 notes 规则输出。",
+  "输出结构：输出 JSON 对象本身就是日报内容，顶层必须直接包含 headline 和 blocks。合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止使用 draft、result、data、output 等外层包装键。",
 ].join("\n");
 
 const DAILY_REPORT_REPAIR_FIELD_GUIDE = [
-  "draft.headline：日报标题；draft.blocks：当前完整日报的 text/section block；section.items 中的 title/body/notes/sourceIds 是条目内容和来源引用。只修复问题，不重做内容。",
-  "violations：本地校验指出的具体问题；code/stage/message 描述原因，blockKey/candidateIds 用于定位；plan.sections 是不可改变的栏目和候选归属。",
+  "input.draft.headline：待修复日报标题；input.draft.blocks：待修复日报的 text/section block；section.items 中的 topicId/title/body/notes 是条目主题和内容。只修复问题，不重做内容。",
+  "violations：本地校验指出的具体问题；code/stage/message 描述原因，blockKey/topicId/candidateIds 用于定位；Topic-Candidate 和 Topic-Block 映射不可改变，sourceIds 由代码管理。",
   "template.blocks：模板定义的 block、条目数量、正文和 notes 规则；只按 violation 修复格式或缺失字段。",
-  "只修复 violations 指定的问题，不重新选题、不改写事实、不新增来源或栏目。",
+  "只修复 violations 指定的问题，不重新归纳主题、不改写事实、不新增来源或栏目。",
+  "输出结构：输出 JSON 对象本身就是修复后的日报内容，顶层必须直接包含 headline 和 blocks。合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；input.draft 只是输入字段，禁止在输出中保留 draft，也禁止使用 result、data、output 等外层包装键。",
 ].join("\n");
 
 function compactDailyReportModelCandidate(article: unknown) {
@@ -453,6 +483,48 @@ function compactDailyReportModelCandidate(article: unknown) {
   }
 
   return candidate;
+}
+
+function truncateDailyReportWritingText(value: unknown, maxChars: number) {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim();
+  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1)}…`;
+}
+
+function compactDailyReportWritingCandidate(article: unknown) {
+  if (!article || typeof article !== "object" || Array.isArray(article)) return article;
+  const input = article as Record<string, unknown>;
+  const candidate = Object.fromEntries(
+    DAILY_REPORT_WRITE_CANDIDATE_KEYS
+      .filter((key) => key in input)
+      .map((key) => [key, key === "title" ? truncateDailyReportWritingText(input[key], 180) : key === "summary" ? truncateDailyReportWritingText(input[key], 2400) : ["eventSubject", "eventAction", "eventObject"].includes(key) ? truncateDailyReportWritingText(input[key], 240) : input[key]]),
+  ) as Record<string, unknown>;
+  if (Array.isArray(input.evidenceItems)) {
+    candidate.evidenceItems = input.evidenceItems
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+      .slice(0, 3)
+      .map((item) => ({
+        title: truncateDailyReportWritingText(item.title, 180),
+        sourceName: truncateDailyReportWritingText(item.sourceName, 100),
+        summaryExcerpt: truncateDailyReportWritingText(item.summary ?? item.summaryExcerpt, 360),
+        publishedAt: item.publishedAt,
+      }));
+  }
+  return candidate;
+}
+
+function stripDailyReportSourceIdsForModel(draft: DailyReportModelDraft | DailyReportDraft): DailyReportModelDraft {
+  return {
+    ...draft,
+    blocks: draft.blocks.map((block) => block.type === "section"
+      ? {
+          ...block,
+          items: block.items.map((item) => Object.fromEntries(
+            Object.entries(item).filter(([key]) => key !== "sourceIds"),
+          )),
+        }
+      : block),
+  } as DailyReportModelDraft;
 }
 
 function getFallbackEnrichment(
@@ -806,130 +878,24 @@ function buildEnrichmentFromParsed(
 }
 
 type ClusterMergeInputMetadata = {
-  validIds: string[];
   allowedPairKeys: Set<string>;
-  allowedPairs: Array<[string, string]>;
-  itemCounts: Map<string, number>;
 };
 
 function buildClusterMergePairKey(leftId: string, rightId: string) {
   return [leftId, rightId].sort().join("\u0000");
 }
 
-function parseMergeGroups(rawContent: string, metadata: ClusterMergeInputMetadata): string[][] {
-  const normalized = normalizeModelResponseText(rawContent);
-  const validSet = new Set(metadata.validIds);
-
-  try {
-    const parsed = JSON.parse(normalized) as { approvedPairs?: unknown; pairs?: unknown; mergeGroups?: unknown };
-    const approvedPairs = parseApprovedClusterMergePairs(parsed, metadata);
-
-    if (Array.isArray(parsed.approvedPairs) || Array.isArray(parsed.pairs)) {
-      return buildClusterMergeGroupsFromApprovedPairs(approvedPairs, metadata);
-    }
-
-    if (!Array.isArray(parsed.mergeGroups)) {
-      return [];
-    }
-
-    const groups: string[][] = [];
-    const seenIds = new Set<string>();
-
-    for (const group of parsed.mergeGroups) {
-      if (!Array.isArray(group) || group.length < 2) {
-        continue;
-      }
-      const validGroup: string[] = [];
-      for (const id of group) {
-        if (typeof id === "string" && validSet.has(id) && !seenIds.has(id)) {
-          validGroup.push(id);
-          seenIds.add(id);
-        }
-      }
-      if (validGroup.length >= 2) {
-        groups.push(validGroup);
-      }
-    }
-
-    return groups;
-  } catch (error) {
-    throw new InvalidJsonModelResponseError(
-      `Invalid cluster merge JSON: ${getJsonParseErrorMessage(error)}`,
-    );
-  }
-}
-
-function parseApprovedClusterMergePairs(
-  parsed: { approvedPairs?: unknown; pairs?: unknown },
-  metadata: ClusterMergeInputMetadata,
-) {
-  const validSet = new Set(metadata.validIds);
-  const rawPairs = Array.isArray(parsed.approvedPairs)
-    ? parsed.approvedPairs
-    : Array.isArray(parsed.pairs)
-      ? parsed.pairs
-      : [];
-  const pairs: Array<[string, string]> = [];
-  const seenPairKeys = new Set<string>();
-
-  for (const rawPair of rawPairs) {
-    const pair = normalizeApprovedClusterMergePair(rawPair, Array.isArray(parsed.approvedPairs));
-
-    if (!pair) {
-      continue;
-    }
-
-    const [leftId, rightId] = pair;
-    const pairKey = buildClusterMergePairKey(leftId, rightId);
-
-    if (
-      leftId === rightId ||
-      !validSet.has(leftId) ||
-      !validSet.has(rightId) ||
-      !metadata.allowedPairKeys.has(pairKey) ||
-      seenPairKeys.has(pairKey)
-    ) {
-      continue;
-    }
-
-    seenPairKeys.add(pairKey);
-    pairs.push([leftId, rightId]);
-  }
-
-  return pairs;
-}
-
-function normalizeApprovedClusterMergePair(rawPair: unknown, implicitlyApproved: boolean): [string, string] | null {
-  if (Array.isArray(rawPair) && typeof rawPair[0] === "string" && typeof rawPair[1] === "string") {
-    return [rawPair[0], rawPair[1]];
-  }
-
-  if (!rawPair || typeof rawPair !== "object") {
-    return null;
-  }
-
-  const pair = rawPair as Record<string, unknown>;
-  if (!implicitlyApproved && pair.approved !== true) {
-    return null;
-  }
-
-  const leftId = pair.leftId ?? pair.leftClusterId ?? pair.sourceId ?? getClusterIdFromUnknown(pair.left);
-  const rightId = pair.rightId ?? pair.rightClusterId ?? pair.targetId ?? getClusterIdFromUnknown(pair.right);
-
-  return typeof leftId === "string" && typeof rightId === "string" ? [leftId, rightId] : null;
-}
-
 function getClusterIdFromUnknown(value: unknown) {
   return value && typeof value === "object" && "id" in value && typeof value.id === "string" ? value.id : null;
 }
 
-function buildClusterMergeGroupsFromApprovedPairs(
-  approvedPairs: Array<[string, string]>,
-  metadata: Pick<ClusterMergeInputMetadata, "itemCounts"> & { preservePairOrder?: boolean },
+function buildClusterMergeGroupsFromApprovedEdges(
+  approvedEdges: Array<[string, string]>,
+  metadata: { itemCounts: Map<string, number>; preservePairOrder?: boolean },
 ) {
   const adjacency = new Map<string, Set<string>>();
 
-  for (const [leftId, rightId] of approvedPairs) {
+  for (const [leftId, rightId] of approvedEdges) {
     if (!adjacency.has(leftId)) {
       adjacency.set(leftId, new Set());
     }
@@ -989,7 +955,7 @@ export function buildClusterMergeGroupsFromDecisions(
   decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "verdict">>,
   itemCounts: Map<string, number>,
 ) {
-  return buildClusterMergeGroupsFromApprovedPairs(
+  return buildClusterMergeGroupsFromApprovedEdges(
     decisions
       .filter((decision) => decision.verdict === "approved")
       .map((decision) => [decision.leftClusterId, decision.rightClusterId]),
@@ -999,19 +965,11 @@ export function buildClusterMergeGroupsFromDecisions(
 
 function parseClusterMergeInputMetadata(clustersJson: string): ClusterMergeInputMetadata {
   const parsed = JSON.parse(clustersJson) as unknown;
-  const validIds = new Set<string>();
   const allowedPairKeys = new Set<string>();
-  const allowedPairs: Array<[string, string]> = [];
-  const itemCounts = new Map<string, number>();
 
   const addCluster = (entry: unknown) => {
     if (!entry || typeof entry !== "object" || !("id" in entry) || typeof entry.id !== "string") {
       return null;
-    }
-
-    validIds.add(entry.id);
-    if ("itemCount" in entry && typeof entry.itemCount === "number") {
-      itemCounts.set(entry.id, entry.itemCount);
     }
 
     return entry.id;
@@ -1019,13 +977,7 @@ function parseClusterMergeInputMetadata(clustersJson: string): ClusterMergeInput
 
   const addPair = (leftId: unknown, rightId: unknown) => {
     if (typeof leftId === "string" && typeof rightId === "string" && leftId !== rightId) {
-      validIds.add(leftId);
-      validIds.add(rightId);
-      const pairKey = buildClusterMergePairKey(leftId, rightId);
-      if (!allowedPairKeys.has(pairKey)) {
-        allowedPairKeys.add(pairKey);
-        allowedPairs.push([leftId, rightId]);
-      }
+      allowedPairKeys.add(buildClusterMergePairKey(leftId, rightId));
     }
   };
 
@@ -1033,7 +985,7 @@ function parseClusterMergeInputMetadata(clustersJson: string): ClusterMergeInput
     for (const entry of parsed) {
       addCluster(entry);
     }
-    return { validIds: [...validIds], allowedPairKeys, allowedPairs, itemCounts };
+    return { allowedPairKeys };
   }
 
   if (parsed && typeof parsed === "object") {
@@ -1064,7 +1016,7 @@ function parseClusterMergeInputMetadata(clustersJson: string): ClusterMergeInput
     }
   }
 
-  return { validIds: [...validIds], allowedPairKeys, allowedPairs, itemCounts };
+  return { allowedPairKeys };
 }
 
 function normalizeClusterMergeConfidence(value: unknown) {
@@ -1090,6 +1042,7 @@ function normalizeClusterMergeDecision(
   const leftId = decision.leftClusterId ?? decision.leftId ?? decision.sourceId ?? getClusterIdFromUnknown(decision.left);
   const rightId = decision.rightClusterId ?? decision.rightId ?? decision.targetId ?? getClusterIdFromUnknown(decision.right);
   const verdict = decision.verdict;
+  const reasonCode = normalizeClusterMergeReasonCode(decision.reasonCode);
 
   if (
     typeof leftId !== "string" ||
@@ -1106,14 +1059,24 @@ function normalizeClusterMergeDecision(
     rightClusterId: rightId,
     verdict,
     confidence: normalizeClusterMergeConfidence(decision.confidence),
-    reasonCode: typeof decision.reasonCode === "string" ? decision.reasonCode.trim() || null : null,
+    reasonCode,
     reasonText: typeof decision.reasonText === "string" ? decision.reasonText.trim() || null : null,
   };
 }
 
+function normalizeClusterMergeReasonCode(value: unknown): ClusterMergeReasonCode | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return (CLUSTER_MERGE_REASON_CODES as readonly string[]).includes(normalized)
+    ? normalized as ClusterMergeReasonCode
+    : null;
+}
+
 function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeInputMetadata) {
   const normalized = normalizeModelResponseText(rawContent);
-  let parsed: { decisions?: unknown; approvedPairs?: unknown; pairs?: unknown };
+  let parsed: { decisions?: unknown };
 
   try {
     parsed = JSON.parse(normalized) as { decisions?: unknown };
@@ -1127,25 +1090,9 @@ function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeIn
   const seenPairKeys = new Set<string>();
 
   if (!Array.isArray(parsed.decisions)) {
-    const approvedPairs = parseApprovedClusterMergePairs(parsed, metadata);
-    if (!Array.isArray(parsed.approvedPairs) && !Array.isArray(parsed.pairs)) {
-      throw new InvalidJsonModelResponseError(
-        'Cluster merge decision JSON must contain a "decisions" array.',
-      );
-    }
-
-    const approvedPairKeys = new Set(approvedPairs.map(([leftId, rightId]) => buildClusterMergePairKey(leftId, rightId)));
-    return metadata.allowedPairs.map(([leftClusterId, rightClusterId]) => {
-      const pairKey = buildClusterMergePairKey(leftClusterId, rightClusterId);
-      return {
-        leftClusterId,
-        rightClusterId,
-        verdict: approvedPairKeys.has(pairKey) ? "approved" : "declined",
-        confidence: null,
-        reasonCode: approvedPairKeys.has(pairKey) ? "legacy_llm_approved" : "legacy_llm_declined",
-        reasonText: null,
-      } satisfies ClusterMergeDecision;
-    });
+    throw new InvalidJsonModelResponseError(
+      'Cluster merge decision JSON must contain a "decisions" array.',
+    );
   }
 
   for (const rawDecision of parsed.decisions) {
@@ -1484,9 +1431,6 @@ export function createAiProvider(
         blockKey: section.key,
         blockTitle: section.title,
         description: section.description,
-        required: section.required === true,
-        minItems: section.minItems ?? 0,
-        maxItems: section.maxItems,
       })),
       recentTopicRules: template.recentTopicRules,
       recentTopicLookbackDays: recentTopicLookbackDays ?? null,
@@ -1511,11 +1455,13 @@ export function createAiProvider(
     };
   };
 
-  const buildDailyReportWritingTemplate = (template: NormalizedDailyReportTemplate) => ({
+  const buildDailyReportWritingTemplate = (template: NormalizedDailyReportTemplate, selectedBlockKeys?: string[]) => ({
     schemaVersion: template.schemaVersion,
     headlineInstruction: template.headlineInstruction,
     globalRules: template.globalRules,
-    blocks: template.blocks,
+    blocks: selectedBlockKeys && selectedBlockKeys.length > 0
+      ? template.blocks.filter((block) => block.type === "text" || (block.key && selectedBlockKeys.includes(block.key)))
+      : template.blocks,
   });
 
   const buildDailyReportStageConfig = (stage: string, contract: string): PromptRuntimeConfig => ({
@@ -1537,8 +1483,8 @@ export function createAiProvider(
     return raw as unknown as DailyReportCandidateAssessment[];
   };
 
-  const parsePlanOutput = (output: string): DailyReportPlan => parseDailyReportStageObject(output) as unknown as DailyReportPlan;
-  const parseDraftOutput = (output: string): DailyReportDraft => parseDailyReportStageObject(output) as unknown as DailyReportDraft;
+  const parsePlanOutput = (output: string): DailyReportPlanSelection => parseDailyReportStageObject(output) as unknown as DailyReportPlanSelection;
+  const parseDraftOutput = (output: string): DailyReportModelDraft => parseDailyReportStageObject(output) as unknown as DailyReportModelDraft;
 
   return {
     async understandItem(inputText, metadata) {
@@ -1620,25 +1566,6 @@ export function createAiProvider(
 
       return decisions ?? [];
     },
-    async mergeClusters(clustersJson) {
-      const metadata = parseClusterMergeInputMetadata(clustersJson);
-      const userContent = renderPromptTemplate(clusterMergeConfig.promptTemplate, {
-        clustersJson,
-      });
-
-      const groups = await completeJsonWithParseRetry(
-        clusterMergeConfig,
-        userContent,
-        (output) => parseMergeGroups(output, metadata),
-      ).catch((error) => {
-        if (isInvalidJsonModelResponseError(error)) {
-          return [];
-        }
-        throw error;
-      });
-
-      return groups ?? [];
-    },
     async assessDailyReportCandidates(input) {
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
@@ -1659,19 +1586,21 @@ export function createAiProvider(
       return output ?? [];
     },
     async planDailyReport(input) {
+      const repairingPlan = Boolean(input.planViolations?.length);
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "PLAN",
-          "必须返回 schemaVersion=1；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于可规划栏目，绝不能出现在 sections 中；每个 topicId 和 candidateId 最多出现一次；candidateIds 的归属以输入 topicBriefs[].candidateIds 为唯一事实，栏目中的每个 candidateId 必须属于该栏目 topicIds 的 candidateIds，并且必须同时列出它的所属 topicId。输出前逐项检查 topicId-candidateId 映射。",
+          `必须返回 schemaVersion=2；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于 sections。每个 topics[].candidateIds 必须非空；一个 candidateId 只能属于一个 topic。topicId 由代码生成，不要输出。${repairingPlan ? "这是一次 PLAN_VALIDATE 修复，只修复输入 repair.violations 指出的映射或结构问题，保留其他合法主题和栏目。" : ""}`,
         ),
         buildDailyReportStagePrompt(
           "PLAN",
-          "基于可规划 assessment 和 topicBriefs 做全局选题与栏目分配。先综合 summaryExcerpt、candidateScore、relevanceScore、sourceCount、itemCount、日期相关性、后续进展和近期重复，再选择 topicId 和 candidateId；不要只按单一分数排序。template.sections 是唯一可规划栏目清单，输出的每个 section.blockKey 必须逐字复制其中一个 blockKey。candidateIds 必须按输入 topicBriefs[].candidateIds 校验：先选择 topicId，再从该 topic 的 candidateIds 中选择候选；如果选择某个候选，必须把包含该候选的 topicId 也放入同一 section。只返回 {schemaVersion:1,sections:[{blockKey,topicIds,candidateIds}]}。不得输出 blockTitle、headlineHint、excludedCandidateIds、selectionRationale 或其他解释字段；不得写正文、不得创建输入之外的候选或栏目，不得输出 text block。",
+          `${repairingPlan ? "根据 candidateBriefs 和 repair.previousPlan 修复 PLAN。repair.violations 是代码校验发现的问题；修复候选重复归属、非法栏目或结构错误时，不要新增候选，不要改变未涉及的合法主题。" : "基于所有 candidateBriefs 做全局选题、主题归纳和栏目分配。先判断哪些候选属于同一个最终日报主题，再决定主题是否入选和放入哪个栏目；可以合并来自不同 cluster 的相关候选，也可以只选择一个 cluster 中的部分候选。综合摘要、事件线索、来源数量、日期相关性、后续进展、近期重复和评分信号，不要只按单一分数排序。"} 输出的每个 section.blockKey 必须逐字复制 template.sections[].blockKey；每个 section 的 topics 数量应满足对应模板的 minItems 和 maxItems，不能为了填满数量选择低价值候选。一个 topics[].candidateIds 数组表示一个最终日报主题的全部候选来源；每个候选只能出现在一个主题中。只返回 {schemaVersion:2,sections:[{blockKey,topics:[{candidateIds:[number]}]}]}。不要输出主题编号、栏目展示名、标题、理由或其他字段；不得写正文、不得创建输入之外的候选或栏目，不得输出 text block。`,
           {
             template: buildDailyReportPlanningTemplate(input.template, input.recentTopicLookbackDays),
             input: {
-              ledger: input.ledger,
-              topicBriefs: input.topicBriefs,
+              candidateBriefs: input.candidateBriefs,
+              recentTopics: input.recentTopics ?? [],
+              ...(repairingPlan ? { repair: { previousPlan: input.previousPlan, violations: input.planViolations } } : {}),
             },
           },
           DAILY_REPORT_PLAN_FIELD_GUIDE,
@@ -1682,15 +1611,16 @@ export function createAiProvider(
       return output;
     },
     async writeDailyReport(input) {
+      const selectedBlockKeys = Array.from(new Set(input.selectedTopics.map((topic) => topic.blockKey)));
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "WRITE",
-          "只能使用 plan 中的 section、topic 和 candidate；不得重新选题、合并主题、增加栏目或补造事实。顶层返回 {headline:string,blocks:Array}；text block 返回 {type:\"text\",title,body}，section block 返回 {type:\"section\",blockKey,title,items}，item 返回 {title,body,notes,sourceIds}；notes 必须是 {label:string,text:string} 数组，模板中的 required 和 instruction 只是规则元数据，绝不能原样输出到 notes；模板中 required=true 的 note 必须按模板 label 原样输出且 text 非空，required=false 的 note 可按内容需要输出；只使用模板中定义的 text block 和已规划的 section block。",
+          "只能使用 selectedTopics 中的主题和候选；不得重新归纳主题、换栏目、增加栏目或补造事实。输出对象本身就是日报内容，顶层必须直接包含 headline 和 blocks，合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止输出 draft、result、data、output 等外层包装键。text block 返回 {type:\"text\",title,body}，section block 返回 {type:\"section\",blockKey,title,items}，item 返回 {topicId,title,body,notes}；每个 selectedTopics 必须生成一个 item，topicId 必须原样复制；不要输出 sourceIds、candidateIds 或其他来源映射字段；notes 必须是 {label:string,text:string} 数组，模板中的 required 和 instruction 只是规则元数据，绝不能原样输出到 notes；模板中 required=true 的 note 必须按模板 label 原样输出且 text 非空，required=false 的 note 可按内容需要输出；只使用模板中定义的 text block 和已规划的 section block。",
         ),
         buildDailyReportStagePrompt(
           "WRITE",
-          "严格按照全局计划和模板写作，只返回日报 Draft JSON。只能使用计划中的 candidateId 和输入候选的 id（sourceIds 使用这些 id），不得重新选题、合并、增加栏目或补造事实。每个 section block 必须包含与模板一致的 blockKey 和 title；每个 section item 必须包含 title、body、sourceIds 和 notes；当模板中该栏目 item.bodyRequired=false 时 body 必须为空字符串或省略，不能输出正文，否则 body 必须非空；每个 notes 元素只能是 {label,text}，不要输出 required 或 instruction；notes 中必须包含模板配置的全部 required=true note，label 必须逐字匹配、text 必须非空；每个 text block 必须包含 type、title、body。",
-          { template: buildDailyReportWritingTemplate(input.template), input: { plan: input.plan, selectedCandidates: input.selectedCandidates.map(compactDailyReportModelCandidate) } },
+          "严格按照 selectedTopics 和对应 Block 写作，只返回完整日报内容 JSON。输出对象本身就是日报内容，顶层直接包含 headline 和 blocks，不得包在 draft、result、data 或 output 字段中。不得重新选题、合并主题、换栏目、增加栏目或补造事实。每个 section block 必须包含与输入一致的 blockKey 和模板 title；每个 section item 必须包含 topicId、title、body 和 notes，不要输出 sourceIds 或 candidateIds；每个计划主题必须且只能对应一个 item；当模板中该栏目 item.bodyRequired=false 时 body 必须为空字符串或省略，不能输出正文，否则 body 必须非空；每个 notes 元素只能是 {label,text}，不要输出 required 或 instruction；notes 中必须包含模板配置的全部 required=true note，label 必须逐字匹配、text 必须非空；每个 text block 必须包含 type、title、body。",
+          { template: buildDailyReportWritingTemplate(input.template, selectedBlockKeys), input: { selectedTopics: input.selectedTopics.map((topic) => ({ ...topic, candidates: topic.candidates.map(compactDailyReportWritingCandidate) })) } },
           DAILY_REPORT_WRITE_FIELD_GUIDE,
         ),
         parseDraftOutput,
@@ -1703,15 +1633,15 @@ export function createAiProvider(
         {
           ...buildDailyReportStageConfig(
             "REPAIR",
-            "逐条修复输入 violations 中列出的问题，不改变事实、计划允许的候选和栏目；必须按违规中的栏目、第几条、条目标题和来源定位目标 item，不能只修复其中一条。补齐模板要求的 required note 时必须使用模板原始 label 和非空 text，notes 元素只能包含 label 和 text。输出前逐项确认每条 violation 都已消除。",
+            "逐条修复输入 violations 中列出的问题，不改变事实、计划允许的主题、候选和栏目；必须按违规中的栏目、topicId、条目标题和来源定位目标 item，不能只修复其中一条。输出对象本身就是修复后的日报内容，顶层必须直接包含 headline 和 blocks，合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止输出 draft、result、data、output 等外层包装键。补齐模板要求的 required note 时必须使用模板原始 label 和非空 text，notes 元素只能包含 label 和 text。输出前逐项确认每条 violation 都已消除。",
           ),
           temperature: 0,
           maxTokens: Math.min(dailyReportConfig.maxTokens ?? 4096, MAX_DAILY_REPORT_REPAIR_TOKENS),
         },
         buildDailyReportStagePrompt(
           "REPAIR",
-          "只修复 violations 中列出的问题。保持 plan 允许的候选和栏目不变，返回完整 Draft JSON；对于缺失的 required note，按违规信息定位到对应的第 N 条 item，按模板要求补齐对应 label 和非空 text，删除 notes 中的 required/instruction 元数据字段；相同栏目出现多个缺失要点时必须逐条补齐，不得遗漏。",
-          { template: buildDailyReportWritingTemplate(input.template), input: { draft: input.draft, violations: input.violations, plan: input.plan } },
+          "只修复 violations 中列出的问题。保持 plan 允许的主题、候选和栏目不变，返回完整日报内容 JSON；输出顶层直接包含 headline 和 blocks，不得包在 draft、result、data 或 output 字段中；不要输出 sourceIds、candidateIds 或其他来源映射字段；对于缺失的 required note，按违规信息定位到对应 topicId 的 item，按模板要求补齐对应 label 和非空 text，删除 notes 中的 required/instruction 元数据字段；相同栏目出现多个缺失要点时必须逐条补齐，不得遗漏。",
+          { template: buildDailyReportWritingTemplate(input.template), input: { draft: stripDailyReportSourceIdsForModel(input.draft), violations: input.violations, plan: input.plan } },
           DAILY_REPORT_REPAIR_FIELD_GUIDE,
         ),
         parseDraftOutput,

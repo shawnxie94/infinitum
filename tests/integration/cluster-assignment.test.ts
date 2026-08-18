@@ -1038,9 +1038,9 @@ describe("cluster assignment", () => {
       ],
     });
     const splitResult = await splitClusterIntoSingletons("split-block-cluster");
-    const mergeClustersAi = vi.fn().mockResolvedValue([splitResult.singletonClusterIds]);
+    const mergeClustersAi = vi.fn().mockResolvedValue([]);
     const aiProvider = {
-      mergeClusters: mergeClustersAi,
+      assessClusterMergePairs: mergeClustersAi,
     } as unknown as AiProvider;
 
     const mergeResult = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));
@@ -1409,7 +1409,7 @@ describe("cluster assignment", () => {
     });
     const mergeClustersAi = vi.fn().mockResolvedValue([]);
     const aiProvider = {
-      mergeClusters: mergeClustersAi,
+      assessClusterMergePairs: mergeClustersAi,
     } as unknown as AiProvider;
     const now = new Date("2026-04-21T10:00:00.000Z");
 
@@ -1439,7 +1439,6 @@ describe("cluster assignment", () => {
     expect(secondPass).toMatchObject({
       dirtyPairs: 0,
       precomputedCleanPairsUsed: 1,
-      legacyProtocolPairs: 1,
     });
     expect(thirdPass).toMatchObject({
       dirtyPairs: 0,
@@ -1559,7 +1558,7 @@ describe("cluster assignment", () => {
       .mockRejectedValueOnce(new Error("upstream timeout"))
       .mockResolvedValueOnce([]);
     const aiProvider = {
-      mergeClusters: mergeClustersAi,
+      assessClusterMergePairs: mergeClustersAi,
     } as unknown as AiProvider;
 
     const failedPass = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));
@@ -1581,7 +1580,6 @@ describe("cluster assignment", () => {
       prisma.clusterDecision.count({
         where: {
           verdict: "failed",
-          reasonCode: "llm_failure",
         },
       }),
     ).resolves.toBe(1);
@@ -1682,7 +1680,7 @@ describe("cluster assignment", () => {
     });
     const mergeClustersAi = vi.fn();
     const aiProvider = {
-      mergeClusters: mergeClustersAi,
+      assessClusterMergePairs: mergeClustersAi,
     } as unknown as AiProvider;
 
     const result = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));

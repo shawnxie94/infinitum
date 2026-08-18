@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_BLACKLIST_KEYWORDS } from "@/config/blacklist";
+import { DEFAULT_DAILY_REPORT_PROMPT } from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
 import { DEFAULT_SOURCE_CONFIGS } from "@/config/sources";
 
@@ -33,12 +34,7 @@ describe("runtime config defaults", () => {
     expect(defaults.prompts.clusterSummary).toContain("*斜体*");
     expect(defaults.prompts.clusterMatch.length).toBeGreaterThan(0);
     expect(defaults.prompts.clusterMatch).toContain('{"clusterId":"候选组ID"}');
-    expect(defaults.prompts.dailyReport).toContain("优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性");
-    expect(defaults.prompts.dailyReport).toContain("items 为空数组时会在渲染时自动隐藏");
-    expect(defaults.prompts.dailyReport).toContain("说明变化内容、适用对象、实践价值或可能影响");
-    expect(defaults.prompts.dailyReport).toContain("多个来源只能用于同一事件的互证");
-    expect(defaults.prompts.dailyReport).toContain("只使用输入候选内容和合法来源编号");
-    expect(defaults.prompts.dailyReport).toContain("同一事件只出现一次，避免跨栏目重复");
+    expect(defaults.prompts.dailyReport).toBe(DEFAULT_DAILY_REPORT_PROMPT);
   });
 
   it("returns fresh copies for mutable arrays", () => {

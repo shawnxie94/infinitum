@@ -1051,7 +1051,6 @@ export type ClusterMergePassResult = {
   decisionsDeclined: number;
   decisionsAmbiguous: number;
   decisionsFailed: number;
-  legacyProtocolPairs: number;
   dirtyPairs: number;
   preLimitCandidates: number;
   postLimitCandidates: number;
@@ -1332,14 +1331,13 @@ async function filterBlockedClusterMergeEdges(input: {
 async function recordClusterMergeDecisions(input: {
   candidatesById: Map<string, ClusterMergeCandidate>;
   allowedPairs: ClusterMergeCandidateEdge[];
-  decisions?: ClusterMergeDecision[];
-  mergeGroups?: string[][];
+  decisions: ClusterMergeDecision[];
   verdictOnMissing: "declined" | "failed";
   now: Date;
 }) {
-  const decisions: Array<Awaited<ReturnType<typeof recordClusterDecision>>> = [];
+  const recordedDecisions: Array<Awaited<ReturnType<typeof recordClusterDecision>>> = [];
   const decisionByPairKey = new Map(
-    (input.decisions ?? []).map((decision) => [
+    input.decisions.map((decision) => [
       buildClusterMergeEdgeKey(decision.leftClusterId, decision.rightClusterId),
       decision,
     ]),
@@ -1352,12 +1350,8 @@ async function recordClusterMergeDecisions(input: {
     }
 
     const aiDecision = decisionByPairKey.get(buildClusterMergeEdgeKey(edge.leftId, edge.rightId));
-    const legacyApproved = input.mergeGroups?.some((group) =>
-      groupContainsClusterMergePair(group, edge.leftId, edge.rightId),
-    ) ?? false;
-    const verdict = aiDecision?.verdict
-      ?? (input.mergeGroups ? (legacyApproved ? "approved" : "declined") : input.verdictOnMissing);
-    decisions.push(
+    const verdict = aiDecision?.verdict ?? input.verdictOnMissing;
+    recordedDecisions.push(
       await recordClusterDecision({
         kind: "cluster_pair",
         source: "llm",
@@ -1368,15 +1362,14 @@ async function recordClusterMergeDecisions(input: {
         inputHash: buildClusterMergePairInputHash(pair.left, pair.right),
         localScore: edge.score,
         confidence: aiDecision?.confidence,
-        reasonCode: aiDecision?.reasonCode
-          ?? (verdict === "failed" ? "llm_failure" : verdict === "approved" ? "llm_approved" : "llm_declined"),
+        reasonCode: aiDecision?.reasonCode ?? null,
         reasonText: aiDecision?.reasonText,
         now: input.now,
       }),
     );
   }
 
-  return decisions;
+  return recordedDecisions;
 }
 
 function countClusterMergeDecisionVerdicts(
@@ -1532,7 +1525,6 @@ export async function executeClusterMerge(
     decisionsDeclined: 0,
     decisionsAmbiguous: 0,
     decisionsFailed: 0,
-    legacyProtocolPairs: 0,
     dirtyPairs: diagnostics.dirtyPairs,
     preLimitCandidates: diagnostics.preLimitCandidates,
     postLimitCandidates: allCandidates.length,
@@ -1608,18 +1600,15 @@ export async function executeClusterMerge(
 
   const aiMergeStartedAt = Date.now();
   try {
-    if (aiProvider.assessClusterMergePairs) {
-      mergeDecisions = await aiProvider.assessClusterMergePairs(clustersJson);
-      const itemCounts = new Map(allCandidates.map((candidate) => [candidate.id, candidate.itemCount]));
-      mergeGroups = buildClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
-    } else {
-      mergeGroups = await aiProvider.mergeClusters(clustersJson);
-    }
+    mergeDecisions = await aiProvider.assessClusterMergePairs(clustersJson);
+    const itemCounts = new Map(allCandidates.map((candidate) => [candidate.id, candidate.itemCount]));
+    mergeGroups = buildClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
   } catch {
     timings.aiMergeMs = Date.now() - aiMergeStartedAt;
     const failedDecisions = await recordClusterMergeDecisions({
       candidatesById,
       allowedPairs,
+      decisions: [],
       verdictOnMissing: "failed",
       now,
     });
@@ -1641,13 +1630,9 @@ export async function executeClusterMerge(
     candidatesById,
     allowedPairs,
     decisions: mergeDecisions,
-    mergeGroups: mergeDecisions ? undefined : mergeGroups,
-    verdictOnMissing: mergeDecisions ? "failed" : "declined",
+    verdictOnMissing: "declined",
     now,
   });
-  const legacyProtocolPairs = mergeDecisions
-    ? recordedMergeDecisions.filter((decision) => decision.reasonCode?.startsWith("legacy_")).length
-    : allowedPairs.length;
   await markDeclinedPrecomputedCleanMergePairs(
     precomputedSelection.usedPairIdsByEdgeKey,
     allowedPairs,
@@ -1729,7 +1714,6 @@ export async function executeClusterMerge(
   return {
     ...baseResult,
     ...countClusterMergeDecisionVerdicts(recordedMergeDecisions),
-    legacyProtocolPairs,
     ...timings,
     aiMergeGroups: mergeGroups.filter((group) => group.length >= 2).length,
     skipped: false,

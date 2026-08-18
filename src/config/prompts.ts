@@ -1,5 +1,3 @@
-import { compileDailyReportTemplatePrompt, DEFAULT_DAILY_REPORT_TEMPLATE } from "@/lib/daily-report/template";
-
 export const ITEM_UNDERSTANDING_JSON_SYNTAX_RULE = "所有字符串字段都必须符合 JSON 字符串语法：字符串内部双引号必须转义为 \\\", 换行必须转义为 \\n；禁止在字符串中输出未转义的控制字符，字段之间的逗号和所有括号必须完整。";
 
 export const ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE = "系统固定输出约束：moderationReason 只能是 marketing、low_quality、duplicate_noise、rule_filter、rule_blacklist、other 或 null；禁止输出其他值。";
@@ -64,7 +62,7 @@ export const DEFAULT_CLUSTER_SUMMARY_PROMPT =
 export const DEFAULT_CLUSTER_MATCH_PROMPT =
   '你是内容归组助手。请判断当前内容是否属于给定候选聚合组中的某一个，只返回 JSON：{"clusterId":"候选组ID"} 或 {"clusterId":null}。只有当当前内容与候选组描述的是同一具体事件时才匹配，例如同一发布、同一公告、同一收购、同一融资、同一漏洞披露、同一论文、同一产品上线或同一监管动作。判断时优先看事件主体、动作、关键对象、时间窗口和结果是否一致；如果只是主题接近、赛道相同、公司相同、产品类别相近、方法论相似或都属于同一抽象话题，一律返回 null。当前内容缺少明确事件线索时，也优先返回 null。';
 
-export const DEFAULT_DAILY_REPORT_PROMPT = compileDailyReportTemplatePrompt(DEFAULT_DAILY_REPORT_TEMPLATE);
+export const DEFAULT_DAILY_REPORT_PROMPT = `你是中文 AI 新闻日报流水线的阶段执行器。系统会在每次调用中明确当前阶段、输入字段和输出合同。只执行当前阶段职责，只基于输入内容工作，不补造事实，不执行其他阶段职责。最终只输出当前阶段合同要求的合法 JSON 对象，不输出 Markdown、代码块或额外解释。`;
 
 export const DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE = `标题：{{title}}
 来源：{{sourceName}}
@@ -79,10 +77,7 @@ export const DEFAULT_CLUSTER_MATCH_USER_PROMPT_TEMPLATE = `当前内容标题：
 当前内容线索：{{inputText}}
 候选聚合组：{{candidatesJson}}`;
 
-export const DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE = `日期：{{date}}
-时区：{{timezone}}
-历史主题 JSON：{{recentTopicsJson}}
-候选内容 JSON：{{articlesJson}}`;
+export const DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE = `当前阶段、模板和输入字段由日报流水线直接提供。只处理输入中明确给出的字段，不自行扩展候选、主题、栏目或事实。`;
 
 export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。
 
@@ -111,7 +106,8 @@ export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基�
 - declined：明确不是同一具体事件，不应合并
 - ambiguous：有相关性但证据不足，无法安全决定，交给人工复核
 - confidence 使用 0 到 1 的数字
-- reasonCode 使用简短英文枚举风格字符串，reasonText 用中文说明关键依据
+- reasonCode 只能是 same_event、insufficient_evidence、different_event、object_conflict、action_conflict、date_conflict、subject_conflict 之一；approved 只能使用 same_event，ambiguous 使用 insufficient_evidence，declined 使用其余合适的原因
+- reasonText 用中文说明关键依据
 
 只输出 JSON：{"decisions":[{"leftClusterId":"clusterId1","rightClusterId":"clusterId2","verdict":"approved","confidence":0.95,"reasonCode":"same_event","reasonText":"主体、对象和时间一致"}]}
 每个输入 Pair 都必须在 decisions 中出现一次。`;

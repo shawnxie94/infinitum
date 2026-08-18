@@ -11,7 +11,9 @@ import {
 } from "@/config/prompts";
 import { prisma } from "@/lib/db";
 import {
+  DEFAULT_DAILY_REPORT_TEMPLATE,
   DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
+  compileDailyReportTemplatePrompt,
   getLegacyDefaultDailyReportSystemPrompt,
   parseDailyReportTemplateJson,
   stringifyDailyReportTemplate,
@@ -73,8 +75,8 @@ describe("admin settings service", () => {
     expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.templateJson).toBe(
       DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
     );
-    expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toContain(
-      "优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性",
+    expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toBe(
+      DEFAULT_DAILY_REPORT_PROMPT,
     );
     expect(settings.taskSchedule.key).toBe("ingestion_default");
     expect(settings.taskSchedule.enabled).toBe(false);
@@ -230,6 +232,21 @@ describe("admin settings service", () => {
     })).rejects.toThrow("必须使用 decisions/verdict 协议");
   });
 
+  it("rejects mixed cluster merge output protocols", async () => {
+    await expect(createPromptConfig({
+      name: "混合聚合合并提示词",
+      type: "cluster_merge",
+      systemPrompt: '输出 decisions/verdict；不要输出 approvedPairs。示例：{"approvedPairs": []}',
+      prompt: "候选聚合 Pair JSON：{{clustersJson}}",
+      temperature: 0,
+      maxTokens: 2000,
+      topP: null,
+      modelApiConfigId: null,
+      isEnabled: true,
+      isDefault: false,
+    })).rejects.toThrow("必须使用 decisions/verdict 协议");
+  });
+
   it("saves content extraction connection and limits", async () => {
     const config = await updateContentExtractionConfig({
       jinaEnabled: true,
@@ -330,13 +347,13 @@ describe("admin settings service", () => {
     expect(clusterMergeConfig?.promptTemplate).toBe("候选：{{clustersJson}}");
   });
 
-  it("keeps the tightened default daily report prompt in seeded settings", async () => {
+  it("compiles the default daily report template for runtime settings", async () => {
     await getIngestionRuntimeConfig();
 
     const runtimeConfig = await getIngestionRuntimeConfig();
     const dailyReportConfig = runtimeConfig.selectedPromptConfigs?.dailyReport;
 
-    expect(dailyReportConfig?.systemPrompt).toBe(DEFAULT_DAILY_REPORT_PROMPT);
+    expect(dailyReportConfig?.systemPrompt).toBe(compileDailyReportTemplatePrompt(DEFAULT_DAILY_REPORT_TEMPLATE));
     expect(dailyReportConfig?.systemPrompt).toContain("items 为空数组时会在渲染时自动隐藏");
     expect(dailyReportConfig?.systemPrompt).toContain("说明变化内容、适用对象、实践价值或可能影响");
     expect(dailyReportConfig?.systemPrompt).toContain("多个来源只能用于同一事件的互证");
@@ -749,8 +766,7 @@ describe("admin settings service", () => {
       where: { type: "daily_report", isDefault: true },
     });
     expect(config?.templateJson).toBe(DEFAULT_DAILY_REPORT_TEMPLATE_JSON);
-    expect(config?.systemPrompt).toContain("固定输出格式：");
-    expect(config?.systemPrompt).toContain('"blocks"');
+    expect(config?.systemPrompt).toBe(DEFAULT_DAILY_REPORT_PROMPT);
     expect(config?.maxTokens).toBe(40960);
   });
 
@@ -791,8 +807,7 @@ describe("admin settings service", () => {
       where: { type: "daily_report", isDefault: true },
     });
     expect(config?.templateJson).toBe(DEFAULT_DAILY_REPORT_TEMPLATE_JSON);
-    expect(config?.systemPrompt).toContain("固定输出格式：");
-    expect(config?.systemPrompt).toContain('"blocks"');
+    expect(config?.systemPrompt).toBe(DEFAULT_DAILY_REPORT_PROMPT);
     expect(config?.maxTokens).toBe(40960);
   });
 

@@ -834,7 +834,6 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
     decisionsDeclined: mergeResult.decisionsDeclined,
     decisionsAmbiguous: mergeResult.decisionsAmbiguous,
     decisionsFailed: mergeResult.decisionsFailed,
-    legacyProtocolPairs: mergeResult.legacyProtocolPairs,
     dirtyPairs: mergeResult.dirtyPairs,
     preLimitCandidates: mergeResult.preLimitCandidates,
     postLimitCandidates: mergeResult.postLimitCandidates,

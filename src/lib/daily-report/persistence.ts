@@ -194,7 +194,7 @@ export async function persistDailyReport(input: {
         inputHash: saved.inputHash,
         modelName: saved.modelName,
         templateSignature: input.templateSignature,
-        pipelineVersion: "daily-report-selection-writing-v3",
+        pipelineVersion: "daily-report-topic-first-v1",
         taskRunId: saved.taskRunId,
         candidateSnapshot: saved.candidateSnapshot,
         idempotencyKey: input.idempotencyKey,

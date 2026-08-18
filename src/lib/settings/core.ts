@@ -466,9 +466,8 @@ function validateClusterMergePromptProtocol(input: SavePromptConfigInput) {
 
   const content = `${input.systemPrompt ?? ""}\n${input.prompt}`;
   const usesLegacyOutput = ["approvedPairs", "mergeGroups"].some((marker) => content.includes(marker));
-  const declaresDecisionProtocol = content.includes("decisions") && content.includes("verdict");
 
-  if (usesLegacyOutput && !declaresDecisionProtocol) {
+  if (usesLegacyOutput) {
     throw new Error("聚合合并提示词必须使用 decisions/verdict 协议，不能继续输出 approvedPairs 或 mergeGroups。");
   }
 }

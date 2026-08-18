@@ -29,6 +29,7 @@ export function buildAiProviderMock(
     analysisFixture: ReturnType<typeof vi.fn>;
     summarizeCluster: ReturnType<typeof vi.fn>;
     matchClusterCandidate: ReturnType<typeof vi.fn>;
+    assessClusterMergePairs: ReturnType<typeof vi.fn>;
     assessDailyReportCandidates: ReturnType<typeof vi.fn>;
     planDailyReport: ReturnType<typeof vi.fn>;
     writeDailyReport: ReturnType<typeof vi.fn>;
@@ -106,8 +107,9 @@ export function buildAiProviderMock(
     ),
     summarizeCluster: vi.fn().mockResolvedValue(JSON.stringify({ title: "默认聚合标题", summary: "默认聚合摘要" })),
     matchClusterCandidate: vi.fn().mockResolvedValue(null),
+    assessClusterMergePairs: vi.fn().mockResolvedValue([]),
     assessDailyReportCandidates: vi.fn().mockResolvedValue([]),
-    planDailyReport: vi.fn().mockResolvedValue({ schemaVersion: 1, sections: [] }),
+    planDailyReport: vi.fn().mockResolvedValue({ schemaVersion: 2, sections: [] }),
     writeDailyReport: vi.fn().mockResolvedValue({ blocks: [] }),
     repairDailyReportDraft: vi.fn().mockResolvedValue({ blocks: [] }),
   };

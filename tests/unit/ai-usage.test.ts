@@ -21,10 +21,9 @@ describe("task AI usage provider wrapper", () => {
       summarizeCluster: vi.fn(),
       matchClusterCandidate: vi.fn(),
       assessClusterMergePairs,
-      mergeClusters: vi.fn(),
     } as unknown as AiProvider);
 
-    await expect(provider.assessClusterMergePairs?.('{"clusters":[]}')).resolves.toEqual([
+    await expect(provider.assessClusterMergePairs('{"clusters":[]}')).resolves.toEqual([
       expect.objectContaining({ verdict: "ambiguous" }),
     ]);
     expect(assessClusterMergePairs).toHaveBeenCalledWith('{"clusters":[]}');
@@ -33,15 +32,16 @@ describe("task AI usage provider wrapper", () => {
     ]));
   });
 
-  it("keeps the structured method absent for legacy providers", () => {
+  it("always exposes the unified cluster merge decision method", () => {
     const tracker = createTaskAiUsageTracker();
+    const assessClusterMergePairs = vi.fn().mockResolvedValue([]);
     const provider = tracker.wrapProvider({
       understandItem: vi.fn(),
       summarizeCluster: vi.fn(),
       matchClusterCandidate: vi.fn(),
-      mergeClusters: vi.fn(),
+      assessClusterMergePairs,
     } as unknown as AiProvider);
 
-    expect(provider.assessClusterMergePairs).toBeUndefined();
+    expect(provider.assessClusterMergePairs).toBeDefined();
   });
 });

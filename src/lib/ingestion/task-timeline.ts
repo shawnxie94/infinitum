@@ -79,7 +79,6 @@ export type IngestionTimelineCounters = {
     decisionsDeclined: number;
     decisionsAmbiguous: number;
     decisionsFailed: number;
-    legacyProtocolPairs: number;
     dirtyPairs: number;
     preLimitCandidates: number;
     postLimitCandidates: number;
@@ -231,7 +230,6 @@ export function createIngestionTimelineCounters(): IngestionTimelineCounters {
       decisionsDeclined: 0,
       decisionsAmbiguous: 0,
       decisionsFailed: 0,
-      legacyProtocolPairs: 0,
       dirtyPairs: 0,
       preLimitCandidates: 0,
       postLimitCandidates: 0,
@@ -463,7 +461,6 @@ export function buildIngestionTaskTimeline(input: {
         { label: "账本拒绝", value: counters.clusterMerge.decisionsDeclined },
         { label: "账本灰区", value: counters.clusterMerge.decisionsAmbiguous },
         { label: "账本失败", value: counters.clusterMerge.decisionsFailed },
-        { label: "旧协议Pair", value: counters.clusterMerge.legacyProtocolPairs },
         { label: "Dirty Pair", value: counters.clusterMerge.dirtyPairs },
         { label: "裁剪前", value: counters.clusterMerge.preLimitCandidates },
         { label: "候选组", value: counters.clusterMerge.candidates },
@@ -477,7 +474,7 @@ export function buildIngestionTaskTimeline(input: {
         { label: "模型调用ms", value: counters.clusterMerge.aiMergeMs },
         { label: "执行合并ms", value: counters.clusterMerge.applyMergeMs },
         { label: "标记Hashms", value: counters.clusterMerge.markEvaluatedMs },
-        { label: "AI返回组", value: counters.clusterMerge.aiMergeGroups },
+        { label: "决策生成合并组", value: counters.clusterMerge.aiMergeGroups },
         { label: "跳过", value: counters.clusterMerge.skipped ? 1 : 0 },
         { label: "合并后", value: counters.clusterMerge.candidates - counters.clusterMerge.merged },
         { label: "移动条目", value: counters.clusterMerge.itemsMoved },

@@ -61,23 +61,18 @@ export type DailyReportAssessmentLedger = {
   recentTopics?: RecentDailyReportTopic[];
 };
 
-export type DailyReportMergedTopic = {
-  topicId: string;
-  candidateIds: number[];
-  sourceBatchIndexes?: number[];
-  identitySource: "cluster" | "event-identity" | "source-key" | "standalone";
-  titleHint: string;
-  evidenceCount: number;
-  sourceKeys: string[];
-  relevanceScore: number;
-  ambiguity: { candidateIds: number[]; reason: string } | null;
-};
-
-export type DailyReportTopicBriefCandidate = {
+export type DailyReportPlanningCandidateBrief = {
   candidateId: number;
   title: string;
+  clusterId?: string | null;
   sourceName?: string;
   summaryExcerpt?: string | null;
+  evidenceItems?: Array<{
+    title: string;
+    sourceName: string;
+    summaryExcerpt?: string | null;
+    publishedAt: string;
+  }>;
   qualityScore?: number;
   candidateScore: number;
   relevanceScore: number;
@@ -96,26 +91,95 @@ export type DailyReportTopicBriefCandidate = {
   newSourceCountOnDate?: number;
 };
 
-export type DailyReportTopicBrief = {
+export type DailyReportPlanTopicSelection = {
+  candidateIds: number[];
+};
+
+export type DailyReportPlanSectionSelection = {
+  blockKey: string;
+  topics: DailyReportPlanTopicSelection[];
+};
+
+export type DailyReportPlanSelection = {
+  schemaVersion: 2;
+  sections: DailyReportPlanSectionSelection[];
+};
+
+export type DailyReportPlanTopic = {
   topicId: string;
   candidateIds: number[];
-  identitySource: DailyReportMergedTopic["identitySource"];
-  titleHint: string;
-  evidenceCount: number;
-  relevanceScore: number;
-  ambiguity: DailyReportMergedTopic["ambiguity"];
-  candidateBriefs: DailyReportTopicBriefCandidate[];
 };
 
 export type DailyReportPlanSection = {
   blockKey: string;
-  topicIds: string[];
-  candidateIds: number[];
+  topics: DailyReportPlanTopic[];
 };
 
 export type DailyReportPlan = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   sections: DailyReportPlanSection[];
+};
+
+export type DailyReportTopicPriorityComponents = {
+  candidateScore: number;
+  relevanceScore: number;
+  qualityScore: number;
+  evidenceBonus: number;
+  freshnessBonus: number;
+  followUpBonus: number;
+};
+
+export type DailyReportPlanningAuditTopic = {
+  topicId: string | null;
+  candidateIds: number[];
+  topicPriority: number;
+  priorityComponents: DailyReportTopicPriorityComponents;
+  retained: boolean;
+};
+
+export type DailyReportPlanningAuditSection = {
+  blockKey: string;
+  maxItems: number | null;
+  inputTopicCount: number;
+  outputTopicCount: number;
+  truncatedTopicCount: number;
+  topics: DailyReportPlanningAuditTopic[];
+};
+
+export type DailyReportPlanningAudit = {
+  schemaVersion: 1;
+  topicPriorityVersion: "v1";
+  inputTopicCount: number;
+  outputTopicCount: number;
+  truncatedTopicCount: number;
+  sections: DailyReportPlanningAuditSection[];
+};
+
+export type DailyReportSelectedTopic = {
+  topicId: string;
+  blockKey: string;
+  candidateIds: number[];
+  representativeCandidateId: number;
+  candidates: DailyReportPlanningCandidate[];
+};
+
+export type DailyReportModelItem = {
+  /** Internal mapping between one model item and one selected PLAN topic. */
+  topicId?: string;
+  title: string;
+  body: string;
+  notes?: DailyReportItemNote[];
+};
+
+export type DailyReportModelSectionBlock = Omit<DailyReportSectionBlock, "items"> & {
+  items: DailyReportModelItem[];
+};
+
+export type DailyReportModelBlock = DailyReportTextBlock | DailyReportModelSectionBlock;
+
+export type DailyReportModelDraft = Omit<DailyReportContent, "blocks" | "sections"> & {
+  blocks: DailyReportModelBlock[];
+  sections?: Record<string, DailyReportModelItem[]>;
 };
 
 export type DailyReportViolation = {
@@ -123,12 +187,13 @@ export type DailyReportViolation = {
   stage: "plan" | "draft";
   message: string;
   blockKey?: string;
+  topicId?: string;
   candidateIds?: number[];
 };
 
 export type DailyReportDraft = DailyReportContent & {
   metadata?: {
-    planSchemaVersion: 1;
+    planSchemaVersion: 2;
     selectedCandidateIds: number[];
     selectedSourceNumbers: number[];
     writerModel: string | null;
@@ -171,6 +236,8 @@ export type DailyReportItemNote = {
 };
 
 export type DailyReportItem = {
+  /** Internal mapping between one final item and one selected PLAN topic. */
+  topicId?: string;
   title: string;
   body: string;
   notes?: DailyReportItemNote[];

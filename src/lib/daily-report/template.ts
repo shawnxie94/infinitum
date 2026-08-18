@@ -170,8 +170,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
   globalRules: [
     "每个条目只描述一个独立事件、产品、漏洞、模型、政策或研究成果；不同主体、不同产品或不同事件不要合并成一条。",
     "多个来源只能用于同一事件的互证；如果只是主题相近但事实不同，应拆成不同条目或只保留最相关来源。",
-    "只使用输入候选内容和合法来源编号，不编造事实、来源或输入之外的信息。",
-    "每个 section item 的 sourceIds 必须至少包含 1 个合法候选编号；无法确定合法编号时不要输出该条。",
+    "只使用输入候选内容，不编造事实或输入之外的信息。",
     "同一事件只出现一次，避免跨栏目重复。",
     "正文只写内容本身，不要带栏目名、字段名或标签前缀。",
     "除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。",
@@ -290,6 +289,12 @@ function normalizeNote(note: Partial<DailyReportTemplateNote>): DailyReportTempl
   };
 }
 
+function isModelOwnedSourceMappingRule(rule: string) {
+  return rule.includes("sourceIds") && (
+    rule.includes("section item") || rule.includes("合法候选编号") || rule.includes("来源编号")
+  );
+}
+
 export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDailyReportTemplate {
   if (!isObject(value)) {
     return cloneDefaultTemplate();
@@ -349,7 +354,10 @@ export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDa
     }),
     globalRules:
       Array.isArray(input.globalRules) && input.globalRules.length > 0
-        ? input.globalRules.filter((rule): rule is string => typeof rule === "string" && Boolean(rule.trim())).map((rule) => rule.trim())
+        ? input.globalRules
+          .filter((rule): rule is string => typeof rule === "string" && Boolean(rule.trim()))
+          .map((rule) => rule.trim())
+          .filter((rule) => !isModelOwnedSourceMappingRule(rule))
         : [...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules],
   };
 }
@@ -614,7 +622,6 @@ function buildBlockExample(block: DailyReportTemplateBlock) {
         title: "...",
         body: "...",
         notes: block.item.notes.map((note) => ({ label: note.label, text: "..." })),
-        sourceIds: [1, 2],
       },
     ],
   };
@@ -634,10 +641,9 @@ export function compileDailyReportTemplatePrompt(templateInput: DailyReportTempl
     "",
     "通用结构规则：",
     "1. 最终 JSON 顶层必须包含 headline 字段。",
-    "2. section block 的 items 为空数组时会在渲染时自动隐藏；有 items 时，每个 item 必须包含 title、sourceIds，建议包含 body。",
-    "3. sourceIds 必须是至少包含 1 个合法候选编号的数字数组，只使用输入候选内容中的合法来源编号；不要使用空数组、字符串、URL、标题或不存在的编号。",
-    "4. item.title 写事件标题；item.body 写正文或轻量看点；body 为空字符串或缺失时会按紧凑模式只展示标题和来源。",
-    "5. notes 只按栏目配置输出 label/text；无配置时输出空数组。",
+    "2. section block 的 items 为空数组时会在渲染时自动隐藏；有 items 时，每个 item 必须包含 title，建议包含 body。",
+    "3. item.title 写事件标题；item.body 写正文或轻量看点；body 为空字符串或缺失时会按紧凑模式只展示标题。",
+    "4. notes 只按栏目配置输出 label/text；无配置时输出空数组。",
     "",
     "输出要求：",
   ];

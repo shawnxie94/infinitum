@@ -132,19 +132,11 @@ export function createTaskAiUsageTracker(
           syncEstimateFloor();
           return aiProvider.matchClusterCandidate(inputText, metadata);
         },
-        assessClusterMergePairs: aiProvider.assessClusterMergePairs
-          ? async (clustersJson) => {
-              incrementActual("cluster_merge");
-              incrementEstimated("cluster_merge");
-              syncEstimateFloor();
-              return aiProvider.assessClusterMergePairs!(clustersJson);
-            }
-          : undefined,
-        async mergeClusters(clustersJson) {
+        async assessClusterMergePairs(clustersJson) {
           incrementActual("cluster_merge");
           incrementEstimated("cluster_merge");
           syncEstimateFloor();
-          return aiProvider.mergeClusters(clustersJson);
+          return aiProvider.assessClusterMergePairs(clustersJson);
         },
         async assessDailyReportCandidates(input) {
           incrementActual("daily_report");

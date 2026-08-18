@@ -296,15 +296,29 @@ describe("ai provider", () => {
     ).toBe(`{"summary":"这是摘要","isAggregation":false}`);
   });
 
-  it("turns approved merge pairs into conservative target-direct merge groups", async () => {
+  it("turns approved merge decisions into conservative target-direct merge groups", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
           message: {
             content: JSON.stringify({
-              approvedPairs: [
-                ["cluster-a", "cluster-b"],
-                ["cluster-b", "cluster-c"],
+              decisions: [
+                {
+                  leftClusterId: "cluster-a",
+                  rightClusterId: "cluster-b",
+                  verdict: "approved",
+                  confidence: 0.95,
+                  reasonCode: "same_event",
+                  reasonText: "主体、对象和时间一致",
+                },
+                {
+                  leftClusterId: "cluster-b",
+                  rightClusterId: "cluster-c",
+                  verdict: "approved",
+                  confidence: 0.8,
+                  reasonCode: "same_event",
+                  reasonText: "主体和对象一致",
+                },
               ],
             }),
           },
@@ -327,7 +341,7 @@ describe("ai provider", () => {
       },
     );
 
-    const groups = await provider.mergeClusters(JSON.stringify({
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
           left: { id: "cluster-a", title: "A", summary: "A", itemCount: 10 },
@@ -342,7 +356,22 @@ describe("ai provider", () => {
       ],
     }));
 
-    expect(groups).toEqual([["cluster-a", "cluster-b"]]);
+    expect(decisions).toEqual([
+      expect.objectContaining({
+        leftClusterId: "cluster-a",
+        rightClusterId: "cluster-b",
+        verdict: "approved",
+        confidence: 95,
+        reasonCode: "same_event",
+      }),
+      expect.objectContaining({
+        leftClusterId: "cluster-b",
+        rightClusterId: "cluster-c",
+        verdict: "approved",
+        confidence: 80,
+        reasonCode: "same_event",
+      }),
+    ]);
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("候选聚合 Pair");
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("score 是本地规则");
@@ -428,15 +457,64 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"decisions"');
   });
 
-  it("ignores approved merge pairs that were not present in the local pair input", async () => {
+  it("normalizes an unknown merge reason code instead of persisting free-form text", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            decisions: [{
+              leftClusterId: "cluster-a",
+              rightClusterId: "cluster-b",
+              verdict: "declined",
+              confidence: 0.9,
+              reasonCode: "model_invented_reason",
+              reasonText: "对象不一致",
+            }],
+          }),
+        },
+      }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      undefined,
+      { chat: { completions: { create } } },
+    );
+
+    await expect(provider.assessClusterMergePairs?.(JSON.stringify({
+      pairs: [{
+        left: { id: "cluster-a", title: "A", summary: "A", itemCount: 2 },
+        right: { id: "cluster-b", title: "B", summary: "B", itemCount: 1 },
+        score: 80,
+      }],
+    }))).resolves.toEqual([{
+      leftClusterId: "cluster-a",
+      rightClusterId: "cluster-b",
+      verdict: "declined",
+      confidence: 90,
+      reasonCode: null,
+      reasonText: "对象不一致",
+    }]);
+  });
+
+  it("ignores merge decisions that were not present in the local pair input", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
           message: {
             content: JSON.stringify({
-              approvedPairs: [
-                ["cluster-a", "cluster-b"],
-                ["cluster-a", "cluster-c"],
+              decisions: [
+                {
+                  leftClusterId: "cluster-a",
+                  rightClusterId: "cluster-b",
+                  verdict: "approved",
+                  reasonCode: "same_event",
+                },
+                {
+                  leftClusterId: "cluster-a",
+                  rightClusterId: "cluster-c",
+                  verdict: "approved",
+                  reasonCode: "same_event",
+                },
               ],
             }),
           },
@@ -459,7 +537,7 @@ describe("ai provider", () => {
       },
     );
 
-    const groups = await provider.mergeClusters(JSON.stringify({
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
           left: { id: "cluster-a", title: "A", summary: "A", itemCount: 3 },
@@ -469,18 +547,19 @@ describe("ai provider", () => {
       ],
     }));
 
-    expect(groups).toEqual([["cluster-a", "cluster-b"]]);
+    expect(decisions).toEqual([expect.objectContaining({
+      leftClusterId: "cluster-a",
+      rightClusterId: "cluster-b",
+      verdict: "approved",
+    })]);
   });
 
-  it("honors explicit empty approved merge pairs over legacy merge groups", async () => {
+  it("returns no merge groups when decisions is empty", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
           message: {
-            content: JSON.stringify({
-              approvedPairs: [],
-              mergeGroups: [["cluster-a", "cluster-b"]],
-            }),
+            content: JSON.stringify({ decisions: [] }),
           },
         },
       ],
@@ -501,7 +580,7 @@ describe("ai provider", () => {
       },
     );
 
-    const groups = await provider.mergeClusters(JSON.stringify({
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
           left: { id: "cluster-a", title: "A", summary: "A", itemCount: 3 },
@@ -511,7 +590,7 @@ describe("ai provider", () => {
       ],
     }));
 
-    expect(groups).toEqual([]);
+    expect(decisions).toEqual([]);
   });
 
   it("retries cluster merge once when the first response is invalid json", async () => {
@@ -521,7 +600,7 @@ describe("ai provider", () => {
         choices: [
           {
             message: {
-              content: "{\"approvedPairs\":[[\"cluster-a\",\"cluster-b\"]",
+              content: "{\"decisions\":[{\"leftClusterId\":\"cluster-a\",\"rightClusterId\":\"cluster-b\"}",
             },
           },
         ],
@@ -531,7 +610,12 @@ describe("ai provider", () => {
           {
             message: {
               content: JSON.stringify({
-                approvedPairs: [["cluster-a", "cluster-b"]],
+                decisions: [{
+                  leftClusterId: "cluster-a",
+                  rightClusterId: "cluster-b",
+                  verdict: "approved",
+                  reasonCode: "same_event",
+                }],
               }),
             },
           },
@@ -553,7 +637,7 @@ describe("ai provider", () => {
       },
     );
 
-    const groups = await provider.mergeClusters(JSON.stringify({
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
           left: { id: "cluster-a", title: "A", summary: "A", itemCount: 3 },
@@ -563,7 +647,11 @@ describe("ai provider", () => {
       ],
     }));
 
-    expect(groups).toEqual([["cluster-a", "cluster-b"]]);
+    expect(decisions).toEqual([expect.objectContaining({
+      leftClusterId: "cluster-a",
+      rightClusterId: "cluster-b",
+      verdict: "approved",
+    })]);
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[1]?.[0]?.messages?.[1]?.content).toContain("上一次输出不是合法 JSON");
   });

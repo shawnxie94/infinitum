@@ -220,16 +220,24 @@ function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
   if (task.kind !== "daily_report_generate" || !task.pipelineCheckpoint) return null;
   const checkpoint = task.pipelineCheckpoint;
 
-  if (label === "主题数" && Array.isArray(checkpoint.mergedTopics)) {
-    return checkpoint.mergedTopics.length;
-  }
-
-  const plan = checkpoint.plan as { sections?: Array<{ candidateIds?: unknown[] }> } | undefined;
+  const plan = checkpoint.plan as { sections?: Array<{ topics?: Array<{ candidateIds?: unknown[] }> }> } | undefined;
   if (plan && Array.isArray(plan.sections)) {
     if (label === "计划栏目") return plan.sections.length;
     if (label === "计划入选") {
-      return plan.sections.reduce((total, section) => total + (Array.isArray(section.candidateIds) ? section.candidateIds.length : 0), 0);
+      return plan.sections.reduce((total, section) => total + (section.topics ?? []).reduce(
+        (topicTotal, topic) => topicTotal + (Array.isArray(topic.candidateIds) ? topic.candidateIds.length : 0),
+        0,
+      ), 0);
     }
+  }
+
+  if (label === "可规划候选" && Array.isArray(checkpoint.planningCandidateBriefs)) {
+    return checkpoint.planningCandidateBriefs.length;
+  }
+
+  if (label === "截取主题") {
+    const planningAudit = checkpoint.planningAudit as { truncatedTopicCount?: unknown } | undefined;
+    return typeof planningAudit?.truncatedTopicCount === "number" ? planningAudit.truncatedTopicCount : null;
   }
 
   if (label === "违规数" && Array.isArray(checkpoint.violations)) {
@@ -268,9 +276,9 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
     case "daily_report_assess":
       return `固定批次 ${getValue("批次大小") > 0 ? `${getValue("批次大小")} 条` : "整批"} · ${getValue("批次数")} 个`;
     case "daily_report_merge":
-      return `合并为 ${getValue("主题数")} 个主题`;
+      return `准备 ${getValue("可规划候选")} 个候选供全局规划`;
     case "daily_report_plan":
-      return `规划 ${getValue("计划栏目")} 个栏目 · 入选 ${getValue("计划入选")} 条`;
+      return `规划 ${getValue("计划栏目")} 个栏目 · 入选 ${getValue("计划入选")} 条 · 截取 ${getValue("截取主题")} 个主题`;
     case "daily_report_plan_validate":
       return `计划结构校验 · 违规 ${getValue("违规数")} 条`;
     case "daily_report_validate":

@@ -53,9 +53,11 @@ function normalizeStructuredItem(value: unknown): DailyReportItem | null {
   const body = asText(item.body);
   const notes = normalizeNotes(item.notes);
   const sourceIds = normalizeSourceIds(item.sourceIds);
+  const topicId = typeof item.topicId === "string" && item.topicId.trim() ? item.topicId.trim() : undefined;
 
   if (!title) return null;
   return {
+    ...(topicId ? { topicId } : {}),
     title,
     body,
     notes: notes.length > 0 ? notes : undefined,
@@ -85,6 +87,7 @@ function normalizeLegacyItem(value: unknown, sectionTitle: string): DailyReportI
   }
 
   const knownKeys = new Set([
+    "topicId",
     "title",
     "topic",
     "body",

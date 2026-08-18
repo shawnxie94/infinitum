@@ -17,6 +17,13 @@ vi.mock("next/navigation", () => ({
 
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { ToastProvider } from "@/components/ui/toast";
+import {
+  DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
+} from "@/config/prompts";
+import {
+  compileDailyReportTemplatePrompt,
+  parseDailyReportTemplateJson,
+} from "@/lib/daily-report/template";
 import type { AdminSettingsSnapshot } from "@/lib/settings/types";
 
 const originalClipboard = navigator.clipboard;
@@ -829,13 +836,11 @@ describe("AdminSettingsPanel", () => {
       systemPrompt: string;
       templateJson: string;
     };
-    expect(payload.prompt).toContain("候选内容 JSON：{{articlesJson}}");
-    expect(payload.systemPrompt).toContain("固定输出格式");
-    const template = JSON.parse(payload.templateJson) as {
-      headlineInstruction: string;
-      recentTopicRules: string[];
-      blocks: Array<{ title: string }>;
-    };
+    expect(payload.prompt).toBe(DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE);
+    const template = parseDailyReportTemplateJson(payload.templateJson);
+    expect(template).not.toBeNull();
+    if (!template) throw new Error("日报模板 JSON 无法解析");
+    expect(payload.systemPrompt).toBe(compileDailyReportTemplatePrompt(template));
     expect(template.headlineInstruction).toContain("热点事件");
     expect(template.recentTopicRules[0]).toContain("历史主题召回窗口");
     expect(template.blocks[0].title).toBe("其他值得看");

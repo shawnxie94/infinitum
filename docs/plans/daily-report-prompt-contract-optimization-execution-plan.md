@@ -1,7 +1,7 @@
 ---
 id: infinitum-daily-report-prompt-contract-optimization
 type: execution_plan
-status: approved
+status: superseded
 created_at: 2026-08-18
 updated_at: 2026-08-18
 sources:
@@ -9,9 +9,12 @@ sources:
 related:
   - docs/plans/daily-report-selection-writing-separation-execution-plan.md
 base_commit: 63be0ebcf2cd511e7e9e90b551281f2daff98d48
+superseded_by: docs/plans/daily-report-topic-first-execution-plan.md
 ---
 
 # 日报模型提示词与阶段契约优化执行计划
+
+> 本计划已被 `docs/plans/daily-report-topic-first-execution-plan.md` 替代；其中的 `topicBrief` 预分组和旧版 PLAN 输出契约不再适用于当前实现。
 
 ## 目标
 

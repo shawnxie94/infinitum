@@ -1,6 +1,7 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import type { TaskTimelineNodeSnapshot } from "@/lib/tasks/types";
+import type { DailyReportPlanningAudit } from "@/lib/daily-report/types";
 
 export type DailyReportPipelineStage =
   | "prepare"
@@ -18,9 +19,11 @@ type DailyReportTaskTimelineInput = {
   status: "running" | "succeeded" | "failed" | "cancelled" | "skipped";
   candidateCount?: number | null;
   selectedCount?: number | null;
-  mergedTopicCount?: number | null;
+  planningCandidateCount?: number | null;
   planSectionCount?: number | null;
   planSelectedCount?: number | null;
+  planTruncatedTopicCount?: number | null;
+  planningAudit?: DailyReportPlanningAudit | null;
   planViolationCount?: number | null;
   validationViolationCount?: number | null;
   repairCount?: number | null;
@@ -46,7 +49,7 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
   const stages = [
     ["daily_report_prepare", "准备候选"],
     ["daily_report_assess", "分批选题评估"],
-    ["daily_report_merge", "确定性主题合并"],
+    ["daily_report_merge", "准备规划输入"],
     ["daily_report_plan", "全局规划"],
     ["daily_report_plan_validate", "计划校验"],
     ["daily_report_write", "按计划写作"],
@@ -90,16 +93,18 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
           { label: "批次数", value: input.batchCount ?? 0 },
           { label: "批次大小", value: input.batchSize ?? 0 },
         ] : []),
-        ...(index === 2 ? [{ label: "主题数", value: input.mergedTopicCount ?? 0 }] : []),
+        ...(index === 2 ? [{ label: "可规划候选", value: input.planningCandidateCount ?? 0 }] : []),
         ...(index === 3 ? [
           { label: "计划栏目", value: input.planSectionCount ?? 0 },
           { label: "计划入选", value: input.planSelectedCount ?? input.selectedCount ?? 0 },
+          { label: "截取主题", value: input.planTruncatedTopicCount ?? 0 },
         ] : []),
         ...(index === 4 ? [{ label: "违规数", value: input.planViolationCount ?? 0 }] : []),
         ...(index === 5 ? [{ label: "入选数", value: input.selectedCount ?? 0 }] : []),
         ...(index === 6 ? [{ label: "违规数", value: input.validationViolationCount ?? 0 }] : []),
         ...(index === 7 ? [{ label: "修复次数", value: input.repairCount ?? 0 }] : []),
       ],
+      ...(key === "daily_report_plan" && input.planningAudit ? { audit: { planning: input.planningAudit } } : {}),
     } satisfies TaskTimelineNodeSnapshot;
   });
   return [

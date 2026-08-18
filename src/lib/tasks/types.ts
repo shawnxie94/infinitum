@@ -93,6 +93,7 @@ export type TaskTimelineNodeSnapshot = {
   durationMs: number | null;
   modelName?: string | null;
   metrics: TaskTimelineMetricSnapshot[];
+  audit?: Record<string, unknown>;
 };
 
 export type TaskPipelineCheckpoint = {
@@ -110,6 +111,7 @@ export type TaskPipelineCheckpoint = {
   resumeAttempt?: number;
   stageAttempts?: Record<string, number>;
   candidateSnapshot?: unknown;
+  planningAudit?: unknown;
   assessmentBatches?: Array<{
     index: number;
     candidateIds: number[];
@@ -119,7 +121,7 @@ export type TaskPipelineCheckpoint = {
     error?: string;
   }>;
   ledger?: unknown;
-  mergedTopics?: unknown[];
+  planningCandidateBriefs?: unknown[];
   plan?: unknown;
   draft?: unknown;
   violations?: unknown[];

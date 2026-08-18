@@ -34,9 +34,10 @@ export function parseTaskPipelineCheckpointJson(value: string | null | undefined
         ? { stageAttempts: Object.fromEntries(Object.entries(parsed.stageAttempts).filter(([, attempt]) => typeof attempt === "number" && Number.isFinite(attempt))) as Record<string, number> }
         : {}),
       ...(parsed.candidateSnapshot !== undefined ? { candidateSnapshot: parsed.candidateSnapshot } : {}),
+      ...(parsed.planningAudit !== undefined ? { planningAudit: parsed.planningAudit } : {}),
       ...(Array.isArray(parsed.assessmentBatches) ? { assessmentBatches: parsed.assessmentBatches as TaskPipelineCheckpoint["assessmentBatches"] } : {}),
       ...(parsed.ledger !== undefined ? { ledger: parsed.ledger } : {}),
-      ...(Array.isArray(parsed.mergedTopics) ? { mergedTopics: parsed.mergedTopics } : {}),
+      ...(Array.isArray(parsed.planningCandidateBriefs) ? { planningCandidateBriefs: parsed.planningCandidateBriefs } : {}),
       ...(parsed.plan !== undefined ? { plan: parsed.plan } : {}),
       ...(parsed.draft !== undefined ? { draft: parsed.draft } : {}),
       ...(Array.isArray(parsed.violations) ? { violations: parsed.violations } : {}),

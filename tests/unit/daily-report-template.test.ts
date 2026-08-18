@@ -33,10 +33,9 @@ describe("daily report template config", () => {
     expect(prompt).toContain("如果候选内容与历史主题召回窗口内已写主题只是同一事件的重复报道");
     expect(prompt).toContain("每条正文约 120-260 字");
     expect(prompt).toContain("每条正文约 80-180 字");
-    expect(prompt).toContain("每个 item 必须包含 title、sourceIds，建议包含 body");
-    expect(prompt).toContain("sourceIds 必须是至少包含 1 个合法候选编号的数字数组");
-    expect(prompt).toContain("body 为空字符串或缺失时会按紧凑模式只展示标题和来源");
-    expect(prompt).toContain("无法确定合法编号时不要输出该条");
+    expect(prompt).toContain("每个 item 必须包含 title，建议包含 body");
+    expect(prompt).not.toContain("sourceIds");
+    expect(prompt).toContain("body 为空字符串或缺失时会按紧凑模式只展示标题");
     expect(prompt).toContain("notes 要求：重点 必填");
     expect(prompt).toContain("只保留独立且有明确事实增量");
     expect(prompt).not.toContain("可根据管理员习惯调整");
@@ -72,12 +71,25 @@ describe("daily report template config", () => {
 
     const prompt = compileDailyReportTemplatePrompt(template);
 
-    expect(prompt).toContain('"title":"产业信号","items":[{"title":"...","body":"...","notes":[{"label":"信号","text":"..."}],"sourceIds":[1,2]}]');
+    expect(prompt).toContain('"title":"产业信号","items":[{"title":"...","body":"...","notes":[{"label":"信号","text":"..."}]}]');
     expect(prompt).toContain("headline 字段：写一个适合公众号传播的短标题主题。");
     expect(prompt).toContain("section block「产业信号」：条目数非空校验：关闭；条目数量：0 至 不限 条；栏目要求：聚焦产业变化。");
     expect(prompt).toContain("items 为空数组时会在渲染时自动隐藏");
     expect(prompt).toContain("信号 必填：说明为什么重要。");
     expect(prompt).toContain("1. 重复事件不再写入。");
+  });
+
+  it("removes legacy model-owned source mapping rules from normalized templates", () => {
+    const template = parseDailyReportTemplateJson(JSON.stringify({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      globalRules: [
+        "只使用输入候选内容。",
+        "每个 section item 的 sourceIds 必须至少包含 1 个合法候选编号。",
+        "保留这条编辑规则。",
+      ],
+    }))!;
+
+    expect(template.globalRules).toEqual(["只使用输入候选内容。", "保留这条编辑规则。"]);
   });
 
   it("backfills headline and recent topic rules for older blocks template json", () => {

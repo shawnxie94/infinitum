@@ -28,8 +28,9 @@ import {
   type DailyReportCandidateCoverageDTO,
   type DailyReportCandidateSnapshotEntry,
   type DailyReportCandidateAssessment,
-  type DailyReportMergedTopic,
+  type DailyReportModelDraft,
   type DailyReportPlan,
+  type DailyReportPlanningAudit,
   type DailyReportPlanningCandidate,
   type DailyReportContent,
   type DailyReportItem,
@@ -37,11 +38,17 @@ import {
   type RecentDailyReportTopic,
 } from "@/lib/daily-report/types";
 import {
-  mergeDailyReportTopics,
-  buildDailyReportTopicBriefs,
+  buildDailyReportCandidateBriefs,
+  buildDailyReportSelectedTopics,
+  attachDailyReportTopicSources,
+  getDailyReportPlanCandidateIds,
+  getDailyReportPlanTopics,
+  materializeDailyReportPlan,
   normalizeDailyReportDraftForTemplate,
-  normalizeDailyReportPlanForValidation,
+  orderAndLimitDailyReportPlanWithAudit,
+  orderDailyReportDraft,
   splitDailyReportCandidates,
+  toDailyReportModelDraft,
   toDailyReportPlanningCandidate,
   validateDailyReportAssessments,
   validateDailyReportDraft,
@@ -138,7 +145,7 @@ function buildDailyReportGenerationSignature(input: {
   const modelApi = prompt?.modelApi ?? input.runtimeConfig.modelApi;
   return createHash("sha256")
     .update(JSON.stringify({
-      pipelineVersion: "daily-report-selection-writing-v3",
+      pipelineVersion: "daily-report-topic-first-v1",
       templateSignature: input.templateSignature,
       planningBatchSize: input.planningBatchSize,
       recentTopicLookbackDays: input.recentTopicLookbackDays,
@@ -182,7 +189,7 @@ export function deduplicateDailyReportContentByCandidate(
   const identityBySourceId = new Map(
     candidates.map((candidate) => [candidate.id, buildDailyReportContentDuplicateIdentities(candidate)]),
   );
-  const seen = new Set<string>();
+  const seenIdentityOwner = new Map<string, string>();
   const emptySectionTitles: string[] = [];
   const refilledSectionTitles: string[] = [];
   const removedEmptySectionTitles: string[] = [];
@@ -196,15 +203,29 @@ export function deduplicateDailyReportContentByCandidate(
     }
 
     const items: DailyReportItem[] = [];
-    for (const item of block.items) {
+    for (const [itemIndex, item] of block.items.entries()) {
+      const itemOwner = item.topicId ?? `${block.blockKey ?? block.title}:${itemIndex}`;
       const sourceIds = item.sourceIds.filter((sourceId) => {
         const identities = identityBySourceId.get(sourceId) ?? new Set([`source:${sourceId}`]);
-        if ([...identities].some((identity) => seen.has(identity))) {
+        // PLAN has already established the final topic boundary. Do not
+        // collapse two different topic items merely because their candidates
+        // share an upstream event identity; source IDs remain distinct
+        // evidence inside their selected topic.
+        if (item.topicId) {
+          for (const identity of identities) {
+            seenIdentityOwner.set(identity, itemOwner);
+          }
+          return true;
+        }
+        if ([...identities].some((identity) => {
+          const owner = seenIdentityOwner.get(identity);
+          return owner !== undefined && owner !== itemOwner;
+        })) {
           changed = true;
           return false;
         }
         for (const identity of identities) {
-          seen.add(identity);
+          seenIdentityOwner.set(identity, itemOwner);
         }
         return true;
       });
@@ -222,14 +243,14 @@ export function deduplicateDailyReportContentByCandidate(
       const fallbackCandidate = refillEmptySections
         ? candidates.find((candidate) => {
             const identities = identityBySourceId.get(candidate.id);
-            return identities && ![...identities].some((identity) => seen.has(identity));
+            return identities && ![...identities].some((identity) => seenIdentityOwner.has(identity));
           })
         : null;
       if (fallbackCandidate) {
         const identities = identityBySourceId.get(fallbackCandidate.id);
         if (identities) {
           for (const identity of identities) {
-            seen.add(identity);
+            seenIdentityOwner.set(identity, `${block.blockKey ?? block.title}:fallback`);
           }
         }
         items.push({
@@ -1148,6 +1169,7 @@ async function generateDailyReportInternal(input: {
       reason: "日报输入未变化，已跳过生成。",
       candidateCount: candidates.length,
       selectedCount: await countExistingSelectedDailyReportCandidates(existing.id),
+      planningCandidateCount: 0,
       mergedTopicCount: 0,
       planSectionCount: 0,
       planSelectedCount: 0,
@@ -1166,6 +1188,7 @@ async function generateDailyReportInternal(input: {
       reason: `候选内容不足 ${MIN_CANDIDATE_COUNT} 条，已跳过生成。`,
       candidateCount: candidates.length,
       selectedCount: 0,
+      planningCandidateCount: 0,
       mergedTopicCount: 0,
       planSectionCount: 0,
       planSelectedCount: 0,
@@ -1188,6 +1211,7 @@ async function generateDailyReportInternal(input: {
   let finalizationTemplate: ReturnType<typeof normalizeDailyReportTemplateConfig> | null = null;
   finalizationTemplate = template;
   let planningBatchCount = 0;
+  let planningCandidateCount = 0;
   let mergedTopicCount = 0;
   let planSectionCount = 0;
   let planSelectedCount = 0;
@@ -1199,8 +1223,9 @@ async function generateDailyReportInternal(input: {
   let currentStage: DailyReportPipelineStage = "prepare";
   let currentBatchIndex: number | null = null;
   let currentAttemptKey = "PREPARE";
-  let latestPlanAttempt: Awaited<ReturnType<typeof provider.planDailyReport>> | null = null;
+  let latestPlanAttempt: DailyReportPlan | null = null;
   let latestPlanViolations: ReturnType<typeof validateDailyReportPlan> | null = null;
+  let latestPlanningAudit: DailyReportPlanningAudit | null = null;
   const buildFailureCheckpoint = (error: unknown) => {
     if (!latestCheckpoint) return null;
     const contextOverflow = isDailyReportContextOverflowError(error);
@@ -1215,6 +1240,7 @@ async function generateDailyReportInternal(input: {
     const planFailureContext = currentStage === "plan_validate"
       ? {
           ...(latestPlanAttempt ? { plan: latestPlanAttempt } : {}),
+          ...(latestPlanningAudit ? { planningAudit: latestPlanningAudit } : {}),
           ...(latestPlanViolations ? { violations: latestPlanViolations } : {}),
         }
       : {};
@@ -1298,7 +1324,7 @@ async function generateDailyReportInternal(input: {
       checkpoint.inputHash === inputHash &&
       checkpoint.candidateSnapshotHash === candidateSnapshotHash &&
       checkpoint.templateSignature === templateSignature &&
-      checkpoint.pipelineVersion === "daily-report-selection-writing-v3",
+      checkpoint.pipelineVersion === "daily-report-topic-first-v1",
     );
     if (input.resumeCheckpoint && !canResume) {
       throw new DailyReportGenerationError(
@@ -1315,7 +1341,7 @@ async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-selection-writing-v3",
+      pipelineVersion: "daily-report-topic-first-v1",
       stage: "prepare",
       completedStages: canResume ? checkpoint?.completedStages ?? ["prepare"] : ["prepare"],
       lastCompletedStage: "prepare",
@@ -1333,7 +1359,8 @@ async function generateDailyReportInternal(input: {
         ? { assessmentBatches: checkpoint.assessmentBatches }
         : { assessmentBatches: batches.map((batch, index) => ({ index, candidateIds: batch.map((candidate) => candidate.id), status: "pending" as const, attempt: 0 })) }),
       ...(canResume && checkpoint?.ledger ? { ledger: checkpoint.ledger } : {}),
-      ...(canResume && checkpoint?.mergedTopics ? { mergedTopics: checkpoint.mergedTopics } : {}),
+      ...(canResume && checkpoint?.planningAudit ? { planningAudit: checkpoint.planningAudit } : {}),
+      ...(canResume && checkpoint?.planningCandidateBriefs ? { planningCandidateBriefs: checkpoint.planningCandidateBriefs } : {}),
       ...(canResume && checkpoint?.plan ? { plan: checkpoint.plan } : {}),
       ...(canResume && checkpoint?.draft ? { draft: checkpoint.draft } : {}),
     });
@@ -1351,7 +1378,7 @@ async function generateDailyReportInternal(input: {
       assessments.push(...batchAssessments);
       await saveCheckpoint({
         version: 1,
-        pipelineVersion: "daily-report-selection-writing-v3",
+        pipelineVersion: "daily-report-topic-first-v1",
         stage: "assess",
         completedStages: ["prepare", "assess"],
         lastCompletedStage: "assess",
@@ -1378,14 +1405,6 @@ async function generateDailyReportInternal(input: {
     }
     currentBatchIndex = null;
     await input.onStageUpdate?.("merge");
-    const topics = canResume && Array.isArray(checkpoint?.mergedTopics)
-      ? checkpoint.mergedTopics as DailyReportMergedTopic[]
-      : mergeDailyReportTopics(
-          planningCandidates,
-          assessments,
-          new Map(batches.flatMap((batch, index) => batch.map((candidate) => [candidate.id, index] as const))),
-        );
-    mergedTopicCount = topics.length;
     const ledger = {
       schemaVersion: 1 as const,
       candidateCount: planningCandidates.length,
@@ -1400,10 +1419,13 @@ async function generateDailyReportInternal(input: {
       batchCount: batches.length,
       recentTopics,
     };
-    const topicBriefs = buildDailyReportTopicBriefs(topics, planningCandidates, assessments);
+    const candidateBriefs = canResume && Array.isArray(checkpoint?.planningCandidateBriefs)
+      ? checkpoint.planningCandidateBriefs as Awaited<ReturnType<typeof buildDailyReportCandidateBriefs>>
+      : buildDailyReportCandidateBriefs(planningCandidates, assessments);
+    planningCandidateCount = candidateBriefs.length;
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-selection-writing-v3",
+      pipelineVersion: "daily-report-topic-first-v1",
       stage: "merge",
       completedStages: ["prepare", "assess", "merge"],
       lastCompletedStage: "merge",
@@ -1425,36 +1447,53 @@ async function generateDailyReportInternal(input: {
       })),
       data: { batchCount: batches.length, batchSize, assessedCount: assessments.length },
       ledger,
-      mergedTopics: topics,
+      planningCandidateBriefs: candidateBriefs,
     });
     await input.onStageUpdate?.("plan");
-    const planFromProvider = canResume && checkpoint?.plan
-      ? checkpoint.plan as Awaited<ReturnType<typeof provider.planDailyReport>>
-      : await runStageWithAttempts("plan", async () => provider.planDailyReport({ ledger, topicBriefs, template, recentTopicLookbackDays }));
-    const plan = canResume && checkpoint?.plan && checkpoint.completedStages.includes("plan_validate")
-      ? planFromProvider
-      : await runStageWithAttempts("plan_validate", async (attempt) => {
+    const hasCompletedPlan = Boolean(canResume && checkpoint?.plan && checkpoint.completedStages.includes("plan_validate"));
+    let plan: DailyReportPlan;
+    if (hasCompletedPlan) {
+      plan = checkpoint!.plan as DailyReportPlan;
+      latestPlanningAudit = checkpoint?.planningAudit as DailyReportPlanningAudit | null ?? null;
+    } else {
+      const planFromProvider = await runStageWithAttempts("plan", async () => provider.planDailyReport({ candidateBriefs, template, recentTopics, recentTopicLookbackDays }));
+      plan = await runStageWithAttempts("plan_validate", async (attempt) => {
         await input.onStageUpdate?.("plan_validate");
-        const rawCandidatePlan = attempt === 1
+        const rawSelection = attempt === 1
           ? planFromProvider
-          : await provider.planDailyReport({ ledger, topicBriefs, template, recentTopicLookbackDays });
-        const candidatePlan = normalizeDailyReportPlanForValidation(rawCandidatePlan, topics, template);
-        const violations = validateDailyReportPlan(candidatePlan, topics, planningCandidates, template);
-        latestPlanAttempt = candidatePlan;
+          : await provider.planDailyReport({
+              candidateBriefs,
+              template,
+              recentTopics,
+              recentTopicLookbackDays,
+              previousPlan: latestPlanAttempt ?? undefined,
+              planViolations: latestPlanViolations ?? undefined,
+            });
+        const ordered = orderAndLimitDailyReportPlanWithAudit(
+          materializeDailyReportPlan(rawSelection),
+          template,
+          planningCandidates,
+          assessments,
+        );
+        const violations = validateDailyReportPlan(ordered.plan, planningCandidates, assessments, template);
+        latestPlanAttempt = ordered.plan;
+        latestPlanningAudit = ordered.audit;
         latestPlanViolations = violations;
         if (violations.length > 0) throw new Error(`PLAN 校验失败：${violations.map((violation) => violation.message).slice(0, 5).join("；")}`);
-        return candidatePlan;
+        return ordered.plan;
       }, { attemptKey: "PLAN_VALIDATE", matrixStage: "PLAN_VALIDATE" });
-    const planViolations = validateDailyReportPlan(plan, topics, planningCandidates, template);
+    }
+    const planViolations = validateDailyReportPlan(plan, planningCandidates, assessments, template);
     planSectionCount = plan.sections.length;
-    planSelectedCount = plan.sections.reduce((total, section) => total + section.candidateIds.length, 0);
+    planSelectedCount = getDailyReportPlanCandidateIds(plan).length;
+    mergedTopicCount = getDailyReportPlanTopics(plan).length;
     planViolationCount = planViolations.length;
     if (planViolations.length > 0) {
       throw new Error(`PLAN 校验失败：${planViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-selection-writing-v3",
+      pipelineVersion: "daily-report-topic-first-v1",
       stage: "plan_validate",
       completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
       lastCompletedStage: "plan_validate",
@@ -1476,18 +1515,21 @@ async function generateDailyReportInternal(input: {
         assessments: assessments.filter((assessment) => batch.some((candidate) => candidate.id === assessment.candidateId)),
       })),
       ledger,
-      mergedTopics: topics,
+      planningCandidateBriefs: candidateBriefs,
       plan,
+      ...(latestPlanningAudit ? { planningAudit: latestPlanningAudit } : {}),
       violations: [],
     });
-    const selectedIds = new Set(plan.sections.flatMap((section) => section.candidateIds));
+    const selectedIds = new Set(getDailyReportPlanCandidateIds(plan));
     const selectedCandidates = planningCandidates.filter((candidate) => selectedIds.has(candidate.id));
+    const selectedTopics = buildDailyReportSelectedTopics(plan, planningCandidates, assessments);
     finalizationPlan = plan;
     finalizationSelectedCandidates = selectedCandidates;
     await input.onStageUpdate?.("write");
-    let draft = normalizeDailyReportDraftForTemplate(canResume && checkpoint?.draft
-      ? checkpoint.draft as Awaited<ReturnType<typeof provider.writeDailyReport>>
-      : await runStageWithAttempts("write", async () => provider.writeDailyReport({ selectedCandidates, plan, template })), template);
+    let modelDraft: DailyReportModelDraft = canResume && checkpoint?.draft
+      ? toDailyReportModelDraft(checkpoint.draft as DailyReportModelDraft)
+      : await runStageWithAttempts("write", async () => provider.writeDailyReport({ selectedTopics, template }));
+    let draft = normalizeDailyReportDraftForTemplate(orderDailyReportDraft(attachDailyReportTopicSources(modelDraft, plan), plan, template), template);
     let draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
     stageAttempts.VALIDATE = Math.min(getDailyReportAttemptLimit("VALIDATE"), 1);
     validationViolationCount = draftViolations.length;
@@ -1504,16 +1546,17 @@ async function generateDailyReportInternal(input: {
         failureCode: null,
         resumeEligible: true,
         stageAttempts: { ...stageAttempts },
-        draft,
+        draft: modelDraft,
         violations: draftViolations,
       });
     }
     if (draftViolations.length > 0) {
       repairCount = 1;
       await input.onStageUpdate?.("repair");
-      draft = normalizeDailyReportDraftForTemplate(await runStageWithAttempts("repair", async () => provider.repairDailyReportDraft({ draft, violations: draftViolations, plan, template }), {
+      modelDraft = await runStageWithAttempts("repair", async () => provider.repairDailyReportDraft({ draft: toDailyReportModelDraft(draft), violations: draftViolations, plan, template }), {
         matrixStage: "REPAIR",
-      }), template);
+      });
+      draft = normalizeDailyReportDraftForTemplate(orderDailyReportDraft(attachDailyReportTopicSources(modelDraft, plan), plan, template), template);
       draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
       validationViolationCount = draftViolations.length;
       if (latestCheckpoint) {
@@ -1528,7 +1571,7 @@ async function generateDailyReportInternal(input: {
           failureCode: null,
           resumeEligible: draftViolations.length === 0,
           stageAttempts: { ...stageAttempts },
-          draft,
+          draft: modelDraft,
           violations: draftViolations,
         });
       }
@@ -1657,6 +1700,7 @@ async function generateDailyReportInternal(input: {
     reason: null,
     candidateCount: candidates.length,
     selectedCount,
+    planningCandidateCount,
     batchCount: planningBatchCount,
     mergedTopicCount,
     planSectionCount,
@@ -1703,9 +1747,11 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     ? taskRun.entityId
     : getTodayDailyReportDate();
   let candidateCount = 0;
-  let mergedTopicCount = 0;
+  let planningCandidateCount = 0;
   let planSectionCount = 0;
   let planSelectedCount = 0;
+  let planTruncatedTopicCount = 0;
+  let planningAudit: DailyReportPlanningAudit | null = null;
   let planViolationCount = 0;
   let repairCount = 0;
   let validationViolationCount = 0;
@@ -1767,16 +1813,23 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         });
       },
       onCheckpoint: async (checkpoint) => {
-        if (checkpoint.mergedTopics) mergedTopicCount = checkpoint.mergedTopics.length;
         if (typeof checkpoint.data?.batchCount === "number") batchCount = checkpoint.data.batchCount;
         if (checkpoint.data && Object.prototype.hasOwnProperty.call(checkpoint.data, "batchSize")) {
           batchSize = typeof checkpoint.data.batchSize === "number" ? checkpoint.data.batchSize : null;
         }
         const checkpointPlan = checkpoint.plan as DailyReportPlan | undefined;
+        if (Array.isArray(checkpoint.planningCandidateBriefs)) {
+          planningCandidateCount = checkpoint.planningCandidateBriefs.length;
+        }
         if (checkpointPlan?.sections) {
           planSectionCount = checkpointPlan.sections.length;
-          planSelectedCount = checkpointPlan.sections.reduce((total, section) => total + section.candidateIds.length, 0);
+          planSelectedCount = getDailyReportPlanCandidateIds(checkpointPlan).length;
           planViolationCount = checkpoint.violations?.length ?? 0;
+        }
+        const checkpointPlanningAudit = checkpoint.planningAudit as DailyReportPlanningAudit | undefined;
+        if (checkpointPlanningAudit && typeof checkpointPlanningAudit.truncatedTopicCount === "number") {
+          planningAudit = checkpointPlanningAudit;
+          planTruncatedTopicCount = checkpointPlanningAudit.truncatedTopicCount;
         }
         if (checkpoint.stage === "validate" || checkpoint.stage === "repair") {
           validationViolationCount = checkpoint.violations?.length ?? 0;
@@ -1813,9 +1866,11 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         status: result.skipped ? "skipped" : "succeeded",
         candidateCount: result.candidateCount,
         selectedCount: result.selectedCount,
-        mergedTopicCount: result.mergedTopicCount,
+        planningCandidateCount: result.planningCandidateCount,
         planSectionCount: result.planSectionCount,
         planSelectedCount: result.planSelectedCount,
+        planTruncatedTopicCount,
+        planningAudit,
         planViolationCount: result.planViolationCount,
         validationViolationCount: result.validationViolationCount,
         repairCount: result.repairCount,
@@ -1841,8 +1896,13 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     const failedPlan = failedCheckpoint?.plan as DailyReportPlan | undefined;
     if (failedPlan?.sections) {
       planSectionCount = failedPlan.sections.length;
-      planSelectedCount = failedPlan.sections.reduce((total, section) => total + section.candidateIds.length, 0);
+      planSelectedCount = getDailyReportPlanCandidateIds(failedPlan).length;
       planViolationCount = failedCheckpoint?.violations?.length ?? 0;
+    }
+    const failedPlanningAudit = failedCheckpoint?.planningAudit as DailyReportPlanningAudit | undefined;
+    if (failedPlanningAudit && typeof failedPlanningAudit.truncatedTopicCount === "number") {
+      planningAudit = failedPlanningAudit;
+      planTruncatedTopicCount = failedPlanningAudit.truncatedTopicCount;
     }
     const finishedAt = new Date();
     await updateTaskRun(taskRun.id, {
@@ -1858,9 +1918,11 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         taskRun,
         status: cancelled ? "cancelled" : "failed",
         candidateCount,
-        mergedTopicCount,
+        planningCandidateCount,
         planSectionCount,
         planSelectedCount,
+        planTruncatedTopicCount,
+        planningAudit,
         planViolationCount,
         validationViolationCount,
         repairCount,
