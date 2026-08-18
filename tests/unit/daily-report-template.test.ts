@@ -126,6 +126,23 @@ describe("daily report template config", () => {
     expect(upgradeDefaultDailyReportTemplate(template).headlineInstruction).toBe("管理员自定义标题规则。");
   });
 
+  it("updates the previous default global rule without changing custom templates", () => {
+    const previousDefault = parseDailyReportTemplateJson(JSON.stringify({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      globalRules: [
+        ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(0, 3),
+        "同一事件只出现一次，避免跨栏目重复。",
+        ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(4),
+      ],
+    }))!;
+
+    expect(upgradeDefaultDailyReportTemplate(previousDefault)).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE);
+    expect(upgradeDefaultDailyReportTemplate({
+      ...previousDefault,
+      globalRules: ["管理员自定义规则。"],
+    }).globalRules).toEqual(["管理员自定义规则。"]);
+  });
+
   it("updates the previously seeded v2 default with generated section keys", () => {
     const template = parseDailyReportTemplateJson(JSON.stringify({
       ...DEFAULT_DAILY_REPORT_TEMPLATE,

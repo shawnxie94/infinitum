@@ -171,7 +171,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     "每个条目只描述一个独立事件、产品、漏洞、模型、政策或研究成果；不同主体、不同产品或不同事件不要合并成一条。",
     "多个来源只能用于同一事件的互证；如果只是主题相近但事实不同，应拆成不同条目或只保留最相关来源。",
     "只使用输入候选内容，不编造事实或输入之外的信息。",
-    "同一事件只出现一次，避免跨栏目重复。",
+    "严格按输入中的已确定主题逐条写作；不要合并、删除、改栏目或新增主题。主题之间的重复关系由上游选题和本地校验处理。",
     "正文只写内容本身，不要带栏目名、字段名或标签前缀。",
     "除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。",
   ],
@@ -201,6 +201,11 @@ const PREVIOUS_DEFAULT_HEADLINE_INSTRUCTION =
 const PREVIOUS_DEFAULT_RECENT_TOPIC_RULES = [
   "如果候选内容与最近 7 天已写主题只是同一事件的重复报道，不要再次写入。",
   ...DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES.slice(1),
+];
+const PREVIOUS_DEFAULT_GLOBAL_RULES = [
+  ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(0, 3),
+  "同一事件只出现一次，避免跨栏目重复。",
+  ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(4),
 ];
 
 function getLegacyDefaultDailyReportTemplate() {
@@ -249,6 +254,18 @@ function getPreviouslyMigratedV2DefaultDailyReportTemplate() {
   if (otherWorthReading?.type === "section") {
     otherWorthReading.item.bodyInstruction = "不要求输出正文，仅保留条目标题和来源；如确有必要可补充简短说明。";
   }
+  return template;
+}
+
+function getPreviouslyMigratedV2DefaultWithPreviousGlobalRules() {
+  const template = getPreviouslyMigratedV2DefaultDailyReportTemplate();
+  template.globalRules = PREVIOUS_DEFAULT_GLOBAL_RULES;
+  return template;
+}
+
+function getCurrentShapeDefaultWithPreviousGlobalRules() {
+  const template = cloneDefaultTemplate();
+  template.globalRules = PREVIOUS_DEFAULT_GLOBAL_RULES;
   return template;
 }
 
@@ -373,12 +390,16 @@ export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemp
   const legacyDefaultTemplate = getLegacyDefaultDailyReportTemplate();
   const previouslySeededV2DefaultTemplate = getPreviouslySeededV2DefaultDailyReportTemplate();
   const previouslyMigratedV2DefaultTemplate = getPreviouslyMigratedV2DefaultDailyReportTemplate();
+  const previouslyMigratedV2DefaultWithPreviousGlobalRules = getPreviouslyMigratedV2DefaultWithPreviousGlobalRules();
+  const currentShapeDefaultWithPreviousGlobalRules = getCurrentShapeDefaultWithPreviousGlobalRules();
   const isUntouchedDefault = [
     defaultTemplate,
     previousDefaultTemplate,
     legacyDefaultTemplate,
     previouslySeededV2DefaultTemplate,
     previouslyMigratedV2DefaultTemplate,
+    previouslyMigratedV2DefaultWithPreviousGlobalRules,
+    currentShapeDefaultWithPreviousGlobalRules,
   ].some(
     (candidate) => JSON.stringify(template) === JSON.stringify(candidate),
   );
