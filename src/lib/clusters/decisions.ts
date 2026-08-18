@@ -78,31 +78,39 @@ export async function getClusterPairDecisionBlock(input: {
   inputHash: string;
   now: Date;
 }) {
-  const latestDeclined = await prisma.clusterDecision.findFirst({
+  const latestDecision = await prisma.clusterDecision.findFirst({
     where: {
       kind: "cluster_pair",
       pairKey: input.pairKey,
       inputHash: input.inputHash,
-      verdict: "declined",
+      verdict: { in: ["declined", "ambiguous"] },
+      appliedAt: null,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 
-  if (!latestDeclined) {
+  if (!latestDecision) {
     return null;
   }
 
-  if (latestDeclined.attemptCount >= MAX_DECLINED_ATTEMPTS) {
+  if (latestDecision.verdict === "ambiguous") {
     return {
-      reason: "declined_attempt_limit" as const,
-      decision: latestDeclined,
+      reason: "ambiguous_pending_review" as const,
+      decision: latestDecision,
     };
   }
 
-  if (latestDeclined.expiresAt && latestDeclined.expiresAt.getTime() > input.now.getTime()) {
+  if (latestDecision.attemptCount >= MAX_DECLINED_ATTEMPTS) {
+    return {
+      reason: "declined_attempt_limit" as const,
+      decision: latestDecision,
+    };
+  }
+
+  if (latestDecision.expiresAt && latestDecision.expiresAt.getTime() > input.now.getTime()) {
     return {
       reason: "declined_cooldown" as const,
-      decision: latestDeclined,
+      decision: latestDecision,
     };
   }
 
@@ -117,6 +125,29 @@ export async function markDecisionApplied(decisionId: string, appliedAction: str
       appliedAction,
     },
   });
+}
+
+export async function markOrphanedClusterPairDecisionsStale(now = new Date()) {
+  return prisma.$executeRaw`
+    UPDATE "cluster_decisions"
+    SET "appliedAt" = ${now.getTime()},
+        "appliedAction" = ${"stale_orphan_cluster"}
+    WHERE "kind" = ${"cluster_pair"}
+      AND "verdict" IN (${Prisma.join(["approved", "ambiguous"])})
+      AND "appliedAt" IS NULL
+      AND (
+        "leftClusterId" IS NULL
+        OR "rightClusterId" IS NULL
+        OR NOT EXISTS (
+          SELECT 1 FROM "content_clusters" left_cluster
+          WHERE left_cluster."id" = "cluster_decisions"."leftClusterId"
+        )
+        OR NOT EXISTS (
+          SELECT 1 FROM "content_clusters" right_cluster
+          WHERE right_cluster."id" = "cluster_decisions"."rightClusterId"
+        )
+      )
+  `;
 }
 
 function mapReviewCluster(cluster: {
@@ -142,26 +173,49 @@ function mapReviewCluster(cluster: {
 export async function listClusterReviewCandidates(page = 1, pageSize = 20, options?: { since?: Date | null }) {
   const normalizedPage = Math.max(1, page);
   const normalizedPageSize = Math.min(100, Math.max(1, pageSize));
-  const where: Prisma.ClusterDecisionWhereInput = {
-    kind: "cluster_pair" as const,
-    verdict: { in: ["approved", "ambiguous"] as ClusterDecisionVerdict[] },
-    appliedAt: null,
-    leftClusterId: { not: null },
-    rightClusterId: { not: null },
-    ...(options?.since ? { createdAt: { gte: options.since } } : {}),
-  };
-  const [decisions, total] = await Promise.all([
-    prisma.clusterDecision.findMany({
-      where,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip: (normalizedPage - 1) * normalizedPageSize,
-      take: normalizedPageSize,
-    }),
-    prisma.clusterDecision.count({ where }),
+  const skip = (normalizedPage - 1) * normalizedPageSize;
+  const createdAtFilter = options?.since
+    ? Prisma.sql`AND d."createdAt" >= ${options.since.getTime()}`
+    : Prisma.empty;
+  const reviewDecisionFilter = Prisma.sql`
+    WHERE d."kind" = ${"cluster_pair"}
+      AND d."verdict" IN (${Prisma.join(["approved", "ambiguous"])})
+      AND d."appliedAt" IS NULL
+      AND d."leftClusterId" IS NOT NULL
+      AND d."rightClusterId" IS NOT NULL
+      ${createdAtFilter}
+  `;
+  const [decisionIdRows, totalRows] = await Promise.all([
+    prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT d.id
+      FROM "cluster_decisions" d
+      INNER JOIN "content_clusters" left_cluster ON left_cluster.id = d."leftClusterId"
+      INNER JOIN "content_clusters" right_cluster ON right_cluster.id = d."rightClusterId"
+      ${reviewDecisionFilter}
+      ORDER BY d."createdAt" DESC, d.id DESC
+      LIMIT ${normalizedPageSize}
+      OFFSET ${skip}
+    `),
+    prisma.$queryRaw<Array<{ total: number | bigint }>>(Prisma.sql`
+      SELECT COUNT(*) AS total
+      FROM "cluster_decisions" d
+      INNER JOIN "content_clusters" left_cluster ON left_cluster.id = d."leftClusterId"
+      INNER JOIN "content_clusters" right_cluster ON right_cluster.id = d."rightClusterId"
+      ${reviewDecisionFilter}
+    `),
   ]);
+  const decisionIds = decisionIdRows.map((row) => row.id);
+  const decisions = decisionIds.length
+    ? await prisma.clusterDecision.findMany({ where: { id: { in: decisionIds } } })
+    : [];
+  const decisionsById = new Map(decisions.map((decision) => [decision.id, decision]));
+  const orderedDecisions = decisionIds
+    .map((id) => decisionsById.get(id))
+    .filter((decision): decision is (typeof decisions)[number] => Boolean(decision));
+  const total = Number(totalRows[0]?.total ?? 0);
   const clusterIds = Array.from(
     new Set(
-      decisions
+      orderedDecisions
         .flatMap((decision) => [decision.leftClusterId, decision.rightClusterId])
         .filter((id): id is string => Boolean(id)),
     ),
@@ -181,7 +235,7 @@ export async function listClusterReviewCandidates(page = 1, pageSize = 20, optio
   const clustersById = new Map(clusters.map((cluster) => [cluster.id, cluster]));
   const candidates: ClusterReviewCandidateDTO[] = [];
 
-  for (const decision of decisions) {
+  for (const decision of orderedDecisions) {
     if (!decision.leftClusterId || !decision.rightClusterId) {
       continue;
     }

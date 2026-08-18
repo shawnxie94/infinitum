@@ -53,6 +53,68 @@ describe("cluster assignment", () => {
     }
   });
 
+  it("loads affected clusters outside the ordinary merge scan limit", async () => {
+    const executeRawSpy = vi.spyOn(prisma, "$executeRaw").mockResolvedValue(0);
+    const findManySpy = vi.spyOn(prisma.contentCluster, "findMany")
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: "dirty-outside-scan",
+        title: "受影响聚合",
+        summary: "受影响聚合摘要",
+        fingerprint: "dirty-outside-scan",
+        mergeInputHash: null,
+        eventType: "launch",
+        eventSubject: "OpenAI",
+        eventAction: "发布",
+        eventObject: "Agent",
+        eventDate: "2026-04-21",
+        itemCount: 1,
+        latestPublishedAt: new Date("2026-04-01T10:00:00.000Z"),
+      } as never]);
+
+    try {
+      const result = await executeClusterMerge(undefined, new Date("2026-04-21T10:00:00.000Z"), {
+        liveClusterIds: ["dirty-outside-scan"],
+      });
+
+      expect(result.baseClusters).toBe(1);
+      expect(findManySpy).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        where: expect.objectContaining({
+          id: { in: ["dirty-outside-scan"] },
+        }),
+      }));
+    } finally {
+      executeRawSpy.mockRestore();
+      findManySpy.mockRestore();
+    }
+  });
+
+  it("marks orphaned cluster pair decisions stale while preserving their audit record", async () => {
+    await prisma.clusterDecision.create({
+      data: {
+        id: "orphaned-merge-decision",
+        kind: "cluster_pair",
+        source: "llm",
+        verdict: "ambiguous",
+        leftClusterId: "missing-left-cluster",
+        rightClusterId: "missing-right-cluster",
+        pairKey: "missing-left-cluster::missing-right-cluster",
+        inputHash: "orphaned-input",
+        reasonCode: "insufficient_evidence",
+      },
+    });
+
+    await executeClusterMerge(undefined, new Date("2026-04-21T10:00:00.000Z"));
+
+    await expect(
+      prisma.clusterDecision.findUnique({ where: { id: "orphaned-merge-decision" } }),
+    ).resolves.toMatchObject({
+      verdict: "ambiguous",
+      appliedAction: "stale_orphan_cluster",
+      appliedAt: expect.any(Date),
+    });
+  });
+
   it("keeps sources with aggregation disabled out of cluster matching", async () => {
     const [aggregatingSource, isolatedSource] = await Promise.all([
       prisma.source.create({
@@ -1092,7 +1154,7 @@ describe("cluster assignment", () => {
         },
       ],
     });
-    const mergeClustersAi = vi.fn().mockImplementation(async (clustersJson: string) => {
+    const assessClusterMergePairs = vi.fn().mockImplementation(async (clustersJson: string) => {
       const input = JSON.parse(clustersJson) as {
         pairs: Array<{ left: { id: string }; right: { id: string } }>;
       };
@@ -1106,10 +1168,17 @@ describe("cluster assignment", () => {
         ),
       ).toBe(true);
 
-      return [["openai-contract-cluster", "microsoft-contract-cluster"]];
+      return [{
+        leftClusterId: "openai-contract-cluster",
+        rightClusterId: "microsoft-contract-cluster",
+        verdict: "approved" as const,
+        confidence: 95,
+        reasonCode: "same_event",
+        reasonText: "主体、对象和时间一致",
+      }];
     });
     const aiProvider = {
-      mergeClusters: mergeClustersAi,
+      assessClusterMergePairs,
     } as unknown as AiProvider;
 
     const result = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));
@@ -1120,7 +1189,7 @@ describe("cluster assignment", () => {
       mergedCount: 1,
       affectedClusterIds: ["openai-contract-cluster"],
     });
-    expect(mergeClustersAi).toHaveBeenCalledTimes(1);
+    expect(assessClusterMergePairs).toHaveBeenCalledTimes(1);
     await expect(prisma.contentCluster.findUnique({ where: { id: "microsoft-contract-cluster" } })).resolves.toBeNull();
     await expect(
       prisma.item.count({
@@ -1130,6 +1199,119 @@ describe("cluster assignment", () => {
         },
       }),
     ).resolves.toBe(2);
+  });
+
+  it("persists AI ambiguous verdicts for manual review without merging", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Ambiguous Merge Feed",
+        rssUrl: "https://ambiguous-merge.example.com/feed.xml",
+        siteUrl: "https://ambiguous-merge.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    await prisma.contentCluster.createMany({
+      data: [
+        {
+          id: "ambiguous-left-cluster",
+          kind: "topic",
+          title: "OpenAI 发布 Agent 工具",
+          summary: "OpenAI 发布 Agent 工具。",
+          score: 84,
+          itemCount: 1,
+          latestPublishedAt: new Date("2026-04-20T09:00:00.000Z"),
+          status: "active",
+          fingerprint: "ambiguous-left",
+          eventType: "release",
+          eventSubject: "OpenAI",
+          eventAction: "发布",
+          eventObject: "Agent 工具",
+          eventDate: "2026-04-20",
+        },
+        {
+          id: "ambiguous-right-cluster",
+          kind: "topic",
+          title: "OpenAI 更新 Agent 工具",
+          summary: "OpenAI 更新 Agent 工具。",
+          score: 82,
+          itemCount: 1,
+          latestPublishedAt: new Date("2026-04-20T10:00:00.000Z"),
+          status: "active",
+          fingerprint: "ambiguous-right",
+          eventType: "release",
+          eventSubject: "OpenAI",
+          eventAction: "更新",
+          eventObject: "Agent 工具",
+          eventDate: "2026-04-20",
+        },
+      ],
+    });
+    await prisma.item.createMany({
+      data: [
+        {
+          id: "ambiguous-left-item",
+          sourceId: source.id,
+          clusterId: "ambiguous-left-cluster",
+          originalUrl: "https://ambiguous-merge.example.com/left",
+          canonicalUrl: "https://ambiguous-merge.example.com/left",
+          urlHash: "ambiguous-left-hash",
+          originalTitle: "OpenAI 发布 Agent 工具",
+          publishedAt: new Date("2026-04-20T09:00:00.000Z"),
+          summaryText: "OpenAI 发布 Agent 工具。",
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 84,
+          qualityRationale: "relevant",
+        },
+        {
+          id: "ambiguous-right-item",
+          sourceId: source.id,
+          clusterId: "ambiguous-right-cluster",
+          originalUrl: "https://ambiguous-merge.example.com/right",
+          canonicalUrl: "https://ambiguous-merge.example.com/right",
+          urlHash: "ambiguous-right-hash",
+          originalTitle: "OpenAI 更新 Agent 工具",
+          publishedAt: new Date("2026-04-20T10:00:00.000Z"),
+          summaryText: "OpenAI 更新 Agent 工具。",
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 82,
+          qualityRationale: "relevant",
+        },
+      ],
+    });
+    const assessClusterMergePairs = vi.fn().mockResolvedValue([{
+      leftClusterId: "ambiguous-left-cluster",
+      rightClusterId: "ambiguous-right-cluster",
+      verdict: "ambiguous" as const,
+      confidence: 62,
+      reasonCode: "insufficient_evidence",
+      reasonText: "主体和对象相关，但动作不同",
+    }]);
+
+    const result = await executeClusterMerge(
+      { assessClusterMergePairs } as unknown as AiProvider,
+      new Date("2026-04-21T10:00:00.000Z"),
+    );
+
+    expect(result).toMatchObject({
+      decisionsAmbiguous: 1,
+      mergedCount: 0,
+      failedGroups: 0,
+    });
+    await expect(
+      prisma.clusterDecision.findFirst({
+        where: { reasonCode: "insufficient_evidence" },
+        orderBy: { createdAt: "desc" },
+      }),
+    ).resolves.toMatchObject({
+      verdict: "ambiguous",
+      confidence: 62,
+      reasonText: "主体和对象相关，但动作不同",
+    });
+    await expect(prisma.contentCluster.count()).resolves.toBe(2);
   });
 
   it("uses declined decision cooldowns and stops after three declined attempts", async () => {
@@ -1257,6 +1439,7 @@ describe("cluster assignment", () => {
     expect(secondPass).toMatchObject({
       dirtyPairs: 0,
       precomputedCleanPairsUsed: 1,
+      legacyProtocolPairs: 1,
     });
     expect(thirdPass).toMatchObject({
       dirtyPairs: 0,

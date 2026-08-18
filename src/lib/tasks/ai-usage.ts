@@ -132,6 +132,14 @@ export function createTaskAiUsageTracker(
           syncEstimateFloor();
           return aiProvider.matchClusterCandidate(inputText, metadata);
         },
+        assessClusterMergePairs: aiProvider.assessClusterMergePairs
+          ? async (clustersJson) => {
+              incrementActual("cluster_merge");
+              incrementEstimated("cluster_merge");
+              syncEstimateFloor();
+              return aiProvider.assessClusterMergePairs!(clustersJson);
+            }
+          : undefined,
         async mergeClusters(clustersJson) {
           incrementActual("cluster_merge");
           incrementEstimated("cluster_merge");

@@ -490,6 +490,69 @@ describe("/api/admin/clusters", () => {
     });
   });
 
+  it("excludes orphaned cluster decisions before counting and paginating", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+    await prisma.contentCluster.create({
+      data: {
+        id: "cluster-review-source",
+        kind: "topic",
+        title: "OpenAI Agent launch follow-up",
+        summary: "复核摘要",
+        score: 78,
+        itemCount: 1,
+        latestPublishedAt: new Date("2026-04-10T07:00:00.000Z"),
+        status: "active",
+        fingerprint: "openai-agent-review-source",
+      },
+    });
+    await prisma.clusterDecision.createMany({
+      data: [
+        {
+          id: "decision-review-valid",
+          kind: "cluster_pair",
+          source: "llm",
+          verdict: "ambiguous",
+          leftClusterId: "cluster-1",
+          rightClusterId: "cluster-review-source",
+          pairKey: "cluster-1::cluster-review-source",
+          inputHash: "valid-input",
+          createdAt: new Date("2026-04-10T07:00:00.000Z"),
+        },
+        {
+          id: "decision-review-orphan-left",
+          kind: "cluster_pair",
+          source: "llm",
+          verdict: "approved",
+          leftClusterId: "missing-left-cluster",
+          rightClusterId: "cluster-review-source",
+          pairKey: "missing-left-cluster::cluster-review-source",
+          inputHash: "orphan-left-input",
+          createdAt: new Date("2026-04-10T09:00:00.000Z"),
+        },
+        {
+          id: "decision-review-orphan-right",
+          kind: "cluster_pair",
+          source: "llm",
+          verdict: "approved",
+          leftClusterId: "cluster-1",
+          rightClusterId: "missing-right-cluster",
+          pairKey: "cluster-1::missing-right-cluster",
+          inputHash: "orphan-right-input",
+          createdAt: new Date("2026-04-10T08:00:00.000Z"),
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/admin/clusters/review-candidates/route");
+    const response = await GET(new Request("http://localhost/api/admin/clusters/review-candidates?page=1&pageSize=1"));
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.total).toBe(1);
+    expect(json.candidates).toHaveLength(1);
+    expect(json.candidates[0].id).toBe("decision-review-valid");
+  });
+
   it("merges a cluster review candidate and marks the decision applied", async () => {
     requireAdmin.mockResolvedValue(undefined);
     mergeClusters.mockResolvedValue({

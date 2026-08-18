@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_CLUSTER_MERGE_PROMPT,
   DEFAULT_DAILY_REPORT_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { prisma } from "@/lib/db";
@@ -160,6 +163,71 @@ describe("admin settings service", () => {
       where: { id: "prompt-custom" },
     });
     expect(untouched.systemPrompt).toBe(customPrompt);
+  });
+
+  it("upgrades the untouched legacy cluster merge prompt idempotently", async () => {
+    await prisma.promptConfig.create({
+      data: {
+        id: "prompt-legacy-cluster-merge",
+        name: "默认聚合合并提示词",
+        type: "cluster_merge",
+        prompt: "候选聚合 Pair JSON：{{clustersJson}}",
+        systemPrompt: LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
+        isEnabled: true,
+        isDefault: true,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const upgraded = await prisma.promptConfig.findUniqueOrThrow({
+      where: { id: "prompt-legacy-cluster-merge" },
+    });
+    expect(upgraded.systemPrompt).toBe(DEFAULT_CLUSTER_MERGE_PROMPT);
+
+    await ensureRuntimeConfigSeeded();
+    const afterSecondRun = await prisma.promptConfig.findUniqueOrThrow({
+      where: { id: "prompt-legacy-cluster-merge" },
+    });
+    expect(afterSecondRun.systemPrompt).toBe(DEFAULT_CLUSTER_MERGE_PROMPT);
+  });
+
+  it("removes historical compatibility wording from the upgraded cluster merge prompt", async () => {
+    await prisma.promptConfig.create({
+      data: {
+        id: "prompt-previous-cluster-merge",
+        name: "默认聚合合并提示词",
+        type: "cluster_merge",
+        prompt: "候选聚合 Pair JSON：{{clustersJson}}",
+        systemPrompt: PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
+        isEnabled: true,
+        isDefault: true,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const upgraded = await prisma.promptConfig.findUniqueOrThrow({
+      where: { id: "prompt-previous-cluster-merge" },
+    });
+    expect(upgraded.systemPrompt).toBe(DEFAULT_CLUSTER_MERGE_PROMPT);
+    expect(upgraded.systemPrompt).not.toContain("approvedPairs");
+    expect(upgraded.systemPrompt).not.toContain("mergeGroups");
+  });
+
+  it("rejects newly saved legacy cluster merge output protocols", async () => {
+    await expect(createPromptConfig({
+      name: "旧版聚合合并提示词",
+      type: "cluster_merge",
+      systemPrompt: '只输出 JSON：{"approvedPairs": []}',
+      prompt: "候选聚合 Pair JSON：{{clustersJson}}",
+      temperature: 0,
+      maxTokens: 2000,
+      topP: null,
+      modelApiConfigId: null,
+      isEnabled: true,
+      isDefault: false,
+    })).rejects.toThrow("必须使用 decisions/verdict 协议");
   });
 
   it("saves content extraction connection and limits", async () => {

@@ -349,6 +349,85 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain("\"pairs\"");
   });
 
+  it("parses explicit cluster merge verdicts including ambiguous pairs", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            decisions: [
+              {
+                leftClusterId: "cluster-a",
+                rightClusterId: "cluster-b",
+                verdict: "approved",
+                confidence: 0.95,
+                reasonCode: "same_event",
+                reasonText: "主体、对象和时间一致",
+              },
+              {
+                leftClusterId: "cluster-a",
+                rightClusterId: "cluster-c",
+                verdict: "ambiguous",
+                confidence: 0.62,
+                reasonCode: "insufficient_evidence",
+                reasonText: "主体相关但对象证据不足",
+              },
+            ],
+          }),
+        },
+      }],
+    });
+    const provider = createAiProvider(
+      {
+        apiKey: "sk-test",
+        baseURL: "https://example.com/v1",
+        model: "test-model",
+      },
+      undefined,
+      {
+        chat: {
+          completions: {
+            create,
+          },
+        },
+      },
+    );
+
+    await expect(provider.assessClusterMergePairs?.(JSON.stringify({
+      pairs: [
+        {
+          left: { id: "cluster-a", title: "A", summary: "A", itemCount: 10 },
+          right: { id: "cluster-b", title: "B", summary: "B", itemCount: 5 },
+          score: 95,
+        },
+        {
+          left: { id: "cluster-a", title: "A", summary: "A", itemCount: 10 },
+          right: { id: "cluster-c", title: "C", summary: "C", itemCount: 1 },
+          score: 60,
+        },
+      ],
+    }))).resolves.toEqual([
+      {
+        leftClusterId: "cluster-a",
+        rightClusterId: "cluster-b",
+        verdict: "approved",
+        confidence: 95,
+        reasonCode: "same_event",
+        reasonText: "主体、对象和时间一致",
+      },
+      {
+        leftClusterId: "cluster-a",
+        rightClusterId: "cluster-c",
+        verdict: "ambiguous",
+        confidence: 62,
+        reasonCode: "insufficient_evidence",
+        reasonText: "主体相关但对象证据不足",
+      },
+    ]);
+
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("逐一判断");
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"decisions"');
+  });
+
   it("ignores approved merge pairs that were not present in the local pair input", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [

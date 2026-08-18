@@ -104,6 +104,45 @@ export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基�
 - 没有出现在输入 pairs 中的两个聚合组禁止输出为 approved pair
 - 多个聚合组是否最终合并由系统根据 approved pair 组装，你只负责确认两两 Pair
 
+输出要求：
+- 必须逐一判断输入 pairs 中的每一个 Pair，不能遗漏、重复或新增 Pair
+- verdict 只能是 approved、declined、ambiguous
+- approved：明确是同一具体事件，可以合并
+- declined：明确不是同一具体事件，不应合并
+- ambiguous：有相关性但证据不足，无法安全决定，交给人工复核
+- confidence 使用 0 到 1 的数字
+- reasonCode 使用简短英文枚举风格字符串，reasonText 用中文说明关键依据
+
+只输出 JSON：{"decisions":[{"leftClusterId":"clusterId1","rightClusterId":"clusterId2","verdict":"approved","confidence":0.95,"reasonCode":"same_event","reasonText":"主体、对象和时间一致"}]}
+每个输入 Pair 都必须在 decisions 中出现一次。`;
+
+/** Exact previous default used only to migrate the already-upgraded prompt. */
+export const PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT = DEFAULT_CLUSTER_MERGE_PROMPT.replace(
+  "每个输入 Pair 都必须在 decisions 中出现一次。",
+  "每个输入 Pair 都必须在 decisions 中出现一次。不要输出 approvedPairs、mergeGroups 或额外解释。",
+);
+
+/** Exact legacy default used only by the idempotent runtime migration. */
+export const LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。
+
+判断标准：
+1. 事件主体（eventSubject）一致，或指向同一公司/机构/产品的不同表述
+2. 关键对象（eventObject）一致，或指向同一产品/功能/版本/政策的不同表述
+3. 事件动作（eventAction）一致或高度相关
+4. 事件类型（eventType）一致
+5. 时间窗口接近（7天内）
+
+注意：
+- 输入 JSON 的 pairs 数组由本地规则预筛选生成；每个 Pair 只有 left 和 right 两个聚合组
+- left/right 是聚合组当前快照；id 是聚合组标识，itemCount 是该聚合组包含的条目数
+- title 和 summary 是展示文本，用于理解事件；eventType、eventSubject、eventAction、eventObject、eventDate 是结构化事件线索，应优先用于判断是否同一具体事件
+- pairs[].score 是本地规则对该 Pair 的相关性评分，只表示需要复核的优先级和相似强度；分数高不等于必须合并，最终仍以两个聚合组是否为同一具体事件为准
+- 只合并描述同一具体事件的聚合组，不要因为主题相近、赛道相同、公司相同而合并
+- 如果无法确定是否同一事件，保守处理，不要合并
+- 只判断输入 pairs 中明确给出的 Pair，不要从全量候选里重新发现关系
+- 没有出现在输入 pairs 中的两个聚合组禁止输出为 approved pair
+- 多个聚合组是否最终合并由系统根据 approved pair 组装，你只负责确认两两 Pair
+
 只输出 JSON：{"approvedPairs": [["clusterId1", "clusterId2"], ["clusterId3", "clusterId4"]]}
 不需要合并时输出 {"approvedPairs": []}。`;
 

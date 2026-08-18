@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import {
   CLUSTER_AI_CANDIDATE_LIMIT,
   CLUSTER_AI_MIN_SCORE,
@@ -17,7 +18,13 @@ import {
   CLUSTER_MERGE_SCAN_CLUSTER_LIMIT,
 } from "@/config/constants";
 
-import { createAiProvider, type AiEventSignature, type AiProvider } from "@/lib/ai/provider";
+import {
+  buildClusterMergeGroupsFromDecisions,
+  createAiProvider,
+  type AiEventSignature,
+  type AiProvider,
+  type ClusterMergeDecision,
+} from "@/lib/ai/provider";
 import {
   buildCandidateRange,
   buildCandidateRangeKey,
@@ -56,6 +63,7 @@ import {
 } from "@/lib/clusters/constraints";
 import {
   getClusterPairDecisionBlock,
+  markOrphanedClusterPairDecisionsStale,
   recordClusterDecision,
 } from "@/lib/clusters/decisions";
 import { buildEventIdentity } from "@/lib/clusters/identity";
@@ -1038,10 +1046,12 @@ export type ClusterMergePassResult = {
   precomputedCleanPairsInvalidSkipped: number;
   blockedByCannotLink: number;
   blockedByDeclinedDecision: number;
+  blockedByReviewDecision: number;
   decisionsApproved: number;
   decisionsDeclined: number;
   decisionsAmbiguous: number;
   decisionsFailed: number;
+  legacyProtocolPairs: number;
   dirtyPairs: number;
   preLimitCandidates: number;
   postLimitCandidates: number;
@@ -1276,6 +1286,7 @@ async function filterBlockedClusterMergeEdges(input: {
   const filteredPairs: ClusterMergeCandidateEdge[] = [];
   let blockedByCannotLink = 0;
   let blockedByDeclinedDecision = 0;
+  let blockedByReviewDecision = 0;
 
   for (const edge of input.allowedPairs) {
     const pair = getClusterMergePairCandidates(input.candidatesById, edge);
@@ -1299,7 +1310,11 @@ async function filterBlockedClusterMergeEdges(input: {
       now: input.now,
     });
     if (decisionBlock) {
-      blockedByDeclinedDecision += 1;
+      if (decisionBlock.reason === "ambiguous_pending_review") {
+        blockedByReviewDecision += 1;
+      } else {
+        blockedByDeclinedDecision += 1;
+      }
       continue;
     }
 
@@ -1310,17 +1325,25 @@ async function filterBlockedClusterMergeEdges(input: {
     allowedPairs: filteredPairs,
     blockedByCannotLink,
     blockedByDeclinedDecision,
+    blockedByReviewDecision,
   };
 }
 
 async function recordClusterMergeDecisions(input: {
   candidatesById: Map<string, ClusterMergeCandidate>;
   allowedPairs: ClusterMergeCandidateEdge[];
-  mergeGroups: string[][];
+  decisions?: ClusterMergeDecision[];
+  mergeGroups?: string[][];
   verdictOnMissing: "declined" | "failed";
   now: Date;
 }) {
   const decisions: Array<Awaited<ReturnType<typeof recordClusterDecision>>> = [];
+  const decisionByPairKey = new Map(
+    (input.decisions ?? []).map((decision) => [
+      buildClusterMergeEdgeKey(decision.leftClusterId, decision.rightClusterId),
+      decision,
+    ]),
+  );
 
   for (const edge of input.allowedPairs) {
     const pair = getClusterMergePairCandidates(input.candidatesById, edge);
@@ -1328,18 +1351,26 @@ async function recordClusterMergeDecisions(input: {
       continue;
     }
 
-    const approved = input.mergeGroups.some((group) => groupContainsClusterMergePair(group, edge.leftId, edge.rightId));
+    const aiDecision = decisionByPairKey.get(buildClusterMergeEdgeKey(edge.leftId, edge.rightId));
+    const legacyApproved = input.mergeGroups?.some((group) =>
+      groupContainsClusterMergePair(group, edge.leftId, edge.rightId),
+    ) ?? false;
+    const verdict = aiDecision?.verdict
+      ?? (input.mergeGroups ? (legacyApproved ? "approved" : "declined") : input.verdictOnMissing);
     decisions.push(
       await recordClusterDecision({
         kind: "cluster_pair",
         source: "llm",
-        verdict: input.verdictOnMissing === "failed" ? "failed" : approved ? "approved" : "declined",
+        verdict,
         leftClusterId: edge.leftId,
         rightClusterId: edge.rightId,
         pairKey: buildClusterMergeEdgeKey(edge.leftId, edge.rightId),
         inputHash: buildClusterMergePairInputHash(pair.left, pair.right),
         localScore: edge.score,
-        reasonCode: input.verdictOnMissing === "failed" ? "llm_failure" : approved ? "llm_approved" : "llm_declined",
+        confidence: aiDecision?.confidence,
+        reasonCode: aiDecision?.reasonCode
+          ?? (verdict === "failed" ? "llm_failure" : verdict === "approved" ? "llm_approved" : "llm_declined"),
+        reasonText: aiDecision?.reasonText,
         now: input.now,
       }),
     );
@@ -1376,27 +1407,48 @@ async function refreshRecentClusterItemCounts(lookbackSince: Date) {
   `;
 }
 
-async function loadRecentMergeClusters(lookbackSince: Date) {
-  return prisma.contentCluster.findMany({
-    where: {
-      status: "active",
-      latestPublishedAt: { gte: lookbackSince },
-      items: {
-        some: {
-          status: "processed",
-          moderationStatus: { in: ["allowed", "restored"] },
-          OR: [{ source: { aggregationEnabled: true } }, { parentItemId: { not: null } }],
-        },
+async function loadRecentMergeClusters(lookbackSince: Date, affectedClusterIds?: Iterable<string>) {
+  const baseWhere: Prisma.ContentClusterWhereInput = {
+    status: "active" as const,
+    latestPublishedAt: { gte: lookbackSince },
+    items: {
+      some: {
+        status: "processed" as const,
+        moderationStatus: { in: ["allowed", "restored"] },
+        OR: [{ source: { aggregationEnabled: true } }, { parentItemId: { not: null } }],
       },
     },
-    orderBy: [
-      { latestPublishedAt: "desc" },
-      { updatedAt: "desc" },
-      { itemCount: "desc" },
-      { id: "asc" },
-    ],
+  };
+  const orderBy = [
+    { latestPublishedAt: "desc" as const },
+    { updatedAt: "desc" as const },
+    { itemCount: "desc" as const },
+    { id: "asc" as const },
+  ];
+  const recentClusters = await prisma.contentCluster.findMany({
+    where: baseWhere,
+    orderBy,
     take: CLUSTER_MERGE_SCAN_CLUSTER_LIMIT,
   });
+  const affectedIds = [...new Set(affectedClusterIds ?? [])];
+
+  if (affectedIds.length === 0) {
+    return recentClusters;
+  }
+
+  const affectedClusters = await prisma.contentCluster.findMany({
+    where: {
+      ...baseWhere,
+      id: { in: affectedIds },
+    },
+    orderBy,
+  });
+  const existingIds = new Set(recentClusters.map((cluster) => cluster.id));
+
+  return [
+    ...affectedClusters,
+    ...recentClusters.filter((cluster) => !existingIds.has(cluster.id)),
+  ];
 }
 
 function sleep(ms: number) {
@@ -1422,11 +1474,13 @@ export async function executeClusterMerge(
     markEvaluatedMs: 0,
   };
 
+  await markOrphanedClusterPairDecisionsStale(now);
+
   const refreshStartedAt = Date.now();
   await refreshRecentClusterItemCounts(lookbackSince);
   timings.refreshItemCountsMs = Date.now() - refreshStartedAt;
   const loadStartedAt = Date.now();
-  const recentClusters = await loadRecentMergeClusters(lookbackSince);
+  const recentClusters = await loadRecentMergeClusters(lookbackSince, liveClusterIds ?? undefined);
   timings.loadClustersMs = Date.now() - loadStartedAt;
   const liveClusters = liveClusterIds
     ? recentClusters.filter((cluster) => liveClusterIds.has(cluster.id))
@@ -1473,10 +1527,12 @@ export async function executeClusterMerge(
     precomputedCleanPairsInvalidSkipped: precomputedSelection.invalidSkipped,
     blockedByCannotLink: blockedSelection.blockedByCannotLink,
     blockedByDeclinedDecision: blockedSelection.blockedByDeclinedDecision,
+    blockedByReviewDecision: blockedSelection.blockedByReviewDecision,
     decisionsApproved: 0,
     decisionsDeclined: 0,
     decisionsAmbiguous: 0,
     decisionsFailed: 0,
+    legacyProtocolPairs: 0,
     dirtyPairs: diagnostics.dirtyPairs,
     preLimitCandidates: diagnostics.preLimitCandidates,
     postLimitCandidates: allCandidates.length,
@@ -1548,16 +1604,22 @@ export async function executeClusterMerge(
   timings.promptBuildMs = Date.now() - promptBuildStartedAt;
   timings.promptChars = clustersJson.length;
   let mergeGroups: string[][];
+  let mergeDecisions: ClusterMergeDecision[] | undefined;
 
   const aiMergeStartedAt = Date.now();
   try {
-    mergeGroups = await aiProvider.mergeClusters(clustersJson);
+    if (aiProvider.assessClusterMergePairs) {
+      mergeDecisions = await aiProvider.assessClusterMergePairs(clustersJson);
+      const itemCounts = new Map(allCandidates.map((candidate) => [candidate.id, candidate.itemCount]));
+      mergeGroups = buildClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
+    } else {
+      mergeGroups = await aiProvider.mergeClusters(clustersJson);
+    }
   } catch {
     timings.aiMergeMs = Date.now() - aiMergeStartedAt;
     const failedDecisions = await recordClusterMergeDecisions({
       candidatesById,
       allowedPairs,
-      mergeGroups: [],
       verdictOnMissing: "failed",
       now,
     });
@@ -1575,13 +1637,17 @@ export async function executeClusterMerge(
     };
   }
   timings.aiMergeMs = Date.now() - aiMergeStartedAt;
-  const mergeDecisions = await recordClusterMergeDecisions({
+  const recordedMergeDecisions = await recordClusterMergeDecisions({
     candidatesById,
     allowedPairs,
-    mergeGroups,
-    verdictOnMissing: "declined",
+    decisions: mergeDecisions,
+    mergeGroups: mergeDecisions ? undefined : mergeGroups,
+    verdictOnMissing: mergeDecisions ? "failed" : "declined",
     now,
   });
+  const legacyProtocolPairs = mergeDecisions
+    ? recordedMergeDecisions.filter((decision) => decision.reasonCode?.startsWith("legacy_")).length
+    : allowedPairs.length;
   await markDeclinedPrecomputedCleanMergePairs(
     precomputedSelection.usedPairIdsByEdgeKey,
     allowedPairs,
@@ -1635,7 +1701,7 @@ export async function executeClusterMerge(
       mergedCount += stillAllowedSources.length;
       itemsMoved += mergeResult.itemsMoved;
       await Promise.all(
-        mergeDecisions
+        recordedMergeDecisions
           .filter((decision) => decision.verdict === "approved" && stillAllowedSources.some((sourceId) =>
             buildClusterMergeEdgeKey(target.id, sourceId) === decision.pairKey
           ))
@@ -1662,7 +1728,8 @@ export async function executeClusterMerge(
 
   return {
     ...baseResult,
-    ...countClusterMergeDecisionVerdicts(mergeDecisions),
+    ...countClusterMergeDecisionVerdicts(recordedMergeDecisions),
+    legacyProtocolPairs,
     ...timings,
     aiMergeGroups: mergeGroups.filter((group) => group.length >= 2).length,
     skipped: false,

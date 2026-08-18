@@ -74,10 +74,12 @@ export type IngestionTimelineCounters = {
     precomputedCleanPairsInvalidSkipped: number;
     blockedByCannotLink: number;
     blockedByDeclinedDecision: number;
+    blockedByReviewDecision: number;
     decisionsApproved: number;
     decisionsDeclined: number;
     decisionsAmbiguous: number;
     decisionsFailed: number;
+    legacyProtocolPairs: number;
     dirtyPairs: number;
     preLimitCandidates: number;
     postLimitCandidates: number;
@@ -224,10 +226,12 @@ export function createIngestionTimelineCounters(): IngestionTimelineCounters {
       precomputedCleanPairsInvalidSkipped: 0,
       blockedByCannotLink: 0,
       blockedByDeclinedDecision: 0,
+      blockedByReviewDecision: 0,
       decisionsApproved: 0,
       decisionsDeclined: 0,
       decisionsAmbiguous: 0,
       decisionsFailed: 0,
+      legacyProtocolPairs: 0,
       dirtyPairs: 0,
       preLimitCandidates: 0,
       postLimitCandidates: 0,
@@ -454,10 +458,12 @@ export function buildIngestionTaskTimeline(input: {
         { label: "预计算失效", value: counters.clusterMerge.precomputedCleanPairsInvalidSkipped },
         { label: "人工阻断", value: counters.clusterMerge.blockedByCannotLink },
         { label: "冷却阻断", value: counters.clusterMerge.blockedByDeclinedDecision },
+        { label: "灰区待复核阻断", value: counters.clusterMerge.blockedByReviewDecision },
         { label: "账本通过", value: counters.clusterMerge.decisionsApproved },
         { label: "账本拒绝", value: counters.clusterMerge.decisionsDeclined },
         { label: "账本灰区", value: counters.clusterMerge.decisionsAmbiguous },
         { label: "账本失败", value: counters.clusterMerge.decisionsFailed },
+        { label: "旧协议Pair", value: counters.clusterMerge.legacyProtocolPairs },
         { label: "Dirty Pair", value: counters.clusterMerge.dirtyPairs },
         { label: "裁剪前", value: counters.clusterMerge.preLimitCandidates },
         { label: "候选组", value: counters.clusterMerge.candidates },

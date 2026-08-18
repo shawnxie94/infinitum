@@ -2,8 +2,11 @@ import { JSDOM } from "jsdom";
 import { PromptConfigType } from "@prisma/client";
 
 import {
+  DEFAULT_CLUSTER_MERGE_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
@@ -420,6 +423,7 @@ export async function validatePromptConfigInput(
   if (!normalizeText(input.prompt)) {
     throw new Error("请填写提示词模板。");
   }
+  validateClusterMergePromptProtocol(input);
   if (input.temperature != null && (input.temperature < 0 || input.temperature > 2)) {
     throw new Error("温度必须在 0 到 2 之间。");
   }
@@ -452,6 +456,20 @@ export async function validatePromptConfigInput(
     if (existingDefault && !input.isEnabled) {
       throw new Error("默认提示词配置不能被保存为禁用状态。");
     }
+  }
+}
+
+function validateClusterMergePromptProtocol(input: SavePromptConfigInput) {
+  if (input.type !== PromptConfigType.cluster_merge) {
+    return;
+  }
+
+  const content = `${input.systemPrompt ?? ""}\n${input.prompt}`;
+  const usesLegacyOutput = ["approvedPairs", "mergeGroups"].some((marker) => content.includes(marker));
+  const declaresDecisionProtocol = content.includes("decisions") && content.includes("verdict");
+
+  if (usesLegacyOutput && !declaresDecisionProtocol) {
+    throw new Error("聚合合并提示词必须使用 decisions/verdict 协议，不能继续输出 approvedPairs 或 mergeGroups。");
   }
 }
 
@@ -513,6 +531,8 @@ async function ensureModelAndPromptConfigsSeeded(options: RuntimeConfigSeedOptio
 
   await upgradeLegacyItemUnderstandingPrompt();
   await upgradePreviousDefaultItemUnderstandingPrompt();
+  await upgradeLegacyClusterMergePrompt();
+  await upgradePreviousDefaultClusterMergePrompt();
   if (options.migrateDailyReportTemplates !== false) {
     await upgradeLegacyDailyReportPrompt(fileConfig);
   }
@@ -682,6 +702,39 @@ async function upgradePreviousDefaultItemUnderstandingPrompt() {
     },
     data: {
       systemPrompt: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+    },
+  });
+}
+
+async function upgradeLegacyClusterMergePrompt() {
+  const configs = await prisma.promptConfig.findMany({
+    where: {
+      type: PromptConfigType.cluster_merge,
+      isDefault: true,
+      systemPrompt: LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
+    },
+    select: { id: true },
+  });
+
+  if (configs.length === 0) {
+    return;
+  }
+
+  await prisma.promptConfig.updateMany({
+    where: { id: { in: configs.map((config) => config.id) } },
+    data: { systemPrompt: DEFAULT_CLUSTER_MERGE_PROMPT },
+  });
+}
+
+async function upgradePreviousDefaultClusterMergePrompt() {
+  await prisma.promptConfig.updateMany({
+    where: {
+      type: PromptConfigType.cluster_merge,
+      isDefault: true,
+      systemPrompt: PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
+    },
+    data: {
+      systemPrompt: DEFAULT_CLUSTER_MERGE_PROMPT,
     },
   });
 }
