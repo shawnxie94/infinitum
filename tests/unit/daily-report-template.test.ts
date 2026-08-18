@@ -139,6 +139,14 @@ describe("daily report template config", () => {
     expect(upgradeDefaultDailyReportTemplate(previousDefault)).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE);
     expect(upgradeDefaultDailyReportTemplate({
       ...previousDefault,
+      globalRules: [
+        ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(0, 3),
+        "严格按输入中的已确定主题逐条写作；不要合并、删除、改栏目或新增主题。主题之间的重复关系由上游选题和本地校验处理。",
+        ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(4),
+      ],
+    })).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE);
+    expect(upgradeDefaultDailyReportTemplate({
+      ...previousDefault,
       globalRules: ["管理员自定义规则。"],
     }).globalRules).toEqual(["管理员自定义规则。"]);
   });

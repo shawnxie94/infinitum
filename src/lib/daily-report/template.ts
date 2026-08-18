@@ -171,7 +171,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     "每个条目只描述一个独立事件、产品、漏洞、模型、政策或研究成果；不同主体、不同产品或不同事件不要合并成一条。",
     "多个来源只能用于同一事件的互证；如果只是主题相近但事实不同，应拆成不同条目或只保留最相关来源。",
     "只使用输入候选内容，不编造事实或输入之外的信息。",
-    "严格按输入中的已确定主题逐条写作；不要合并、删除、改栏目或新增主题。主题之间的重复关系由上游选题和本地校验处理。",
+    "每个输入主题生成且仅生成一个条目；不得合并、删除或新增主题，不得调整主题所属栏目。",
     "正文只写内容本身，不要带栏目名、字段名或标签前缀。",
     "除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。",
   ],
@@ -205,6 +205,11 @@ const PREVIOUS_DEFAULT_RECENT_TOPIC_RULES = [
 const PREVIOUS_DEFAULT_GLOBAL_RULES = [
   ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(0, 3),
   "同一事件只出现一次，避免跨栏目重复。",
+  ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(4),
+];
+const PREVIOUS_INTERMEDIATE_GLOBAL_RULES = [
+  ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(0, 3),
+  "严格按输入中的已确定主题逐条写作；不要合并、删除、改栏目或新增主题。主题之间的重复关系由上游选题和本地校验处理。",
   ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(4),
 ];
 
@@ -266,6 +271,12 @@ function getPreviouslyMigratedV2DefaultWithPreviousGlobalRules() {
 function getCurrentShapeDefaultWithPreviousGlobalRules() {
   const template = cloneDefaultTemplate();
   template.globalRules = PREVIOUS_DEFAULT_GLOBAL_RULES;
+  return template;
+}
+
+function getCurrentShapeDefaultWithPreviousIntermediateRules() {
+  const template = cloneDefaultTemplate();
+  template.globalRules = PREVIOUS_INTERMEDIATE_GLOBAL_RULES;
   return template;
 }
 
@@ -392,6 +403,7 @@ export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemp
   const previouslyMigratedV2DefaultTemplate = getPreviouslyMigratedV2DefaultDailyReportTemplate();
   const previouslyMigratedV2DefaultWithPreviousGlobalRules = getPreviouslyMigratedV2DefaultWithPreviousGlobalRules();
   const currentShapeDefaultWithPreviousGlobalRules = getCurrentShapeDefaultWithPreviousGlobalRules();
+  const currentShapeDefaultWithPreviousIntermediateRules = getCurrentShapeDefaultWithPreviousIntermediateRules();
   const isUntouchedDefault = [
     defaultTemplate,
     previousDefaultTemplate,
@@ -400,6 +412,7 @@ export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemp
     previouslyMigratedV2DefaultTemplate,
     previouslyMigratedV2DefaultWithPreviousGlobalRules,
     currentShapeDefaultWithPreviousGlobalRules,
+    currentShapeDefaultWithPreviousIntermediateRules,
   ].some(
     (candidate) => JSON.stringify(template) === JSON.stringify(candidate),
   );

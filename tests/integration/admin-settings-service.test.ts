@@ -357,7 +357,7 @@ describe("admin settings service", () => {
     expect(dailyReportConfig?.systemPrompt).toContain("items 为空数组时会在渲染时自动隐藏");
     expect(dailyReportConfig?.systemPrompt).toContain("说明变化内容、适用对象、实践价值或可能影响");
     expect(dailyReportConfig?.systemPrompt).toContain("多个来源只能用于同一事件的互证");
-    expect(dailyReportConfig?.systemPrompt).toContain("严格按输入中的已确定主题逐条写作");
+    expect(dailyReportConfig?.systemPrompt).toContain("每个输入主题生成且仅生成一个条目");
   });
 
   it("compiles and stores daily report templateJson when saving prompt configs", async () => {
