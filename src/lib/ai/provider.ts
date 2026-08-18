@@ -30,10 +30,12 @@ import type {
   DailyReportPlanSelection,
   DailyReportPlanningCandidate,
   DailyReportPlanningCandidateBrief,
+  DailyReportRepairPatchResult,
   DailyReportSelectedTopic,
   DailyReportViolation,
   RecentDailyReportTopic,
 } from "@/lib/daily-report/types";
+import { isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
 import type {
   DailyReportTemplateSectionBlock,
   NormalizedDailyReportTemplate,
@@ -153,9 +155,9 @@ export type AiProvider = {
   repairDailyReportDraft(input: {
     draft: DailyReportModelDraft;
     violations: DailyReportViolation[];
-    plan: DailyReportPlan;
+    selectedTopics: DailyReportSelectedTopic[];
     template: NormalizedDailyReportTemplate;
-  }): Promise<DailyReportModelDraft>;
+  }): Promise<DailyReportRepairPatchResult>;
 };
 
 type CompletionResponse = {
@@ -427,9 +429,11 @@ const DAILY_REPORT_ASSESSMENT_FIELD_GUIDE = [
   "candidateId：输入候选的 id；isWorthReading：是否进入 PLAN；relevanceScore：0 到 100 的选题相关性分。",
   "suggestedBlockKey：建议的 section blockKey，必须来自模板 sections，无法判断时为 null；它只是软提示，最终以 PLAN 和本地校验为准。",
   "historyDecision：与 recentTopics 比较后的历史关系，只能是 new、duplicate、follow_up 或 uncertain。duplicate 表示近期开过的日报已覆盖同一事件；follow_up 表示同一事件有新的动作、事实、数据或影响；new 表示新事件；uncertain 表示无法确定。",
+  "matchedRecentTopicTitle：当 historyDecision=duplicate 时，填写命中的历史主题标题；其他情况必须为 null。它只用于人工追溯，不改变去重判断。",
   "template.sections 中 blockKey 是稳定栏目键，blockTitle 只是展示名，description 是选题方向；只根据栏目语义判断 suggestedBlockKey。",
+  "template.historyTopicRules：后台配置的历史主题判断策略，只用于辅助判断重复报道和后续进展；不改变系统硬过滤、历史数据来源或输出枚举。",
   "recentTopics 是完整的近期已发布日报主题集合。逐一将每个候选与整个集合比较，不要假设代码已经提供了候选与历史主题的关联关系；不要因为主体、来源或 cluster 相同就直接判定重复。",
-  "只返回上述五个字段，不附带其他解释字段。",
+  "只返回上述六个字段，不附带其他解释字段。",
 ].join("\n");
 
 const DAILY_REPORT_PLAN_FIELD_GUIDE = [
@@ -440,6 +444,7 @@ const DAILY_REPORT_PLAN_FIELD_GUIDE = [
   "candidateBriefs[].publishedAt/publishedAtKnown：源站时间及其可靠性；isFollowUp/newItemCountOnDate/newSourceCountOnDate：后续进展及日报日期新增量信号。",
   "candidateBriefs[].historyDecision：ASSESS 对历史日报的判断；new、follow_up 是可规划候选，duplicate 不应出现在 candidateBriefs，uncertain 需要结合其他字段判断。",
   "candidateBriefs[].eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索，只用于理解和比较；不得补造输入之外的事实。预算压缩时可选字段可能省略，但 candidateId、title、candidateScore、relevanceScore、sourceCount、itemCount 和 publishedAt 会保留。",
+  "template.historyTopicRules：后台配置的历史主题判断策略，只用于辅助识别重复事件或后续进展；recentTopics 是代码提供的历史主题数据，不是本期候选。",
   "recentTopics：近期开过的日报条目，仅用于识别重复事件或后续进展；不要把它们当作本期候选。输入中的 candidateBriefs 已经是 ASSESS 通过的候选全集。",
   "template.sections[].blockKey 是唯一栏目键；blockTitle 仅用于理解栏目，description 是栏目意图，required/minItems/maxItems 是主题数量约束；正常情况下每个 section 的 topics 数量必须满足 minItems/maxItems，不能为了凑数选择低价值候选。",
   "输出 sections[].topics[]：每个 topic 的 candidateIds 表示同一个最终日报主题的全部候选来源；一个候选只能属于一个主题。topicId 由代码生成，不要输出。",
@@ -447,21 +452,24 @@ const DAILY_REPORT_PLAN_FIELD_GUIDE = [
 
 const DAILY_REPORT_WRITE_FIELD_GUIDE = [
   "selectedTopics[]：每个元素对应一个最终日报条目；topicId 是内部主题编号，blockKey 是唯一栏目键，candidateIds 是只读的主题候选编号，representativeCandidateId 是代码选出的代表候选。WRITE 不得改变这些映射。",
+  "selectedTopics[].requiredNotes：当前栏目对该主题要求输出的必填要点；每个 label 必须在 item.notes 中原样出现一次，并填写基于候选事实的非空 text。正文中已经出现相关事实时，也不能省略对应 notes。",
   "selectedTopics[].candidates：只包含写作所需事实；id 是只读候选编号，title 是标题，summary 是已有摘要，sourceName 是代表来源。",
   "selectedTopics[].candidates[].publishedAt/publishedAtKnown：源站时间及其可靠性；eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索；isFollowUp/newItemCountOnDate/newSourceCountOnDate：后续进展信号。",
   "selectedTopics[].candidates[].evidenceItems：有限来源证据，包含标题、来源、摘要片段和发布时间；只用于核对事实，不逐条复述。",
   "候选字段只用于基于事实写作；不要把内部编号、来源名、时间或事件线索扩写成输入之外的事实。",
+  "template.writingRules：后台配置的正文表达和信息侧重规则；只影响写作方式，不包含阶段流程、Topic-Candidate 映射或输出协议。",
   "每个 selectedTopics[] 必须生成一个 section item；item.topicId 必须原样复制对应 topicId；不要输出 sourceIds、candidateIds 或其他来源映射字段，来源关系由代码根据 Topic 映射生成。",
   "template.blocks：完整栏目与正文规则；text block 只写模板定义的文本块，section block 按 type/key/title、item.bodyInstruction/bodyRequired 和 notes 规则输出。",
   "输出结构：输出 JSON 对象本身就是日报内容，顶层必须直接包含 headline 和 blocks。合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止使用 draft、result、data、output 等外层包装键。",
 ].join("\n");
 
 const DAILY_REPORT_REPAIR_FIELD_GUIDE = [
-  "input.draft.headline：待修复日报标题；input.draft.blocks：待修复日报的 text/section block；section.items 中的 topicId/title/body/notes 是条目主题和内容。只修复问题，不重做内容。",
-  "violations：本地校验指出的具体问题；code/stage/message 描述原因，blockKey/topicId/candidateIds 用于定位；Topic-Candidate 和 Topic-Block 映射不可改变，sourceIds 由代码管理。",
-  "template.blocks：模板定义的 block、条目数量、正文和 notes 规则；只按 violation 修复格式或缺失字段。",
-  "只修复 violations 指定的问题，不重新归纳主题、不改写事实、不新增来源或栏目。",
-  "输出结构：输出 JSON 对象本身就是修复后的日报内容，顶层必须直接包含 headline 和 blocks。合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；input.draft 只是输入字段，禁止在输出中保留 draft，也禁止使用 result、data、output 等外层包装键。",
+  "input.draft：待修复日报，仅用于查看现有条目的 notes；不要重写其中的 headline、blocks、正文、主题、候选、栏目或顺序。",
+  "violations：本地校验指出的具体问题；code/stage/message 描述原因，blockKey/topicId/candidateIds/itemIndex/itemTitle/noteLabel/noteInstruction 用于精确定位。",
+  "repairTargets：受影响主题及其候选事实；requiredNotes 是该主题允许补齐的必填要点，candidates 是唯一可用的事实来源。",
+  "template.blocks：模板定义的 block 和 notes 规则；只按 violation 补齐缺失字段。template.writingRules 只影响表达方式，不能改变修复范围或数据关系。",
+  "只修复 violations 指定的问题，不重新归纳主题、不改写正文、不新增来源或栏目。",
+  "输出结构：只返回 {\"patches\":[{\"topicId\":\"...\",\"notes\":[{\"label\":\"...\",\"text\":\"...\"}]}]}；不要返回 headline、blocks、draft、result、data、output 或 sourceIds。",
 ].join("\n");
 
 function compactDailyReportModelCandidate(article: unknown) {
@@ -1436,9 +1444,9 @@ export function createAiProvider(
         blockTitle: section.title,
         description: section.description,
       })),
-      recentTopicRules: template.recentTopicRules,
-      recentTopicLookbackDays: recentTopicLookbackDays ?? null,
-    });
+    historyTopicRules: template.recentTopicRules,
+    recentTopicLookbackDays: recentTopicLookbackDays ?? null,
+  });
 
   const buildDailyReportPlanningTemplate = (template: NormalizedDailyReportTemplate, recentTopicLookbackDays?: number) => {
     const sections = template.blocks.filter(
@@ -1446,7 +1454,7 @@ export function createAiProvider(
     );
     return {
       schemaVersion: template.schemaVersion,
-      recentTopicRules: template.recentTopicRules,
+      historyTopicRules: template.recentTopicRules,
       recentTopicLookbackDays: recentTopicLookbackDays ?? null,
       sections: sections.map((section) => ({
         blockKey: section.key,
@@ -1462,11 +1470,18 @@ export function createAiProvider(
   const buildDailyReportWritingTemplate = (template: NormalizedDailyReportTemplate, selectedBlockKeys?: string[]) => ({
     schemaVersion: template.schemaVersion,
     headlineInstruction: template.headlineInstruction,
-    globalRules: template.globalRules,
+    writingRules: template.globalRules,
     blocks: selectedBlockKeys && selectedBlockKeys.length > 0
       ? template.blocks.filter((block) => block.type === "text" || (block.key && selectedBlockKeys.includes(block.key)))
       : template.blocks,
   });
+
+  const getRequiredNotesForBlock = (template: NormalizedDailyReportTemplate, blockKey: string) => {
+    const block = template.blocks.find((entry): entry is DailyReportTemplateSectionBlock => entry.type === "section" && entry.key === blockKey);
+    return block?.item.notes
+      .filter((note) => note.required)
+      .map((note) => ({ label: note.label, instruction: note.instruction })) ?? [];
+  };
 
   const buildDailyReportStageConfig = (stage: string, contract: string): PromptRuntimeConfig => ({
     ...dailyReportConfig,
@@ -1489,6 +1504,13 @@ export function createAiProvider(
 
   const parsePlanOutput = (output: string): DailyReportPlanSelection => parseDailyReportStageObject(output) as unknown as DailyReportPlanSelection;
   const parseDraftOutput = (output: string): DailyReportModelDraft => parseDailyReportStageObject(output) as unknown as DailyReportModelDraft;
+  const parseRepairPatchOutput = (output: string): DailyReportRepairPatchResult => {
+    const parsed = parseDailyReportStageObject(output);
+    if (!Array.isArray(parsed.patches)) {
+      throw new InvalidJsonModelResponseError("REPAIR 返回必须是 patches 数组。");
+    }
+    return { patches: parsed.patches as DailyReportRepairPatchResult["patches"] };
+  };
 
   return {
     async understandItem(inputText, metadata) {
@@ -1574,11 +1596,11 @@ export function createAiProvider(
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "ASSESS",
-          "不得写正文、不得合并主题、不得重新编号或遗漏候选；必须逐一返回输入中的每个 candidateId。只返回 candidateId、isWorthReading、relevanceScore、suggestedBlockKey、historyDecision 五个字段。suggestedBlockKey 必须来自模板 sections 或为 null；historyDecision 必须是 new、duplicate、follow_up、uncertain 之一。若 historyDecision=duplicate，isWorthReading 必须为 false。",
+          "不得写正文、不得合并主题、不得重新编号或遗漏候选；必须逐一返回输入中的每个 candidateId。只返回 candidateId、isWorthReading、relevanceScore、suggestedBlockKey、historyDecision、matchedRecentTopicTitle 六个字段。suggestedBlockKey 必须来自模板 sections 或为 null；historyDecision 必须是 new、duplicate、follow_up、uncertain 之一。historyDecision=duplicate 时 matchedRecentTopicTitle 填写命中的历史主题标题，否则为 null。若 historyDecision=duplicate，isWorthReading 必须为 false。",
         ),
         buildDailyReportStagePrompt(
           "ASSESS",
-          "逐一评估输入中的每个 candidateId。每个候选必须返回一次，不得新增或遗漏 ID。返回 {assessments:[{candidateId,isWorthReading,relevanceScore,suggestedBlockKey,historyDecision}]}。只做选题评估和历史重复判断，不写正文，不合并主题。",
+          "逐一评估输入中的每个 candidateId。每个候选必须返回一次，不得新增或遗漏 ID。返回 {assessments:[{candidateId,isWorthReading,relevanceScore,suggestedBlockKey,historyDecision,matchedRecentTopicTitle}]}。只做选题评估和历史重复判断，不写正文，不合并主题。",
           {
             template: buildDailyReportAssessmentTemplate(input.template, input.recentTopicLookbackDays),
             input: {
@@ -1622,12 +1644,12 @@ export function createAiProvider(
       const output = await completeJsonWithParseRetry(
         buildDailyReportStageConfig(
           "WRITE",
-          "只能使用 selectedTopics 中的主题和候选；不得重新归纳主题、换栏目、增加栏目或补造事实。输出对象本身就是日报内容，顶层必须直接包含 headline 和 blocks，合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止输出 draft、result、data、output 等外层包装键。text block 返回 {type:\"text\",title,body}，section block 返回 {type:\"section\",blockKey,title,items}，item 返回 {topicId,title,body,notes}；每个 selectedTopics 必须生成一个 item，topicId 必须原样复制；不要输出 sourceIds、candidateIds 或其他来源映射字段；notes 必须是 {label:string,text:string} 数组，模板中的 required 和 instruction 只是规则元数据，绝不能原样输出到 notes；模板中 required=true 的 note 必须按模板 label 原样输出且 text 非空，required=false 的 note 可按内容需要输出；只使用模板中定义的 text block 和已规划的 section block。",
+          "只能使用 selectedTopics 中的主题和候选；不得重新归纳主题、换栏目、增加栏目或补造事实。输出对象本身就是日报内容，顶层必须直接包含 headline 和 blocks，合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止输出 draft、result、data、output 等外层包装键。text block 返回 {type:\"text\",title,body}，section block 返回 {type:\"section\",blockKey,title,items}，item 返回 {topicId,title,body,notes}；每个 selectedTopics 必须生成一个 item，topicId 必须原样复制；不要输出 sourceIds、candidateIds 或其他来源映射字段；notes 必须是 {label:string,text:string} 数组，模板中的 required 和 instruction 只是规则元数据，绝不能原样输出到 notes；模板中 required=true 的 note 必须按模板 label 原样输出且 text 非空，required=false 的 note 可按内容需要输出；只使用模板中定义的 text block 和已规划的 section block。正文只写内容本身，不要带栏目名、字段名或标签前缀；除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。",
         ),
         buildDailyReportStagePrompt(
           "WRITE",
           "严格按照 selectedTopics 和对应 Block 写作，只返回完整日报内容 JSON。输出对象本身就是日报内容，顶层直接包含 headline 和 blocks，不得包在 draft、result、data 或 output 字段中。不得重新选题、合并主题、换栏目、增加栏目或补造事实。每个 section block 必须包含与输入一致的 blockKey 和模板 title；每个 section item 必须包含 topicId、title、body 和 notes，不要输出 sourceIds 或 candidateIds；每个计划主题必须且只能对应一个 item；当模板中该栏目 item.bodyRequired=false 时 body 必须为空字符串或省略，不能输出正文，否则 body 必须非空；每个 notes 元素只能是 {label,text}，不要输出 required 或 instruction；notes 中必须包含模板配置的全部 required=true note，label 必须逐字匹配、text 必须非空；每个 text block 必须包含 type、title、body。",
-          { template: buildDailyReportWritingTemplate(input.template, selectedBlockKeys), input: { selectedTopics: input.selectedTopics.map((topic) => ({ ...topic, candidates: topic.candidates.map(compactDailyReportWritingCandidate) })) } },
+          { template: buildDailyReportWritingTemplate(input.template, selectedBlockKeys), input: { selectedTopics: input.selectedTopics.map((topic) => ({ ...topic, requiredNotes: getRequiredNotesForBlock(input.template, topic.blockKey), candidates: topic.candidates.map(compactDailyReportWritingCandidate) })) } },
           DAILY_REPORT_WRITE_FIELD_GUIDE,
         ),
         parseDraftOutput,
@@ -1636,24 +1658,40 @@ export function createAiProvider(
       return output;
     },
     async repairDailyReportDraft(input) {
+      const unsupportedViolations = input.violations.filter(
+        (violation) => !isDailyReportNotesRepairableViolation(violation),
+      );
+      if (unsupportedViolations.length > 0) {
+        throw new Error("REPAIR notes patch 只支持修复 draft_required_note_missing，不支持修改日报结构。");
+      }
+      const affectedTopicIds = new Set(input.violations.map((violation) => violation.topicId).filter((topicId): topicId is string => Boolean(topicId)));
+      const repairTargets = input.selectedTopics
+        .filter((topic) => affectedTopicIds.size === 0 || affectedTopicIds.has(topic.topicId))
+        .map((topic) => ({
+          topicId: topic.topicId,
+          blockKey: topic.blockKey,
+          candidateIds: topic.candidateIds,
+          requiredNotes: getRequiredNotesForBlock(input.template, topic.blockKey),
+          candidates: topic.candidates.map(compactDailyReportWritingCandidate),
+        }));
       const output = await completeJsonWithParseRetry(
         {
           ...buildDailyReportStageConfig(
             "REPAIR",
-            "逐条修复输入 violations 中列出的问题，不改变事实、计划允许的主题、候选和栏目；必须按违规中的栏目、topicId、条目标题和来源定位目标 item，不能只修复其中一条。输出对象本身就是修复后的日报内容，顶层必须直接包含 headline 和 blocks，合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止输出 draft、result、data、output 等外层包装键。补齐模板要求的 required note 时必须使用模板原始 label 和非空 text，notes 元素只能包含 label 和 text。输出前逐项确认每条 violation 都已消除。",
+            "只修复输入 violations 中列出的问题，不改变已有正文、主题、候选、栏目和顺序。REPAIR 只返回 notes 补丁，不返回完整日报草稿；合法结构为 {\"patches\":[{\"topicId\":\"...\",\"notes\":[{\"label\":\"...\",\"text\":\"...\"}]}]}。topicId 必须来自 repairTargets，notes 的 label 必须来自对应 requiredNotes，不能新增主题、候选、栏目或字段。补丁文本只能使用 repairTargets 中的候选事实，不得编造。每条 violation 都必须有对应补丁或已经由现有内容满足。",
           ),
           temperature: 0,
           maxTokens: Math.min(dailyReportConfig.maxTokens ?? 4096, MAX_DAILY_REPORT_REPAIR_TOKENS),
         },
         buildDailyReportStagePrompt(
           "REPAIR",
-          "只修复 violations 中列出的问题。保持 plan 允许的主题、候选和栏目不变，返回完整日报内容 JSON；输出顶层直接包含 headline 和 blocks，不得包在 draft、result、data 或 output 字段中；不要输出 sourceIds、candidateIds 或其他来源映射字段；对于缺失的 required note，按违规信息定位到对应 topicId 的 item，按模板要求补齐对应 label 和非空 text，删除 notes 中的 required/instruction 元数据字段；相同栏目出现多个缺失要点时必须逐条补齐，不得遗漏。",
-          { template: buildDailyReportWritingTemplate(input.template), input: { draft: stripDailyReportSourceIdsForModel(input.draft), violations: input.violations, plan: input.plan } },
+          "只修复 violations 中列出的问题。返回 notes 补丁，不要返回 headline、blocks、draft、result、data 或 output；每个补丁必须定位到 violations 中的 topicId，并使用 repairTargets 对应候选事实补齐缺失的 required note。相同主题有多个缺失要点时必须在同一个补丁中逐条补齐；只输出 {patches:[{topicId,notes:[{label,text}]}]}。",
+          { template: buildDailyReportWritingTemplate(input.template, input.selectedTopics.map((topic) => topic.blockKey)), input: { draft: stripDailyReportSourceIdsForModel(input.draft), violations: input.violations, repairTargets } },
           DAILY_REPORT_REPAIR_FIELD_GUIDE,
         ),
-        parseDraftOutput,
+        parseRepairPatchOutput,
       );
-      if (!output) throw new Error("REPAIR 阶段没有返回结果。");
+      if (!output) throw new Error("REPAIR 阶段没有返回补丁。");
       return output;
     },
   };

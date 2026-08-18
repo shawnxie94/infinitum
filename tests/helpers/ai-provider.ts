@@ -111,7 +111,7 @@ export function buildAiProviderMock(
     assessDailyReportCandidates: vi.fn().mockResolvedValue([]),
     planDailyReport: vi.fn().mockResolvedValue({ schemaVersion: 2, sections: [] }),
     writeDailyReport: vi.fn().mockResolvedValue({ blocks: [] }),
-    repairDailyReportDraft: vi.fn().mockResolvedValue({ blocks: [] }),
+    repairDailyReportDraft: vi.fn().mockResolvedValue({ patches: [] }),
   };
 
   return {

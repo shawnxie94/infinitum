@@ -189,7 +189,9 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
           </Button>
         </div>
       ) : null}
-      <FormBlock label="标题规则">
+      <FormBlock
+        label="标题规则"
+      >
         <TextArea
           rows={3}
           value={template.headlineInstruction}
@@ -201,7 +203,9 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
         />
       </FormBlock>
 
-      <FormBlock label="内容全局规则">
+      <FormBlock
+        label="正文通用规则"
+      >
         <TextArea
           rows={5}
           value={formatDailyReportGlobalRulesForEditor(template.globalRules)}
@@ -213,7 +217,9 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
         />
       </FormBlock>
 
-      <FormBlock label="历史主题去重规则">
+      <FormBlock
+        label="历史主题识别策略"
+      >
         <TextArea
           rows={4}
           value={formatDailyReportGlobalRulesForEditor(template.recentTopicRules)}

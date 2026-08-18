@@ -6,6 +6,7 @@ import { withDailyReportCache } from "@/lib/daily-report/cache";
 import { getDailyReportDateRange } from "@/lib/daily-report/date";
 import {
   DAILY_REPORT_TIMEZONE,
+  type DailyReportAssessDuplicateSnapshotEntry,
   type DailyReportCandidateCoverageDTO,
   type DailyReportCandidateReviewDTO,
   type DailyReportCandidate,
@@ -384,6 +385,42 @@ function parseDailyReportCandidateReview(
           Boolean(candidate && typeof candidate === "object" && "title" in candidate && "itemTitle" in candidate && "excludedReason" in candidate),
         )
       : [];
+    const excludedAssessDuplicates = Array.isArray(snapshot.excludedAssessDuplicates)
+      ? snapshot.excludedAssessDuplicates.flatMap((candidate) => {
+          if (
+            !candidate ||
+            typeof candidate !== "object" ||
+            !("title" in candidate) ||
+            !("itemTitle" in candidate) ||
+            typeof candidate.relevanceScore !== "number" ||
+            candidate.historyDecision !== "duplicate" ||
+            !("excludedReason" in candidate)
+          ) {
+            return [];
+          }
+          const entry = candidate as Record<string, unknown>;
+          return [{
+            ...candidate,
+            matchedRecentTopicTitle: typeof entry.matchedRecentTopicTitle === "string" ? entry.matchedRecentTopicTitle : null,
+          } as DailyReportAssessDuplicateSnapshotEntry];
+        })
+      : [];
+    const excludedCurrentDuplicates = Array.isArray(snapshot.excludedCurrentDuplicates)
+      ? snapshot.excludedCurrentDuplicates.flatMap((candidate) => {
+          if (!candidate || typeof candidate !== "object" || !("title" in candidate) || !("itemTitle" in candidate)) {
+            return [];
+          }
+          const entry = candidate as Record<string, unknown>;
+          return [{
+            ...candidate,
+            excludedReason: typeof entry.excludedReason === "string"
+              ? entry.excludedReason
+              : typeof entry.reason === "string" ? entry.reason : "当前候选集合内重复",
+            matchedRecentDate: typeof entry.matchedRecentDate === "string" ? entry.matchedRecentDate : null,
+            matchedRecentTitle: typeof entry.matchedRecentTitle === "string" ? entry.matchedRecentTitle : null,
+          }];
+        })
+      : [];
     const rawCoverage = snapshot.candidateCoverage;
     const candidateCoverage = rawCoverage && typeof rawCoverage === "object"
       ? rawCoverage as Record<string, unknown>
@@ -414,6 +451,8 @@ function parseDailyReportCandidateReview(
       selectedCount,
       candidates,
       excludedRecentDuplicates,
+      excludedAssessDuplicates,
+      excludedCurrentDuplicates,
       candidateCoverage: parsedCoverage,
     };
   } catch {

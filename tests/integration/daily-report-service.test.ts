@@ -723,9 +723,7 @@ describe("daily report service", () => {
     writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: Array<{ topicId: string; blockKey: string; candidateIds: number[] }> }) => {
       return buildDailyReportOutput(selectedTopics);
     });
-    repairDailyReportDraftMock.mockImplementation(async ({ draft }: { draft: Record<string, unknown> }) => {
-      return draft;
-    });
+    repairDailyReportDraftMock.mockImplementation(async () => ({ patches: [] }));
     await prisma.dailyReportSource.deleteMany();
     await prisma.dailyReport.deleteMany();
     await prisma.item.deleteMany();
@@ -872,6 +870,8 @@ describe("daily report service", () => {
       candidateCount: 4,
       selectedCount: 4,
       excludedRecentDuplicates: [],
+      excludedAssessDuplicates: [],
+      excludedCurrentDuplicates: [],
       candidateCoverage: {
         candidateCount: 4,
         selectedCount: 4,
@@ -1620,6 +1620,7 @@ describe("daily report service", () => {
 
   it("passes the full recent topic set to ASSESS and records model history filtering", async () => {
     await createReportCandidates();
+    await createDailyReportSchedule({ autoPublish: true });
     await createHistoricalDailyReportSource({
       date: "2026-04-20",
       title: "历史日报已写主题",
@@ -1652,6 +1653,7 @@ describe("daily report service", () => {
         isWorthReading: true,
         suggestedBlockKey: "changes-practice",
         historyDecision: candidate.id === 1 ? "duplicate" : "new",
+        matchedRecentTopicTitle: candidate.id === 1 ? "历史日报已写主题" : null,
       }));
     });
     writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => buildDailyReportOutput(selectedTopics));
@@ -1666,6 +1668,41 @@ describe("daily report service", () => {
     }>;
     expect(timeline.find((node) => node.key === "daily_report_assess")).toMatchObject({
       metrics: expect.arrayContaining([{ label: "历史重复过滤", value: 1 }]),
+    });
+    const storedReport = await prisma.dailyReport.findUniqueOrThrow({
+      where: { date_timezone: { date: REPORT_DATE, timezone: "Asia/Shanghai" } },
+    });
+    const snapshot = JSON.parse(storedReport.candidateSnapshot ?? "{}") as {
+      excludedAssessDuplicates?: Array<Record<string, unknown>>;
+      excludedRecentDuplicates?: unknown[];
+      excludedCurrentDuplicates?: unknown[];
+    };
+    expect(snapshot).toMatchObject({
+      excludedAssessDuplicates: [
+        expect.objectContaining({
+          title: "OpenAI 发布新模型",
+          relevanceScore: 90,
+          suggestedBlockKey: "changes-practice",
+          historyDecision: "duplicate",
+          matchedRecentTopicTitle: "历史日报已写主题",
+          excludedReason: "ASSESS 判定为历史重复",
+        }),
+      ],
+      excludedRecentDuplicates: [],
+      excludedCurrentDuplicates: [],
+    });
+    const detail = await getDailyReportByDate(REPORT_DATE, true);
+    expect(detail?.candidateReview).toMatchObject({
+      excludedAssessDuplicates: [
+        expect.objectContaining({
+          title: "OpenAI 发布新模型",
+          relevanceScore: 90,
+          historyDecision: "duplicate",
+          matchedRecentTopicTitle: "历史日报已写主题",
+        }),
+      ],
+      excludedRecentDuplicates: [],
+      excludedCurrentDuplicates: [],
     });
   });
 
@@ -2073,14 +2110,15 @@ describe("daily report service", () => {
     expect(failedTaskRun).toMatchObject({
       status: "failed",
       errorSummary: expect.stringContaining("WRITE 校验失败"),
-      aiCallCountActual: 4,
-      aiCallCountEstimated: 4,
+      aiCallCountActual: 3,
+      aiCallCountEstimated: 3,
     });
+    expect(repairDailyReportDraftMock).not.toHaveBeenCalled();
     expect(JSON.parse(failedTaskRun.aiCallBreakdownJson ?? "[]")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: "daily_report", actual: 4, estimated: 4 }),
+      expect.objectContaining({ key: "daily_report", actual: 3, estimated: 3 }),
     ]));
     expect(JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
-      failedStage: "repair",
+      failedStage: "validate",
       failureCode: "stage_failed",
       resumeEligible: false,
     });

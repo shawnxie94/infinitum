@@ -103,11 +103,11 @@ export function DailyReportTemplatePreview({ templateJson }: DailyReportTemplate
 
       <div className="space-y-3">
         <section className="rounded-lg border border-[color:var(--line)] bg-[var(--surface)] p-4">
-          <div className="mb-3 text-sm font-medium text-[var(--text-1)]">内容全局规则</div>
+          <div className="mb-3 text-sm font-medium text-[var(--text-1)]">正文通用规则</div>
           <RuleList rules={template.globalRules} />
         </section>
         <section className="rounded-lg border border-[color:var(--line)] bg-[var(--surface)] p-4">
-          <div className="mb-3 text-sm font-medium text-[var(--text-1)]">历史主题去重规则</div>
+          <div className="mb-3 text-sm font-medium text-[var(--text-1)]">历史主题识别策略</div>
           <RuleList rules={template.recentTopicRules} />
         </section>
       </div>

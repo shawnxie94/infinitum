@@ -171,7 +171,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
     "每个条目只描述一个独立事件、产品、漏洞、模型、政策或研究成果；不同主体、不同产品或不同事件不要合并成一条。",
     "多个来源只能用于同一事件的互证；如果只是主题相近但事实不同，应拆成不同条目或只保留最相关来源。",
     "只使用输入候选内容，不编造事实或输入之外的信息。",
-    "每个输入主题生成且仅生成一个条目；不得合并、删除或新增主题，不得调整主题所属栏目。",
+    "正文优先说明事件的事实变化、结果和影响，避免泛化为行业综述。",
     "正文只写内容本身，不要带栏目名、字段名或标签前缀。",
     "除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。",
   ],
@@ -459,7 +459,7 @@ export function validateDailyReportTemplateConfig(
   }
   assertNonEmptyText(template.headlineInstruction, "标题规则");
   if (!Array.isArray(template.recentTopicRules)) {
-    throw new Error("历史主题去重规则必须是数组。");
+    throw new Error("历史主题判断策略必须是数组。");
   }
   for (const [index, block] of template.blocks.entries()) {
     const label = `第 ${index + 1} 个 block`;
@@ -516,7 +516,7 @@ export function validateDailyReportTemplateConfig(
     throw new Error("日报模板 section key 必须唯一。");
   }
   if (!Array.isArray(template.globalRules)) {
-    throw new Error("内容全局规则必须是数组。");
+    throw new Error("正文写作规则必须是数组。");
   }
   return template;
 }
@@ -707,6 +707,9 @@ export function compileDailyReportTemplatePrompt(templateInput: DailyReportTempl
     index += 1;
   }
 
+  if (template.globalRules.some((rule) => rule.trim())) {
+    lines.push("", "正文写作规则：");
+  }
   for (const rule of template.globalRules) {
     if (!rule.trim()) continue;
     lines.push(`${index}. ${rule.trim()}`);
@@ -714,7 +717,7 @@ export function compileDailyReportTemplatePrompt(templateInput: DailyReportTempl
   }
 
   if (template.recentTopicRules.length > 0) {
-    lines.push("", "历史主题去重规则：");
+    lines.push("", "历史主题判断策略：");
     for (const [ruleIndex, rule] of template.recentTopicRules.entries()) {
       if (!rule.trim()) continue;
       lines.push(`${ruleIndex + 1}. ${rule.trim()}`);

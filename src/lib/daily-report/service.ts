@@ -28,6 +28,8 @@ import {
   type DailyReportCandidateCoverageDTO,
   type DailyReportCandidateSnapshotEntry,
   type DailyReportCandidateAssessment,
+  type DailyReportAssessDuplicateSnapshotEntry,
+  type DailyReportDraft,
   type DailyReportModelDraft,
   type DailyReportPlan,
   type DailyReportPlanningAudit,
@@ -36,15 +38,18 @@ import {
   type DailyReportItem,
   type DailyReportSourceRegistryEntry,
   type RecentDailyReportTopic,
+  isDailyReportNotesRepairableViolation,
 } from "@/lib/daily-report/types";
 import {
   buildDailyReportCandidateBriefs,
   buildDailyReportSelectedTopics,
+  applyDailyReportRepairPatches,
   attachDailyReportTopicSources,
   getDailyReportPlanCandidateIds,
   getDailyReportPlanTopics,
   materializeDailyReportPlan,
   normalizeDailyReportDraftForTemplate,
+  omitInvalidOptionalDailyReportTopics,
   orderAndLimitDailyReportPlanWithAudit,
   orderDailyReportDraft,
   splitDailyReportCandidates,
@@ -780,6 +785,33 @@ function buildDailyReportExcludedRecentDuplicateSnapshots(
   });
 }
 
+function buildDailyReportExcludedAssessDuplicateSnapshots(
+  candidates: DailyReportCandidate[],
+  assessments: DailyReportCandidateAssessment[],
+): DailyReportAssessDuplicateSnapshotEntry[] {
+  const assessmentById = new Map(
+    assessments
+      .filter((assessment) => assessment.historyDecision === "duplicate")
+      .map((assessment) => [assessment.candidateId, assessment]),
+  );
+
+  return candidates.flatMap((candidate) => {
+    const assessment = assessmentById.get(candidate.id);
+    if (!assessment) {
+      return [];
+    }
+
+    return [{
+      ...toCandidateSnapshotEntry(candidate),
+      relevanceScore: assessment.relevanceScore,
+      suggestedBlockKey: assessment.suggestedBlockKey,
+      historyDecision: "duplicate" as const,
+      matchedRecentTopicTitle: assessment.matchedRecentTopicTitle,
+      excludedReason: "ASSESS 判定为历史重复",
+    }];
+  });
+}
+
 function buildRecentDailyReportTopics(recentSources: RecentDailyReportSourceSnapshot[]): RecentDailyReportTopic[] {
   const topics = new Map<string, RecentDailyReportTopic>();
 
@@ -1175,6 +1207,8 @@ async function generateDailyReportInternal(input: {
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
+      partial: false,
+      omittedTopicIds: [],
       historyFilteredCount: 0,
       batchCount: 0,
       batchSize: schedule.dailyReportPlanningBatchSize ?? null,
@@ -1195,6 +1229,8 @@ async function generateDailyReportInternal(input: {
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
+      partial: false,
+      omittedTopicIds: [],
       historyFilteredCount: 0,
       batchCount: 0,
       batchSize: schedule.dailyReportPlanningBatchSize ?? null,
@@ -1221,6 +1257,8 @@ async function generateDailyReportInternal(input: {
   let repairCount = 0;
   let historyFilteredCount = 0;
   let validationViolationCount = 0;
+  let partial = false;
+  let omittedTopicIds = new Set<string>();
   let latestCheckpoint: TaskPipelineCheckpoint | null = input.resumeCheckpoint ?? null;
   const stageAttempts: Record<string, number> = { ...(input.resumeCheckpoint?.stageAttempts ?? {}) };
   let currentStage: DailyReportPipelineStage = "prepare";
@@ -1315,6 +1353,7 @@ async function generateDailyReportInternal(input: {
     const stageError = lastError instanceof Error ? lastError : new Error(`${stage} 阶段失败。`);
     throw new DailyReportGenerationError(stageError, aiUsage.snapshot(), buildFailureCheckpoint(stageError));
   };
+  const assessments: DailyReportCandidateAssessment[] = [];
   try {
     const planningCandidates = candidates.map(toDailyReportPlanningCandidate);
     const batchSize = schedule.dailyReportPlanningBatchSize ?? null;
@@ -1368,7 +1407,6 @@ async function generateDailyReportInternal(input: {
       ...(canResume && checkpoint?.draft ? { draft: checkpoint.draft } : {}),
     });
     await input.onStageUpdate?.("assess");
-    const assessments: DailyReportCandidateAssessment[] = [];
     const getHistoryFilteredCount = () => assessments.filter(
       (assessment) => assessment.historyDecision === "duplicate",
     ).length;
@@ -1576,30 +1614,101 @@ async function generateDailyReportInternal(input: {
         violations: draftViolations,
       });
     }
-    if (draftViolations.length > 0) {
-      repairCount = 1;
-      await input.onStageUpdate?.("repair");
-      modelDraft = await runStageWithAttempts("repair", async () => provider.repairDailyReportDraft({ draft: toDailyReportModelDraft(draft), violations: draftViolations, plan, template }), {
-        matrixStage: "REPAIR",
-      });
-      draft = normalizeDailyReportDraftForTemplate(orderDailyReportDraft(attachDailyReportTopicSources(modelDraft, plan), plan, template), template);
-      draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
-      validationViolationCount = draftViolations.length;
-      if (latestCheckpoint) {
-        await saveCheckpoint({
-          ...latestCheckpoint,
-          stage: "repair",
-          completedStages: draftViolations.length > 0
-            ? [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])].filter((stage) => stage !== "validate")
-            : [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])],
-          lastCompletedStage: draftViolations.length > 0 ? "repair" : "repair",
-          failedStage: null,
-          failureCode: null,
-          resumeEligible: draftViolations.length === 0,
-          stageAttempts: { ...stageAttempts },
-          draft: modelDraft,
-          violations: draftViolations,
-        });
+    currentStage = "validate";
+    currentAttemptKey = "VALIDATE";
+    const nonRepairableDraftViolations = draftViolations.filter(
+      (violation) => !isDailyReportNotesRepairableViolation(violation),
+    );
+    if (draftViolations.length > 0 && nonRepairableDraftViolations.length === 0) {
+      const maxRepairRounds = 2;
+      let repairViolations = draftViolations.filter(isDailyReportNotesRepairableViolation);
+      while (repairViolations.length > 0 && repairCount < maxRepairRounds) {
+        repairCount += 1;
+        await input.onStageUpdate?.("repair");
+        let patchResult;
+        try {
+          patchResult = await runStageWithAttempts(
+            "repair",
+            async () => provider.repairDailyReportDraft({
+              draft: toDailyReportModelDraft(draft),
+              violations: repairViolations,
+              selectedTopics,
+              template,
+            }),
+            {
+              attemptKey: `REPAIR.round.${repairCount}`,
+              matrixStage: "REPAIR",
+            },
+          );
+        } catch {
+          break;
+        }
+        draft = normalizeDailyReportDraftForTemplate(
+          orderDailyReportDraft(
+            applyDailyReportRepairPatches(draft, patchResult) as DailyReportDraft,
+            plan,
+            template,
+          ),
+          template,
+        );
+        modelDraft = toDailyReportModelDraft(draft);
+        draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
+        repairViolations = draftViolations.filter(isDailyReportNotesRepairableViolation);
+        validationViolationCount = draftViolations.length;
+        if (latestCheckpoint) {
+          await saveCheckpoint({
+            ...latestCheckpoint,
+            stage: "repair",
+            completedStages: draftViolations.length > 0
+              ? [...new Set([...latestCheckpoint.completedStages, "write", "repair"])]
+              : [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])],
+            lastCompletedStage: "repair",
+            failedStage: null,
+            failureCode: null,
+            resumeEligible: draftViolations.length === 0,
+            stageAttempts: { ...stageAttempts },
+            draft: modelDraft,
+            violations: draftViolations,
+            data: {
+              ...(latestCheckpoint.data ?? {}),
+              omittedTopicIds: Array.from(omittedTopicIds),
+              omittedTopicCount: omittedTopicIds.size,
+            },
+          });
+        }
+      }
+      if (draftViolations.length > 0) {
+        const fallback = omitInvalidOptionalDailyReportTopics(draft, draftViolations, template, omittedTopicIds);
+        omittedTopicIds = fallback.omittedTopicIds;
+        if (omittedTopicIds.size > 0) {
+          partial = true;
+          draft = normalizeDailyReportDraftForTemplate(
+            orderDailyReportDraft(fallback.draft as DailyReportDraft, plan, template),
+            template,
+          );
+          modelDraft = toDailyReportModelDraft(draft);
+          draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
+          validationViolationCount = draftViolations.length;
+          if (latestCheckpoint) {
+            await saveCheckpoint({
+              ...latestCheckpoint,
+              stage: "repair",
+              completedStages: [...new Set([...latestCheckpoint.completedStages, "write", "repair"])],
+              lastCompletedStage: "repair",
+              failedStage: null,
+              failureCode: null,
+              resumeEligible: false,
+              stageAttempts: { ...stageAttempts },
+              draft: modelDraft,
+              violations: draftViolations,
+              data: {
+                ...(latestCheckpoint.data ?? {}),
+                omittedTopicIds: Array.from(omittedTopicIds),
+                omittedTopicCount: omittedTopicIds.size,
+              },
+            });
+          }
+        }
       }
     }
     if (draftViolations.length > 0) {
@@ -1638,6 +1747,7 @@ async function generateDailyReportInternal(input: {
         finalizationPlan,
         finalizationSelectedCandidates,
         finalizationTemplate,
+        omittedTopicIds,
       );
       validationViolationCount = finalViolations.length;
       if (finalViolations.length > 0) {
@@ -1666,6 +1776,7 @@ async function generateDailyReportInternal(input: {
   }
   const selectedCount = countSelectedDailyReportCandidates(content);
   const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const excludedAssessDuplicates = buildDailyReportExcludedAssessDuplicateSnapshots(candidates, assessments);
   const expandedSourcesByNumber = await buildExpandedDailyReportSourceRegistry({
     candidatesById,
     sourceRows,
@@ -1683,16 +1794,20 @@ async function generateDailyReportInternal(input: {
     candidates: candidates.map(toCandidateSnapshotEntry),
     excludedCurrentDuplicates: deduplicated.duplicates.map((candidate) => ({
       ...toCandidateSnapshotEntry(candidate),
-      reason: "current_candidate_duplicate",
+      excludedReason: "当前候选集合内重复",
+      matchedRecentDate: null,
+      matchedRecentTitle: null,
     })),
     excludedRecentDuplicates,
+    excludedAssessDuplicates,
     emptySectionsAfterDeduplication: deduplication.emptySectionTitles,
     refilledEmptySections: deduplication.refilledSectionTitles,
     removedEmptySections: deduplication.removedEmptySectionTitles,
+    omittedRepairTopics: Array.from(omittedTopicIds),
     candidateCoverage,
     candidateCount: candidates.length,
   });
-  const shouldAutoPublish = schedule.dailyReportAutoPublish;
+  const shouldAutoPublish = schedule.dailyReportAutoPublish && !partial;
   const publishedAt = shouldAutoPublish ? new Date() : null;
   const persistIdempotencyKey = `generated:${input.taskRunId ?? `direct-${Date.now()}`}:${inputHash}`;
 
@@ -1733,6 +1848,8 @@ async function generateDailyReportInternal(input: {
     planSelectedCount,
     planViolationCount,
     repairCount,
+    partial,
+    omittedTopicIds: Array.from(omittedTopicIds),
     historyFilteredCount,
     validationViolationCount,
     batchSize: schedule.dailyReportPlanningBatchSize ?? null,
@@ -1783,6 +1900,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
   let planViolationCount = 0;
   let repairCount = 0;
   let validationViolationCount = 0;
+  let omittedTopicCount = 0;
   let batchCount = 0;
   let batchSize: number | null = null;
   let activeStage: DailyReportPipelineStage | null = "prepare";
@@ -1865,6 +1983,9 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         if (checkpoint.stage === "validate" || checkpoint.stage === "repair") {
           validationViolationCount = checkpoint.violations?.length ?? 0;
         }
+        if (typeof checkpoint.data?.omittedTopicCount === "number") {
+          omittedTopicCount = checkpoint.data.omittedTopicCount;
+        }
         await updateTaskRun(taskRun.id, { pipelineCheckpoint: checkpoint });
         resumeCheckpoint = checkpoint;
       },
@@ -1873,6 +1994,8 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
 
     const finishedAt = new Date();
     const finalAiUsage = result.aiUsage;
+    const finalStatus = result.partial ? "partial" : "succeeded";
+    omittedTopicCount = result.omittedTopicIds.length;
     const totalActual = result.skipped ? 0 : finalAiUsage.actual;
     const totalEstimated = finalAiUsage.estimated;
     // Always include the daily_report key so the breakdown is non-empty when
@@ -1883,18 +2006,18 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         ? finalAiUsage.breakdown
         : [{ key: "daily_report", label: "AI 日报", actual: totalActual, estimated: totalEstimated }];
     await updateTaskRun(taskRun.id, {
-      status: "succeeded",
+      status: finalStatus,
       progressCurrent: 1,
       progressTotal: 1,
       progressLabel: result.skipped
         ? result.reason
-        : `已生成 ${date} AI 日报${result.report?.status === "published" ? "并发布" : "草稿"}`,
+        : `已生成 ${date} AI 日报${result.report?.status === "published" ? "并发布" : "草稿"}${result.partial ? "（部分条目因校验失败被剔除）" : ""}`,
       aiCallCountActual: totalActual,
       aiCallCountEstimated: totalEstimated,
       aiCallBreakdown: finalBreakdown,
       taskTimeline: buildDailyReportTaskTimeline({
         taskRun,
-        status: result.skipped ? "skipped" : "succeeded",
+        status: result.skipped ? "skipped" : finalStatus,
         candidateCount: result.candidateCount,
         historyFilteredCount: result.historyFilteredCount,
         selectedCount: result.selectedCount,
@@ -1906,6 +2029,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         planViolationCount: result.planViolationCount,
         validationViolationCount: result.validationViolationCount,
         repairCount: result.repairCount,
+        omittedTopicCount,
         batchCount: result.batchCount,
         batchSize: result.batchSize,
         activeStage: result.skipped ? null : "persist_publish",
@@ -1914,7 +2038,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       pipelineCheckpoint: null,
       finishedAt,
     });
-    await markDailyScheduleRunFinished(taskRun, "succeeded");
+    await markDailyScheduleRunFinished(taskRun, finalStatus);
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI 日报生成失败。";
     const cancelled = error instanceof DailyReportCancellationError;
@@ -1927,6 +2051,9 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     }
     if (failedCheckpoint?.data && Object.prototype.hasOwnProperty.call(failedCheckpoint.data, "batchSize")) {
       batchSize = typeof failedCheckpoint.data.batchSize === "number" ? failedCheckpoint.data.batchSize : null;
+    }
+    if (failedCheckpoint?.data && typeof failedCheckpoint.data.omittedTopicCount === "number") {
+      omittedTopicCount = failedCheckpoint.data.omittedTopicCount;
     }
     const failedPlan = failedCheckpoint?.plan as DailyReportPlan | undefined;
     if (failedPlan?.sections) {
@@ -1962,6 +2089,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         planViolationCount,
         validationViolationCount,
         repairCount,
+        omittedTopicCount,
         batchCount,
         batchSize,
         activeStage,

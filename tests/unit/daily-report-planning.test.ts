@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildDailyReportCandidateBriefs,
+  applyDailyReportRepairPatches,
   getDailyReportTopicPriority,
   materializeDailyReportPlan,
   normalizeDailyReportDraftForTemplate,
+  omitInvalidOptionalDailyReportTopics,
   orderAndLimitDailyReportPlan,
   orderAndLimitDailyReportPlanWithAudit,
   orderDailyReportDraft,
@@ -55,6 +57,7 @@ function assessment(id: number, overrides: Partial<DailyReportCandidateAssessmen
     isWorthReading: true,
     suggestedBlockKey: "hot-topics",
     historyDecision: "new",
+    matchedRecentTopicTitle: null,
     ...overrides,
   };
 }
@@ -372,6 +375,70 @@ describe("daily report planning contracts", () => {
         ? { ...block, items: [...block.items, { ...block.items[0], title: "重复主题" }] }
         : block),
     }, plan, [candidate(1), candidate(2)], template()).map((violation) => violation.code)).toContain("draft_duplicate_topic");
+  });
+
+  it("merges REPAIR notes without changing body or source mapping", () => {
+    const draft = {
+      headline: "标题",
+      blocks: [{
+        type: "section" as const,
+        blockKey: "hot-topics",
+        title: "热点事件",
+        items: [{ topicId: "topic-1", title: "主题条目", body: "原正文", sourceIds: [1, 2], notes: [] }],
+      }],
+    };
+
+    const repaired = applyDailyReportRepairPatches(draft, {
+      patches: [{ topicId: "topic-1", notes: [{ label: "重点", text: "补充重点" }] }],
+    });
+
+    expect(repaired).toMatchObject({
+      headline: "标题",
+      blocks: [{ items: [{ topicId: "topic-1", body: "原正文", sourceIds: [1, 2], notes: [{ label: "重点", text: "补充重点" }] }] }],
+    });
+  });
+
+  it("omits an invalid item from an optional section when the remaining draft is valid", () => {
+    const repairTemplate = normalizeDailyReportTemplateConfig({
+      schemaVersion: 2,
+      headlineInstruction: "生成标题",
+      recentTopicRules: [],
+      globalRules: [],
+      blocks: [
+        { type: "text", title: "摘要", bodyInstruction: "生成摘要" },
+        {
+          type: "section",
+          key: "data-insights",
+          title: "数据与洞察",
+          description: "数据",
+          required: false,
+          minItems: 0,
+          maxItems: 3,
+          item: { bodyInstruction: "说明数据", notes: [{ label: "数据", required: true, instruction: "列出关键数字。" }] },
+        },
+      ],
+    });
+    const plan = materializeDailyReportPlan({
+      schemaVersion: 2,
+      sections: [{ blockKey: "data-insights", topics: [{ candidateIds: [1] }, { candidateIds: [2] }] }],
+    });
+    const draft = {
+      headline: "标题",
+      blocks: [
+        { type: "text" as const, title: "摘要", body: "摘要" },
+        { type: "section" as const, blockKey: "data-insights", title: "数据与洞察", items: [
+          { topicId: "topic-1", title: "数据条目", body: "正文", sourceIds: [1], notes: [] },
+          { topicId: "topic-2", title: "合格数据条目", body: "正文", sourceIds: [2], notes: [{ label: "数据", text: "关键数字" }] },
+        ] },
+      ],
+    };
+    const violations = validateDailyReportDraft(draft, plan, [candidate(1), candidate(2)], repairTemplate);
+    const fallback = omitInvalidOptionalDailyReportTopics(draft, violations, repairTemplate);
+    const remainingViolations = validateDailyReportDraft(fallback.draft as typeof draft, plan, [candidate(1), candidate(2)], repairTemplate, fallback.omittedTopicIds);
+
+    expect(violations).toEqual([expect.objectContaining({ code: "draft_required_note_missing", topicId: "topic-1", noteLabel: "数据", candidateIds: [1] })]);
+    expect(fallback.omittedTopicIds).toEqual(new Set(["topic-1"]));
+    expect(remainingViolations).toEqual([]);
   });
 
   it("applies title-only template sections before validation", () => {

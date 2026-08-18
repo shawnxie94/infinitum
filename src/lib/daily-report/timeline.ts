@@ -16,7 +16,7 @@ export type DailyReportPipelineStage =
 
 type DailyReportTaskTimelineInput = {
   taskRun: BackgroundTaskRun;
-  status: "running" | "succeeded" | "failed" | "cancelled" | "skipped";
+  status: "running" | "succeeded" | "partial" | "failed" | "cancelled" | "skipped";
   candidateCount?: number | null;
   historyFilteredCount?: number | null;
   selectedCount?: number | null;
@@ -28,6 +28,7 @@ type DailyReportTaskTimelineInput = {
   planViolationCount?: number | null;
   validationViolationCount?: number | null;
   repairCount?: number | null;
+  omittedTopicCount?: number | null;
   activeStage?: DailyReportPipelineStage | null;
   batchCount?: number | null;
   batchSize?: number | null;
@@ -37,6 +38,7 @@ type DailyReportTaskTimelineInput = {
 function getDailyReportTaskFinishedLabel(status: DailyReportTaskTimelineInput["status"]) {
   if (status === "running") return "进行中";
   if (status === "failed") return "失败";
+  if (status === "partial") return "部分完成";
   if (status === "cancelled") return "已取消";
   if (status === "skipped") return "已跳过";
   return "已完成";
@@ -64,6 +66,8 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
     ? "running"
     : input.status === "failed"
       ? "failed"
+      : input.status === "partial"
+        ? "partial"
       : input.status === "cancelled"
         ? "cancelled"
         : input.status === "skipped" ? "skipped" : "succeeded";
@@ -132,6 +136,8 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
         ? "running"
         : input.status === "failed"
           ? "failed"
+          : input.status === "partial"
+            ? "partial"
           : input.status === "cancelled"
             ? "cancelled"
             : input.status === "skipped" ? "skipped" : "succeeded",

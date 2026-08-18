@@ -52,6 +52,7 @@ export type DailyReportCandidateAssessment = {
   isWorthReading: boolean;
   suggestedBlockKey: string | null;
   historyDecision: DailyReportHistoryDecision;
+  matchedRecentTopicTitle: string | null;
 };
 
 export type DailyReportAssessmentLedger = {
@@ -189,6 +190,15 @@ export type DailyReportModelDraft = Omit<DailyReportContent, "blocks" | "section
   sections?: Record<string, DailyReportModelItem[]>;
 };
 
+export type DailyReportRepairPatch = {
+  topicId: string;
+  notes: DailyReportItemNote[];
+};
+
+export type DailyReportRepairPatchResult = {
+  patches: DailyReportRepairPatch[];
+};
+
 export type DailyReportViolation = {
   code: string;
   stage: "plan" | "draft";
@@ -196,7 +206,18 @@ export type DailyReportViolation = {
   blockKey?: string;
   topicId?: string;
   candidateIds?: number[];
+  itemIndex?: number;
+  itemTitle?: string;
+  noteLabel?: string;
+  noteInstruction?: string;
 };
+
+/** REPAIR notes patch can only fill required notes; structure stays code-owned. */
+export function isDailyReportNotesRepairableViolation(
+  violation: Pick<DailyReportViolation, "code">,
+) {
+  return violation.code === "draft_required_note_missing";
+}
 
 export type DailyReportDraft = DailyReportContent & {
   metadata?: {
@@ -333,6 +354,14 @@ export type DailyReportExcludedCandidateSnapshotEntry = DailyReportCandidateSnap
   matchedRecentTitle: string | null;
 };
 
+export type DailyReportAssessDuplicateSnapshotEntry = DailyReportCandidateSnapshotEntry & {
+  relevanceScore: number;
+  suggestedBlockKey: string | null;
+  historyDecision: "duplicate";
+  matchedRecentTopicTitle: string | null;
+  excludedReason: string;
+};
+
 export type DailyReportCandidateCoverageDTO = {
   candidateCount: number;
   selectedCount: number;
@@ -349,6 +378,8 @@ export type DailyReportCandidateReviewDTO = {
   selectedCount: number;
   candidates: DailyReportCandidateSnapshotEntry[];
   excludedRecentDuplicates: DailyReportExcludedCandidateSnapshotEntry[];
+  excludedAssessDuplicates: DailyReportAssessDuplicateSnapshotEntry[];
+  excludedCurrentDuplicates: DailyReportExcludedCandidateSnapshotEntry[];
   candidateCoverage?: DailyReportCandidateCoverageDTO | null;
 };
 

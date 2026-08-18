@@ -16,6 +16,7 @@ import type {
   DailyReportPlanningAudit,
   DailyReportPlanningAuditSection,
   DailyReportPlanningAuditTopic,
+  DailyReportRepairPatchResult,
   DailyReportSelectedTopic,
   DailyReportTopicPriorityComponents,
   DailyReportViolation,
@@ -104,6 +105,15 @@ export function validateDailyReportAssessments(
       throw new Error(`ASSESS 候选 ${candidateId} 的 historyDecision 必须是 new、duplicate、follow_up 或 uncertain。`);
     }
     const historyDecision = rawAssessment.historyDecision as typeof DAILY_REPORT_HISTORY_DECISIONS[number];
+    if (rawAssessment.matchedRecentTopicTitle !== undefined && !nullableString(rawAssessment.matchedRecentTopicTitle)) {
+      throw new Error(`ASSESS 候选 ${candidateId} 的 matchedRecentTopicTitle 必须是字符串或 null。`);
+    }
+    const matchedRecentTopicTitle = typeof rawAssessment.matchedRecentTopicTitle === "string"
+      ? rawAssessment.matchedRecentTopicTitle.trim() || null
+      : null;
+    if (historyDecision !== "duplicate" && matchedRecentTopicTitle !== null) {
+      throw new Error(`ASSESS 候选 ${candidateId} 只有 historyDecision=duplicate 时才能填写 matchedRecentTopicTitle。`);
+    }
     assessments.push({
       candidateId,
       relevanceScore: rawAssessment.relevanceScore as number,
@@ -114,6 +124,7 @@ export function validateDailyReportAssessments(
         ? null
         : (rawAssessment.suggestedBlockKey as string).trim(),
       historyDecision,
+      matchedRecentTopicTitle,
     });
   }
   if (returnedIds.size !== batchIds.size) throw new Error("ASSESS 未覆盖当前批次全部候选。");
@@ -274,6 +285,86 @@ export function toDailyReportModelDraft(draft: DailyReportDraft | DailyReportMod
         }
       : block),
   } as DailyReportModelDraft;
+}
+
+export function applyDailyReportRepairPatches(
+  draft: DailyReportDraft | DailyReportModelDraft,
+  result: DailyReportRepairPatchResult,
+): DailyReportDraft | DailyReportModelDraft {
+  if (!draft || !Array.isArray(draft.blocks)) return draft;
+  const patchesByTopicId = new Map(
+    (result?.patches ?? [])
+      .filter((patch) => typeof patch?.topicId === "string" && Array.isArray(patch.notes))
+      .map((patch) => [patch.topicId.trim(), patch] as const),
+  );
+
+  return {
+    ...draft,
+    blocks: draft.blocks.map((block) => block.type === "section"
+      ? {
+          ...block,
+          items: block.items.map((item) => {
+            const patch = item.topicId ? patchesByTopicId.get(item.topicId) : undefined;
+            if (!patch) return item;
+            const notesByLabel = new Map((item.notes ?? []).map((note) => [note.label, note]));
+            for (const note of patch.notes) {
+              if (typeof note?.label !== "string" || typeof note.text !== "string") continue;
+              const label = note.label.trim();
+              const text = note.text.trim();
+              if (label && text) notesByLabel.set(label, { label, text });
+            }
+            return { ...item, notes: Array.from(notesByLabel.values()) };
+          }),
+        }
+      : block),
+  } as DailyReportDraft | DailyReportModelDraft;
+}
+
+export function omitInvalidOptionalDailyReportTopics(
+  draft: DailyReportDraft | DailyReportModelDraft,
+  violations: DailyReportViolation[],
+  template: NormalizedDailyReportTemplate,
+  alreadyOmittedTopicIds: ReadonlySet<string> = new Set(),
+) {
+  const sectionByKey = new Map(
+    sectionBlocks(template)
+      .filter((block) => block.key)
+      .map((block) => [block.key!, block]),
+  );
+  const invalidTopicIdsByBlock = new Map<string, Set<string>>();
+  for (const violation of violations) {
+    if (violation.code !== "draft_required_note_missing") continue;
+    if (!violation.topicId || !violation.blockKey) continue;
+    const block = sectionByKey.get(violation.blockKey);
+    if (!block || block.required) continue;
+    const topicIds = invalidTopicIdsByBlock.get(violation.blockKey) ?? new Set<string>();
+    topicIds.add(violation.topicId);
+    invalidTopicIdsByBlock.set(violation.blockKey, topicIds);
+  }
+
+  const omittedTopicIds = new Set(alreadyOmittedTopicIds);
+  if (!draft || !Array.isArray(draft.blocks)) return { draft, omittedTopicIds };
+  const nextDraft = {
+    ...draft,
+    blocks: draft.blocks.map((block) => {
+      if (block.type !== "section" || !block.blockKey) return block;
+      const topicIds = invalidTopicIdsByBlock.get(block.blockKey);
+      if (!topicIds) return block;
+      const templateBlock = sectionByKey.get(block.blockKey);
+      if (!templateBlock) return block;
+      const removableCount = Math.max(0, block.items.length - (templateBlock.minItems ?? 0));
+      let removedCount = 0;
+      const items = block.items.filter((item) => {
+        if (!item.topicId || !topicIds.has(item.topicId) || removedCount >= removableCount) return true;
+        removedCount += 1;
+        omittedTopicIds.add(item.topicId);
+        return false;
+      });
+      return items.length === block.items.length ? block : { ...block, items };
+    }),
+  } as DailyReportDraft | DailyReportModelDraft;
+
+  return { draft: nextDraft, omittedTopicIds };
 }
 
 export function buildDailyReportSelectedTopics(
@@ -714,6 +805,7 @@ export function validateDailyReportDraft(
   plan: DailyReportPlan,
   selectedCandidates: DailyReportPlanningCandidate[],
   template: NormalizedDailyReportTemplate,
+  omittedTopicIds: ReadonlySet<string> = new Set(),
 ): DailyReportViolation[] {
   const violations: DailyReportViolation[] = [];
   const blocks = Array.isArray(draft?.blocks) ? draft.blocks as unknown[] : null;
@@ -845,6 +937,12 @@ export function validateDailyReportDraft(
             code: "draft_required_note_missing",
             stage: "draft",
             blockKey: templateBlock.key,
+            topicId: topicId || undefined,
+            candidateIds: itemSourceIds,
+            itemIndex,
+            itemTitle: typeof rawItem.title === "string" ? rawItem.title.trim() : undefined,
+            noteLabel: note.label,
+            noteInstruction: note.instruction,
             message: `${templateBlock.title} 第 ${itemIndex + 1} 条${itemTitle}${sourceSummary}缺少必填要点 ${note.label}（要求：${note.instruction}）。`,
           });
         }
@@ -862,7 +960,7 @@ export function validateDailyReportDraft(
     }
   }
   for (const topic of planTopics) {
-    if (!seenTopicIds.has(topic.topicId)) {
+    if (!omittedTopicIds.has(topic.topicId) && !seenTopicIds.has(topic.topicId)) {
       violations.push({ code: "draft_topic_missing", stage: "draft", blockKey: topic.blockKey, topicId: topic.topicId, message: `草稿缺少主题 ${topic.topicId} 对应的日报条目。` });
     }
   }

@@ -29,7 +29,7 @@ describe("daily report template config", () => {
     expect(prompt).not.toContain("输出 3-5 条");
     expect(prompt).toContain("items 为空数组时会在渲染时自动隐藏");
     expect(prompt).toContain("headline 字段：基于最终输出的“热点事件”栏目全部条目生成标题主题");
-    expect(prompt).toContain("历史主题去重规则：");
+    expect(prompt).toContain("历史主题判断策略：");
     expect(prompt).toContain("如果候选内容与历史主题召回窗口内已写主题只是同一事件的重复报道");
     expect(prompt).toContain("每条正文约 120-260 字");
     expect(prompt).toContain("每条正文约 80-180 字");
@@ -38,6 +38,8 @@ describe("daily report template config", () => {
     expect(prompt).toContain("body 为空字符串或缺失时会按紧凑模式只展示标题");
     expect(prompt).toContain("notes 要求：重点 必填");
     expect(prompt).toContain("只保留独立且有明确事实增量");
+    expect(prompt).toContain("正文写作规则：");
+    expect(prompt).not.toContain("每个输入主题生成且仅生成一个条目");
     expect(prompt).not.toContain("可根据管理员习惯调整");
     expect(prompt).not.toContain("openingLabel");
   });

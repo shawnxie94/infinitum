@@ -32,10 +32,10 @@ const candidate: DailyReportPlanningCandidate = {
 describe("daily report staged provider", () => {
   it("exposes assess, plan, write and repair as separate JSON calls", async () => {
     const create = vi.fn()
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ assessments: [{ candidateId: 1, relevanceScore: 90, isWorthReading: true, suggestedBlockKey: "hot-topics", historyDecision: "new" }] }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ assessments: [{ candidateId: 1, relevanceScore: 90, isWorthReading: true, suggestedBlockKey: "hot-topics", historyDecision: "new", matchedRecentTopicTitle: null }] }) } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ schemaVersion: 2, sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: [1] }] }] }) } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "正文", sourceIds: [1] }] }] }) } }] })
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "修复正文", sourceIds: [1] }] }] }) } }] });
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ patches: [{ topicId: "topic-1", notes: [{ label: "重点", text: "修复后的重点" }] }] }) } }] });
     const provider = createAiProvider(
       { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
       { dailyReport: { systemPrompt: "日报", promptTemplate: "{{articlesJson}}" } },
@@ -79,16 +79,18 @@ describe("daily report staged provider", () => {
       eventObject: candidate.eventObject,
       eventDate: candidate.eventDate,
     }];
-    const selection = await provider.planDailyReport({ candidateBriefs, template, recentTopicLookbackDays: 10 });
-    const plan = {
-      schemaVersion: 2 as const,
-      sections: [{ blockKey: "hot-topics", topics: [{ topicId: "topic-1", candidateIds: selection.sections[0]?.topics[0]?.candidateIds ?? [1] }] }],
-    };
+    await provider.planDailyReport({ candidateBriefs, template, recentTopicLookbackDays: 10 });
     const draft = await provider.writeDailyReport({ selectedTopics: [{ topicId: "topic-1", blockKey: "hot-topics", candidateIds: [1], representativeCandidateId: 1, candidates: [candidate] }], template });
-    const repaired = await provider.repairDailyReportDraft({ draft, violations: [], plan, template });
+    const repaired = await provider.repairDailyReportDraft({
+      draft,
+      violations: [],
+      selectedTopics: [{ topicId: "topic-1", blockKey: "hot-topics", candidateIds: [1], representativeCandidateId: 1, candidates: [candidate] }],
+      template,
+    });
     expect(assessments[0]?.candidateId).toBe(1);
+    expect(assessments[0]?.matchedRecentTopicTitle).toBeNull();
     expect(draft.blocks).toHaveLength(1);
-    expect(repaired.blocks).toHaveLength(1);
+    expect(repaired.patches).toHaveLength(1);
     expect(create).toHaveBeenCalledTimes(4);
     const userPrompts = create.mock.calls.map((call) => call[0]?.messages?.[1]?.content as string).join("\n");
     expect(userPrompts).toContain("阶段：ASSESS");
@@ -106,10 +108,12 @@ describe("daily report staged provider", () => {
     expect(assessSystemPrompt).not.toContain("旧版");
     expect(assessSystemPrompt).not.toContain("一次性日报");
     expect(assessUserPrompt).toContain("candidateScore");
-    expect(assessUserPrompt).toContain("只返回上述五个字段");
+    expect(assessUserPrompt).toContain("只返回上述六个字段");
     expect(assessUserPrompt).toContain("不附带其他解释字段");
     expect(assessUserPrompt).toContain('"recentTopics"');
     expect(assessUserPrompt).toContain("historyDecision");
+    expect(assessUserPrompt).toContain("matchedRecentTopicTitle");
+    expect(assessUserPrompt).toContain("historyTopicRules");
     expect(assessUserPrompt).toContain('"recentTopicLookbackDays":10');
     expect(assessUserPrompt).not.toContain('"required"');
     expect(assessUserPrompt).not.toContain('"minItems"');
@@ -131,6 +135,7 @@ describe("daily report staged provider", () => {
     expect(planUserPrompt).toContain("不要输出主题编号、栏目展示名、标题、理由或其他字段");
     expect(planSystemPrompt).toContain("text block 不属于 sections");
     expect(planUserPrompt).toContain('"recentTopicLookbackDays":10');
+    expect(planUserPrompt).toContain('"historyTopicRules"');
     const writeSystemPrompt = create.mock.calls[2]?.[0]?.messages?.[0]?.content as string;
     const writeUserPrompt = create.mock.calls[2]?.[0]?.messages?.[1]?.content as string;
     expect(writeSystemPrompt).toContain("每个 selectedTopics 必须生成一个 item");
@@ -139,18 +144,19 @@ describe("daily report staged provider", () => {
     expect(writeSystemPrompt).toContain("输出对象本身就是日报内容");
     expect(writeSystemPrompt).toContain("禁止输出 draft、result、data、output 等外层包装键");
     expect(writeUserPrompt).toContain("顶层直接包含 headline 和 blocks");
+    expect(writeUserPrompt).toContain('"writingRules"');
     expect(writeUserPrompt).not.toContain("日报 Draft JSON");
-    expect(writeUserPrompt).not.toContain("历史主题去重规则");
-    expect(writeUserPrompt).not.toContain("recentTopicRules");
+    expect(writeUserPrompt).not.toContain("历史主题判断策略");
+    expect(writeUserPrompt).not.toContain("historyTopicRules");
     expect(writeUserPrompt).not.toContain('"sourceIds":');
     expect(writeUserPrompt).not.toContain('"candidateScore"');
     const repairUserPrompt = create.mock.calls[3]?.[0]?.messages?.[1]?.content as string;
     const repairSystemPrompt = create.mock.calls[3]?.[0]?.messages?.[0]?.content as string;
-    expect(repairSystemPrompt).toContain("禁止输出 draft、result、data、output 等外层包装键");
-    expect(repairUserPrompt).toContain("input.draft.headline");
-    expect(repairUserPrompt).toContain("输出 JSON 对象本身就是修复后的日报内容");
-    expect(repairUserPrompt).not.toContain("返回完整 Draft JSON");
-    expect(repairUserPrompt).not.toContain("历史主题去重规则");
-    expect(repairUserPrompt).not.toContain("recentTopicRules");
+    expect(repairSystemPrompt).toContain("只返回 notes 补丁");
+    expect(repairUserPrompt).toContain('"repairTargets"');
+    expect(repairUserPrompt).toContain("只输出 {patches:[{topicId,notes:[{label,text}]}]}");
+    expect(repairUserPrompt).not.toContain("返回完整日报内容 JSON");
+    expect(repairUserPrompt).not.toContain("历史主题判断策略");
+    expect(repairUserPrompt).not.toContain("historyTopicRules");
   });
 });

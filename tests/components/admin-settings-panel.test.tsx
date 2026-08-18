@@ -769,7 +769,7 @@ describe("AdminSettingsPanel", () => {
     expect(within(dialog).getByText("日报模板")).toBeInTheDocument();
     expect(within(dialog).queryByText(/这里配置日报的选题/)).not.toBeInTheDocument();
     expect(within(dialog).getByLabelText("标题规则")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("历史主题去重规则")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("历史主题识别策略")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
   });
 
@@ -940,7 +940,7 @@ describe("AdminSettingsPanel", () => {
     const dialog = screen.getByRole("dialog", { name: "提示词预览 - 日报模板预览测试" });
     expect(within(dialog).queryByText("日报模板预览")).not.toBeInTheDocument();
     expect(within(dialog).getByText("标题规则")).toBeInTheDocument();
-    expect(within(dialog).getByText("内容全局规则")).toBeInTheDocument();
+    expect(within(dialog).getByText("正文通用规则")).toBeInTheDocument();
     expect(within(dialog).getByText("栏目要求")).toBeInTheDocument();
     expect(within(dialog).getAllByText("正文要求")).toHaveLength(2);
     expect(within(dialog).getByText("重点")).toBeInTheDocument();
