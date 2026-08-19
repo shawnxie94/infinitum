@@ -5,6 +5,7 @@ import { BackToTopButton } from "@/components/ui/back-to-top-button";
 import { PageShell } from "@/components/ui/page-shell";
 import { EVENT_BRIEFING_MAX_PAGE_SIZE } from "@/lib/events/pagination";
 import { getEventBriefing } from "@/lib/events/service";
+import { normalizeEventBriefingTag } from "@/lib/events/types";
 import { listPublicHeaderLinks } from "@/lib/settings/service";
 import {
   buildBreadcrumbListJsonLd,
@@ -114,8 +115,9 @@ export default async function EventsPage({ searchParams }: EventsPageProps) {
   const page = parsePositiveInteger(getSearchParamValue(resolvedSearchParams, "page"), 1);
   const pageSize = parseOptionalPositiveInteger(getSearchParamValue(resolvedSearchParams, "size"));
   const channelId = getSearchParamValue(resolvedSearchParams, "channel") ?? null;
+  const tag = normalizeEventBriefingTag(getSearchParamValue(resolvedSearchParams, "tag"));
   const [briefing, headerLinks] = await Promise.all([
-    getEventBriefing({ date: selectedDate, page, pageSize, channelId }),
+    getEventBriefing({ date: selectedDate, page, pageSize, channelId, tag }),
     listPublicHeaderLinks(),
   ]);
   const origin = getSiteOrigin();

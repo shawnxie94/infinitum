@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import type {
   EventBriefingCandidate,
   EventBriefingDateRange,
+  EventBriefingTag,
   EventCandidateEntity,
   EventCandidateItem,
   EventCandidateSource,
@@ -14,6 +15,7 @@ type PublicItemRow = Awaited<ReturnType<typeof listDailyPublicItems>>[number];
 
 type ListEventBriefingCandidateOptions = {
   groupIds?: string[];
+  tag?: EventBriefingTag;
 };
 
 function uniqueBy<T>(values: T[], getKey: (value: T) => string) {
@@ -125,6 +127,36 @@ function buildSourceFilter(groupIds: string[] = []) {
 
 async function listDailyPublicItems(range: EventBriefingDateRange, options: ListEventBriefingCandidateOptions = {}) {
   const groupIds = normalizeGroupIds(options.groupIds);
+  const tagWhere = options.tag === "follow_up"
+    ? {
+        cluster: {
+          is: {
+            status: "active" as const,
+            OR: [
+              { earliestCreatedAt: null },
+              { earliestCreatedAt: { lt: range.start } },
+            ],
+          },
+        },
+      }
+    : options.tag === "new_content"
+      ? {
+          OR: [
+            { clusterId: null },
+            {
+              cluster: {
+                is: {
+                  status: "active" as const,
+                  OR: [
+                    { earliestCreatedAt: null },
+                    { earliestCreatedAt: { gte: range.start } },
+                  ],
+                },
+              },
+            },
+          ],
+        }
+      : null;
 
   return prisma.item.findMany({
     where: {
@@ -140,6 +172,7 @@ async function listDailyPublicItems(range: EventBriefingDateRange, options: List
             { cluster: { is: { status: "active" } } },
           ],
         },
+        ...(tagWhere ? [tagWhere] : []),
       ],
     },
     select: {
@@ -476,6 +509,14 @@ function getAggregationParentClusterIds(item: PublicItemRow) {
   ].filter((clusterId): clusterId is string => Boolean(clusterId));
 }
 
+function matchesEventBriefingTag(candidate: EventBriefingCandidate, tag: EventBriefingTag | undefined) {
+  if (!tag || tag === "all") {
+    return true;
+  }
+
+  return tag === "follow_up" ? candidate.isFollowUp : !candidate.isFollowUp;
+}
+
 export async function listEventBriefingCandidates(
   range: EventBriefingDateRange,
   options: ListEventBriefingCandidateOptions = {},
@@ -512,7 +553,8 @@ export async function listEventBriefingCandidates(
       clusterMembersByClusterId.get(clusterId) ?? [],
       range,
     ))
-    .filter((candidate): candidate is EventBriefingCandidate => Boolean(candidate));
+    .filter((candidate): candidate is EventBriefingCandidate => Boolean(candidate))
+    .filter((candidate) => matchesEventBriefingTag(candidate, options.tag));
   const visibleClusterIds = new Set(
     clusterCandidates
       .filter((candidate) => candidate.type === "cluster")
@@ -531,7 +573,8 @@ export async function listEventBriefingCandidates(
 
       return !getAggregationParentClusterIds(item).some((clusterId) => visibleClusterIds.has(clusterId));
     })
-    .map(buildSingleCandidate);
+    .map(buildSingleCandidate)
+    .filter((candidate) => matchesEventBriefingTag(candidate, options.tag));
 
   return {
     candidates: [...clusterCandidates, ...singleCandidates],

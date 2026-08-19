@@ -1,6 +1,17 @@
 import type { AdminBriefingPreferenceConfig, AdminEventBriefingConfig } from "@/lib/settings/types";
 
 export type EventBriefingEntryType = "cluster" | "single";
+export type EventBriefingTag = "all" | "follow_up" | "new_content";
+
+export const EVENT_BRIEFING_TAG_OPTIONS: Array<{ value: EventBriefingTag; label: string }> = [
+  { value: "all", label: "所有" },
+  { value: "follow_up", label: "新进展" },
+  { value: "new_content", label: "新内容" },
+];
+
+export function normalizeEventBriefingTag(value: string | null | undefined): EventBriefingTag {
+  return value === "follow_up" || value === "new_content" ? value : "all";
+}
 
 export type EventBriefingChannelDTO = {
   id: string;
@@ -16,6 +27,7 @@ export type EventBriefingOptions = {
   page?: number;
   pageSize?: number;
   channelId?: string | null;
+  tag?: EventBriefingTag | null;
   now?: Date;
 };
 
@@ -70,6 +82,7 @@ export type EventBriefingItemDTO = {
 
 export type EventBriefingDTO = {
   date: string;
+  tag: EventBriefingTag;
   channel: EventBriefingChannelDTO;
   channels: EventBriefingChannelDTO[];
   timezone: "Asia/Shanghai";

@@ -12,6 +12,7 @@ import type {
   EventBriefingOptions,
   EventBriefingSummaryDTO,
 } from "@/lib/events/types";
+import { normalizeEventBriefingTag } from "@/lib/events/types";
 import { withEventBriefingCache } from "@/lib/events/cache";
 import {
   DEFAULT_EVENT_BRIEFING_CHANNEL_ID,
@@ -200,6 +201,7 @@ function sortEntries(left: EventBriefingEntryDTO, right: EventBriefingEntryDTO) 
 
 type RankedEventBriefing = {
   date: string;
+  tag: NonNullable<EventBriefingOptions["tag"]>;
   channel: EventBriefingChannelDTO;
   channels: EventBriefingChannelDTO[];
   timezone: "Asia/Shanghai";
@@ -261,8 +263,12 @@ async function loadEntriesForChannel(input: {
   range: ReturnType<typeof getEventBriefingDateRange>;
   preference: BriefingPreferenceForRuntime;
   minRankScore: number;
+  tag: EventBriefingOptions["tag"];
 }) {
-  const candidateResult = await listEventBriefingCandidates(input.range, { groupIds: input.channel.sourceGroupIds });
+  const candidateResult = await listEventBriefingCandidates(input.range, {
+    groupIds: input.channel.sourceGroupIds,
+    tag: normalizeEventBriefingTag(input.tag),
+  });
 
   return candidateResult.candidates
     .map((candidate) => toEntryDTO({
@@ -276,6 +282,7 @@ async function loadEntriesForChannel(input: {
 
 async function loadRankedEventBriefing(options: EventBriefingOptions): Promise<RankedEventBriefing> {
   const range = getEventBriefingDateRange(options.date, options.now);
+  const tag = normalizeEventBriefingTag(options.tag);
   const { config, preference, activeChannels } = await loadEventBriefingRuntime();
   const selectedChannel = resolveSelectedChannel(activeChannels, options.channelId);
   const channelEntries = await Promise.all(
@@ -286,6 +293,7 @@ async function loadRankedEventBriefing(options: EventBriefingOptions): Promise<R
         range,
         preference,
         minRankScore: config.minRankScore,
+        tag,
       }),
     })),
   );
@@ -298,6 +306,7 @@ async function loadRankedEventBriefing(options: EventBriefingOptions): Promise<R
 
   return {
     date: range.date,
+    tag,
     channel: selectedChannelWithCount,
     channels,
     timezone: range.timezone,
@@ -328,6 +337,7 @@ async function loadEventBriefing(options: EventBriefingOptions): Promise<EventBr
 
   return {
     date: ranked.date,
+    tag: ranked.tag,
     channel: ranked.channel,
     channels: ranked.channels,
     timezone: ranked.timezone,
@@ -347,6 +357,7 @@ function serializeRankedOptions(options: EventBriefingOptions) {
   return JSON.stringify({
     date: options.date ?? null,
     channelId: options.channelId ?? null,
+    tag: normalizeEventBriefingTag(options.tag),
     now: options.now?.toISOString() ?? null,
   });
 }
@@ -403,6 +414,7 @@ async function loadDailyReportRankedEntries(options: {
       range,
       preference,
       minRankScore: config.minRankScore,
+      tag: "all",
     })),
   );
 

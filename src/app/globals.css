@@ -525,6 +525,21 @@ main {
   color: var(--muted) !important;
 }
 
+.select-modern-antd.event-tag-filter.ant-select-single,
+.select-modern-antd.event-tag-filter.ant-select-single .ant-select-selector {
+  height: 32px !important;
+  min-height: 32px !important;
+}
+
+.select-modern-antd.event-tag-filter.ant-select-single .ant-select-selection-search-input {
+  height: 30px !important;
+}
+
+.select-modern-antd.event-tag-filter .ant-select-selection-item,
+.select-modern-antd.event-tag-filter .ant-select-selection-placeholder {
+  line-height: 30px;
+}
+
 .select-modern-antd-multiline.ant-select-multiple {
   height: auto !important;
   min-height: 36px;

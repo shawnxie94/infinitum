@@ -12,10 +12,17 @@ import { EventBriefingDetailModal } from "@/components/events/event-briefing-det
 import { EventBriefingPagination } from "@/components/events/event-briefing-pagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterInput } from "@/components/ui/filter-input";
+import { SelectField } from "@/components/ui/select-field";
 import { useToast } from "@/components/ui/toast";
 import { useClientAdminSession } from "@/components/ui/use-client-admin-session";
 import { EVENT_BRIEFING_DEFAULT_PAGE_SIZE } from "@/lib/events/pagination";
-import type { EventBriefingDTO, EventBriefingEntryDTO } from "@/lib/events/types";
+import {
+  EVENT_BRIEFING_TAG_OPTIONS,
+  type EventBriefingDTO,
+  type EventBriefingEntryDTO,
+  type EventBriefingTag,
+  normalizeEventBriefingTag,
+} from "@/lib/events/types";
 import { cx } from "@/lib/ui/cx";
 
 type EventBriefingListProps = {
@@ -24,16 +31,46 @@ type EventBriefingListProps = {
   hydrateAdminClient?: boolean;
 };
 
-function buildEventsHref(input: { date: string; pageSize: number; channelId: string }) {
+function buildEventsHref(input: { date: string; pageSize: number; channelId: string; tag: EventBriefingTag }) {
   const params = new URLSearchParams();
   params.set("date", input.date);
   params.set("channel", input.channelId);
+
+  if (input.tag !== "all") {
+    params.set("tag", input.tag);
+  }
 
   if (input.pageSize !== EVENT_BRIEFING_DEFAULT_PAGE_SIZE) {
     params.set("size", String(input.pageSize));
   }
 
   return `/events?${params.toString()}`;
+}
+
+function EventTagSelect({ briefing, pageSize }: { briefing: EventBriefingDTO; pageSize: number }) {
+  const router = useRouter();
+
+  return (
+    <div className="h-8 w-28">
+      <SelectField
+        id="event-tag-filter"
+        aria-label="事件标签"
+        className="event-tag-filter"
+        compact
+        showSearch={false}
+        value={briefing.tag}
+        options={EVENT_BRIEFING_TAG_OPTIONS}
+        onChange={(value) => {
+          router.push(buildEventsHref({
+            date: briefing.date,
+            pageSize,
+            channelId: briefing.channel.id,
+            tag: normalizeEventBriefingTag(String(value ?? "")),
+          }));
+        }}
+      />
+    </div>
+  );
 }
 
 export function EventBriefingList({
@@ -120,6 +157,7 @@ export function EventBriefingList({
                       date: briefing.date,
                       pageSize,
                       channelId: channel.id,
+                      tag: briefing.tag,
                     })}
                   >
                     {channel.name} {channel.count}
@@ -128,23 +166,27 @@ export function EventBriefingList({
               })}
             </nav>
           </div>
-          <form action="/events" className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-            <input
-              aria-label="选择日期"
-              className="h-8 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-2.5 text-sm text-[var(--text-1)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[rgba(59,130,246,0.18)]"
-              name="date"
-              type="date"
-              defaultValue={briefing.date}
-            />
-            <input name="size" type="hidden" value={pageSize} />
-            <input name="channel" type="hidden" value={briefing.channel.id} />
-            <button
-              className="lumina-home-action-button lumina-home-action-button--primary inline-flex h-8 items-center justify-center rounded-sm bg-[var(--accent)] px-3 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
-              type="submit"
-            >
-              查看
-            </button>
-          </form>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+            <EventTagSelect briefing={briefing} pageSize={pageSize} />
+            <form action="/events" className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+              <input
+                aria-label="选择日期"
+                className="h-8 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-2.5 text-sm text-[var(--text-1)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[rgba(59,130,246,0.18)]"
+                name="date"
+                type="date"
+                defaultValue={briefing.date}
+              />
+              <input name="size" type="hidden" value={pageSize} />
+              <input name="channel" type="hidden" value={briefing.channel.id} />
+              {briefing.tag !== "all" ? <input name="tag" type="hidden" value={briefing.tag} /> : null}
+              <button
+                className="lumina-home-action-button lumina-home-action-button--primary inline-flex h-8 items-center justify-center rounded-sm bg-[var(--accent)] px-3 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
+                type="submit"
+              >
+                查看
+              </button>
+            </form>
+          </div>
         </div>
       </header>
       ) : (
@@ -170,6 +212,7 @@ export function EventBriefingList({
                       date: briefing.date,
                       pageSize,
                       channelId: channel.id,
+                      tag: briefing.tag,
                     })}
                   >
                     {channel.name} {channel.count}
@@ -178,7 +221,8 @@ export function EventBriefingList({
               })}
             </nav>
           </div>
-          <div className="flex w-full items-center justify-start sm:w-auto sm:justify-end">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end sm:justify-end">
+            <EventTagSelect briefing={briefing} pageSize={pageSize} />
             <FilterInput
               label="日期"
               ariaLabel="选择日期"
@@ -194,6 +238,7 @@ export function EventBriefingList({
                     date: value,
                     pageSize,
                     channelId: briefing.channel.id,
+                    tag: briefing.tag,
                   }),
                 );
               }}
@@ -246,6 +291,7 @@ export function EventBriefingList({
           page={page}
           pageSize={pageSize}
           channelId={briefing.channel.id}
+          tag={briefing.tag}
           total={total}
           totalPages={totalPages}
         />

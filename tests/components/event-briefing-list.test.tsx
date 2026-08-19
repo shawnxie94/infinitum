@@ -17,6 +17,7 @@ vi.mock("next/navigation", () => ({
 function buildBriefing(overrides: Partial<EventBriefingDTO> = {}): EventBriefingDTO {
   return {
     date: "2026-06-30",
+    tag: "all",
     channel: {
       id: "important",
       name: "重点事件",
@@ -166,6 +167,12 @@ describe("EventBriefingList", () => {
     );
     expect(screen.queryByRole("link", { name: /全部/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /最新进展/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("事件标签")).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "事件标签" })).toHaveValue("all");
+    expect(screen.getByRole("combobox", { name: "事件标签" })).toHaveClass("event-tag-filter");
+    expect(screen.getByRole("option", { name: "所有" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "新进展" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "新内容" })).toBeInTheDocument();
 
     const card = screen.getByRole("article");
     expect(within(card).getByText("#01")).toBeInTheDocument();
@@ -245,6 +252,36 @@ describe("EventBriefingList", () => {
 
     expect(within(card).getByText("新内容")).toBeInTheDocument();
     expect(within(card).queryByText("新进展")).not.toBeInTheDocument();
+  });
+
+  it("preserves the selected event tag across channel, date, and pagination links", () => {
+    renderEventBriefingList(buildBriefing({
+      tag: "follow_up",
+      pagination: {
+        page: 1,
+        pageSize: 50,
+        total: 96,
+        totalPages: 2,
+      },
+    }));
+
+    expect(screen.getByRole("combobox", { name: "事件标签" })).toHaveValue("follow_up");
+    expect(screen.getByRole("link", { name: "观点实践 24" })).toHaveAttribute(
+      "href",
+      "/events?date=2026-06-30&channel=insight&tag=follow_up&size=50",
+    );
+
+    fireEvent.change(screen.getByRole("combobox", { name: "事件标签" }), {
+      target: { value: "new_content" },
+    });
+    expect(routerPushMock).toHaveBeenCalledWith(
+      "/events?date=2026-06-30&channel=important&tag=new_content&size=50",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
+    expect(routerPushMock).toHaveBeenCalledWith(
+      "/events?date=2026-06-30&channel=important&tag=follow_up&page=2&size=50",
+    );
   });
 
   it("opens a detail modal with full summaries and expandable cluster items", () => {
@@ -407,6 +444,7 @@ describe("EventBriefingList", () => {
     expect(sizeInput).toBeTruthy();
     expect(sizeInput).toHaveAttribute("type", "hidden");
     expect(channelInput).toHaveAttribute("value", "important");
+    expect(form?.querySelector('input[name="tag"]')).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "查看" })).toHaveAttribute("type", "submit");
   });
   it("preserves active channel in date search and pagination", () => {

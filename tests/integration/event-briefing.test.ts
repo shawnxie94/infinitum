@@ -352,6 +352,14 @@ describe("event briefing service", () => {
     expect(firstPage.entries[0]?.isFollowUp).toBe(true);
     expect(firstPage.entries[0]?.curatorBoost).toBeGreaterThan(0);
 
+    const followUpOnly = await getEventBriefing({ date: "2026-06-30", tag: "follow_up" });
+    expect(followUpOnly.entries.map((entry) => entry.id)).toEqual(["cluster-openai"]);
+    expect(followUpOnly.summary.eventCount).toBe(1);
+
+    const newContentOnly = await getEventBriefing({ date: "2026-06-30", tag: "new_content" });
+    expect(newContentOnly.entries.map((entry) => entry.id)).toEqual(["item-single"]);
+    expect(newContentOnly.summary.eventCount).toBe(1);
+
     const secondPage = await getEventBriefing({ date: "2026-06-30", page: 2, pageSize: 1 });
 
     expect(secondPage.entries[0]?.id).toBe("item-single");
