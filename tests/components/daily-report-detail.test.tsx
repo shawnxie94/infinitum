@@ -172,4 +172,77 @@ describe("DailyReportDetail", () => {
 
     expect(container.querySelector("details.daily-report-source-list")).toHaveAttribute("open");
   });
+
+  it("shows duplicate explanations inline without standalone duplicate type labels", () => {
+    const report = buildReport({
+      candidateReview: {
+        candidateCount: 2,
+        selectedCount: 0,
+        candidates: [],
+        excludedRecentDuplicates: [{
+          id: 1,
+          sourceKey: "rule-1",
+          itemId: "item-rule-1",
+          clusterId: null,
+          title: "规则事件",
+          itemTitle: "规则重复候选",
+          sourceName: "Source A",
+          url: "https://example.com/rule-1",
+          candidateScore: 70,
+          sourceCount: 1,
+          itemCount: 1,
+          eventType: "release",
+          eventSubject: "主体",
+          eventAction: "发布",
+          eventObject: "产品",
+          eventDate: "2026-04-29",
+          isFollowUp: false,
+          newItemCountOnDate: 1,
+          newSourceCountOnDate: 1,
+          publishedAtKnown: true,
+          excludedReason: "近 7 天日报已覆盖相同或高度相似事件",
+          matchedRecentDate: "2026-04-28",
+          matchedRecentTitle: "历史主题",
+        }],
+        excludedAssessDuplicates: [{
+          id: 2,
+          sourceKey: "assess-1",
+          itemId: "item-assess-1",
+          clusterId: null,
+          title: "AI 事件",
+          itemTitle: "AI 历史重复候选",
+          sourceName: "Source B",
+          url: "https://example.com/assess-1",
+          candidateScore: 80,
+          sourceCount: 1,
+          itemCount: 1,
+          eventType: "update",
+          eventSubject: "主体",
+          eventAction: "更新",
+          eventObject: "产品",
+          eventDate: "2026-04-29",
+          isFollowUp: false,
+          newItemCountOnDate: 1,
+          newSourceCountOnDate: 1,
+          publishedAtKnown: true,
+          relevanceScore: 40,
+          suggestedBlockKey: "other-worth-reading",
+          historyDecision: "duplicate",
+          matchedRecentTopicTitle: "OpenAI CEO 变局",
+          excludedReason: "ASSESS 判定为历史重复",
+        }],
+        excludedCurrentDuplicates: [],
+        candidateCoverage: null,
+      },
+    });
+
+    render(<DailyReportDetail report={report} date="2026-04-29" isAdmin />);
+    fireEvent.click(screen.getByTitle("查看候选与去重"));
+    fireEvent.click(screen.getByRole("button", { name: "重复排除" }));
+
+    expect(screen.getByText("近 7 天日报已覆盖相同或高度相似事件：2026-04-28 · 历史主题")).toBeInTheDocument();
+    expect(screen.getByText("AI 相关性 40 · 建议栏目 other-worth-reading · 命中历史主题：OpenAI CEO 变局")).toBeInTheDocument();
+    expect(screen.queryByText("规则重复")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI 历史重复")).not.toBeInTheDocument();
+  });
 });

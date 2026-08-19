@@ -66,8 +66,8 @@ type CandidateReviewEntry =
   | CandidateReview["excludedRecentDuplicates"][number]
   | CandidateReview["excludedAssessDuplicates"][number]
   | CandidateReview["excludedCurrentDuplicates"][number];
-type CandidateReviewExcludedItem = CandidateReviewEntry & {
-  duplicateType: "rule" | "assess" | "current";
+type CandidateReviewCurrentDuplicateEntry = CandidateReviewEntry & {
+  duplicateType: "current";
 };
 type CandidateReviewExcludedEntry = CandidateReviewEntry & {
   excludedReason: string;
@@ -294,12 +294,12 @@ function CandidateReviewModal({
 }) {
   const [mode, setMode] = useState<CandidateReviewMode>("candidates");
   const [page, setPage] = useState(1);
-  const excludedItems: CandidateReviewExcludedItem[] = [
-    ...review.excludedRecentDuplicates.map((candidate) => ({ ...candidate, duplicateType: "rule" as const })),
-    ...review.excludedAssessDuplicates.map((candidate) => ({ ...candidate, duplicateType: "assess" as const })),
+  const excludedItems: Array<CandidateReviewEntry | CandidateReviewCurrentDuplicateEntry> = [
+    ...review.excludedRecentDuplicates,
+    ...review.excludedAssessDuplicates,
     ...review.excludedCurrentDuplicates.map((candidate) => ({ ...candidate, duplicateType: "current" as const })),
   ];
-  const items: CandidateReviewEntry[] | CandidateReviewExcludedItem[] = mode === "candidates"
+  const items: Array<CandidateReviewEntry | CandidateReviewCurrentDuplicateEntry> = mode === "candidates"
     ? review.candidates
     : excludedItems;
   const totalPages = Math.max(1, Math.ceil(items.length / candidateReviewPageSize));
@@ -428,27 +428,13 @@ function CandidateReviewModal({
             </div>
             {isExcludedCandidate(candidate) ? (
               <div className="mt-2 rounded-sm bg-[var(--bg-muted)] px-2 py-1 text-xs leading-5 text-[var(--text-2)]">
-                {candidate.excludedReason}
-                {candidate.matchedRecentDate ? `：${candidate.matchedRecentDate}` : ""}
-                {candidate.matchedRecentTitle ? ` · ${candidate.matchedRecentTitle}` : ""}
+                {"relevanceScore" in candidate
+                  ? `AI 相关性 ${candidate.relevanceScore} · 建议栏目 ${candidate.suggestedBlockKey ?? "未指定"}${candidate.matchedRecentTopicTitle ? ` · 命中历史主题：${candidate.matchedRecentTopicTitle}` : ""}`
+                  : `${candidate.excludedReason}${candidate.matchedRecentDate ? `：${candidate.matchedRecentDate}` : ""}${candidate.matchedRecentTitle ? ` · ${candidate.matchedRecentTitle}` : ""}`}
               </div>
             ) : null}
-            {mode === "excluded" && "duplicateType" in candidate ? (
-              <div className="mt-2 text-xs font-medium text-[var(--text-2)]">
-                {candidate.duplicateType === "rule"
-                  ? "规则重复"
-                  : candidate.duplicateType === "assess"
-                    ? "AI 历史重复"
-                    : "当前重复"}
-              </div>
-            ) : null}
-            {mode === "excluded" && "duplicateType" in candidate && candidate.duplicateType === "assess" && "relevanceScore" in candidate ? (
-              <div className="mt-1 text-xs text-[var(--text-3)]">
-                AI 相关性 {candidate.relevanceScore} · 建议栏目 {candidate.suggestedBlockKey ?? "未指定"}
-                {"matchedRecentTopicTitle" in candidate && candidate.matchedRecentTopicTitle
-                  ? ` · 命中历史主题：${candidate.matchedRecentTopicTitle}`
-                  : ""}
-              </div>
+            {mode === "excluded" && "duplicateType" in candidate && candidate.duplicateType === "current" ? (
+              <div className="mt-2 text-xs font-medium text-[var(--text-2)]">当前重复</div>
             ) : null}
           </div>
         ))}
