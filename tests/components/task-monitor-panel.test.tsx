@@ -762,4 +762,72 @@ describe("TaskMonitorPanel", () => {
       within(dialog).getByText("6/10 已精确分类 = 3 (最终新增) + 0 (AI 过滤) + 更新/重处理暂无精确数据 + 1 (重复过滤) + 2 (规则过滤)"),
     ).toBeInTheDocument();
   });
+
+  it("opens daily report recovery choices and submits the selected stage", async () => {
+    const user = userEvent.setup();
+    const dailyReportTask = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "daily-report-failed",
+      kind: "daily_report_generate" as const,
+      label: "AI 日报生成 2026-04-21",
+      entityId: "2026-04-21",
+      status: "failed" as const,
+      startedAt: "2026-04-21T00:00:00.000Z",
+      finishedAt: "2026-04-21T00:02:00.000Z",
+      errorSummary: "WRITE 校验失败：草稿缺少主题。",
+      pipelineCheckpoint: {
+        version: 1 as const,
+        pipelineVersion: "daily-report-topic-first-v2",
+        stage: "validate",
+        completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write"],
+        inputHash: "input",
+        templateSignature: "template",
+        candidateSnapshotHash: "candidates",
+        resumeEligible: false,
+        assessmentBatches: [{ index: 0, candidateIds: [1], status: "succeeded" as const, attempt: 1 }],
+        ledger: { schemaVersion: 1 },
+        planningCandidateBriefs: [{ candidateId: 1 }],
+        plan: { schemaVersion: 2, sections: [] },
+        draft: { headline: "旧草稿", blocks: [] },
+        violations: [{ code: "draft_topic_missing", stage: "draft" as const, message: "缺少主题" }],
+      },
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        ...buildMonitorSnapshot(),
+        runningTasks: [],
+        recentTasks: [dailyReportTask],
+        recentTotal: 1,
+      })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[dailyReportTask]} />,
+    );
+
+    await screen.findByText("AI 日报生成 2026-04-21");
+    await user.click(screen.getByTitle("重新生成"));
+    const dialog = await screen.findByRole("dialog", { name: "选择日报重试方式" });
+    const recoverySelect = within(dialog).getByLabelText("日报重试方式");
+    expect(recoverySelect).toHaveValue("write");
+    expect(within(dialog).getByRole("option", { name: "全部重试" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("option", { name: "从 WRITE 继续" })).toBeInTheDocument();
+    expect(within(dialog).queryByText("从 REPAIR 继续")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/推荐/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/当前 checkpoint/)).not.toBeInTheDocument();
+
+    await user.selectOptions(recoverySelect, "write");
+    await user.click(within(dialog).getByRole("button", { name: "确认重试" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/admin/monitor/tasks/daily-report-failed/retrigger",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ retryFrom: "write" }),
+        }),
+      );
+    });
+  });
 });

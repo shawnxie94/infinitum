@@ -26,6 +26,10 @@ export type BackgroundTaskRunTrigger = "scheduled" | "manual" | "admin_action";
 
 export type BackgroundTaskRunStatus = "queued" | "running" | "succeeded" | "failed" | "partial" | "cancelled";
 
+export const DAILY_REPORT_RECOVERY_STAGES = ["assess", "plan", "write"] as const;
+export const DAILY_REPORT_LEGACY_RECOVERY_STAGES = ["repair"] as const;
+export type DailyReportRecoveryStage = typeof DAILY_REPORT_RECOVERY_STAGES[number];
+
 export type ScheduleUpdateInput = {
   enabled: boolean;
   cronExpression: string;
@@ -109,6 +113,18 @@ export type TaskPipelineCheckpoint = {
   failedStage?: string | null;
   failureCode?: string | null;
   resumeAttempt?: number;
+  resumeFrom?: DailyReportRecoveryStage;
+  stageLoop?: {
+    stage: "assess" | "plan" | "write";
+    repairRound: number;
+    cleanRetryAttempt: number;
+    messages?: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+    lastOutput?: string | null;
+    lastViolations?: unknown[];
+    inputHash?: string;
+    contextTokenEstimate?: number;
+    contextOverflow?: boolean;
+  };
   stageAttempts?: Record<string, number>;
   candidateSnapshot?: unknown;
   planningAudit?: unknown;

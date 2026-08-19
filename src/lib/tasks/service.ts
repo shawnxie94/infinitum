@@ -44,9 +44,11 @@ import {
   type TaskScheduleSnapshot,
   type BackgroundTaskRunKind,
   type BackgroundTaskRunStatus,
+  type DailyReportRecoveryStage,
 } from "@/lib/tasks/types";
 import { prisma } from "@/lib/db";
 import { parseTaskPipelineCheckpointJson, serializeTaskPipelineCheckpoint } from "@/lib/tasks/checkpoint";
+import { getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
 
 export const TASK_RUN_CANCELLED_MESSAGE = "管理员手动终止任务。";
 export const TASK_RUN_CANCELLED_LABEL = "任务已终止";
@@ -759,7 +761,72 @@ export async function getTaskRun(id: string) {
   });
 }
 
-export async function resumeTaskRun(id: string) {
+function resetStageAttemptsForDailyReportRecovery(
+  stageAttempts: Record<string, number> | undefined,
+  retryFrom: DailyReportRecoveryStage,
+) {
+  const resetPrefixes: Record<DailyReportRecoveryStage, string[]> = {
+    assess: ["ASSESS", "MERGE", "PLAN", "PLAN_VALIDATE", "WRITE", "JSON_REPAIR", "VALIDATE", "REPAIR", "PERSIST_PUBLISH"],
+    plan: ["PLAN", "PLAN_VALIDATE", "WRITE", "JSON_REPAIR", "VALIDATE", "REPAIR", "PERSIST_PUBLISH"],
+    write: ["WRITE", "JSON_REPAIR", "VALIDATE", "REPAIR", "PERSIST_PUBLISH"],
+  };
+  const prefixes = resetPrefixes[retryFrom];
+
+  return Object.fromEntries(
+    Object.entries(stageAttempts ?? {}).filter(([key]) => !prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}.`))),
+  );
+}
+
+function resetDailyReportCheckpointForRecovery(
+  checkpoint: TaskPipelineCheckpoint,
+  retryFrom: DailyReportRecoveryStage,
+) {
+  const nextCheckpoint: TaskPipelineCheckpoint = {
+    ...checkpoint,
+    stage: retryFrom,
+    resumeEligible: true,
+    resumeAttempt: (checkpoint.resumeAttempt ?? 0) + 1,
+    resumeFrom: retryFrom,
+    failedStage: null,
+    failureCode: null,
+    stageAttempts: resetStageAttemptsForDailyReportRecovery(checkpoint.stageAttempts, retryFrom),
+    data: {
+      ...(checkpoint.data ?? {}),
+      manualRetryFrom: retryFrom,
+    },
+  };
+  delete nextCheckpoint.stageLoop;
+
+  if (retryFrom === "assess") {
+    nextCheckpoint.completedStages = ["prepare"];
+    nextCheckpoint.assessmentBatches = nextCheckpoint.assessmentBatches?.map(({ index, candidateIds }) => ({
+      index,
+      candidateIds,
+      status: "pending" as const,
+      attempt: 0,
+    }));
+    delete nextCheckpoint.planningAudit;
+    delete nextCheckpoint.ledger;
+    delete nextCheckpoint.planningCandidateBriefs;
+    delete nextCheckpoint.plan;
+    delete nextCheckpoint.draft;
+    delete nextCheckpoint.violations;
+  } else if (retryFrom === "plan") {
+    nextCheckpoint.completedStages = ["prepare", "assess", "merge"];
+    delete nextCheckpoint.planningAudit;
+    delete nextCheckpoint.plan;
+    delete nextCheckpoint.draft;
+    delete nextCheckpoint.violations;
+  } else if (retryFrom === "write") {
+    nextCheckpoint.completedStages = ["prepare", "assess", "merge", "plan", "plan_validate"];
+    delete nextCheckpoint.draft;
+    delete nextCheckpoint.violations;
+  }
+
+  return nextCheckpoint;
+}
+
+export async function resumeTaskRun(id: string, options: { retryFrom?: DailyReportRecoveryStage } = {}) {
   const taskRun = await getTaskRun(id);
   if (!taskRun) throw new Error("Task run not found.");
   if (taskRun.kind !== "daily_report_generate") throw new Error("只有日报任务支持断点恢复。");
@@ -767,10 +834,24 @@ export async function resumeTaskRun(id: string) {
   if (!taskRun.pipelineCheckpointJson) throw new Error("该任务没有可恢复的 checkpoint，请重新生成。");
   const checkpoint = parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson);
   if (!checkpoint) throw new Error("任务 checkpoint 已损坏，无法恢复。");
-  if (!checkpoint.resumeEligible) throw new Error("该任务 checkpoint 不满足恢复条件。");
-  checkpoint.resumeAttempt = (checkpoint.resumeAttempt ?? 0) + 1;
-  checkpoint.failedStage = null;
-  checkpoint.failureCode = null;
+  const retryFrom = options.retryFrom;
+  const nextCheckpoint = retryFrom
+    ? (() => {
+        const recoveryStages = getDailyReportRecoveryStages(checkpoint);
+        if (!recoveryStages.includes(retryFrom)) {
+          throw new Error(`当前任务不支持从 ${retryFrom.toUpperCase()} 阶段继续，请选择其他阶段或全部重试。`);
+        }
+        return resetDailyReportCheckpointForRecovery(checkpoint, retryFrom);
+      })()
+    : (() => {
+        if (!checkpoint.resumeEligible) throw new Error("该任务 checkpoint 不满足恢复条件。");
+        return {
+          ...checkpoint,
+          resumeAttempt: (checkpoint.resumeAttempt ?? 0) + 1,
+          failedStage: null,
+          failureCode: null,
+        };
+      })();
   const updated = await prisma.backgroundTaskRun.updateMany({
     where: {
       id,
@@ -786,7 +867,7 @@ export async function resumeTaskRun(id: string) {
       cancelRequestedAt: null,
       startedAt: null,
       finishedAt: null,
-      pipelineCheckpointJson: JSON.stringify(checkpoint),
+      pipelineCheckpointJson: JSON.stringify(nextCheckpoint),
     },
   });
   if (updated.count !== 1) throw new Error("任务状态已变化，请刷新后再试。");

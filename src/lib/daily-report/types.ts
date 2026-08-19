@@ -201,7 +201,7 @@ export type DailyReportRepairPatchResult = {
 
 export type DailyReportViolation = {
   code: string;
-  stage: "plan" | "draft";
+  stage: "assess" | "plan" | "draft";
   message: string;
   blockKey?: string;
   topicId?: string;

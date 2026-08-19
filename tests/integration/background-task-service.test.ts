@@ -730,6 +730,100 @@ describe("background task persistence", () => {
     await expect(prisma.backgroundTaskRun.count()).resolves.toBe(1);
   });
 
+  it("resets the invalid draft when manually continuing from WRITE", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "failed",
+        label: "AI 日报生成",
+        entityId: "2026-04-12",
+      },
+    });
+
+    await updateTaskRun(taskRun.id, {
+      pipelineCheckpoint: {
+        version: 1,
+        pipelineVersion: "daily-report-topic-first-v2",
+        stage: "validate",
+        completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write"],
+        inputHash: "input-hash",
+        templateSignature: "template-signature",
+        candidateSnapshotHash: "candidate-hash",
+        resumeEligible: false,
+        failedStage: "validate",
+        failureCode: "stage_failed",
+        stageAttempts: { WRITE: 2, VALIDATE: 1 },
+        plan: { schemaVersion: 2, sections: [] },
+        draft: { headline: "旧草稿", blocks: [] },
+        violations: [{ code: "draft_topic_missing", stage: "draft", message: "缺少主题" }],
+      },
+    });
+
+    const resumed = await resumeTaskRun(taskRun.id, { retryFrom: "write" });
+    const checkpoint = JSON.parse(resumed.pipelineCheckpointJson ?? "{}") as Record<string, unknown>;
+
+    expect(resumed.id).toBe(taskRun.id);
+    expect(resumed.status).toBe("queued");
+    expect(checkpoint).toMatchObject({
+      stage: "write",
+      resumeEligible: true,
+      resumeFrom: "write",
+      resumeAttempt: 1,
+      completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
+      data: { manualRetryFrom: "write" },
+    });
+    expect(checkpoint.plan).toEqual({ schemaVersion: 2, sections: [] });
+    expect(checkpoint).not.toHaveProperty("draft");
+    expect(checkpoint).not.toHaveProperty("violations");
+    expect(checkpoint.stageAttempts).toEqual({});
+  });
+
+  it("restarts WRITE when a legacy REPAIR checkpoint is manually continued", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "failed",
+        label: "AI 日报生成",
+        entityId: "2026-04-12",
+      },
+    });
+
+    await updateTaskRun(taskRun.id, {
+      pipelineCheckpoint: {
+        version: 1,
+        pipelineVersion: "daily-report-topic-first-v2",
+        stage: "repair",
+        completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write"],
+        inputHash: "input-hash",
+        templateSignature: "template-signature",
+        candidateSnapshotHash: "candidate-hash",
+        resumeEligible: false,
+        failedStage: "repair",
+        failureCode: "stage_failed",
+        stageAttempts: { REPAIR: 1 },
+        plan: { schemaVersion: 2, sections: [] },
+        draft: { headline: "可修复草稿", blocks: [] },
+        violations: [{ code: "draft_required_note_missing", stage: "draft", message: "缺少重点" }],
+      },
+    });
+
+    const resumed = await resumeTaskRun(taskRun.id, { retryFrom: "write" });
+    const checkpoint = JSON.parse(resumed.pipelineCheckpointJson ?? "{}") as Record<string, unknown>;
+
+    expect(checkpoint).toMatchObject({
+      stage: "write",
+      resumeEligible: true,
+      resumeFrom: "write",
+      completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
+      data: { manualRetryFrom: "write" },
+    });
+    expect(checkpoint).not.toHaveProperty("draft");
+    expect(checkpoint).not.toHaveProperty("violations");
+    expect(checkpoint.stageAttempts).toEqual({});
+  });
+
   it("refreshes the scheduler heartbeat while a task is reporting progress", async () => {
     const schedule = await prisma.taskSchedule.create({
       data: {

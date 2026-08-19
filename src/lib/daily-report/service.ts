@@ -3,7 +3,11 @@ import { createHash } from "node:crypto";
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import type { RuntimeConfig } from "@/config/runtime";
-import { createAiProvider, type AiEventSignature } from "@/lib/ai/provider";
+import {
+  createAiProvider,
+  type AiEventSignature,
+  type DailyReportStageContext,
+} from "@/lib/ai/provider";
 import { prisma } from "@/lib/db";
 import { getDailyReportDateRange, getTodayDailyReportDate, normalizeDailyReportDate } from "@/lib/daily-report/date";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
@@ -11,6 +15,11 @@ import { withDailyReportLock } from "@/lib/daily-report/history";
 import { DailyReportCancellationError, DailyReportGenerationError } from "@/lib/daily-report/errors";
 import { getDailyReportSectionBlocks } from "@/lib/daily-report/content";
 import { getDailyReportAttemptLimit, isDailyReportContextOverflowError } from "@/lib/daily-report/attempts";
+import {
+  DailyReportStageLoopError,
+  runDailyReportStageLoop,
+  type DailyReportStageLoopResult,
+} from "@/lib/daily-report/stage-loop";
 import {
   listDailyReportCandidates,
   listRecentDailyReportSourceSnapshots,
@@ -38,12 +47,10 @@ import {
   type DailyReportItem,
   type DailyReportSourceRegistryEntry,
   type RecentDailyReportTopic,
-  isDailyReportNotesRepairableViolation,
 } from "@/lib/daily-report/types";
 import {
   buildDailyReportCandidateBriefs,
   buildDailyReportSelectedTopics,
-  applyDailyReportRepairPatches,
   attachDailyReportTopicSources,
   getDailyReportPlanCandidateIds,
   getDailyReportPlanTopics,
@@ -84,7 +91,11 @@ import {
   updateTaskRun,
 } from "@/lib/tasks/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
-import { buildDailyReportTaskTimeline, type DailyReportPipelineStage } from "@/lib/daily-report/timeline";
+import {
+  buildDailyReportTaskTimeline,
+  normalizeDailyReportTimelineStage,
+  type DailyReportPipelineStage,
+} from "@/lib/daily-report/timeline";
 import { DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS } from "@/lib/tasks/scheduler";
 
 const MIN_CANDIDATE_COUNT = 2;
@@ -1207,6 +1218,7 @@ async function generateDailyReportInternal(input: {
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
+      writeRetryCount: 0,
       partial: false,
       omittedTopicIds: [],
       historyFilteredCount: 0,
@@ -1229,6 +1241,7 @@ async function generateDailyReportInternal(input: {
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
+      writeRetryCount: 0,
       partial: false,
       omittedTopicIds: [],
       historyFilteredCount: 0,
@@ -1255,6 +1268,7 @@ async function generateDailyReportInternal(input: {
   let planSelectedCount = 0;
   let planViolationCount = 0;
   let repairCount = 0;
+  let writeRetryCount = 0;
   let historyFilteredCount = 0;
   let validationViolationCount = 0;
   let partial = false;
@@ -1264,6 +1278,7 @@ async function generateDailyReportInternal(input: {
   let currentStage: DailyReportPipelineStage = "prepare";
   let currentBatchIndex: number | null = null;
   let currentAttemptKey = "PREPARE";
+  let currentStageContext: DailyReportStageContext | null = null;
   let latestPlanAttempt: DailyReportPlan | null = null;
   let latestPlanViolations: ReturnType<typeof validateDailyReportPlan> | null = null;
   let latestPlanningAudit: DailyReportPlanningAudit | null = null;
@@ -1278,7 +1293,7 @@ async function generateDailyReportInternal(input: {
         ? { ...batch, status: "failed" as const, attempt: currentAttempt, error: error instanceof Error ? error.message : String(error) }
         : batch,
     );
-    const planFailureContext = currentStage === "plan_validate"
+    const planFailureContext = currentStage === "plan" || currentStage === "plan_validate"
       ? {
           ...(latestPlanAttempt ? { plan: latestPlanAttempt } : {}),
           ...(latestPlanningAudit ? { planningAudit: latestPlanningAudit } : {}),
@@ -1292,8 +1307,13 @@ async function generateDailyReportInternal(input: {
       failureCode: contextOverflow ? "context_overflow" : "stage_failed",
       resumeEligible: !contextOverflow && currentAttempt < maxAttempts,
       stageAttempts: { ...stageAttempts },
+      ...(currentStageContext ? { stageLoop: currentStageContext } : latestCheckpoint.stageLoop ? { stageLoop: latestCheckpoint.stageLoop } : {}),
       ...(assessmentBatches ? { assessmentBatches } : {}),
       ...planFailureContext,
+      data: {
+        ...(latestCheckpoint.data ?? {}),
+        writeRetryCount,
+      },
     } satisfies TaskPipelineCheckpoint;
   };
   const buildCancellationCheckpoint = () => {
@@ -1310,7 +1330,12 @@ async function generateDailyReportInternal(input: {
       failureCode: "cancelled",
       resumeEligible: true,
       stageAttempts: { ...stageAttempts },
+      ...(currentStageContext ? { stageLoop: currentStageContext } : latestCheckpoint.stageLoop ? { stageLoop: latestCheckpoint.stageLoop } : {}),
       ...(assessmentBatches ? { assessmentBatches } : {}),
+      data: {
+        ...(latestCheckpoint.data ?? {}),
+        writeRetryCount,
+      },
     } satisfies TaskPipelineCheckpoint;
   };
   const throwIfCancellationRequested = async () => {
@@ -1319,9 +1344,42 @@ async function generateDailyReportInternal(input: {
     }
   };
   const saveCheckpoint = async (checkpoint: TaskPipelineCheckpoint) => {
-    latestCheckpoint = checkpoint;
-    await input.onCheckpoint?.(checkpoint);
+    const resumeFrom = checkpoint.resumeFrom ?? latestCheckpoint?.resumeFrom;
+    const checkpointWithRecovery = resumeFrom
+      ? {
+          ...checkpoint,
+          resumeFrom,
+          data: {
+            ...(checkpoint.data ?? {}),
+            manualRetryFrom: resumeFrom,
+          },
+        }
+      : checkpoint;
+    latestCheckpoint = checkpointWithRecovery;
+    await input.onCheckpoint?.(checkpointWithRecovery);
     await throwIfCancellationRequested();
+  };
+  const persistStageLoopContext = async (context: DailyReportStageContext) => {
+    currentStageContext = context;
+    currentStage = context.stage;
+    currentAttemptKey = context.stage.toUpperCase();
+    stageAttempts[currentAttemptKey] = context.cleanRetryAttempt + 1;
+    if (!latestCheckpoint) return;
+    await saveCheckpoint({
+      ...latestCheckpoint,
+      stage: context.stage,
+      failedStage: null,
+      failureCode: null,
+      resumeEligible: true,
+      stageAttempts: { ...stageAttempts },
+      stageLoop: context,
+      data: {
+        ...(latestCheckpoint.data ?? {}),
+        [`${context.stage}RepairRound`]: context.repairRound,
+        [`${context.stage}CleanRetryCount`]: context.cleanRetryAttempt,
+        ...(context.contextOverflow ? { contextOverflowStage: context.stage } : {}),
+      },
+    });
   };
   const runStageWithAttempts = async <T>(
     stage: DailyReportPipelineStage,
@@ -1415,10 +1473,38 @@ async function generateDailyReportInternal(input: {
       currentBatchIndex = batchIndex;
       const batchAssessments = checkpointBatch?.assessments
         ? validateDailyReportAssessments(batch, checkpointBatch.assessments)
-        : await runStageWithAttempts("assess", async () => validateDailyReportAssessments(batch, await provider.assessDailyReportCandidates({ candidates: batch, template, recentTopics, recentTopicLookbackDays })), {
-          attemptKey: `ASSESS.batch.${batchIndex}`,
-          matrixStage: "ASSESS",
-        });
+        : validateDailyReportAssessments(
+            batch,
+            (await runDailyReportStageLoop({
+              stage: "assess",
+              inputHash: `${candidateSnapshotHash}:assess:${batchIndex}`,
+              run: (stageContext, validationFeedback) => provider.assessDailyReportCandidates({
+                candidates: batch,
+                template,
+                recentTopics,
+                recentTopicLookbackDays,
+                stageContext,
+                validationFeedback,
+              }),
+              validate: (value) => {
+                try {
+                  validateDailyReportAssessments(batch, value);
+                  return [];
+                } catch (error) {
+                  return [{
+                    code: "assess_output_invalid",
+                    stage: "assess" as const,
+                    message: error instanceof Error ? error.message : String(error),
+                  }];
+                }
+              },
+              onContextUpdate: async (context) => {
+                stageAttempts[`ASSESS.batch.${batchIndex}`] = context.cleanRetryAttempt + 1;
+                await persistStageLoopContext(context);
+              },
+            })).value,
+          );
+      currentStageContext = null;
       assessments.push(...batchAssessments);
       historyFilteredCount = getHistoryFilteredCount();
       await saveCheckpoint({
@@ -1509,25 +1595,28 @@ async function generateDailyReportInternal(input: {
       planningCandidateBriefs: candidateBriefs,
     });
     await input.onStageUpdate?.("plan");
-    const hasCompletedPlan = Boolean(canResume && checkpoint?.plan && checkpoint.completedStages.includes("plan_validate"));
+    const hasCompletedPlan = Boolean(
+      canResume
+      && checkpoint?.plan
+      && (checkpoint.completedStages.includes("plan") || checkpoint.completedStages.includes("plan_validate")),
+    );
     let plan: DailyReportPlan;
     if (hasCompletedPlan) {
       plan = checkpoint!.plan as DailyReportPlan;
       latestPlanningAudit = checkpoint?.planningAudit as DailyReportPlanningAudit | null ?? null;
     } else {
-      const planFromProvider = await runStageWithAttempts("plan", async () => provider.planDailyReport({ candidateBriefs, template, recentTopics, recentTopicLookbackDays }));
-      plan = await runStageWithAttempts("plan_validate", async (attempt) => {
-        await input.onStageUpdate?.("plan_validate");
-        const rawSelection = attempt === 1
-          ? planFromProvider
-          : await provider.planDailyReport({
-              candidateBriefs,
-              template,
-              recentTopics,
-              recentTopicLookbackDays,
-              previousPlan: latestPlanAttempt ?? undefined,
-              planViolations: latestPlanViolations ?? undefined,
-            });
+      const planLoop = await runDailyReportStageLoop({
+        stage: "plan",
+        inputHash: `${inputHash}:plan`,
+        run: (stageContext, validationFeedback) => provider.planDailyReport({
+          candidateBriefs,
+          template,
+          recentTopics,
+          recentTopicLookbackDays,
+          stageContext,
+          validationFeedback,
+        }),
+        validate: (rawSelection) => {
         const ordered = orderAndLimitDailyReportPlanWithAudit(
           materializeDailyReportPlan(rawSelection),
           template,
@@ -1536,11 +1625,21 @@ async function generateDailyReportInternal(input: {
         );
         const violations = validateDailyReportPlan(ordered.plan, planningCandidates, assessments, template);
         latestPlanAttempt = ordered.plan;
-        latestPlanningAudit = ordered.audit;
-        latestPlanViolations = violations;
-        if (violations.length > 0) throw new Error(`PLAN 校验失败：${violations.map((violation) => violation.message).slice(0, 5).join("；")}`);
-        return ordered.plan;
-      }, { attemptKey: "PLAN_VALIDATE", matrixStage: "PLAN_VALIDATE" });
+          latestPlanningAudit = ordered.audit;
+          latestPlanViolations = violations;
+          return violations;
+        },
+        // The model cannot repair a shortage of eligible candidates: the
+        // missing inputs do not exist in the PLAN context. Keep the single
+        // clean retry as a fresh-model attempt, but do not spend same-context
+        // repair rounds on an impossible minimum-count violation.
+        isRepairable: (violations) => !violations.some(
+          (violation) => violation.code === "insufficient_required_candidates",
+        ),
+        onContextUpdate: persistStageLoopContext,
+      });
+      plan = latestPlanAttempt ?? materializeDailyReportPlan(planLoop.value);
+      currentStageContext = null;
     }
     const planViolations = validateDailyReportPlan(plan, planningCandidates, assessments, template);
     planSectionCount = plan.sections.length;
@@ -1553,9 +1652,9 @@ async function generateDailyReportInternal(input: {
     await saveCheckpoint({
       version: 1,
       pipelineVersion: "daily-report-topic-first-v2",
-      stage: "plan_validate",
+      stage: "plan",
       completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
-      lastCompletedStage: "plan_validate",
+      lastCompletedStage: "plan",
       failedStage: null,
       failureCode: null,
       resumeAttempt: checkpoint?.resumeAttempt ?? 0,
@@ -1590,126 +1689,114 @@ async function generateDailyReportInternal(input: {
     finalizationPlan = plan;
     finalizationSelectedCandidates = selectedCandidates;
     await input.onStageUpdate?.("write");
-    let modelDraft: DailyReportModelDraft = canResume && checkpoint?.draft
-      ? toDailyReportModelDraft(checkpoint.draft as DailyReportModelDraft)
-      : await runStageWithAttempts("write", async () => provider.writeDailyReport({ selectedTopics, template }));
-    let draft = normalizeDailyReportDraftForTemplate(orderDailyReportDraft(attachDailyReportTopicSources(modelDraft, plan), plan, template), template);
-    let draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template);
-    stageAttempts.VALIDATE = Math.min(getDailyReportAttemptLimit("VALIDATE"), 1);
+    let modelDraft: DailyReportModelDraft | null = null;
+    let draft: DailyReportDraft | null = null;
+    let draftViolations: ReturnType<typeof validateDailyReportDraft> = [];
+    let latestModelDraftForLoop: DailyReportModelDraft | null = null;
+    let latestDraftForLoop: DailyReportDraft | null = null;
+    let writeLoop: DailyReportStageLoopResult<DailyReportModelDraft> | null = null;
+    let writeLoopFailedWithDraft = false;
+    try {
+      writeLoop = canResume && checkpoint?.draft
+        ? null
+        : await runDailyReportStageLoop({
+          stage: "write",
+          inputHash: `${inputHash}:write`,
+          run: (stageContext, validationFeedback) => provider.writeDailyReport({
+            selectedTopics,
+            template,
+            stageContext,
+            validationFeedback,
+          }),
+          validate: (nextModelDraft) => {
+            latestModelDraftForLoop = nextModelDraft;
+            latestDraftForLoop = normalizeDailyReportDraftForTemplate(
+              orderDailyReportDraft(attachDailyReportTopicSources(nextModelDraft, plan), plan, template),
+              template,
+            );
+            const violations = validateDailyReportDraft(latestDraftForLoop, plan, selectedCandidates, template);
+            draftViolations = violations;
+            validationViolationCount = violations.length;
+            return violations;
+          },
+          onContextUpdate: async (context) => {
+            repairCount = context.repairRound;
+            writeRetryCount = context.cleanRetryAttempt;
+            await persistStageLoopContext(context);
+          },
+          });
+    } catch (error) {
+      if (!(error instanceof DailyReportStageLoopError) || error.stage !== "write" || !latestModelDraftForLoop || !latestDraftForLoop) {
+        throw error;
+      }
+      writeRetryCount = error.cleanRetryCount;
+      repairCount = error.context.repairRound;
+      currentStageContext = error.context;
+      writeLoopFailedWithDraft = true;
+      modelDraft = latestModelDraftForLoop;
+      draft = latestDraftForLoop;
+      draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
+    }
+
+    if (writeLoop) {
+      modelDraft = writeLoop.value;
+      draft = latestDraftForLoop ?? normalizeDailyReportDraftForTemplate(
+        orderDailyReportDraft(attachDailyReportTopicSources(modelDraft, plan), plan, template),
+        template,
+      );
+      draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
+    } else if (!writeLoopFailedWithDraft) {
+      modelDraft = toDailyReportModelDraft(checkpoint!.draft as DailyReportModelDraft);
+      draft = normalizeDailyReportDraftForTemplate(
+        orderDailyReportDraft(attachDailyReportTopicSources(modelDraft, plan), plan, template),
+        template,
+      );
+      draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
+    }
+    if (!modelDraft || !draft) {
+      throw new Error("WRITE 阶段未生成可校验的日报草稿。");
+    }
     validationViolationCount = draftViolations.length;
-    await input.onStageUpdate?.("validate");
+    if (draftViolations.length > 0) {
+      const fallback = omitInvalidOptionalDailyReportTopics(draft, draftViolations, template, omittedTopicIds);
+      omittedTopicIds = fallback.omittedTopicIds;
+      if (omittedTopicIds.size > 0) {
+        partial = true;
+        draft = normalizeDailyReportDraftForTemplate(
+          orderDailyReportDraft(fallback.draft as DailyReportDraft, plan, template),
+          template,
+        );
+        modelDraft = toDailyReportModelDraft(draft);
+        draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
+        validationViolationCount = draftViolations.length;
+      }
+    }
     if (latestCheckpoint) {
       await saveCheckpoint({
         ...latestCheckpoint,
-        stage: "validate",
+        stage: "write",
         completedStages: draftViolations.length > 0
           ? [...new Set([...latestCheckpoint.completedStages, "write"])]
           : [...new Set([...latestCheckpoint.completedStages, "write", "validate"])],
         lastCompletedStage: draftViolations.length > 0 ? "write" : "validate",
         failedStage: null,
         failureCode: null,
-        resumeEligible: true,
+        resumeEligible: draftViolations.length === 0,
         stageAttempts: { ...stageAttempts },
+        stageLoop: undefined,
         draft: modelDraft,
         violations: draftViolations,
+        data: {
+          ...(latestCheckpoint.data ?? {}),
+          writeRetryCount,
+          writeRepairRound: repairCount,
+          omittedTopicIds: Array.from(omittedTopicIds),
+          omittedTopicCount: omittedTopicIds.size,
+        },
       });
     }
-    currentStage = "validate";
-    currentAttemptKey = "VALIDATE";
-    const nonRepairableDraftViolations = draftViolations.filter(
-      (violation) => !isDailyReportNotesRepairableViolation(violation),
-    );
-    if (draftViolations.length > 0 && nonRepairableDraftViolations.length === 0) {
-      const maxRepairRounds = 2;
-      let repairViolations = draftViolations.filter(isDailyReportNotesRepairableViolation);
-      while (repairViolations.length > 0 && repairCount < maxRepairRounds) {
-        repairCount += 1;
-        await input.onStageUpdate?.("repair");
-        let patchResult;
-        try {
-          patchResult = await runStageWithAttempts(
-            "repair",
-            async () => provider.repairDailyReportDraft({
-              draft: toDailyReportModelDraft(draft),
-              violations: repairViolations,
-              selectedTopics,
-              template,
-            }),
-            {
-              attemptKey: `REPAIR.round.${repairCount}`,
-              matrixStage: "REPAIR",
-            },
-          );
-        } catch {
-          break;
-        }
-        draft = normalizeDailyReportDraftForTemplate(
-          orderDailyReportDraft(
-            applyDailyReportRepairPatches(draft, patchResult) as DailyReportDraft,
-            plan,
-            template,
-          ),
-          template,
-        );
-        modelDraft = toDailyReportModelDraft(draft);
-        draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
-        repairViolations = draftViolations.filter(isDailyReportNotesRepairableViolation);
-        validationViolationCount = draftViolations.length;
-        if (latestCheckpoint) {
-          await saveCheckpoint({
-            ...latestCheckpoint,
-            stage: "repair",
-            completedStages: draftViolations.length > 0
-              ? [...new Set([...latestCheckpoint.completedStages, "write", "repair"])]
-              : [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])],
-            lastCompletedStage: "repair",
-            failedStage: null,
-            failureCode: null,
-            resumeEligible: draftViolations.length === 0,
-            stageAttempts: { ...stageAttempts },
-            draft: modelDraft,
-            violations: draftViolations,
-            data: {
-              ...(latestCheckpoint.data ?? {}),
-              omittedTopicIds: Array.from(omittedTopicIds),
-              omittedTopicCount: omittedTopicIds.size,
-            },
-          });
-        }
-      }
-      if (draftViolations.length > 0) {
-        const fallback = omitInvalidOptionalDailyReportTopics(draft, draftViolations, template, omittedTopicIds);
-        omittedTopicIds = fallback.omittedTopicIds;
-        if (omittedTopicIds.size > 0) {
-          partial = true;
-          draft = normalizeDailyReportDraftForTemplate(
-            orderDailyReportDraft(fallback.draft as DailyReportDraft, plan, template),
-            template,
-          );
-          modelDraft = toDailyReportModelDraft(draft);
-          draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
-          validationViolationCount = draftViolations.length;
-          if (latestCheckpoint) {
-            await saveCheckpoint({
-              ...latestCheckpoint,
-              stage: "repair",
-              completedStages: [...new Set([...latestCheckpoint.completedStages, "write", "repair"])],
-              lastCompletedStage: "repair",
-              failedStage: null,
-              failureCode: null,
-              resumeEligible: false,
-              stageAttempts: { ...stageAttempts },
-              draft: modelDraft,
-              violations: draftViolations,
-              data: {
-                ...(latestCheckpoint.data ?? {}),
-                omittedTopicIds: Array.from(omittedTopicIds),
-                omittedTopicCount: omittedTopicIds.size,
-              },
-            });
-          }
-        }
-      }
+    if (draftViolations.length === 0) {
+      currentStageContext = null;
     }
     if (draftViolations.length > 0) {
       throw new Error(`WRITE 校验失败：${draftViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
@@ -1848,6 +1935,7 @@ async function generateDailyReportInternal(input: {
     planSelectedCount,
     planViolationCount,
     repairCount,
+    writeRetryCount,
     partial,
     omittedTopicIds: Array.from(omittedTopicIds),
     historyFilteredCount,
@@ -1898,8 +1986,15 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
   let planTruncatedTopicCount = 0;
   let planningAudit: DailyReportPlanningAudit | null = null;
   let planViolationCount = 0;
+  let assessRepairCount = 0;
+  let assessRetryCount = 0;
+  let planRepairCount = 0;
+  let planRetryCount = 0;
+  let writeRepairCount = 0;
   let repairCount = 0;
+  let writeRetryCount = 0;
   let validationViolationCount = 0;
+  const contextOverflowStages = new Set<string>();
   let omittedTopicCount = 0;
   let batchCount = 0;
   let batchSize: number | null = null;
@@ -1946,8 +2041,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         });
       },
       onStageUpdate: async (stage) => {
-        activeStage = stage;
-        if (stage === "repair") repairCount = 1;
+        activeStage = normalizeDailyReportTimelineStage(stage);
         await updateTaskRun(taskRun.id, {
           taskTimeline: buildDailyReportTaskTimeline({
             taskRun,
@@ -1956,8 +2050,14 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
             historyFilteredCount,
             batchCount,
             batchSize,
-            activeStage,
-          }),
+          activeStage,
+          assessRepairCount,
+          assessRetryCount,
+          planRepairCount,
+          planRetryCount,
+          writeRepairCount,
+          contextOverflowCount: contextOverflowStages.size,
+        }),
         });
       },
       onCheckpoint: async (checkpoint) => {
@@ -1975,16 +2075,34 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
           planSelectedCount = getDailyReportPlanCandidateIds(checkpointPlan).length;
           planViolationCount = checkpoint.violations?.length ?? 0;
         }
+        if (checkpoint.stageLoop) {
+          const stageLoop = checkpoint.stageLoop;
+          if (stageLoop.stage === "assess") {
+            assessRepairCount = stageLoop.repairRound;
+            assessRetryCount = stageLoop.cleanRetryAttempt;
+          } else if (stageLoop.stage === "plan") {
+            planRepairCount = stageLoop.repairRound;
+            planRetryCount = stageLoop.cleanRetryAttempt;
+          } else if (stageLoop.stage === "write") {
+            writeRepairCount = stageLoop.repairRound;
+            repairCount = stageLoop.repairRound;
+            writeRetryCount = stageLoop.cleanRetryAttempt;
+          }
+          if (stageLoop.contextOverflow) contextOverflowStages.add(stageLoop.stage);
+        }
         const checkpointPlanningAudit = checkpoint.planningAudit as DailyReportPlanningAudit | undefined;
         if (checkpointPlanningAudit && typeof checkpointPlanningAudit.truncatedTopicCount === "number") {
           planningAudit = checkpointPlanningAudit;
           planTruncatedTopicCount = checkpointPlanningAudit.truncatedTopicCount;
         }
-        if (checkpoint.stage === "validate" || checkpoint.stage === "repair") {
+        if (checkpoint.stage === "write" || checkpoint.stage === "validate" || checkpoint.stage === "repair") {
           validationViolationCount = checkpoint.violations?.length ?? 0;
         }
         if (typeof checkpoint.data?.omittedTopicCount === "number") {
           omittedTopicCount = checkpoint.data.omittedTopicCount;
+        }
+        if (typeof checkpoint.data?.writeRetryCount === "number") {
+          writeRetryCount = checkpoint.data.writeRetryCount;
         }
         await updateTaskRun(taskRun.id, { pipelineCheckpoint: checkpoint });
         resumeCheckpoint = checkpoint;
@@ -2028,7 +2146,14 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         planningAudit,
         planViolationCount: result.planViolationCount,
         validationViolationCount: result.validationViolationCount,
+        assessRepairCount,
+        assessRetryCount,
+        planRepairCount,
+        planRetryCount,
+        writeRepairCount,
+        writeRetryCount: result.writeRetryCount,
         repairCount: result.repairCount,
+        contextOverflowCount: contextOverflowStages.size,
         omittedTopicCount,
         batchCount: result.batchCount,
         batchSize: result.batchSize,
@@ -2044,7 +2169,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     const cancelled = error instanceof DailyReportCancellationError;
     const failedAiUsage = error instanceof DailyReportGenerationError || cancelled ? error.aiUsage : null;
     const failedCheckpoint = error instanceof DailyReportGenerationError || cancelled ? error.checkpoint : null;
-    if (failedCheckpoint?.failedStage) activeStage = failedCheckpoint.failedStage as DailyReportPipelineStage;
+    if (failedCheckpoint?.failedStage) activeStage = normalizeDailyReportTimelineStage(failedCheckpoint.failedStage);
     if (failedCheckpoint?.data && typeof failedCheckpoint.data.batchCount === "number") batchCount = failedCheckpoint.data.batchCount;
     if (failedCheckpoint?.data && typeof failedCheckpoint.data.historyFilteredCount === "number") {
       historyFilteredCount = failedCheckpoint.data.historyFilteredCount;
@@ -2054,6 +2179,24 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     }
     if (failedCheckpoint?.data && typeof failedCheckpoint.data.omittedTopicCount === "number") {
       omittedTopicCount = failedCheckpoint.data.omittedTopicCount;
+    }
+    if (failedCheckpoint?.data && typeof failedCheckpoint.data.writeRetryCount === "number") {
+      writeRetryCount = failedCheckpoint.data.writeRetryCount;
+    }
+    if (failedCheckpoint?.stageLoop) {
+      const stageLoop = failedCheckpoint.stageLoop;
+      if (stageLoop.stage === "assess") {
+        assessRepairCount = stageLoop.repairRound;
+        assessRetryCount = stageLoop.cleanRetryAttempt;
+      } else if (stageLoop.stage === "plan") {
+        planRepairCount = stageLoop.repairRound;
+        planRetryCount = stageLoop.cleanRetryAttempt;
+      } else if (stageLoop.stage === "write") {
+        writeRepairCount = stageLoop.repairRound;
+        repairCount = stageLoop.repairRound;
+        writeRetryCount = stageLoop.cleanRetryAttempt;
+      }
+      if (stageLoop.contextOverflow) contextOverflowStages.add(stageLoop.stage);
     }
     const failedPlan = failedCheckpoint?.plan as DailyReportPlan | undefined;
     if (failedPlan?.sections) {
@@ -2088,7 +2231,14 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         planningAudit,
         planViolationCount,
         validationViolationCount,
+        assessRepairCount,
+        assessRetryCount,
+        planRepairCount,
+        planRetryCount,
+        writeRepairCount,
+        writeRetryCount,
         repairCount,
+        contextOverflowCount: contextOverflowStages.size,
         omittedTopicCount,
         batchCount,
         batchSize,

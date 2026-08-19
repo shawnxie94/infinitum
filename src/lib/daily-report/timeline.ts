@@ -27,6 +27,13 @@ type DailyReportTaskTimelineInput = {
   planningAudit?: DailyReportPlanningAudit | null;
   planViolationCount?: number | null;
   validationViolationCount?: number | null;
+  assessRepairCount?: number | null;
+  assessRetryCount?: number | null;
+  planRepairCount?: number | null;
+  planRetryCount?: number | null;
+  writeRepairCount?: number | null;
+  writeRetryCount?: number | null;
+  contextOverflowCount?: number | null;
   repairCount?: number | null;
   omittedTopicCount?: number | null;
   activeStage?: DailyReportPipelineStage | null;
@@ -34,6 +41,15 @@ type DailyReportTaskTimelineInput = {
   batchSize?: number | null;
   finishedAt?: Date | null;
 };
+
+export function normalizeDailyReportTimelineStage(stage: string | null | undefined): DailyReportPipelineStage | null {
+  if (!stage) return null;
+  if (stage === "plan_validate") return "plan";
+  if (stage === "validate" || stage === "repair") return "write";
+  return ["prepare", "assess", "merge", "plan", "write", "persist_publish"].includes(stage as DailyReportPipelineStage)
+    ? stage as DailyReportPipelineStage
+    : null;
+}
 
 function getDailyReportTaskFinishedLabel(status: DailyReportTaskTimelineInput["status"]) {
   if (status === "running") return "进行中";
@@ -54,14 +70,17 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
     ["daily_report_assess", "分批选题评估"],
     ["daily_report_merge", "准备规划输入"],
     ["daily_report_plan", "全局规划"],
-    ["daily_report_plan_validate", "计划校验"],
     ["daily_report_write", "按计划写作"],
-    ["daily_report_validate", "草稿校验"],
-    ["daily_report_repair", "语义修复"],
     ["daily_report_persist_publish", "持久化/发布"],
   ] as const;
-  const stageNames: DailyReportPipelineStage[] = ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "repair", "persist_publish"];
+  const stageNames: DailyReportPipelineStage[] = ["prepare", "assess", "merge", "plan", "write", "persist_publish"];
   const activeIndex = input.activeStage ? stageNames.indexOf(input.activeStage) : -1;
+  // A null configured batch size means ASSESS runs as one batch containing all
+  // candidates. Show the effective size in the task timeline instead of the
+  // misleading numeric value 0.
+  const effectiveBatchSize = input.batchSize ?? (
+    input.batchCount === 1 ? input.candidateCount ?? 0 : 0
+  );
   const parentStatus: TaskTimelineNodeSnapshot["status"] = input.status === "running"
     ? "running"
     : input.status === "failed"
@@ -72,11 +91,8 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
         ? "cancelled"
         : input.status === "skipped" ? "skipped" : "succeeded";
   const nodes = stages.map(([key, label], index) => {
-    const repairSkipped = key === "daily_report_repair" && input.status === "succeeded" && (input.repairCount ?? 0) === 0;
     const terminalFailureIndex = Math.max(activeIndex, 0);
-    const nodeStatus = repairSkipped
-      ? "skipped"
-      : input.status === "failed"
+    const nodeStatus = input.status === "failed"
         ? index < terminalFailureIndex ? "succeeded" : index === terminalFailureIndex ? "failed" : "pending"
         : input.status === "cancelled"
           ? index < terminalFailureIndex ? "succeeded" : index === terminalFailureIndex ? "cancelled" : "pending"
@@ -96,19 +112,27 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
         ...(index === 0 ? [{ label: "总候选数", value: input.candidateCount ?? 0 }] : []),
         ...(index === 1 ? [
           { label: "批次数", value: input.batchCount ?? 0 },
-          { label: "批次大小", value: input.batchSize ?? 0 },
+          { label: "批次大小", value: effectiveBatchSize },
           { label: "历史重复过滤", value: input.historyFilteredCount ?? 0 },
+          { label: "修复轮数", value: input.assessRepairCount ?? 0 },
+          { label: "完整重试", value: input.assessRetryCount ?? 0 },
         ] : []),
         ...(index === 2 ? [{ label: "可规划候选", value: input.planningCandidateCount ?? 0 }] : []),
         ...(index === 3 ? [
           { label: "计划栏目", value: input.planSectionCount ?? 0 },
           { label: "计划入选", value: input.planSelectedCount ?? input.selectedCount ?? 0 },
           { label: "截取主题", value: input.planTruncatedTopicCount ?? 0 },
+          { label: "违规数", value: input.planViolationCount ?? 0 },
+          { label: "修复轮数", value: input.planRepairCount ?? 0 },
+          { label: "完整重试", value: input.planRetryCount ?? 0 },
         ] : []),
-        ...(index === 4 ? [{ label: "违规数", value: input.planViolationCount ?? 0 }] : []),
-        ...(index === 5 ? [{ label: "入选数", value: input.selectedCount ?? 0 }] : []),
-        ...(index === 6 ? [{ label: "违规数", value: input.validationViolationCount ?? 0 }] : []),
-        ...(index === 7 ? [{ label: "修复次数", value: input.repairCount ?? 0 }] : []),
+        ...(index === 4 ? [
+          { label: "入选数", value: input.selectedCount ?? 0 },
+          { label: "违规数", value: input.validationViolationCount ?? 0 },
+          { label: "修复轮数", value: input.writeRepairCount ?? input.repairCount ?? 0 },
+          { label: "完整重试", value: input.writeRetryCount ?? 0 },
+          { label: "上下文超限", value: input.contextOverflowCount ?? 0 },
+        ] : []),
       ],
       ...(key === "daily_report_plan" && input.planningAudit ? { audit: { planning: input.planningAudit } } : {}),
     } satisfies TaskTimelineNodeSnapshot;
@@ -124,7 +148,7 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
       metrics: [
         { label: "总候选数", value: input.candidateCount ?? 0 },
         { label: "批次数", value: input.batchCount ?? 0 },
-        { label: "批次大小", value: input.batchSize ?? 0 },
+        { label: "批次大小", value: effectiveBatchSize },
         { label: "最后入选数", value: input.selectedCount ?? 0 },
       ],
     },

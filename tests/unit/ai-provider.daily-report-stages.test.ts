@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createAiProvider } from "@/lib/ai/provider";
+import { createAiProvider, createDailyReportStageContext } from "@/lib/ai/provider";
 import { DEFAULT_DAILY_REPORT_TEMPLATE, normalizeDailyReportTemplateConfig } from "@/lib/daily-report/template";
 import type { DailyReportPlanningCandidate, DailyReportPlanningCandidateBrief } from "@/lib/daily-report/types";
 
@@ -30,12 +30,12 @@ const candidate: DailyReportPlanningCandidate = {
 };
 
 describe("daily report staged provider", () => {
-  it("exposes assess, plan, write and repair as separate JSON calls", async () => {
+  it("uses isolated ASSESS/PLAN/WRITE calls and repairs WRITE in the same context", async () => {
     const create = vi.fn()
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ assessments: [{ candidateId: 1, relevanceScore: 90, isWorthReading: true, suggestedBlockKey: "hot-topics", historyDecision: "new", matchedRecentTopicTitle: null }] }) } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ schemaVersion: 2, sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: [1] }] }] }) } }] })
       .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "正文", sourceIds: [1] }] }] }) } }] })
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ patches: [{ topicId: "topic-1", notes: [{ label: "重点", text: "修复后的重点" }] }] }) } }] });
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布（修复）", body: "修复后的正文", sourceIds: [1] }] }] }) } }] });
     const provider = createAiProvider(
       { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
       { dailyReport: { systemPrompt: "日报", promptTemplate: "{{articlesJson}}" } },
@@ -80,23 +80,29 @@ describe("daily report staged provider", () => {
       eventDate: candidate.eventDate,
     }];
     await provider.planDailyReport({ candidateBriefs, template, recentTopicLookbackDays: 10 });
-    const draft = await provider.writeDailyReport({ selectedTopics: [{ topicId: "topic-1", blockKey: "hot-topics", candidateIds: [1], representativeCandidateId: 1, candidates: [candidate] }], template });
-    const repaired = await provider.repairDailyReportDraft({
-      draft,
-      violations: [],
+    const writeContext = createDailyReportStageContext("write", "write-input");
+    const draft = await provider.writeDailyReport({ selectedTopics: [{ topicId: "topic-1", blockKey: "hot-topics", candidateIds: [1], representativeCandidateId: 1, candidates: [candidate] }], template, stageContext: writeContext });
+    const retriedDraft = await provider.writeDailyReport({
       selectedTopics: [{ topicId: "topic-1", blockKey: "hot-topics", candidateIds: [1], representativeCandidateId: 1, candidates: [candidate] }],
       template,
+      stageContext: writeContext,
+      validationFeedback: {
+        type: "VALIDATION_FEEDBACK",
+        stage: "write",
+        violations: [{ code: "draft_topic_missing", stage: "draft", topicId: "topic-1", message: "草稿缺少主题 topic-1 对应的日报条目。" }],
+        instruction: "只修正反馈中列出的问题，返回完整的当前阶段结果。",
+      },
     });
     expect(assessments[0]?.candidateId).toBe(1);
     expect(assessments[0]?.matchedRecentTopicTitle).toBeNull();
     expect(draft.blocks).toHaveLength(1);
-    expect(repaired.patches).toHaveLength(1);
+    const retriedSection = retriedDraft.blocks.find((block) => block.type === "section");
+    expect(retriedSection?.items[0]?.title).toBe("模型发布（修复）");
     expect(create).toHaveBeenCalledTimes(4);
     const userPrompts = create.mock.calls.map((call) => call[0]?.messages?.[1]?.content as string).join("\n");
     expect(userPrompts).toContain("阶段：ASSESS");
     expect(userPrompts).toContain("阶段：PLAN");
     expect(userPrompts).toContain("阶段：WRITE");
-    expect(userPrompts).toContain("阶段：REPAIR");
 
     const assessCall = create.mock.calls[0]?.[0];
     const assessSystemPrompt = assessCall?.messages?.[0]?.content as string;
@@ -150,13 +156,14 @@ describe("daily report staged provider", () => {
     expect(writeUserPrompt).not.toContain("historyTopicRules");
     expect(writeUserPrompt).not.toContain('"sourceIds":');
     expect(writeUserPrompt).not.toContain('"candidateScore"');
-    const repairUserPrompt = create.mock.calls[3]?.[0]?.messages?.[1]?.content as string;
-    const repairSystemPrompt = create.mock.calls[3]?.[0]?.messages?.[0]?.content as string;
-    expect(repairSystemPrompt).toContain("只返回 notes 补丁");
-    expect(repairUserPrompt).toContain('"repairTargets"');
-    expect(repairUserPrompt).toContain("只输出 {patches:[{topicId,notes:[{label,text}]}]}");
-    expect(repairUserPrompt).not.toContain("返回完整日报内容 JSON");
-    expect(repairUserPrompt).not.toContain("历史主题判断策略");
-    expect(repairUserPrompt).not.toContain("historyTopicRules");
+    const writeRetryCall = create.mock.calls[3]?.[0];
+    expect(writeRetryCall?.messages).toHaveLength(5);
+    expect(writeRetryCall?.messages?.[0]?.role).toBe("system");
+    expect(writeRetryCall?.messages?.[1]?.role).toBe("user");
+    expect(writeRetryCall?.messages?.[2]?.role).toBe("assistant");
+    expect(writeRetryCall?.messages?.[3]?.role).toBe("user");
+    expect(writeRetryCall?.messages?.[3]?.content).toContain("VALIDATION_FEEDBACK");
+    expect(writeRetryCall?.messages?.[3]?.content).toContain("draft_topic_missing");
+    expect(writeRetryCall?.messages?.[4]?.role).toBe("assistant");
   });
 });

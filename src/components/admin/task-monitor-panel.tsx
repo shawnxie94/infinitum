@@ -7,13 +7,20 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { SelectField } from "@/components/ui/select-field";
 import { StatusTag } from "@/components/ui/status-tag";
 import { useToast } from "@/components/ui/toast";
 import { IconButton } from "@/components/ui/icon-button";
 import { IconRotateCw, IconSquare } from "@/components/ui/icons";
+import {
+  DAILY_REPORT_RECOVERY_STAGE_LABELS,
+  getDailyReportRecoveryStages,
+  getRecommendedDailyReportRecoveryStage,
+} from "@/lib/daily-report/recovery";
 import type {
   BackgroundTaskMonitorSnapshot,
   BackgroundTaskRunStatus,
+  DailyReportRecoveryStage,
   TaskRunSnapshot,
 } from "@/lib/tasks/types";
 import { cx } from "@/lib/ui/cx";
@@ -86,7 +93,35 @@ function canResumeDailyReportTask(task: TaskRunSnapshot | null) {
 }
 
 function getTaskRetryActionLabel(task: TaskRunSnapshot | null) {
-  return canResumeDailyReportTask(task) ? "继续执行" : "重新生成";
+  return task?.kind === "daily_report_generate"
+    ? "重新生成"
+    : canResumeDailyReportTask(task) ? "继续执行" : "重新生成";
+}
+
+type DailyReportRetryChoice = "all" | DailyReportRecoveryStage;
+
+function getDailyReportRetryOptions(task: TaskRunSnapshot | null) {
+  if (task?.kind !== "daily_report_generate") return [];
+
+  const stages = getDailyReportRecoveryStages(task.pipelineCheckpoint);
+  return [
+    {
+      value: "all" as const,
+      label: "全部重试",
+      description: "从准备候选开始完整重新生成，创建新的任务。",
+      recommended: false,
+    },
+    ...stages.map((stage) => ({
+      value: stage,
+      label: `从 ${DAILY_REPORT_RECOVERY_STAGE_LABELS[stage]} 继续`,
+      description: stage === "write"
+        ? "复用 PLAN 结果，丢弃旧草稿并重新生成完整日报；阶段内会自动处理校验反馈。"
+        : stage === "plan"
+        ? "复用 ASSESS 结果，重新规划主题和栏目。"
+        : "从候选评估开始重新执行后续阶段。",
+      recommended: stage === getRecommendedDailyReportRecoveryStage(task.pipelineCheckpoint),
+    })),
+  ];
 }
 
 const triggerLabels: Record<TaskRunSnapshot["triggerType"], string> = {
@@ -706,6 +741,9 @@ export function TaskMonitorPanel({
   const [confirmTask, setConfirmTask] = useState<TaskRunSnapshot | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<"retrigger" | "cancel">("retrigger");
+  const [recoveryTask, setRecoveryTask] = useState<TaskRunSnapshot | null>(null);
+  const [recoveryChoice, setRecoveryChoice] = useState<DailyReportRetryChoice>("all");
+  const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
   const pendingRouteTaskIdRef = useRef<string | null>(null);
 
   const allTasks = useMemo(() => {
@@ -719,6 +757,8 @@ export function TaskMonitorPanel({
     }
     return Array.from(taskMap.values());
   }, [taskLists]);
+
+  const recoveryOptions = getDailyReportRetryOptions(recoveryTask);
 
   useEffect(() => {
     if (!selectedTask) {
@@ -842,7 +882,25 @@ export function TaskMonitorPanel({
     setPage(1);
   };
 
+  const handleOpenRecovery = (task: TaskRunSnapshot) => {
+    const options = getDailyReportRetryOptions(task);
+    const recommended = options.find((option) => option.recommended);
+    setRecoveryTask(task);
+    setRecoveryChoice(recommended?.value ?? "all");
+    setIsRecoveryOpen(true);
+  };
+
+  const handleCloseRecovery = () => {
+    setIsRecoveryOpen(false);
+    setRecoveryTask(null);
+    setRecoveryChoice("all");
+  };
+
   const handleOpenConfirm = (task: TaskRunSnapshot, action: "retrigger" | "cancel") => {
+    if (action === "retrigger" && task.kind === "daily_report_generate") {
+      handleOpenRecovery(task);
+      return;
+    }
     setConfirmTask(task);
     setConfirmAction(action);
     setIsConfirmOpen(true);
@@ -856,9 +914,9 @@ export function TaskMonitorPanel({
   const handleConfirmAction = () => {
     if (!confirmTask) return;
     if (confirmAction === "retrigger") {
-      handleRetrigger(confirmTask.id);
+      void handleLegacyRetrigger(confirmTask.id);
     } else {
-      handleCancel(confirmTask.id);
+      void handleCancel(confirmTask.id);
     }
     handleCloseConfirm();
   };
@@ -888,7 +946,7 @@ export function TaskMonitorPanel({
     }
   }, [isDetailOpen]);
 
-  const handleRetrigger = async (taskId: string) => {
+  const handleLegacyRetrigger = async (taskId: string) => {
     setRetriggeringTaskId(taskId);
     const targetTask = allTasks.find((task) => task.id === taskId) ?? null;
     const actionLabel = getTaskRetryActionLabel(targetTask);
@@ -908,6 +966,45 @@ export function TaskMonitorPanel({
       showToast(`任务已${actionLabel}`, "success");
 
       // Refresh the task list after a short delay
+      setTimeout(() => {
+        void refreshSnapshot();
+      }, 500);
+    } catch {
+      showToast("重新触发任务失败", "error");
+    } finally {
+      setRetriggeringTaskId(null);
+    }
+  };
+
+  const handleRetrigger = (taskId: string) => {
+    const targetTask = allTasks.find((task) => task.id === taskId) ?? null;
+    if (targetTask?.kind === "daily_report_generate") {
+      handleOpenRecovery(targetTask);
+      return;
+    }
+    void handleLegacyRetrigger(taskId);
+  };
+
+  const handleSubmitRecovery = async () => {
+    if (!recoveryTask) return;
+    const taskId = recoveryTask.id;
+    setRetriggeringTaskId(taskId);
+
+    try {
+      const response = await fetch(`/api/admin/monitor/tasks/${taskId}/retrigger`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retryFrom: recoveryChoice }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        showToast(data.error || "重新触发任务失败", "error");
+        return;
+      }
+
+      showToast(recoveryChoice === "all" ? "任务已全部重试" : `任务已从 ${DAILY_REPORT_RECOVERY_STAGE_LABELS[recoveryChoice]} 继续`, "success");
+      handleCloseRecovery();
       setTimeout(() => {
         void refreshSnapshot();
       }, 500);
@@ -1128,6 +1225,43 @@ export function TaskMonitorPanel({
         onCancel={handleCancel}
         isCancelling={cancellingTaskId === selectedTask?.id}
       />
+
+      {/* Daily report recovery modal */}
+      <ModalShell
+        isOpen={isRecoveryOpen}
+        onClose={handleCloseRecovery}
+        title="选择日报重试方式"
+        widthClassName="max-w-lg"
+        headerClassName="border-b border-[color:var(--line)] p-4"
+        bodyClassName="p-4"
+        footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button onClick={handleCloseRecovery} variant="secondary">
+              取消
+            </Button>
+            <Button onClick={() => void handleSubmitRecovery()} variant="primary" disabled={retriggeringTaskId === recoveryTask?.id}>
+              {retriggeringTaskId === recoveryTask?.id ? "提交中..." : "确认重试"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-[var(--text-2)]">
+            {recoveryTask?.label}：请选择重新执行范围。
+          </p>
+          <div className="space-y-2">
+            <SelectField
+              id="daily-report-recovery"
+              aria-label="日报重试方式"
+              value={recoveryChoice}
+              options={recoveryOptions.map((option) => ({ value: option.value, label: option.label }))}
+              showSearch={false}
+              onChange={(value) => setRecoveryChoice(String(value) as DailyReportRetryChoice)}
+            />
+          </div>
+        </div>
+      </ModalShell>
 
       {/* Confirm Modal */}
       <ModalShell

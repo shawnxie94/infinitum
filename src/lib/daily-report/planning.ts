@@ -30,11 +30,8 @@ export const DAILY_REPORT_ATTEMPT_MATRIX = [
   { stage: "ASSESS", maxAttempts: 2, retry: "same_batch" },
   { stage: "MERGE", maxAttempts: 1, retry: "none" },
   { stage: "PLAN", maxAttempts: 2, retry: "same_ledger" },
-  { stage: "PLAN_VALIDATE", maxAttempts: 2, retry: "same_ledger" },
   { stage: "WRITE", maxAttempts: 2, retry: "same_plan" },
-  { stage: "JSON_REPAIR", maxAttempts: 1, retry: "same_draft" },
   { stage: "VALIDATE", maxAttempts: 1, retry: "none" },
-  { stage: "REPAIR", maxAttempts: 1, retry: "same_plan" },
   { stage: "PERSIST_PUBLISH", maxAttempts: 2, retry: "db_only" },
 ] as const;
 

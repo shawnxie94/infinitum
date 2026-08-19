@@ -1,3 +1,4 @@
+import { DAILY_REPORT_RECOVERY_STAGES, DAILY_REPORT_LEGACY_RECOVERY_STAGES } from "@/lib/tasks/types";
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
 
 export function parseTaskPipelineCheckpointJson(value: string | null | undefined): TaskPipelineCheckpoint | null {
@@ -30,6 +31,14 @@ export function parseTaskPipelineCheckpointJson(value: string | null | undefined
       ...(typeof parsed.failedStage === "string" || parsed.failedStage === null ? { failedStage: parsed.failedStage } : {}),
       ...(typeof parsed.failureCode === "string" || parsed.failureCode === null ? { failureCode: parsed.failureCode } : {}),
       ...(typeof parsed.resumeAttempt === "number" ? { resumeAttempt: parsed.resumeAttempt } : {}),
+      ...(typeof parsed.resumeFrom === "string" && DAILY_REPORT_RECOVERY_STAGES.includes(parsed.resumeFrom as typeof DAILY_REPORT_RECOVERY_STAGES[number])
+        ? { resumeFrom: parsed.resumeFrom as TaskPipelineCheckpoint["resumeFrom"] }
+        : String(parsed.resumeFrom) === DAILY_REPORT_LEGACY_RECOVERY_STAGES[0]
+          ? { resumeFrom: "write" as const }
+          : {}),
+      ...(parsed.stageLoop && typeof parsed.stageLoop === "object" && !Array.isArray(parsed.stageLoop)
+        ? { stageLoop: parsed.stageLoop as TaskPipelineCheckpoint["stageLoop"] }
+        : {}),
       ...(parsed.stageAttempts && typeof parsed.stageAttempts === "object" && !Array.isArray(parsed.stageAttempts)
         ? { stageAttempts: Object.fromEntries(Object.entries(parsed.stageAttempts).filter(([, attempt]) => typeof attempt === "number" && Number.isFinite(attempt))) as Record<string, number> }
         : {}),

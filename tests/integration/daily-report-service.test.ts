@@ -14,12 +14,10 @@ const {
   assessDailyReportCandidatesMock,
   planDailyReportMock,
   writeDailyReportMock,
-  repairDailyReportDraftMock,
 } = vi.hoisted(() => ({
   assessDailyReportCandidatesMock: vi.fn(),
   planDailyReportMock: vi.fn(),
   writeDailyReportMock: vi.fn(),
-  repairDailyReportDraftMock: vi.fn(),
 }));
 
 vi.mock("@/lib/ai/provider", () => ({
@@ -28,10 +26,6 @@ vi.mock("@/lib/ai/provider", () => ({
     planDailyReport: planDailyReportMock,
     writeDailyReport: async (input: unknown) => {
       const output = await writeDailyReportMock(input);
-      return typeof output === "string" ? JSON.parse(output) : output;
-    },
-    repairDailyReportDraft: async (input: unknown) => {
-      const output = await repairDailyReportDraftMock(input);
       return typeof output === "string" ? JSON.parse(output) : output;
     },
   })),
@@ -694,7 +688,6 @@ describe("daily report service", () => {
     assessDailyReportCandidatesMock.mockReset();
     planDailyReportMock.mockReset();
     writeDailyReportMock.mockReset();
-    repairDailyReportDraftMock.mockReset();
     assessDailyReportCandidatesMock.mockImplementation(async ({ candidates }: { candidates: Array<{ id: number; eventType: string | null; eventSubject: string | null; eventAction: string | null; eventObject: string | null; eventDate: string | null }> }) => candidates.map((candidate) => ({
       candidateId: candidate.id,
       relevanceScore: 90,
@@ -723,7 +716,6 @@ describe("daily report service", () => {
     writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: Array<{ topicId: string; blockKey: string; candidateIds: number[] }> }) => {
       return buildDailyReportOutput(selectedTopics);
     });
-    repairDailyReportDraftMock.mockImplementation(async () => ({ patches: [] }));
     await prisma.dailyReportSource.deleteMany();
     await prisma.dailyReport.deleteMany();
     await prisma.item.deleteMany();
@@ -1737,7 +1729,7 @@ describe("daily report service", () => {
         metrics: [
           { label: "总候选数", value: 4 },
           { label: "批次数", value: 1 },
-          { label: "批次大小", value: 0 },
+          { label: "批次大小", value: 4 },
           { label: "最后入选数", value: 4 },
         ],
       }),
@@ -1751,8 +1743,10 @@ describe("daily report service", () => {
         label: "分批选题评估",
         metrics: [
           { label: "批次数", value: 1 },
-          { label: "批次大小", value: 0 },
+          { label: "批次大小", value: 4 },
           { label: "历史重复过滤", value: 0 },
+          { label: "修复轮数", value: 0 },
+          { label: "完整重试", value: 0 },
         ],
       }),
       expect.objectContaining({
@@ -1766,22 +1760,26 @@ describe("daily report service", () => {
           { label: "计划栏目", value: 2 },
           { label: "计划入选", value: 4 },
           { label: "截取主题", value: 0 },
+          { label: "违规数", value: 0 },
+          { label: "修复轮数", value: 0 },
+          { label: "完整重试", value: 0 },
         ],
         audit: expect.objectContaining({
           planning: expect.objectContaining({ topicPriorityVersion: "v1" }),
         }),
       }),
       expect.objectContaining({
-        key: "daily_report_plan_validate",
-        metrics: [{ label: "违规数", value: 0 }],
+        key: "daily_report_write",
+        metrics: [
+          { label: "入选数", value: 4 },
+          { label: "违规数", value: 0 },
+          { label: "修复轮数", value: 0 },
+          { label: "完整重试", value: 0 },
+          { label: "上下文超限", value: 0 },
+        ],
       }),
       expect.objectContaining({
         key: "daily_report_persist_publish",
-      }),
-      expect.objectContaining({
-        key: "daily_report_repair",
-        metrics: [{ label: "修复次数", value: 0 }],
-        status: "skipped",
       }),
       expect.objectContaining({
         key: "task_finished",
@@ -1811,15 +1809,15 @@ describe("daily report service", () => {
     expect(writeDailyReportMock).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the PLAN_VALIDATE budget for an invalid plan before retrying the planner", async () => {
+  it("repairs an invalid PLAN in the same stage context", async () => {
     await createDailyReportSchedule({ autoPublish: false });
     await createReportCandidates();
     writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => buildDailyReportOutput(selectedTopics));
-    let retryInput: { previousPlan?: unknown; planViolations?: unknown[] } | undefined;
+    let retryInput: { stageContext?: { messages?: unknown[] }; validationFeedback?: { violations?: unknown[] } } | undefined;
     planDailyReportMock.mockImplementationOnce(async () => ({
       schemaVersion: 2,
       sections: [{ blockKey: "text", topics: [{ candidateIds: [] }] }],
-    })).mockImplementationOnce(async (input: { previousPlan?: unknown; planViolations?: unknown[] }) => {
+    })).mockImplementationOnce(async (input: { stageContext?: { messages?: unknown[] }; validationFeedback?: { violations?: unknown[] } }) => {
       retryInput = input;
       return {
         schemaVersion: 2,
@@ -1840,13 +1838,12 @@ describe("daily report service", () => {
     });
 
     expect(planDailyReportMock).toHaveBeenCalledTimes(2);
-    expect(retryInput?.previousPlan).toBeDefined();
-    expect(retryInput?.planViolations).toEqual(expect.arrayContaining([
+    expect(retryInput?.stageContext).toBeDefined();
+    expect(retryInput?.validationFeedback?.violations).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: "unknown_block" }),
     ]));
-    expect(checkpoints.find((checkpoint) => checkpoint.stage === "plan_validate")?.stageAttempts).toMatchObject({
+    expect(checkpoints.find((checkpoint) => checkpoint.stage === "plan")?.stageAttempts).toMatchObject({
       PLAN: 1,
-      PLAN_VALIDATE: 2,
     });
   });
 
@@ -1878,7 +1875,7 @@ describe("daily report service", () => {
     const selectedTopics = writeDailyReportMock.mock.calls.at(-1)?.[0]?.selectedTopics as SelectedTopicFixture[];
     expect(selectedTopics.filter((topic) => topic.blockKey === "hot-topics")).toHaveLength(5);
     expect(selectedTopics.filter((topic) => topic.blockKey === "changes-practice")).toHaveLength(2);
-    expect(checkpoints.find((checkpoint) => checkpoint.stage === "plan_validate")?.planningAudit).toMatchObject({
+    expect(checkpoints.filter((checkpoint) => checkpoint.stage === "plan").at(-1)?.planningAudit).toMatchObject({
       topicPriorityVersion: "v1",
       truncatedTopicCount: 1,
       sections: expect.arrayContaining([
@@ -1910,7 +1907,7 @@ describe("daily report service", () => {
     const failedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
     const checkpoint = JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}");
     expect(checkpoint).toMatchObject({
-      failedStage: "plan_validate",
+      failedStage: "plan",
       plan: invalidPlan,
       violations: expect.arrayContaining([
         expect.objectContaining({ code: "unknown_block" }),
@@ -1919,15 +1916,10 @@ describe("daily report service", () => {
     expect(JSON.parse(failedTaskRun.taskTimelineJson ?? "[]")).toEqual(expect.arrayContaining([
       expect.objectContaining({
         key: "daily_report_plan",
+        status: "failed",
         metrics: expect.arrayContaining([
           { label: "计划栏目", value: 1 },
           { label: "计划入选", value: 0 },
-        ]),
-      }),
-      expect.objectContaining({
-        key: "daily_report_plan_validate",
-        status: "failed",
-        metrics: expect.arrayContaining([
           { label: "违规数", value: expect.any(Number) },
         ]),
       }),
@@ -1994,7 +1986,7 @@ describe("daily report service", () => {
 
     await executeDailyReportTask(taskRun);
 
-    expect(assessDailyReportCandidatesMock).toHaveBeenCalledTimes(1);
+    expect(assessDailyReportCandidatesMock).toHaveBeenCalledTimes(2);
     const failedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
     expect(JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
       failedStage: "assess",
@@ -2002,8 +1994,13 @@ describe("daily report service", () => {
       resumeEligible: false,
       data: { batchCount: 2, batchSize: 2 },
       assessmentBatches: expect.arrayContaining([
-        expect.objectContaining({ status: "failed", attempt: 1 }),
+        expect.objectContaining({ status: "failed", attempt: 2 }),
       ]),
+      stageLoop: expect.objectContaining({
+        stage: "assess",
+        cleanRetryAttempt: 1,
+        contextOverflow: true,
+      }),
     });
     const timeline = JSON.parse(failedTaskRun.taskTimelineJson ?? "[]") as Array<{ key: string; status: string; startedAt: string | null; finishedAt: string | null }>;
     expect(timeline.find((node) => node.key === "daily_report_prepare")).toMatchObject({ status: "succeeded" });
@@ -2067,7 +2064,6 @@ describe("daily report service", () => {
       sections: {},
       closingThought: "太短",
     }));
-    repairDailyReportDraftMock.mockResolvedValue(null);
 
     await executeDailyReportTask(taskRun);
 
@@ -2097,7 +2093,6 @@ describe("daily report service", () => {
       sections: {},
       closingThought: "太短",
     }));
-    repairDailyReportDraftMock.mockResolvedValue(null);
 
     await executeDailyReportTask(taskRun);
 
@@ -2110,17 +2105,91 @@ describe("daily report service", () => {
     expect(failedTaskRun).toMatchObject({
       status: "failed",
       errorSummary: expect.stringContaining("WRITE 校验失败"),
-      aiCallCountActual: 3,
-      aiCallCountEstimated: 3,
+      aiCallCountActual: 8,
+      aiCallCountEstimated: 8,
     });
-    expect(repairDailyReportDraftMock).not.toHaveBeenCalled();
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(6);
+    expect(writeDailyReportMock.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+      validationFeedback: expect.objectContaining({
+        violations: expect.arrayContaining([
+          expect.objectContaining({ code: "draft_schema" }),
+        ]),
+      }),
+    }));
     expect(JSON.parse(failedTaskRun.aiCallBreakdownJson ?? "[]")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: "daily_report", actual: 3, estimated: 3 }),
+      expect.objectContaining({ key: "daily_report", actual: 8, estimated: 8 }),
     ]));
     expect(JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
-      failedStage: "validate",
+      failedStage: "write",
       failureCode: "stage_failed",
       resumeEligible: false,
+      data: { writeRetryCount: 1, writeRepairRound: 2 },
     });
+  });
+
+  it("repairs WRITE structural and note violations in the same context", async () => {
+    await createReportCandidates();
+    const dailyReportPrompt = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report", isDefault: true },
+    });
+    const template = JSON.parse(dailyReportPrompt.templateJson ?? "{}");
+    template.blocks = template.blocks.map((block: Record<string, unknown>) => block.key === "hot-topics"
+      ? {
+          ...block,
+          item: {
+            ...(block.item as Record<string, unknown>),
+            notes: [{ label: "重点", required: true, instruction: "说明为什么值得关注。" }],
+          },
+        }
+      : block);
+    await prisma.promptConfig.update({
+      where: { id: dailyReportPrompt.id },
+      data: { templateJson: JSON.stringify(template) },
+    });
+    writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => {
+      const output = JSON.parse(buildDailyReportOutput(selectedTopics)) as { blocks: Array<{ type: string; items?: unknown[] }> };
+      if (writeDailyReportMock.mock.calls.length === 1) {
+        const hotBlock = output.blocks.find((block) => block.type === "section" && Array.isArray(block.items));
+        if (hotBlock?.items) hotBlock.items = hotBlock.items.slice(0, -1);
+      } else {
+        for (const block of output.blocks) {
+          if (block.type !== "section" || !Array.isArray(block.items)) continue;
+          if ((block as { blockKey?: string }).blockKey !== "hot-topics") continue;
+          block.items = (block.items as Array<Record<string, unknown>>).map((item) => ({
+            ...item,
+            notes: [{ label: "重点", text: "基于候选事实补充的重点说明。" }],
+          }));
+        }
+      }
+      return JSON.stringify(output);
+    });
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+
+    await executeDailyReportTask(taskRun);
+
+    const completedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(completedTaskRun.status).toBe("succeeded");
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(2);
+    expect(writeDailyReportMock.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
+      validationFeedback: expect.objectContaining({ violations: expect.any(Array) }),
+    }));
+    expect(completedTaskRun.aiCallCountActual).toBe(4);
+    expect(JSON.parse(completedTaskRun.taskTimelineJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: "daily_report_write",
+        metrics: expect.arrayContaining([
+          { label: "修复轮数", value: 1 },
+          { label: "完整重试", value: 0 },
+        ]),
+      }),
+    ]));
   });
 });
