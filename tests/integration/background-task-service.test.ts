@@ -763,7 +763,7 @@ describe("background task persistence", () => {
     const resumed = await resumeTaskRun(taskRun.id, { retryFrom: "write" });
     const checkpoint = JSON.parse(resumed.pipelineCheckpointJson ?? "{}") as Record<string, unknown>;
 
-    expect(resumed.id).toBe(taskRun.id);
+    expect(resumed.id).not.toBe(taskRun.id);
     expect(resumed.status).toBe("queued");
     expect(checkpoint).toMatchObject({
       stage: "write",
@@ -777,6 +777,7 @@ describe("background task persistence", () => {
     expect(checkpoint).not.toHaveProperty("draft");
     expect(checkpoint).not.toHaveProperty("violations");
     expect(checkpoint.stageAttempts).toEqual({});
+    await expect(prisma.backgroundTaskRun.count()).resolves.toBe(2);
   });
 
   it("restarts WRITE when a legacy REPAIR checkpoint is manually continued", async () => {
@@ -822,6 +823,56 @@ describe("background task persistence", () => {
     expect(checkpoint).not.toHaveProperty("draft");
     expect(checkpoint).not.toHaveProperty("violations");
     expect(checkpoint.stageAttempts).toEqual({});
+    expect(resumed.id).not.toBe(taskRun.id);
+    await expect(prisma.backgroundTaskRun.count()).resolves.toBe(2);
+  });
+
+  it("creates a separate task when a completed daily report restarts from an intermediate stage", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "succeeded",
+        label: "AI 日报生成",
+        entityId: "2026-04-12",
+      },
+    });
+
+    await updateTaskRun(taskRun.id, {
+      pipelineCheckpoint: {
+        version: 1,
+        pipelineVersion: "daily-report-topic-first-v2",
+        stage: "validate",
+        completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate"],
+        inputHash: "input-hash",
+        templateSignature: "template-signature",
+        candidateSnapshotHash: "candidate-hash",
+        resumeEligible: true,
+        assessmentBatches: [{ index: 0, candidateIds: [1], status: "succeeded" as const, attempt: 1 }],
+        ledger: { schemaVersion: 1 },
+        planningCandidateBriefs: [{ candidateId: 1 }],
+        plan: { schemaVersion: 2, sections: [] },
+        draft: { headline: "已完成日报", blocks: [] },
+      },
+    });
+
+    const regenerated = await resumeTaskRun(taskRun.id, { retryFrom: "write" });
+    const checkpoint = JSON.parse(regenerated.pipelineCheckpointJson ?? "{}");
+
+    expect(regenerated.id).not.toBe(taskRun.id);
+    expect(regenerated.status).toBe("queued");
+    expect(regenerated.label).toContain("从 WRITE 重新生成");
+    expect(checkpoint).toMatchObject({
+      stage: "write",
+      resumeEligible: true,
+      resumeFrom: "write",
+      completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
+      data: { manualRetryFrom: "write" },
+    });
+    await expect(prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } })).resolves.toMatchObject({
+      status: "succeeded",
+    });
+    await expect(prisma.backgroundTaskRun.count()).resolves.toBe(2);
   });
 
   it("refreshes the scheduler heartbeat while a task is reporting progress", async () => {

@@ -156,6 +156,12 @@ export function createTaskAiUsageTracker(
           syncEstimateFloor();
           return aiProvider.writeDailyReport(input);
         },
+        async repairDailyReportDraft(input) {
+          incrementActual("daily_report");
+          incrementEstimated("daily_report");
+          syncEstimateFloor();
+          return aiProvider.repairDailyReportDraft(input);
+        },
       };
     },
   };

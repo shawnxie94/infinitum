@@ -49,6 +49,8 @@ export type DailyReportStageLoopOptions<T> = {
   ) => Promise<T>;
   validate: (value: T) => StageViolation[] | Promise<StageViolation[]>;
   isRepairable?: (violations: StageViolation[]) => boolean;
+  /** Stop the generic full-result repair path so the caller can apply a scoped repair. */
+  stopOnValidation?: (violations: StageViolation[]) => boolean;
   onContextUpdate?: (context: DailyReportStageContext) => Promise<void> | void;
 };
 
@@ -72,11 +74,22 @@ function buildValidationFeedback(
   stage: DailyReportStage,
   violations: StageViolation[],
 ): DailyReportStageValidationFeedback {
+  const missingNotes = violations
+    .filter((violation) => violation.code === "draft_required_note_missing" && violation.topicId && violation.noteLabel)
+    .map((violation) => ({
+      topicId: violation.topicId!,
+      noteLabel: violation.noteLabel!,
+      ...(violation.blockKey ? { blockKey: violation.blockKey } : {}),
+      ...(violation.noteInstruction ? { noteInstruction: violation.noteInstruction } : {}),
+    }));
   return {
     type: "VALIDATION_FEEDBACK",
     stage,
     violations,
-    instruction: "只修正反馈中列出的问题，返回完整的当前阶段结果。",
+    ...(missingNotes.length > 0 ? { missingNotes } : {}),
+    instruction: missingNotes.length > 0
+      ? "反馈中的 missingNotes 已按 topicId + noteLabel 精确定位。只补齐这些 notes；不要删除、重写或重排其他条目，不要返回新的主题。"
+      : "只修正反馈中列出的问题，返回完整的当前阶段结果。",
   };
 }
 
@@ -136,6 +149,17 @@ export async function runDailyReportStageLoop<T>(options: DailyReportStageLoopOp
           };
         }
 
+        if (options.stopOnValidation?.(violations)) {
+          lastError = new Error(`${options.stage.toUpperCase()} 校验需要执行局部修复。`);
+          throw new DailyReportStageLoopError(
+            options.stage,
+            context,
+            violations,
+            cleanRetryCount,
+            lastError,
+          );
+        }
+
         if (repairRound >= maxRepairRounds || !isRepairable(violations)) {
           lastError = new Error(`${options.stage.toUpperCase()} 校验失败：${violations.map((violation) => violation.message).slice(0, 5).join("；")}`);
           break;
@@ -144,6 +168,9 @@ export async function runDailyReportStageLoop<T>(options: DailyReportStageLoopOp
         feedback = buildValidationFeedback(options.stage, violations);
         await options.onContextUpdate?.(context);
       } catch (error) {
+        if (error instanceof DailyReportStageLoopError) {
+          throw error;
+        }
         lastError = error;
         lastViolations = [errorToViolation(options.stage, error)];
         context.lastViolations = lastViolations;

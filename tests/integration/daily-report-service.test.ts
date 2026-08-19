@@ -13,10 +13,12 @@ import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
 const {
   assessDailyReportCandidatesMock,
   planDailyReportMock,
+  repairDailyReportMock,
   writeDailyReportMock,
 } = vi.hoisted(() => ({
   assessDailyReportCandidatesMock: vi.fn(),
   planDailyReportMock: vi.fn(),
+  repairDailyReportMock: vi.fn(),
   writeDailyReportMock: vi.fn(),
 }));
 
@@ -24,6 +26,7 @@ vi.mock("@/lib/ai/provider", () => ({
   createAiProvider: vi.fn(() => ({
     assessDailyReportCandidates: assessDailyReportCandidatesMock,
     planDailyReport: planDailyReportMock,
+    repairDailyReportDraft: repairDailyReportMock,
     writeDailyReport: async (input: unknown) => {
       const output = await writeDailyReportMock(input);
       return typeof output === "string" ? JSON.parse(output) : output;
@@ -687,6 +690,7 @@ describe("daily report service", () => {
   beforeEach(async () => {
     assessDailyReportCandidatesMock.mockReset();
     planDailyReportMock.mockReset();
+    repairDailyReportMock.mockReset();
     writeDailyReportMock.mockReset();
     assessDailyReportCandidatesMock.mockImplementation(async ({ candidates }: { candidates: Array<{ id: number; eventType: string | null; eventSubject: string | null; eventAction: string | null; eventObject: string | null; eventDate: string | null }> }) => candidates.map((candidate) => ({
       candidateId: candidate.id,
@@ -695,6 +699,7 @@ describe("daily report service", () => {
       suggestedBlockKey: "changes-practice",
       historyDecision: "new",
     })));
+    repairDailyReportMock.mockResolvedValue({ patches: [] });
     planDailyReportMock.mockImplementation(async ({ candidateBriefs }: { candidateBriefs: Array<{ candidateId: number; clusterId?: string | null }> }) => ({
       schemaVersion: 2,
       sections: (() => {
@@ -779,6 +784,37 @@ describe("daily report service", () => {
     expect(report.errorMessage).toBeNull();
     expect(report.title).toBe("04-24日报 | OpenAI 发布新模型、开发者工具更新");
     expect(report.renderedMarkdown).toContain("# 04-24日报 | OpenAI 发布新模型、开发者工具更新");
+  });
+
+  it("keeps a reusable checkpoint after a successful task", async () => {
+    await createDailyReportSchedule({ autoPublish: false });
+    await createReportCandidates();
+    writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => buildDailyReportOutput(selectedTopics));
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+
+    await executeDailyReportTask(taskRun);
+
+    const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const checkpoint = JSON.parse(storedTaskRun.pipelineCheckpointJson ?? "{}");
+    expect(storedTaskRun.status).toBe("succeeded");
+    expect(checkpoint).toMatchObject({
+      stage: "validate",
+      lastCompletedStage: "validate",
+      resumeEligible: true,
+      completedStages: expect.arrayContaining(["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate"]),
+    });
+    expect(checkpoint.assessmentBatches).toEqual(expect.any(Array));
+    expect(checkpoint.planningCandidateBriefs).toEqual(expect.any(Array));
+    expect(checkpoint.plan).toBeDefined();
+    expect(checkpoint.draft).toBeDefined();
   });
 
   it("formats generated report titles for public-account publishing", () => {
@@ -2193,5 +2229,72 @@ describe("daily report service", () => {
         ]),
       }),
     ]));
+  });
+
+  it("repairs missing notes with topic-scoped patches without rewriting the draft", async () => {
+    await createReportCandidates();
+    const dailyReportPrompt = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report", isDefault: true },
+    });
+    const template = JSON.parse(dailyReportPrompt.templateJson ?? "{}");
+    template.blocks = template.blocks.map((block: Record<string, unknown>) => block.key === "hot-topics"
+      ? {
+          ...block,
+          item: {
+            ...(block.item as Record<string, unknown>),
+            notes: [{ label: "重点", required: true, instruction: "说明为什么值得关注。" }],
+          },
+        }
+      : block);
+    await prisma.promptConfig.update({
+      where: { id: dailyReportPrompt.id },
+      data: { templateJson: JSON.stringify(template) },
+    });
+    writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => {
+      const output = JSON.parse(buildDailyReportOutput(selectedTopics)) as { blocks: Array<{ type: string; blockKey?: string; items?: Array<Record<string, unknown>> }> };
+      for (const block of output.blocks) {
+        if (block.type === "section" && block.blockKey === "hot-topics") {
+          block.items = block.items?.map((item) => {
+            const nextItem = { ...item };
+            delete nextItem.notes;
+            return nextItem;
+          });
+        }
+      }
+      return JSON.stringify(output);
+    });
+    repairDailyReportMock.mockImplementation(async ({ violations }: { violations: Array<{ topicId?: string; noteLabel?: string }> }) => ({
+      patches: violations.map((violation) => ({
+        topicId: violation.topicId,
+        notes: [{ label: violation.noteLabel, text: "基于该主题候选事实补充的重点说明。" }],
+      })),
+    }));
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+
+    await executeDailyReportTask(taskRun);
+
+    const completedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(completedTaskRun.status).toBe("succeeded");
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(1);
+    expect(repairDailyReportMock).toHaveBeenCalledTimes(1);
+    expect(repairDailyReportMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      violations: expect.arrayContaining([
+        expect.objectContaining({
+          code: "draft_required_note_missing",
+          topicId: expect.any(String),
+          noteLabel: "重点",
+        }),
+      ]),
+    }));
+    expect(completedTaskRun.aiCallCountActual).toBe(4);
+    expect(completedTaskRun.errorSummary).toBeNull();
   });
 });

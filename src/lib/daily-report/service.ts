@@ -48,7 +48,9 @@ import {
   type DailyReportSourceRegistryEntry,
   type RecentDailyReportTopic,
 } from "@/lib/daily-report/types";
+import { isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
 import {
+  applyDailyReportRepairPatches,
   buildDailyReportCandidateBriefs,
   buildDailyReportSelectedTopics,
   attachDailyReportTopicSources,
@@ -97,6 +99,7 @@ import {
   normalizeDailyReportTimelineStage,
   type DailyReportPipelineStage,
 } from "@/lib/daily-report/timeline";
+import { getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
 import { DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS } from "@/lib/tasks/scheduler";
 
 const MIN_CANDIDATE_COUNT = 2;
@@ -1708,6 +1711,7 @@ async function generateDailyReportInternal(input: {
     let latestDraftForLoop: DailyReportDraft | null = null;
     let writeLoop: DailyReportStageLoopResult<DailyReportModelDraft> | null = null;
     let writeLoopFailedWithDraft = false;
+    let notePatchRepairCount = 0;
     try {
       writeLoop = canResume && checkpoint?.draft
         ? null
@@ -1731,6 +1735,7 @@ async function generateDailyReportInternal(input: {
             validationViolationCount = violations.length;
             return violations;
           },
+          stopOnValidation: (violations) => violations.length > 0 && violations.every(isDailyReportNotesRepairableViolation),
           onContextUpdate: async (context) => {
             repairCount = context.repairRound;
             writeRetryCount = context.cleanRetryAttempt;
@@ -1769,6 +1774,69 @@ async function generateDailyReportInternal(input: {
       throw new Error("WRITE 阶段未生成可校验的日报草稿。");
     }
     validationViolationCount = draftViolations.length;
+    const nonRepairableDraftViolations = draftViolations.filter(
+      (violation) => !isDailyReportNotesRepairableViolation(violation),
+    );
+    if (draftViolations.length > 0 && nonRepairableDraftViolations.length === 0) {
+      let repairViolations = draftViolations.filter(isDailyReportNotesRepairableViolation);
+      while (repairViolations.length > 0 && notePatchRepairCount < 2) {
+        notePatchRepairCount += 1;
+        repairCount += 1;
+        await input.onStageUpdate?.("repair");
+        let patchResult;
+        try {
+          patchResult = await runStageWithAttempts(
+            "repair",
+            async () => provider.repairDailyReportDraft({
+              draft: toDailyReportModelDraft(draft!),
+              violations: repairViolations,
+              selectedTopics,
+              template,
+            }),
+            {
+              attemptKey: `REPAIR.round.${notePatchRepairCount}`,
+              matrixStage: "REPAIR",
+            },
+          );
+        } catch {
+          break;
+        }
+        draft = normalizeDailyReportDraftForTemplate(
+          orderDailyReportDraft(
+            applyDailyReportRepairPatches(draft, patchResult) as DailyReportDraft,
+            plan,
+            template,
+          ),
+          template,
+        );
+        modelDraft = toDailyReportModelDraft(draft);
+        draftViolations = validateDailyReportDraft(draft, plan, selectedCandidates, template, omittedTopicIds);
+        repairViolations = draftViolations.filter(isDailyReportNotesRepairableViolation);
+        validationViolationCount = draftViolations.length;
+        if (latestCheckpoint) {
+          await saveCheckpoint({
+            ...latestCheckpoint,
+            stage: "repair",
+            completedStages: draftViolations.length > 0
+              ? [...new Set([...latestCheckpoint.completedStages, "write", "repair"])]
+              : [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])],
+            lastCompletedStage: "repair",
+            failedStage: null,
+            failureCode: null,
+            resumeEligible: draftViolations.length === 0,
+            stageAttempts: { ...stageAttempts },
+            draft: modelDraft,
+            violations: draftViolations,
+            data: {
+              ...(latestCheckpoint.data ?? {}),
+              writeRepairRound: repairCount,
+              omittedTopicIds: Array.from(omittedTopicIds),
+              omittedTopicCount: omittedTopicIds.size,
+            },
+          });
+        }
+      }
+    }
     if (draftViolations.length > 0) {
       const fallback = omitInvalidOptionalDailyReportTopics(draft, draftViolations, template, omittedTopicIds);
       omittedTopicIds = fallback.omittedTopicIds;
@@ -2138,6 +2206,19 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       : finalAiUsage.breakdown.some((entry) => entry.key === "daily_report")
         ? finalAiUsage.breakdown
         : [{ key: "daily_report", label: "AI 日报", actual: totalActual, estimated: totalEstimated }];
+    const completedCheckpoint = resumeCheckpoint
+      && resumeCheckpoint.resumeEligible
+      && getDailyReportRecoveryStages(resumeCheckpoint).length > 0
+      ? {
+          ...resumeCheckpoint,
+          stage: "validate",
+          lastCompletedStage: "validate",
+          failedStage: null,
+          failureCode: null,
+          resumeEligible: true,
+          stageLoop: undefined,
+        }
+      : null;
     await updateTaskRun(taskRun.id, {
       status: finalStatus,
       progressCurrent: 1,
@@ -2176,7 +2257,9 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         activeStage: result.skipped ? null : "persist_publish",
         finishedAt,
       }),
-      pipelineCheckpoint: null,
+      // Keep the final planning inputs and plan so a completed report can be
+      // regenerated from ASSESS/PLAN/WRITE as a new task.
+      pipelineCheckpoint: completedCheckpoint,
       finishedAt,
     });
     await markDailyScheduleRunFinished(taskRun, finalStatus);

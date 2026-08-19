@@ -830,7 +830,12 @@ export async function resumeTaskRun(id: string, options: { retryFrom?: DailyRepo
   const taskRun = await getTaskRun(id);
   if (!taskRun) throw new Error("Task run not found.");
   if (taskRun.kind !== "daily_report_generate") throw new Error("只有日报任务支持断点恢复。");
-  if (!["failed", "partial", "cancelled"].includes(taskRun.status)) throw new Error("只有失败或部分完成的日报任务支持断点恢复。");
+  if (!options.retryFrom && !["failed", "partial", "cancelled"].includes(taskRun.status)) {
+    throw new Error("只有失败或部分完成的日报任务支持断点恢复。");
+  }
+  if (options.retryFrom && !["failed", "partial", "cancelled", "succeeded"].includes(taskRun.status)) {
+    throw new Error("当前日报任务状态不支持中间阶段重新生成。");
+  }
   if (!taskRun.pipelineCheckpointJson) throw new Error("该任务没有可恢复的 checkpoint，请重新生成。");
   const checkpoint = parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson);
   if (!checkpoint) throw new Error("任务 checkpoint 已损坏，无法恢复。");
@@ -852,6 +857,19 @@ export async function resumeTaskRun(id: string, options: { retryFrom?: DailyRepo
           failureCode: null,
         };
       })();
+  if (retryFrom) {
+    const recoveryTask = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: taskRun.kind,
+        triggerType: "admin_action",
+        status: "queued",
+        label: `${taskRun.label}（从 ${retryFrom.toUpperCase()} 重新生成）`,
+        entityId: taskRun.entityId,
+        pipelineCheckpointJson: JSON.stringify(nextCheckpoint),
+      },
+    });
+    return recoveryTask;
+  }
   const updated = await prisma.backgroundTaskRun.updateMany({
     where: {
       id,

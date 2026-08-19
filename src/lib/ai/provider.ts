@@ -24,14 +24,17 @@ import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import type {
   DailyReportCandidateAssessment,
+  DailyReportDraft,
   DailyReportModelDraft,
   DailyReportPlanSelection,
   DailyReportPlanningCandidate,
   DailyReportPlanningCandidateBrief,
+  DailyReportRepairPatchResult,
   DailyReportSelectedTopic,
   DailyReportViolation,
   RecentDailyReportTopic,
 } from "@/lib/daily-report/types";
+import { isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
 import type {
   DailyReportTemplateSectionBlock,
   NormalizedDailyReportTemplate,
@@ -152,6 +155,12 @@ export type AiProvider = {
     stageContext?: DailyReportStageContext;
     validationFeedback?: DailyReportStageValidationFeedback;
   }): Promise<DailyReportModelDraft>;
+  repairDailyReportDraft(input: {
+    draft: DailyReportModelDraft;
+    violations: DailyReportViolation[];
+    selectedTopics: DailyReportSelectedTopic[];
+    template: NormalizedDailyReportTemplate;
+  }): Promise<DailyReportRepairPatchResult>;
 };
 
 export type DailyReportStage = "assess" | "plan" | "write";
@@ -165,6 +174,12 @@ export type DailyReportStageValidationFeedback = {
   type: "VALIDATION_FEEDBACK";
   stage: DailyReportStage;
   violations: DailyReportViolation[];
+  missingNotes?: Array<{
+    topicId: string;
+    noteLabel: string;
+    blockKey?: string;
+    noteInstruction?: string;
+  }>;
   instruction: string;
 };
 
@@ -244,6 +259,7 @@ type CompletionOptions = {
 const DEFAULT_PARSED_AGGREGATION_MAX_EVENTS = 20;
 const TRANSIENT_MODEL_API_RETRY_COUNT = 1;
 const JSON_PARSE_RETRY_COUNT = 1;
+const MAX_DAILY_REPORT_REPAIR_TOKENS = 8192;
 const DAILY_REPORT_JSON_SYNTAX_RULE =
   "JSON 语法是硬约束：所有字符串内部的双引号必须转义为 \\\"，换行必须转义为 \\n；字段之间的逗号和所有括号必须完整；不要把自然语言示例或 Markdown 放在 JSON 对象外。";
 
@@ -507,6 +523,16 @@ const DAILY_REPORT_WRITE_FIELD_GUIDE = [
   "输出结构：输出 JSON 对象本身就是日报内容，顶层必须直接包含 headline 和 blocks。合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止使用 draft、result、data、output 等外层包装键。",
 ].join("\n");
 
+const DAILY_REPORT_REPAIR_FIELD_GUIDE = [
+  "input.draft：待修复日报，仅用于查看现有条目的 notes；不要重写其中的 headline、blocks、正文、主题、候选、栏目或顺序。",
+  "violations：本地校验指出的具体问题；code/stage/message 描述原因，blockKey/topicId/candidateIds/itemIndex/itemTitle/noteLabel/noteInstruction 用于精确定位。",
+  "missingNotes：按 topicId + noteLabel 列出必须补齐的 notes；每个目标只补对应 label，不要扩大影响范围。",
+  "repairTargets：受影响主题及其候选事实；requiredNotes 是该主题允许补齐的必填要点，candidates 是唯一可用的事实来源。",
+  "template.blocks：模板定义的 block 和 notes 规则；只按 violation 补齐缺失字段。template.writingRules 只影响表达方式，不能改变修复范围或数据关系。",
+  "只修复 violations 指定的问题，不重新归纳主题、不改写正文、不新增来源或栏目。",
+  "输出结构：只返回 {\"patches\":[{\"topicId\":\"...\",\"notes\":[{\"label\":\"...\",\"text\":\"...\"}]}]}；不要返回 headline、blocks、draft、result、data、output 或 sourceIds。",
+].join("\n");
+
 function compactDailyReportModelCandidate(article: unknown) {
   if (!article || typeof article !== "object" || Array.isArray(article)) {
     return article;
@@ -558,6 +584,20 @@ function compactDailyReportWritingCandidate(article: unknown) {
       }));
   }
   return candidate;
+}
+
+function stripDailyReportSourceIdsForModel(draft: DailyReportModelDraft | DailyReportDraft): DailyReportModelDraft {
+  return {
+    ...draft,
+    blocks: draft.blocks.map((block) => block.type === "section"
+      ? {
+          ...block,
+          items: block.items.map((item) => Object.fromEntries(
+            Object.entries(item).filter(([key]) => key !== "sourceIds"),
+          )),
+        }
+      : block),
+  } as DailyReportModelDraft;
 }
 
 function getFallbackEnrichment(
@@ -1579,6 +1619,13 @@ export function createAiProvider(
 
   const parsePlanOutput = (output: string): DailyReportPlanSelection => parseDailyReportStageObject(output) as unknown as DailyReportPlanSelection;
   const parseDraftOutput = (output: string): DailyReportModelDraft => parseDailyReportStageObject(output) as unknown as DailyReportModelDraft;
+  const parseRepairPatchOutput = (output: string): DailyReportRepairPatchResult => {
+    const parsed = parseDailyReportStageObject(output);
+    if (!Array.isArray(parsed.patches)) {
+      throw new InvalidJsonModelResponseError("REPAIR 返回必须是 patches 数组。");
+    }
+    return { patches: parsed.patches as DailyReportRepairPatchResult["patches"] };
+  };
   return {
     async understandItem(inputText, metadata) {
       const fallback = getFallbackUnderstanding(metadata);
@@ -1720,6 +1767,63 @@ export function createAiProvider(
         ? await completeJsonInStageContext(promptConfig, userContent, parseDraftOutput, input.stageContext, input.validationFeedback)
         : await completeJsonWithParseRetry(promptConfig, userContent, parseDraftOutput);
       if (!output) throw new Error("WRITE 阶段没有返回结果。");
+      return output;
+    },
+    async repairDailyReportDraft(input) {
+      const unsupportedViolations = input.violations.filter(
+        (violation) => !isDailyReportNotesRepairableViolation(violation),
+      );
+      if (unsupportedViolations.length > 0) {
+        throw new Error("REPAIR notes patch 只支持修复 draft_required_note_missing，不支持修改日报结构。");
+      }
+
+      const affectedTopicIds = new Set(
+        input.violations
+          .map((violation) => violation.topicId)
+          .filter((topicId): topicId is string => Boolean(topicId)),
+      );
+      const repairTargets = input.selectedTopics
+        .filter((topic) => affectedTopicIds.size === 0 || affectedTopicIds.has(topic.topicId))
+        .map((topic) => ({
+          topicId: topic.topicId,
+          blockKey: topic.blockKey,
+          candidateIds: topic.candidateIds,
+          requiredNotes: getRequiredNotesForBlock(input.template, topic.blockKey),
+          candidates: topic.candidates.map(compactDailyReportWritingCandidate),
+        }));
+      const output = await completeJsonWithParseRetry(
+        {
+          ...buildDailyReportStageConfig(
+            "REPAIR",
+            "只修复输入 violations 中列出的问题，不改变已有正文、主题、候选、栏目和顺序。REPAIR 只返回 notes 补丁，不返回完整日报草稿；合法结构为 {\"patches\":[{\"topicId\":\"...\",\"notes\":[{\"label\":\"...\",\"text\":\"...\"}]}]}。topicId 必须来自 repairTargets，notes 的 label 必须来自对应 requiredNotes，不能新增主题、候选、栏目或字段。补丁文本只能使用 repairTargets 中的候选事实，不得编造。每条 violation 都必须有对应补丁或已经由现有内容满足。",
+          ),
+          temperature: 0,
+          maxTokens: Math.min(dailyReportConfig.maxTokens ?? 4096, MAX_DAILY_REPORT_REPAIR_TOKENS),
+        },
+        buildDailyReportStagePrompt(
+          "REPAIR",
+          "只修复 violations 中列出的问题。返回 notes 补丁，不要返回 headline、blocks、draft、result、data 或 output；每个补丁必须定位到 violations 中的 topicId，并使用 repairTargets 对应候选事实补齐缺失的 required note。相同主题有多个缺失要点时必须在同一个补丁中逐条补齐；只输出 {patches:[{topicId,notes:[{label,text}]}]}。",
+          {
+            template: buildDailyReportWritingTemplate(input.template, input.selectedTopics.map((topic) => topic.blockKey)),
+            input: {
+              draft: stripDailyReportSourceIdsForModel(input.draft),
+              violations: input.violations,
+              missingNotes: input.violations
+                .filter((violation) => violation.topicId && violation.noteLabel)
+                .map((violation) => ({
+                  topicId: violation.topicId,
+                  noteLabel: violation.noteLabel,
+                  blockKey: violation.blockKey,
+                  noteInstruction: violation.noteInstruction,
+                })),
+              repairTargets,
+            },
+          },
+          DAILY_REPORT_REPAIR_FIELD_GUIDE,
+        ),
+        parseRepairPatchOutput,
+      );
+      if (!output) throw new Error("REPAIR 阶段没有返回补丁。");
       return output;
     },
   };

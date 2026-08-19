@@ -174,4 +174,64 @@ describe("daily report staged provider", () => {
     expect(writeRetryCall?.messages?.[3]?.content).toContain("draft_topic_missing");
     expect(writeRetryCall?.messages?.[4]?.role).toBe("assistant");
   });
+
+  it("returns a topic-scoped notes patch with explicit topicId and noteLabel feedback", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({
+        patches: [{ topicId: "topic-21", notes: [{ label: "数据", text: "补充关键数据" }] }],
+      }) } }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      { dailyReport: { systemPrompt: "日报", promptTemplate: "{{articlesJson}}" } },
+      { chat: { completions: { create } } },
+    );
+    const template = normalizeDailyReportTemplateConfig({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks.map((block) => block.type === "section" && block.key === "data-insights"
+        ? { ...block, item: { ...block.item, notes: [{ label: "数据", required: true, instruction: "列出关键数字。" }] } }
+        : block),
+    });
+
+    await expect(provider.repairDailyReportDraft({
+      draft: {
+        blocks: [{
+          type: "section",
+          blockKey: "data-insights",
+          title: "数据与洞察",
+          items: [{ topicId: "topic-21", title: "数据条目", body: "原正文", notes: [] }],
+        }],
+      },
+      violations: [{
+        code: "draft_required_note_missing",
+        stage: "draft",
+        blockKey: "data-insights",
+        topicId: "topic-21",
+        candidateIds: [21],
+        noteLabel: "数据",
+        noteInstruction: "列出关键数字。",
+        message: "主题 topic-21 缺少必填 note“数据”。",
+      }],
+      selectedTopics: [{
+        topicId: "topic-21",
+        blockKey: "data-insights",
+        candidateIds: [21],
+        representativeCandidateId: 21,
+        candidates: [candidate],
+      }],
+      template,
+    })).resolves.toEqual({
+      patches: [{ topicId: "topic-21", notes: [{ label: "数据", text: "补充关键数据" }] }],
+    });
+
+    const payload = create.mock.calls[0]?.[0];
+    const systemPrompt = payload.messages[0].content as string;
+    const userPrompt = payload.messages[1].content as string;
+    expect(systemPrompt).toContain("REPAIR");
+    expect(systemPrompt).toContain("只返回 notes 补丁");
+    expect(userPrompt).toContain("topicId");
+    expect(userPrompt).toContain("noteLabel");
+    expect(userPrompt).toContain("missingNotes");
+    expect(userPrompt).not.toContain('"sourceIds"');
+  });
 });

@@ -54,6 +54,59 @@ describe("daily report stage loop", () => {
     expect(contexts[1].cleanRetryAttempt).toBe(1);
   });
 
+  it("stops before full-result repair when the caller selects a scoped repair path", async () => {
+    let calls = 0;
+    await expect(runDailyReportStageLoop({
+      stage: "write",
+      run: async () => {
+        calls += 1;
+        return { valid: false };
+      },
+      validate: () => [{
+        code: "draft_required_note_missing",
+        stage: "draft",
+        topicId: "topic-21",
+        noteLabel: "数据",
+        message: "缺少数据 note",
+      }],
+      stopOnValidation: () => true,
+    })).rejects.toMatchObject({ name: "DailyReportStageLoopError", cleanRetryCount: 0 });
+    expect(calls).toBe(1);
+  });
+
+  it("includes topicId and noteLabel in validation feedback", async () => {
+    let callCount = 0;
+    let feedback: { missingNotes?: unknown[] } | undefined;
+    const result = await runDailyReportStageLoop({
+      stage: "write",
+      maxRepairRounds: 1,
+      run: async (_context, nextFeedback) => {
+        callCount += 1;
+        feedback = nextFeedback;
+        return { valid: callCount > 1 };
+      },
+      validate: (value) => value.valid ? [] : [
+        {
+          code: "draft_required_note_missing",
+          stage: "draft" as const,
+          topicId: "topic-21",
+          noteLabel: "数据",
+          noteInstruction: "列出关键数字。",
+          message: "缺少数据 note",
+        },
+      ],
+    });
+
+    expect(result.value.valid).toBe(true);
+    expect(feedback).toEqual(expect.objectContaining({
+      missingNotes: [{
+        topicId: "topic-21",
+        noteLabel: "数据",
+        noteInstruction: "列出关键数字。",
+      }],
+    }));
+  });
+
   it("skips same-context repair for an explicitly non-repairable violation", async () => {
     let calls = 0;
     await expect(runDailyReportStageLoop({
