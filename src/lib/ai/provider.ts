@@ -477,6 +477,7 @@ const DAILY_REPORT_PLAN_TOPIC_CONTRACT = [
   "归类分两步执行：先从全部通过评估的候选中按重要性挑选“热点事件”，热点事件可以跨越产品、研究、安全、开源等内容类型，但必须是独立事实，且进入热点事件的 topic 不得再出现在其他栏目；热点栏目不足时不要用低价值合集凑数。",
   "对未进入热点事件的候选，再按主要事实类型归类：具体安全事故/漏洞/隐私/合规/滥用归安全与风险；研究/报告/财报/数据集/量化发现归数据与洞察；单个开源项目/工具/模型/仓库的发布或能力变化归开源与工具；产品/模型/服务/工程实践的发布、升级、接入或收购归变更与实践；无法归入前述类型但有明确事实增量的单条内容才归其他值得看。",
   "同一 topic 只能进入一个栏目；如果候选同时符合多个专业类型，优先按安全与风险、数据与洞察、开源与工具、变更与实践的顺序归类。热点事件只按重要性优先选入，不是专业类型的覆盖许可。",
+  "数量是硬约束，不是候选池提示：template.sections[].topics 只表示最终要写入日报的主题，不得输出待裁剪主题。每个 section 的 topics 数量必须不超过对应 maxItems；达到 maxItems 后立即停止继续添加。候选超过上限时只保留按重要性排序的前 maxItems 个，候选不足时不要为了凑数补造或合并合集。",
 ].join("\n");
 
 const DAILY_REPORT_PLAN_FIELD_GUIDE = [
@@ -489,7 +490,7 @@ const DAILY_REPORT_PLAN_FIELD_GUIDE = [
   "candidateBriefs[].eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索，只用于理解和比较；不得补造输入之外的事实。预算压缩时可选字段可能省略，但 candidateId、title、candidateScore、relevanceScore、sourceCount、itemCount 和 publishedAt 会保留。",
   "template.historyTopicRules：后台配置的历史主题判断策略，只用于辅助识别重复事件或后续进展；recentTopics 是代码提供的历史主题数据，不是本期候选。",
   "recentTopics：近期开过的日报条目，仅用于识别重复事件或后续进展；不要把它们当作本期候选。输入中的 candidateBriefs 已经是 ASSESS 通过的候选全集。",
-  "template.sections[].blockKey 是唯一栏目键；blockTitle 仅用于理解栏目，description 是栏目意图，required/minItems/maxItems 是主题数量约束；正常情况下每个 section 的 topics 数量必须满足 minItems/maxItems，不能为了凑数选择低价值候选。",
+  "template.sections[].blockKey 是唯一栏目键；blockTitle 仅用于理解栏目，description 是栏目意图，required/minItems/maxItems 是最终主题数量的硬约束；topics 不是候选池，不能先输出全部候选再交给代码裁剪。每个 section 只能返回最终要保留的 topics，数量必须在 minItems 和 maxItems 之间；达到 maxItems 后立即停止，不能为了凑数选择低价值候选。",
   "输出 sections[].topics[]：每个 topic 的 candidateIds 表示同一个最终日报主题的全部候选来源；一个候选只能属于一个主题。topicId 由代码生成，不要输出。",
 ].join("\n");
 

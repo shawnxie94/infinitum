@@ -139,6 +139,9 @@ describe("daily report staged provider", () => {
     expect(planUserPrompt).toContain("不要把多个开源项目");
     expect(planUserPrompt).toContain("先从全部通过评估的候选中按重要性挑选“热点事件”");
     expect(planUserPrompt).toContain("同一 topic 只能进入一个栏目");
+    expect(planUserPrompt).toContain("数量是硬约束");
+    expect(planUserPrompt).toContain("topics 不是候选池");
+    expect(planUserPrompt).toContain("达到 maxItems 后立即停止");
     expect(planUserPrompt).not.toContain('"type":"text"');
     expect(planUserPrompt).not.toContain('"title":"摘要"');
     expect(planUserPrompt).not.toContain('"headlineInstruction"');

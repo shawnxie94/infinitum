@@ -265,6 +265,28 @@ export function materializeDailyReportPlan(
   };
 }
 
+export function validateDailyReportPlanSectionQuantities(
+  plan: DailyReportPlan,
+  template: NormalizedDailyReportTemplate,
+): DailyReportViolation[] {
+  const sectionBlocksByKey = new Map(
+    sectionBlocks(template)
+      .filter((block): block is DailyReportTemplateSectionBlock & { key: string } => Boolean(block.key))
+      .map((block) => [block.key, block] as const),
+  );
+
+  return plan.sections.flatMap((section) => {
+    const block = sectionBlocksByKey.get(section.blockKey);
+    if (!block || block.maxItems == null || section.topics.length <= block.maxItems) return [];
+    return [{
+      code: "section_max_items",
+      stage: "plan" as const,
+      blockKey: section.blockKey,
+      message: `${block.title} 当前有 ${section.topics.length} 个主题，超过最大 ${block.maxItems} 个；topics 只允许返回最终保留主题，请按优先级截取后再输出。`,
+    }];
+  });
+}
+
 export function toDailyReportModelDraft(draft: DailyReportDraft | DailyReportModelDraft): DailyReportModelDraft {
   if (!draft || typeof draft !== "object" || !Array.isArray(draft.blocks)) {
     return draft as DailyReportModelDraft;
@@ -473,9 +495,8 @@ function compareDailyReportTopics(
 
 /**
  * Apply deterministic template ordering and the local maxItems guard before
- * PLAN validation. Overflow is intentionally truncated instead of causing an
- * extra model repair call; all other plan violations remain visible to the
- * validator.
+ * PLAN validation. The service may give the model one feedback round for raw
+ * overflow; this local guard remains the final safety net.
  */
 export function orderAndLimitDailyReportPlanWithAudit(
   plan: DailyReportPlan,
@@ -823,11 +844,11 @@ export function validateDailyReportPlan(
         });
       }
     }
-    if (block) {
-      if (topics.length < (block.minItems ?? 0)) violations.push({ code: "section_min_items", stage: "plan", blockKey, message: `${block.title} 未达到最小主题数。` });
-      if (block.maxItems != null && topics.length > block.maxItems) violations.push({ code: "section_max_items", stage: "plan", blockKey, message: `${block.title} 超过最大主题数。` });
+    if (block && topics.length < (block.minItems ?? 0)) {
+      violations.push({ code: "section_min_items", stage: "plan", blockKey, message: `${block.title} 未达到最小主题数。` });
     }
   }
+  violations.push(...validateDailyReportPlanSectionQuantities(plan, template));
   for (const block of sectionBlocks(template)) {
     if (block.required && block.key && !assignedBlocks.has(block.key)) {
       violations.push({ code: "missing_required_block", stage: "plan", blockKey: block.key, message: `计划缺少必需栏目 ${block.title}。` });

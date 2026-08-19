@@ -258,7 +258,10 @@ function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
   const plan = checkpoint.plan as { sections?: Array<{ topics?: Array<{ candidateIds?: unknown[] }> }> } | undefined;
   if (plan && Array.isArray(plan.sections)) {
     if (label === "计划栏目") return plan.sections.length;
-    if (label === "计划入选") {
+    if (label === "最终主题") {
+      return plan.sections.reduce((total, section) => total + (section.topics?.length ?? 0), 0);
+    }
+    if (label === "关联候选" || label === "计划入选") {
       return plan.sections.reduce((total, section) => total + (section.topics ?? []).reduce(
         (topicTotal, topic) => topicTotal + (Array.isArray(topic.candidateIds) ? topic.candidateIds.length : 0),
         0,
@@ -270,7 +273,7 @@ function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
     return checkpoint.planningCandidateBriefs.length;
   }
 
-  if (label === "截取主题") {
+  if (label === "裁剪主题" || label === "截取主题") {
     const planningAudit = checkpoint.planningAudit as { truncatedTopicCount?: unknown } | undefined;
     return typeof planningAudit?.truncatedTopicCount === "number" ? planningAudit.truncatedTopicCount : null;
   }
@@ -317,7 +320,7 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
     case "daily_report_merge":
       return `准备 ${getValue("可规划候选")} 个候选供全局规划`;
     case "daily_report_plan":
-      return `规划 ${getValue("计划栏目")} 个栏目 · 入选 ${getValue("计划入选")} 条 · 截取 ${getValue("截取主题")} 个主题`;
+      return `规划 ${getValue("计划栏目")} 个栏目 · 主题 ${getValue("最终主题")} 个 · 关联候选 ${getValue("关联候选")} 个 · 裁剪 ${getValue("裁剪主题")} 个`;
     case "daily_report_plan_validate":
       return `计划结构校验 · 违规 ${getValue("违规数")} 条`;
     case "daily_report_validate":

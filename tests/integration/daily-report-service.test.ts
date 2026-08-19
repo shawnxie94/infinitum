@@ -1758,8 +1758,9 @@ describe("daily report service", () => {
         key: "daily_report_plan",
         metrics: [
           { label: "计划栏目", value: 2 },
-          { label: "计划入选", value: 4 },
-          { label: "截取主题", value: 0 },
+          { label: "最终主题", value: 4 },
+          { label: "关联候选", value: 4 },
+          { label: "裁剪主题", value: 0 },
           { label: "违规数", value: 0 },
           { label: "修复轮数", value: 0 },
           { label: "完整重试", value: 0 },
@@ -1847,7 +1848,7 @@ describe("daily report service", () => {
     });
   });
 
-  it("truncates a Block over maxItems by priority without retrying PLAN", async () => {
+  it("gives one PLAN feedback round for maxItems overflow, then keeps the local safety net", async () => {
     await createDailyReportSchedule({ autoPublish: false });
     await createReportCandidates();
     await createEventSignatureCandidates();
@@ -1871,7 +1872,7 @@ describe("daily report service", () => {
       },
     });
 
-    expect(planDailyReportMock).toHaveBeenCalledTimes(1);
+    expect(planDailyReportMock).toHaveBeenCalledTimes(2);
     const selectedTopics = writeDailyReportMock.mock.calls.at(-1)?.[0]?.selectedTopics as SelectedTopicFixture[];
     expect(selectedTopics.filter((topic) => topic.blockKey === "hot-topics")).toHaveLength(5);
     expect(selectedTopics.filter((topic) => topic.blockKey === "changes-practice")).toHaveLength(2);
@@ -1919,7 +1920,8 @@ describe("daily report service", () => {
         status: "failed",
         metrics: expect.arrayContaining([
           { label: "计划栏目", value: 1 },
-          { label: "计划入选", value: 0 },
+          { label: "最终主题", value: 1 },
+          { label: "关联候选", value: 0 },
           { label: "违规数", value: expect.any(Number) },
         ]),
       }),

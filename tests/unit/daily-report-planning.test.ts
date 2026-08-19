@@ -14,6 +14,7 @@ import {
   validateDailyReportAssessments,
   validateDailyReportDraft,
   validateDailyReportPlan,
+  validateDailyReportPlanSectionQuantities,
 } from "@/lib/daily-report/planning";
 import { normalizeDailyReportTemplateConfig } from "@/lib/daily-report/template";
 import type {
@@ -258,6 +259,30 @@ describe("daily report planning contracts", () => {
       retained: false,
       topicId: null,
     });
+  });
+
+  it("reports raw section overflow before the local maxItems safety net", () => {
+    const rawPlan = materializeDailyReportPlan({
+      schemaVersion: 2,
+      sections: [{
+        blockKey: "hot-topics",
+        topics: [{ candidateIds: [1] }, { candidateIds: [2] }, { candidateIds: [3] }, { candidateIds: [4] }],
+      }],
+    });
+
+    expect(validateDailyReportPlanSectionQuantities(rawPlan, template())).toEqual([
+      expect.objectContaining({
+        code: "section_max_items",
+        blockKey: "hot-topics",
+        message: expect.stringContaining("超过最大 3 个"),
+      }),
+    ]);
+    expect(orderAndLimitDailyReportPlanWithAudit(
+      rawPlan,
+      template(),
+      [candidate(1), candidate(2), candidate(3), candidate(4)],
+      [assessment(1), assessment(2), assessment(3), assessment(4)],
+    ).plan.sections[0]?.topics).toHaveLength(3);
   });
 
   it("reorders generated blocks and items to the deterministic plan order", () => {

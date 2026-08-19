@@ -22,6 +22,7 @@ type DailyReportTaskTimelineInput = {
   selectedCount?: number | null;
   planningCandidateCount?: number | null;
   planSectionCount?: number | null;
+  planTopicCount?: number | null;
   planSelectedCount?: number | null;
   planTruncatedTopicCount?: number | null;
   planningAudit?: DailyReportPlanningAudit | null;
@@ -120,8 +121,9 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
         ...(index === 2 ? [{ label: "可规划候选", value: input.planningCandidateCount ?? 0 }] : []),
         ...(index === 3 ? [
           { label: "计划栏目", value: input.planSectionCount ?? 0 },
-          { label: "计划入选", value: input.planSelectedCount ?? input.selectedCount ?? 0 },
-          { label: "截取主题", value: input.planTruncatedTopicCount ?? 0 },
+          { label: "最终主题", value: input.planTopicCount ?? 0 },
+          { label: "关联候选", value: input.planSelectedCount ?? input.selectedCount ?? 0 },
+          { label: "裁剪主题", value: input.planTruncatedTopicCount ?? 0 },
           { label: "违规数", value: input.planViolationCount ?? 0 },
           { label: "修复轮数", value: input.planRepairCount ?? 0 },
           { label: "完整重试", value: input.planRetryCount ?? 0 },

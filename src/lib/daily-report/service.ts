@@ -65,6 +65,7 @@ import {
   validateDailyReportAssessments,
   validateDailyReportDraft,
   validateDailyReportPlan,
+  validateDailyReportPlanSectionQuantities,
 } from "@/lib/daily-report/planning";
 import {
   DEFAULT_DAILY_REPORT_TEMPLATE,
@@ -1215,6 +1216,7 @@ async function generateDailyReportInternal(input: {
       planningCandidateCount: 0,
       mergedTopicCount: 0,
       planSectionCount: 0,
+      planTopicCount: 0,
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
@@ -1238,6 +1240,7 @@ async function generateDailyReportInternal(input: {
       planningCandidateCount: 0,
       mergedTopicCount: 0,
       planSectionCount: 0,
+      planTopicCount: 0,
       planSelectedCount: 0,
       planViolationCount: 0,
       repairCount: 0,
@@ -1265,6 +1268,7 @@ async function generateDailyReportInternal(input: {
   let planningCandidateCount = 0;
   let mergedTopicCount = 0;
   let planSectionCount = 0;
+  let planTopicCount = 0;
   let planSelectedCount = 0;
   let planViolationCount = 0;
   let repairCount = 0;
@@ -1282,6 +1286,7 @@ async function generateDailyReportInternal(input: {
   let latestPlanAttempt: DailyReportPlan | null = null;
   let latestPlanViolations: ReturnType<typeof validateDailyReportPlan> | null = null;
   let latestPlanningAudit: DailyReportPlanningAudit | null = null;
+  let planOverflowFeedbackUsed = false;
   const buildFailureCheckpoint = (error: unknown) => {
     if (!latestCheckpoint) return null;
     const contextOverflow = isDailyReportContextOverflowError(error);
@@ -1617,17 +1622,23 @@ async function generateDailyReportInternal(input: {
           validationFeedback,
         }),
         validate: (rawSelection) => {
-        const ordered = orderAndLimitDailyReportPlanWithAudit(
-          materializeDailyReportPlan(rawSelection),
-          template,
-          planningCandidates,
-          assessments,
-        );
-        const violations = validateDailyReportPlan(ordered.plan, planningCandidates, assessments, template);
-        latestPlanAttempt = ordered.plan;
+          const rawPlan = materializeDailyReportPlan(rawSelection);
+          const rawQuantityViolations = validateDailyReportPlanSectionQuantities(rawPlan, template);
+          const ordered = orderAndLimitDailyReportPlanWithAudit(
+            rawPlan,
+            template,
+            planningCandidates,
+            assessments,
+          );
+          const violations = validateDailyReportPlan(ordered.plan, planningCandidates, assessments, template);
+          const overflowFeedback = rawQuantityViolations.length > 0 && !planOverflowFeedbackUsed
+            ? rawQuantityViolations
+            : [];
+          if (rawQuantityViolations.length > 0) planOverflowFeedbackUsed = true;
+          latestPlanAttempt = ordered.plan;
           latestPlanningAudit = ordered.audit;
-          latestPlanViolations = violations;
-          return violations;
+          latestPlanViolations = [...overflowFeedback, ...violations];
+          return latestPlanViolations;
         },
         // The model cannot repair a shortage of eligible candidates: the
         // missing inputs do not exist in the PLAN context. Keep the single
@@ -1643,6 +1654,7 @@ async function generateDailyReportInternal(input: {
     }
     const planViolations = validateDailyReportPlan(plan, planningCandidates, assessments, template);
     planSectionCount = plan.sections.length;
+    planTopicCount = getDailyReportPlanTopics(plan).length;
     planSelectedCount = getDailyReportPlanCandidateIds(plan).length;
     mergedTopicCount = getDailyReportPlanTopics(plan).length;
     planViolationCount = planViolations.length;
@@ -1932,6 +1944,7 @@ async function generateDailyReportInternal(input: {
     batchCount: planningBatchCount,
     mergedTopicCount,
     planSectionCount,
+    planTopicCount,
     planSelectedCount,
     planViolationCount,
     repairCount,
@@ -1982,6 +1995,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
   let historyFilteredCount = 0;
   let planningCandidateCount = 0;
   let planSectionCount = 0;
+  let planTopicCount = 0;
   let planSelectedCount = 0;
   let planTruncatedTopicCount = 0;
   let planningAudit: DailyReportPlanningAudit | null = null;
@@ -2072,6 +2086,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         }
         if (checkpointPlan?.sections) {
           planSectionCount = checkpointPlan.sections.length;
+          planTopicCount = getDailyReportPlanTopics(checkpointPlan).length;
           planSelectedCount = getDailyReportPlanCandidateIds(checkpointPlan).length;
           planViolationCount = checkpoint.violations?.length ?? 0;
         }
@@ -2141,6 +2156,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         selectedCount: result.selectedCount,
         planningCandidateCount: result.planningCandidateCount,
         planSectionCount: result.planSectionCount,
+        planTopicCount: result.planTopicCount,
         planSelectedCount: result.planSelectedCount,
         planTruncatedTopicCount,
         planningAudit,
@@ -2201,6 +2217,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
     const failedPlan = failedCheckpoint?.plan as DailyReportPlan | undefined;
     if (failedPlan?.sections) {
       planSectionCount = failedPlan.sections.length;
+      planTopicCount = getDailyReportPlanTopics(failedPlan).length;
       planSelectedCount = getDailyReportPlanCandidateIds(failedPlan).length;
       planViolationCount = failedCheckpoint?.violations?.length ?? 0;
     }
@@ -2226,6 +2243,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         historyFilteredCount,
         planningCandidateCount,
         planSectionCount,
+        planTopicCount,
         planSelectedCount,
         planTruncatedTopicCount,
         planningAudit,
