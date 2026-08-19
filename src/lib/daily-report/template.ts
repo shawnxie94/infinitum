@@ -70,7 +70,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       key: "hot-topics",
       title: "热点事件",
       description:
-        "优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
+        "这是重要性优先的精选栏目，不限定具体内容类型。先从全部候选中挑选最值得放在日报最前面的独立事件；可以跨越产品、研究、安全、开源等领域，但一个条目只讲一个具体事件，不能把多个独立事件合并成合集。已进入本栏目的主题不得在其他栏目重复。",
       required: true,
       minItems: 3,
       maxItems: 5,
@@ -91,7 +91,8 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       type: "section",
       key: "changes-practice",
       title: "变更与实践",
-      description: "聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。",
+      description:
+        "只处理未进入“热点事件”的候选中，主要事实属于产品、模型、服务、工程项目或生态能力变化的内容。一次发布、升级、接入、收购或工程实践变化对应一个条目；不同公司、不同产品和不同服务必须拆开。安全事故、研究数据和单个开源项目发布应归入对应栏目。",
       required: true,
       minItems: 2,
       maxItems: 5,
@@ -105,7 +106,8 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       type: "section",
       key: "security-risk",
       title: "安全与风险",
-      description: "聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。",
+      description:
+        "只处理未进入“热点事件”的候选中，且存在明确主体、风险动作或漏洞、受影响对象和后果的具体安全事件、隐私问题、合规事件、滥用事件或模型行为风险。只有同一事件的多条报道、调查和回应才允许合并；泛安全观点、趋势讨论和普通研究不归入本栏。",
       required: false,
       minItems: 0,
       maxItems: 5,
@@ -122,7 +124,8 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       type: "section",
       key: "open-source-tools",
       title: "开源与工具",
-      description: "聚焦值得开发者关注的开源项目、工具链、框架或工程资产。",
+      description:
+        "只处理未进入“热点事件”的候选中，值得开发者关注的单个开源项目、工具、模型、框架、仓库或工程资产。每个条目默认只包含一个项目或工具；只有同一项目的多个来源，或明确作为同一套产品发布的组件，才允许合并。不要把多个开源项目、Agent 工具或模型拼成工具合集。",
       required: false,
       minItems: 0,
       maxItems: 5,
@@ -138,7 +141,8 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       type: "section",
       key: "data-insights",
       title: "数据与洞察",
-      description: "聚焦关键数据、趋势、研究结论或生态变化信号。",
+      description:
+        "只处理未进入“热点事件”的候选中，一份研究、报告、财报、数据集、基准测试或一个明确的量化发现。只有同一份报告、同一个研究项目或同一个数据集中的关联发现才允许合并；不同研究、报告和统计结果必须拆开，不要拼成泛泛的行业趋势。",
       required: false,
       minItems: 0,
       maxItems: 5,
@@ -156,7 +160,7 @@ export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
       key: "other-worth-reading",
       title: "其他值得看",
       description:
-        "优先选择未进入前面栏目、但仍值得关注的产品、开源项目、研究、数据、行业动态或实践信息。只保留独立且有明确事实增量的内容，不要重复已选主题或为了凑数填充。",
+        "只选择未进入“热点事件”及其他专业栏目的、但仍有明确事实增量的独立产品、项目、研究、数据、行业事件或实践信息。每个条目只对应一个独立内容；这是兜底栏目，不是杂项摘要，禁止把多个无共同事件主体的候选合并成一条。",
       required: false,
       minItems: 0,
       maxItems: 10,
@@ -191,6 +195,58 @@ const LEGACY_DEFAULT_SECTION_DESCRIPTIONS: Record<string, string> = {
   "开源与工具": "可为空；有相关内容时输出 1-5 条。聚焦值得开发者关注的开源项目、工具链、框架或工程资产。",
   "数据与洞察": "可为空；有相关内容时输出 1-5 条。聚焦关键数据、趋势、研究结论或生态变化信号。",
 };
+
+// The previous current defaults are kept only so untouched v2 rows can be
+// upgraded after the editorial boundary wording changes below. Custom
+// templates must remain untouched. There are two entries because the default
+// wording was tightened twice before this migration path was exercised in a
+// persisted Docker database.
+const PREVIOUS_CURRENT_DEFAULT_SECTION_DESCRIPTIONS: Record<string, string> = {
+  "热点事件":
+    "聚焦具有较高新闻价值的独立事件。一个条目只讲一个具体事件，明确说明事件主体、动作、对象、结果和影响；行业主线可以在摘要中综合，但不要把多个独立事件合并成一个条目。",
+  "变更与实践":
+    "聚焦一个产品、模型、服务、工程项目或生态能力的具体变化。一次发布、升级、接入、收购或工程实践变化对应一个条目；不同公司、不同产品和不同服务必须拆开。",
+  "安全与风险":
+    "聚焦一个具体安全事件、漏洞、隐私问题、合规事件、滥用事件或模型行为风险。只有同一事件的多条报道、调查和回应才允许合并；不同风险事件必须拆开。",
+  "开源与工具":
+    "聚焦值得开发者关注的开源项目、工具、模型、框架、仓库或工程资产。每个条目默认只包含一个项目或工具；只有同一项目的多个来源，或明确作为同一套产品发布的组件，才允许合并。不要把多个开源项目、Agent 工具或模型拼成工具合集。",
+  "数据与洞察":
+    "聚焦一份研究、报告、财报、数据集、基准测试或一个明确的量化发现。只有同一份报告、同一个研究项目或同一个数据集中的关联发现才允许合并；不同研究、报告和统计结果必须拆开，不要拼成泛泛的行业趋势。",
+  "其他值得看":
+    "选择未进入前面栏目、但仍有明确事实增量的独立产品、项目、研究、数据、行业事件或实践信息。每个条目只对应一个独立内容；这是兜底栏目，不是杂项摘要，禁止把多个无共同事件主体的候选合并成一条。",
+};
+
+const PREVIOUSLY_CURRENT_DEFAULT_SECTION_DESCRIPTIONS: Record<string, string> = {
+  "热点事件":
+    "优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
+  "变更与实践": "聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。",
+  "安全与风险": "聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。",
+  "开源与工具": "聚焦值得开发者关注的开源项目、工具链、框架或工程资产。",
+  "数据与洞察": "聚焦关键数据、趋势、研究结论或生态变化信号。",
+  "其他值得看":
+    "优先选择未进入前面栏目、但仍值得关注的产品、开源项目、研究、数据、行业动态或实践信息。只保留独立且有明确事实增量的内容，不要重复已选主题或为了凑数填充。",
+};
+
+const PREVIOUS_CURRENT_GLOBAL_RULES_WITH_SOURCE_MAPPING = [
+  ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(0, 2),
+  "只使用输入候选内容和合法来源编号，不编造事实、来源或输入之外的信息。",
+  "同一事件只出现一次，避免跨栏目重复。",
+  ...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules.slice(4),
+];
+
+function getPreviousCurrentDefaultDailyReportTemplate(
+  descriptions: Record<string, string>,
+  globalRules = DEFAULT_DAILY_REPORT_TEMPLATE.globalRules,
+) {
+  const template = cloneDefaultTemplate();
+  template.globalRules = [...globalRules];
+  template.blocks = template.blocks.map((block) => {
+    if (block.type !== "section") return block;
+    const description = descriptions[block.title];
+    return description ? { ...block, description } : block;
+  });
+  return template;
+}
 
 const LEGACY_DEFAULT_OPENING_INSTRUCTION =
   "约 100-180 字。概括当天 AI 领域最关键的事项和主线变化，优先覆盖重大发布、模型/产品进展、产业合作、安全风险、开源工具或关键数据。格式固定为“{{date}} AI 领域呈现...，值得关注的信息：...”，例如：“2026-04-29 AI 领域呈现多线并进格局，值得关注的信息：...”。可使用有限 Markdown 行内标记突出关键信息：用 **加粗** 标注事件主体、关键变化、数字或结论，用 *斜体* 标注必要背景或不确定性；不要使用链接、图片、标题、表格或列表。";
@@ -399,6 +455,12 @@ export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemp
   const defaultTemplate = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
   const previousDefaultTemplate = getPreviousDefaultDailyReportTemplate();
   const legacyDefaultTemplate = getLegacyDefaultDailyReportTemplate();
+  const previousCurrentDefaultTemplate = getPreviousCurrentDefaultDailyReportTemplate(PREVIOUS_CURRENT_DEFAULT_SECTION_DESCRIPTIONS);
+  const previouslyCurrentDefaultTemplate = getPreviousCurrentDefaultDailyReportTemplate(PREVIOUSLY_CURRENT_DEFAULT_SECTION_DESCRIPTIONS);
+  const previouslyCurrentDefaultWithSourceMapping = getPreviousCurrentDefaultDailyReportTemplate(
+    PREVIOUSLY_CURRENT_DEFAULT_SECTION_DESCRIPTIONS,
+    PREVIOUS_CURRENT_GLOBAL_RULES_WITH_SOURCE_MAPPING,
+  );
   const previouslySeededV2DefaultTemplate = getPreviouslySeededV2DefaultDailyReportTemplate();
   const previouslyMigratedV2DefaultTemplate = getPreviouslyMigratedV2DefaultDailyReportTemplate();
   const previouslyMigratedV2DefaultWithPreviousGlobalRules = getPreviouslyMigratedV2DefaultWithPreviousGlobalRules();
@@ -408,6 +470,9 @@ export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemp
     defaultTemplate,
     previousDefaultTemplate,
     legacyDefaultTemplate,
+    previousCurrentDefaultTemplate,
+    previouslyCurrentDefaultTemplate,
+    previouslyCurrentDefaultWithSourceMapping,
     previouslySeededV2DefaultTemplate,
     previouslyMigratedV2DefaultTemplate,
     previouslyMigratedV2DefaultWithPreviousGlobalRules,

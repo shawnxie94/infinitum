@@ -135,11 +135,16 @@ describe("daily report staged provider", () => {
     expect(planUserPrompt).toContain('"summaryExcerpt"');
     expect(planUserPrompt).toContain('"candidateScore"');
     expect(planUserPrompt).toContain("重新归纳最终日报主题");
+    expect(planUserPrompt).toContain("一个独立事实命题");
+    expect(planUserPrompt).toContain("不要把多个开源项目");
+    expect(planUserPrompt).toContain("先从全部通过评估的候选中按重要性挑选“热点事件”");
+    expect(planUserPrompt).toContain("同一 topic 只能进入一个栏目");
     expect(planUserPrompt).not.toContain('"type":"text"');
     expect(planUserPrompt).not.toContain('"title":"摘要"');
     expect(planUserPrompt).not.toContain('"headlineInstruction"');
     expect(planUserPrompt).toContain("不要输出主题编号、栏目展示名、标题、理由或其他字段");
     expect(planSystemPrompt).toContain("text block 不属于 sections");
+    expect(planSystemPrompt).toContain("cluster 只是上游来源聚合线索");
     expect(planUserPrompt).toContain('"recentTopicLookbackDays":10');
     expect(planUserPrompt).toContain('"historyTopicRules"');
     const writeSystemPrompt = create.mock.calls[2]?.[0]?.messages?.[0]?.content as string;

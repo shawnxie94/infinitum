@@ -203,9 +203,7 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
         />
       </FormBlock>
 
-      <FormBlock
-        label="正文通用规则"
-      >
+      <FormBlock label="正文通用规则">
         <TextArea
           rows={5}
           value={formatDailyReportGlobalRulesForEditor(template.globalRules)}
@@ -217,9 +215,7 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
         />
       </FormBlock>
 
-      <FormBlock
-        label="历史主题识别策略"
-      >
+      <FormBlock label="历史主题识别策略">
         <TextArea
           rows={4}
           value={formatDailyReportGlobalRulesForEditor(template.recentTopicRules)}

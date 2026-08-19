@@ -318,6 +318,47 @@ describe("daily report planning contracts", () => {
     expect(violations.map((violation) => violation.code)).toContain("duplicate_candidate");
   });
 
+  it("rejects an obvious digest topic made of unrelated candidates", () => {
+    const candidates = Array.from({ length: 5 }, (_, index) => candidate(index + 1, {
+      eventSubject: `主体-${index + 1}`,
+      eventObject: `对象-${index + 1}`,
+    }));
+    const plan = materializeDailyReportPlan({
+      schemaVersion: 2,
+      sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: candidates.map((item) => item.id) }] }],
+    });
+
+    const violations = validateDailyReportPlan(
+      plan,
+      candidates,
+      candidates.map((item) => assessment(item.id)),
+      template(),
+    );
+
+    expect(violations.map((violation) => violation.code)).toContain("topic_obvious_overmerge");
+  });
+
+  it("keeps a multi-source topic when candidates share an upstream cluster", () => {
+    const candidates = Array.from({ length: 5 }, (_, index) => candidate(index + 1, {
+      clusterId: "cluster-same-event",
+      eventSubject: "同一主体",
+      eventObject: "同一对象",
+    }));
+    const plan = materializeDailyReportPlan({
+      schemaVersion: 2,
+      sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: candidates.map((item) => item.id) }] }],
+    });
+
+    const violations = validateDailyReportPlan(
+      plan,
+      candidates,
+      candidates.map((item) => assessment(item.id)),
+      template(),
+    );
+
+    expect(violations.map((violation) => violation.code)).not.toContain("topic_obvious_overmerge");
+  });
+
   it("validates complete ASSESS coverage and excludes candidates marked not worth reading", () => {
     const batch = [candidate(1), candidate(2)];
     expect(validateDailyReportAssessments(batch, [assessment(1), assessment(2)])).toHaveLength(2);

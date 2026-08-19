@@ -34,10 +34,16 @@ describe("daily report template config", () => {
     expect(prompt).toContain("每条正文约 120-260 字");
     expect(prompt).toContain("每条正文约 80-180 字");
     expect(prompt).toContain("每个 item 必须包含 title，建议包含 body");
+    expect(prompt).toContain("这是重要性优先的精选栏目，不限定具体内容类型");
+    expect(prompt).toContain("安全事故、研究数据和单个开源项目发布应归入对应栏目");
+    expect(prompt).toContain("每个条目默认只包含一个项目或工具");
+    expect(prompt).toContain("这是兜底栏目，不是杂项摘要");
+    expect(prompt).not.toContain("candidateScore");
+    expect(prompt).not.toContain("sourceCount");
+    expect(prompt).not.toContain("eventDate");
     expect(prompt).not.toContain("sourceIds");
     expect(prompt).toContain("body 为空字符串或缺失时会按紧凑模式只展示标题");
     expect(prompt).toContain("notes 要求：重点 必填");
-    expect(prompt).toContain("只保留独立且有明确事实增量");
     expect(prompt).toContain("正文写作规则：");
     expect(prompt).not.toContain("每个输入主题生成且仅生成一个条目");
     expect(prompt).not.toContain("可根据管理员习惯调整");
@@ -151,6 +157,28 @@ describe("daily report template config", () => {
       ...previousDefault,
       globalRules: ["管理员自定义规则。"],
     }).globalRules).toEqual(["管理员自定义规则。"]);
+  });
+
+  it("upgrades both persisted generations of the untouched current default", () => {
+    const descriptions = [
+      "聚焦具有较高新闻价值的独立事件。一个条目只讲一个具体事件，明确说明事件主体、动作、对象、结果和影响；行业主线可以在摘要中综合，但不要把多个独立事件合并成一个条目。",
+      "聚焦一个产品、模型、服务、工程项目或生态能力的具体变化。一次发布、升级、接入、收购或工程实践变化对应一个条目；不同公司、不同产品和不同服务必须拆开。",
+      "聚焦一个具体安全事件、漏洞、隐私问题、合规事件、滥用事件或模型行为风险。只有同一事件的多条报道、调查和回应才允许合并；不同风险事件必须拆开。",
+      "聚焦值得开发者关注的开源项目、工具、模型、框架、仓库或工程资产。每个条目默认只包含一个项目或工具；只有同一项目的多个来源，或明确作为同一套产品发布的组件，才允许合并。不要把多个开源项目、Agent 工具或模型拼成工具合集。",
+      "聚焦一份研究、报告、财报、数据集、基准测试或一个明确的量化发现。只有同一份报告、同一个研究项目或同一个数据集中的关联发现才允许合并；不同研究、报告和统计结果必须拆开，不要拼成泛泛的行业趋势。",
+      "选择未进入前面栏目、但仍有明确事实增量的独立产品、项目、研究、数据、行业事件或实践信息。每个条目只对应一个独立内容；这是兜底栏目，不是杂项摘要，禁止把多个无共同事件主体的候选合并成一条。",
+    ];
+    let sectionIndex = 0;
+    const intermediate = parseDailyReportTemplateJson(JSON.stringify({
+      ...DEFAULT_DAILY_REPORT_TEMPLATE,
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks.map((block) =>
+        block.type === "section"
+          ? { ...block, description: descriptions[sectionIndex++] }
+          : block,
+      ),
+    }))!;
+
+    expect(upgradeDefaultDailyReportTemplate(intermediate)).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE);
   });
 
   it("updates the previously seeded v2 default with generated section keys", () => {

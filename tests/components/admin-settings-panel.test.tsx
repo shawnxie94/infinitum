@@ -770,6 +770,9 @@ describe("AdminSettingsPanel", () => {
     expect(within(dialog).queryByText(/这里配置日报的选题/)).not.toBeInTheDocument();
     expect(within(dialog).getByLabelText("标题规则")).toBeInTheDocument();
     expect(within(dialog).getByLabelText("历史主题识别策略")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/不需要填写 candidateId、clusterId、topicId/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/栏目要求用自然语言描述关注范围/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/建议同时说明“关注什么”/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
   });
 

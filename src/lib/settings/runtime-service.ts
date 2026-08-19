@@ -28,7 +28,11 @@ import type { AdminSettingsSnapshot } from "@/lib/settings/types";
 import { ensureDefaultDailyReportSchedule, ensureDefaultIngestionSchedule, ensureDefaultItemCleanupSchedule, toTaskScheduleSnapshot } from "@/lib/tasks/service";
 
 export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
-  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
+  // Runtime reads are the reliable startup path for the standalone Docker
+  // server and worker. Keep the migration itself idempotent and restricted to
+  // untouched official defaults, but do not skip it here or persisted default
+  // templates will remain stale when the instrumentation hook is unavailable.
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: true });
 
   const [sources, blacklist, defaultModelConfig, promptConfigs, taskSchedule, contentExtractionConfig] = await Promise.all([
     prisma.source.findMany({
@@ -100,7 +104,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
 }
 
 export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
-  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: true });
 
   const [
     modelApiConfigs,

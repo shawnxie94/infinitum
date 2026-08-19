@@ -468,10 +468,21 @@ const DAILY_REPORT_ASSESSMENT_FIELD_GUIDE = [
   "只返回上述六个字段，不附带其他解释字段。",
 ].join("\n");
 
+const DAILY_REPORT_PLAN_TOPIC_CONTRACT = [
+  "主题单位是一个独立事实命题，不是一个栏目主题、行业方向或资讯合集。一个 topic 默认只表达一个主体、一个具体动作、一个对象，以及一个结果或状态变化。",
+  "只有以下情况允许把多个候选放入同一个 topic：它们报道同一具体事件、同一次发布或版本变化、同一个项目的同一项能力、同一安全事故、同一份研究/报告/数据集，或同一个产品变化的互证来源。",
+  "同一栏目、同属 AI/Agent/开源/研究/安全、同一公司、同一技术方向、同一天发布、能够共同支持一个宏观趋势，都不足以证明是同一 topic。",
+  "如果候选的事件主体、动作或对象明显不同，且不是同一事实的互证来源，必须拆成多个 topic；不允许生成工具合集、研究合集、风险合集或其他资讯汇总。",
+  "跨 cluster 合并只能在候选明确指向同一具体事实时使用；cluster 只是上游来源聚合线索，不是合并许可。无法确认时宁可拆开。",
+  "归类分两步执行：先从全部通过评估的候选中按重要性挑选“热点事件”，热点事件可以跨越产品、研究、安全、开源等内容类型，但必须是独立事实，且进入热点事件的 topic 不得再出现在其他栏目；热点栏目不足时不要用低价值合集凑数。",
+  "对未进入热点事件的候选，再按主要事实类型归类：具体安全事故/漏洞/隐私/合规/滥用归安全与风险；研究/报告/财报/数据集/量化发现归数据与洞察；单个开源项目/工具/模型/仓库的发布或能力变化归开源与工具；产品/模型/服务/工程实践的发布、升级、接入或收购归变更与实践；无法归入前述类型但有明确事实增量的单条内容才归其他值得看。",
+  "同一 topic 只能进入一个栏目；如果候选同时符合多个专业类型，优先按安全与风险、数据与洞察、开源与工具、变更与实践的顺序归类。热点事件只按重要性优先选入，不是专业类型的覆盖许可。",
+].join("\n");
+
 const DAILY_REPORT_PLAN_FIELD_GUIDE = [
   "candidateBriefs[]：每个元素对应一个通过 ASSESS 的候选；PLAN 必须基于这些候选重新归纳最终日报主题，不要沿用或假设任何预先主题分组。",
   "candidateBriefs[].candidateId：候选编号，输出时必须原样引用；title：候选标题；summaryExcerpt：有界摘要片段，可能为空且不是全文。",
-  "candidateBriefs[].clusterId：上游事件聚合编号，只表示已有来源聚合，不等于最终日报主题；PLAN 可以跨 cluster 合并相关候选，也可以只选择其中一部分。",
+  "candidateBriefs[].clusterId：上游事件聚合编号，只表示已有来源聚合，不等于最终日报主题；只有确认是同一具体事实时才允许跨 cluster 合并。",
   "candidateBriefs[].sourceName/evidenceItems：代表来源和有限证据线索；candidateScore/qualityScore/relevanceScore/sourceCount/itemCount：排序、质量、相关性、互证来源数和聚合条目数，都是判断信号，不是事实。",
   "candidateBriefs[].publishedAt/publishedAtKnown：源站时间及其可靠性；isFollowUp/newItemCountOnDate/newSourceCountOnDate：后续进展及日报日期新增量信号。",
   "candidateBriefs[].historyDecision：ASSESS 对历史日报的判断；new、follow_up 是可规划候选，duplicate 不应出现在 candidateBriefs，uncertain 需要结合其他字段判断。",
@@ -1672,11 +1683,11 @@ export function createAiProvider(
     async planDailyReport(input) {
       const promptConfig = buildDailyReportStageConfig(
           "PLAN",
-          "必须返回 schemaVersion=2；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于 sections。每个 topics[].candidateIds 必须非空；一个 candidateId 只能属于一个 topic。topicId 由代码生成，不要输出。",
+          `必须返回 schemaVersion=2；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于 sections。每个 topics[].candidateIds 必须非空；一个 candidateId 只能属于一个 topic。topicId 由代码生成，不要输出。\n${DAILY_REPORT_PLAN_TOPIC_CONTRACT}`,
         );
       const userContent = buildDailyReportStagePrompt(
           "PLAN",
-          "基于所有 candidateBriefs 做全局选题、主题归纳和栏目分配。先判断哪些候选属于同一个最终日报主题，再决定主题是否入选和放入哪个栏目；可以合并来自不同 cluster 的相关候选，也可以只选择一个 cluster 中的部分候选。综合摘要、事件线索、来源数量、日期相关性、后续进展、近期重复和评分信号，不要只按单一分数排序。输出的每个 section.blockKey 必须逐字复制 template.sections[].blockKey；每个 section 的 topics 数量应满足对应模板的 minItems 和 maxItems，不能为了填满数量选择低价值候选。一个 topics[].candidateIds 数组表示一个最终日报主题的全部候选来源；每个候选只能出现在一个主题中。只返回 {schemaVersion:2,sections:[{blockKey,topics:[{candidateIds:[number]}]}]}。不要输出主题编号、栏目展示名、标题、理由或其他字段；不得写正文、不得创建输入之外的候选或栏目，不得输出 text block。",
+          `基于所有 candidateBriefs 做全局选题、主题归纳和栏目分配。先按“一个独立事实对应一个 topic”的规则判断候选是否属于同一主题，再决定主题是否入选和放入哪个栏目。${DAILY_REPORT_PLAN_TOPIC_CONTRACT} 综合摘要、事件线索、来源数量、日期相关性、后续进展、近期重复和评分信号，不要只按单一分数排序。输出的每个 section.blockKey 必须逐字复制 template.sections[].blockKey；每个 section 的 topics 数量应满足对应模板的 minItems 和 maxItems，不能为了填满数量选择低价值候选。一个 topics[].candidateIds 数组表示同一个最终日报主题的候选事实或互证来源；每个候选只能出现在一个主题中。只返回 {schemaVersion:2,sections:[{blockKey,topics:[{candidateIds:[number]}]}]}。不要输出主题编号、栏目展示名、标题、理由或其他字段；不得写正文、不得创建输入之外的候选或栏目，不得输出 text block。`,
           {
             template: buildDailyReportPlanningTemplate(input.template, input.recentTopicLookbackDays),
             input: {
@@ -1684,7 +1695,7 @@ export function createAiProvider(
               recentTopics: input.recentTopics ?? [],
             },
           },
-          DAILY_REPORT_PLAN_FIELD_GUIDE,
+          `${DAILY_REPORT_PLAN_TOPIC_CONTRACT}\n${DAILY_REPORT_PLAN_FIELD_GUIDE}`,
         );
       const output = input.stageContext
         ? await completeJsonInStageContext(promptConfig, userContent, parsePlanOutput, input.stageContext, input.validationFeedback)

@@ -642,6 +642,33 @@ function sectionBlocks(template: NormalizedDailyReportTemplate) {
   return template.blocks.filter((block): block is DailyReportTemplateSectionBlock => block.type === "section");
 }
 
+function normalizeTopicSignal(value: string | null | undefined) {
+  return value?.trim().toLocaleLowerCase() ?? "";
+}
+
+function hasSharedTopicCluster(candidates: DailyReportPlanningCandidate[]) {
+  const clusterCounts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const clusterId = candidate.clusterId?.trim();
+    if (!clusterId) continue;
+    clusterCounts.set(clusterId, (clusterCounts.get(clusterId) ?? 0) + 1);
+  }
+  return Array.from(clusterCounts.values()).some((count) => count >= 2);
+}
+
+/**
+ * Catch the most obvious "digest topic" failure without trying to make
+ * deterministic code decide every valid multi-source event. A large topic
+ * with many distinct subjects and objects and no shared upstream cluster is
+ * almost certainly a list of unrelated items, not one event.
+ */
+function isObviousOvermergedDailyReportTopic(candidates: DailyReportPlanningCandidate[]) {
+  if (candidates.length < 5 || hasSharedTopicCluster(candidates)) return false;
+  const subjects = new Set(candidates.map((candidate) => normalizeTopicSignal(candidate.eventSubject)).filter(Boolean));
+  const objects = new Set(candidates.map((candidate) => normalizeTopicSignal(candidate.eventObject)).filter(Boolean));
+  return subjects.size >= 4 && objects.size >= 4;
+}
+
 /**
  * Apply template-owned presentation constraints before validation/persistence.
  * A section with bodyRequired=false is intentionally title/source-only; model
@@ -781,6 +808,19 @@ export function validateDailyReportPlan(
         }
         if (selected.has(candidateId)) violations.push({ code: "duplicate_candidate", stage: "plan", topicId, candidateIds: [candidateId], message: `候选 ${candidateId} 被多个主题选择。` });
         selected.add(candidateId);
+      }
+      const topicCandidates = candidateIds
+        .map((candidateId) => candidateById.get(candidateId))
+        .filter((candidate): candidate is DailyReportPlanningCandidate => Boolean(candidate));
+      if (isObviousOvermergedDailyReportTopic(topicCandidates)) {
+        violations.push({
+          code: "topic_obvious_overmerge",
+          stage: "plan",
+          blockKey,
+          topicId,
+          candidateIds: [...candidateIds],
+          message: `主题 ${topicId} 包含多个主体和对象差异明显的候选，疑似把多个独立内容合并成了一个合集；请拆成独立主题。`,
+        });
       }
     }
     if (block) {
