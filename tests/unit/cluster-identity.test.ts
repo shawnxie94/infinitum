@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildEventBucket, buildEventIdentity } from "@/lib/clusters/identity";
+import { buildCandidateRange } from "@/lib/clusters/helpers";
 
 describe("cluster event identity", () => {
   it("uses canonical date buckets for equivalent date formats", () => {
@@ -23,5 +24,17 @@ describe("cluster event identity", () => {
     expect(
       buildEventIdentity({ eventSignature: { ...base, eventDate: "2026/4/10" }, publishedAt })?.eventIdentityKey,
     ).toBe(buildEventIdentity({ eventSignature: { ...base, eventDate: "2026-04-10" }, publishedAt })?.eventIdentityKey);
+  });
+
+  it("uses createdAt as the candidate time anchor when publication time is unknown", () => {
+    const range = buildCandidateRange({
+      publishedAt: new Date("2020-01-01T00:00:00.000Z"),
+      publishedAtKnown: false,
+      createdAt: new Date("2026-04-10T10:00:00.000Z"),
+    } as never, 7 * 24 * 60 * 60 * 1000);
+
+    expect(range.timeField).toBe("createdAt");
+    expect(range.since.toISOString()).toBe("2026-04-03T10:00:00.000Z");
+    expect(range.until.toISOString()).toBe("2026-04-17T10:00:00.000Z");
   });
 });

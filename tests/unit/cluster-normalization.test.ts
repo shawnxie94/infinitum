@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   areEventDatesCompatible,
+  areEventDatesCompatibleForClustering,
   areEventDatesExactlyEqual,
   getEventDatePrecision,
   normalizeEventActionForStorage,
@@ -67,5 +68,12 @@ describe("cluster normalization helpers", () => {
     expect(areEventDatesCompatible("2026", "2026-04-10")).toBe(true);
     expect(areEventDatesCompatible("2026-04-10", "2026-04-11")).toBe(false);
     expect(areEventDatesCompatible("2026-04", "2026-05-01")).toBe(false);
+  });
+
+  it("allows small exact-date drift for clustering review without changing strict date compatibility", () => {
+    expect(areEventDatesCompatible("2026-04-10", "2026-04-11")).toBe(false);
+    expect(areEventDatesCompatibleForClustering("2026-04-10", "2026-04-11")).toBe(true);
+    expect(areEventDatesCompatibleForClustering("2026-04-10", "2026-04-12")).toBe(true);
+    expect(areEventDatesCompatibleForClustering("2026-04-10", "2026-04-13")).toBe(false);
   });
 });

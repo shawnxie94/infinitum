@@ -94,6 +94,22 @@ describe("buildClusterMergeCandidates", () => {
     expect(conflicting[0]?.dateCompatible).toBe(false);
     expect(conflicting[0]?.strongMatch).toBe(false);
 
+    const smallDateDrift = rankClusterCandidates(item, {
+      ...eventSignature,
+      eventDate: "2026-04-11",
+    }, [
+      createAssignmentCandidate({
+        id: "small-date-drift",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026-04-10",
+      }),
+    ]);
+    expect(smallDateDrift[0]?.dateCompatible).toBe(true);
+    expect(smallDateDrift[0]?.strongMatch).toBe(false);
+
     const objectConflict = rankClusterCandidates(item, eventSignature, [
       createAssignmentCandidate({
         id: "object-conflict",

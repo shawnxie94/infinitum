@@ -42,6 +42,7 @@ import {
   buildExactMatchKey,
   filterClusterMergeSourcesByAllowedEdges,
   generateClusterPresentation,
+  getEventIdentityAnchor,
   getClusterAssignmentWindowKeys,
   getItemEventSignature,
   hasCompleteClusterMatchSignature,
@@ -123,20 +124,20 @@ async function findClusterForItem(
   const fingerprintSeed = buildClusterFingerprintSeed(options);
   const identity = buildEventIdentity({
     eventSignature: options.eventSignature,
-    publishedAt: item.publishedAt,
+    publishedAt: getEventIdentityAnchor(item),
   });
   const fingerprint = identity?.eventIdentityKey
     ? normalizeFingerprint(identity.eventIdentityKey)
     : fingerprintSeed
       ? normalizeFingerprint(fingerprintSeed)
       : "";
-  const { since, until } = buildCandidateRange(item, CLUSTER_LOOKBACK_MS);
-  const rangeKey = buildCandidateRangeKey(since, until);
-  const exactMatchKey = fingerprint ? buildExactMatchKey(fingerprint, since, until) : "";
+  const { since, until, timeField } = buildCandidateRange(item, CLUSTER_LOOKBACK_MS);
+  const rangeKey = buildCandidateRangeKey(since, until, timeField);
+  const exactMatchKey = fingerprint ? buildExactMatchKey(fingerprint, since, until, timeField) : "";
   let exactMatch = fingerprint ? options.coordinator?.exactMatches.get(exactMatchKey) : undefined;
 
   if (fingerprint && typeof exactMatch === "undefined") {
-    exactMatch = await findActiveClusterByFingerprint(fingerprint, since, until);
+    exactMatch = await findActiveClusterByFingerprint(fingerprint, since, until, timeField);
     options.coordinator?.exactMatches.set(exactMatchKey, exactMatch ? toClusterAssignmentCandidate(exactMatch) : null);
   }
 
@@ -151,13 +152,17 @@ async function findClusterForItem(
 
   const titleFallback = options.titleFallback?.trim() ?? "";
   if (titleFallback) {
-    const titleMatch = await findActiveClusterByTitle(titleFallback, since, until);
+    const titleMatch = await findActiveClusterByTitle(titleFallback, since, until, timeField);
     const titleMatchCandidate = titleMatch ? toClusterAssignmentCandidate(titleMatch) : null;
     const titleMatchRank = titleMatchCandidate && options.eventSignature
       ? rankClusterCandidates(item, options.eventSignature, [titleMatchCandidate])[0]
       : null;
 
-    if (titleMatchCandidate && (!titleMatchRank || (titleMatchRank.dateCompatible && !titleMatchRank.hardConflict))) {
+    if (
+      titleMatchCandidate &&
+      (!titleMatchRank ||
+        (titleMatchRank.dateCompatible && !titleMatchRank.preciseDateDrift && !titleMatchRank.hardConflict))
+    ) {
       return {
         cluster: titleMatchCandidate,
         fingerprint,
@@ -194,6 +199,7 @@ async function findClusterForItem(
       candidates: await findRecentActiveClusterCandidates({
         since,
         until,
+        timeField,
       }),
     };
     options.coordinator?.recentCandidates.set(rangeKey, recentCandidateEntry);
@@ -346,7 +352,7 @@ export async function assignItemToCluster(
     const resolvedEventSignature = normalizeEventSignatureForStorage(options.eventSignature ?? getItemEventSignature(item));
     const eventIdentity = buildEventIdentity({
       eventSignature: resolvedEventSignature,
-      publishedAt: item.publishedAt,
+      publishedAt: getEventIdentityAnchor(item),
     });
     const canAggregate = options.aggregationEnabled ?? item.source.aggregationEnabled;
     if (!canAggregate) {
@@ -424,11 +430,15 @@ export async function assignItemToCluster(
       const candidate = toClusterAssignmentCandidate(cluster);
 
       if (fingerprint) {
-        const { since, until } = buildCandidateRange(item, CLUSTER_LOOKBACK_MS);
-        options.coordinator.exactMatches.set(buildExactMatchKey(fingerprint, since, until), candidate);
+        const { since, until, timeField } = buildCandidateRange(item, CLUSTER_LOOKBACK_MS);
+        options.coordinator.exactMatches.set(buildExactMatchKey(fingerprint, since, until, timeField), candidate);
       }
 
-      rememberRecentCandidate(options.coordinator, candidate, item.publishedAt);
+      rememberRecentCandidate(
+        options.coordinator,
+        candidate,
+        item.publishedAtKnown ? item.publishedAt : item.createdAt,
+      );
     }
 
     await setItemCluster(item.id, cluster.id);
@@ -502,7 +512,9 @@ export async function recomputeCluster(
   const latestPublishedAt = cluster.items[0]!.publishedAt;
   const eventIdentity = buildEventIdentity({
     eventSignature,
-    publishedAt: latestPublishedAt,
+    publishedAt: getEventIdentityAnchor(
+      cluster.items.find((item) => item.publishedAtKnown) ?? cluster.items[0]!,
+    ),
   });
   const nextItemCount = cluster.items.length;
   const shouldSkipUpdate =
@@ -574,7 +586,9 @@ async function refreshClusterStats(clusterId: string) {
   const latestPublishedAt = cluster.items[0]!.publishedAt;
   const eventIdentity = buildEventIdentity({
     eventSignature,
-    publishedAt: latestPublishedAt,
+    publishedAt: getEventIdentityAnchor(
+      cluster.items.find((item) => item.publishedAtKnown) ?? cluster.items[0]!,
+    ),
   });
 
   const updated = await prisma.contentCluster.update({

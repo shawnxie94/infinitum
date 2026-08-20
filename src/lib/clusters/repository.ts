@@ -2,6 +2,8 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 
+type ClusterCandidateTimeField = "latestPublishedAt" | "createdAt";
+
 export type ClusterAssignmentCandidate = {
   id: string;
   title: string;
@@ -39,7 +41,16 @@ function clusterableItemWhere(): Prisma.ItemWhereInput {
   };
 }
 
-export async function findActiveClusterByFingerprint(fingerprint: string, since: Date, until?: Date) {
+export async function findActiveClusterByFingerprint(
+  fingerprint: string,
+  since: Date,
+  until?: Date,
+  timeField: ClusterCandidateTimeField = "latestPublishedAt",
+) {
+  const timeFilter = timeField === "createdAt"
+    ? { createdAt: { gte: since, ...(until ? { lte: until } : {}) } }
+    : { latestPublishedAt: { gte: since, ...(until ? { lte: until } : {}) } };
+
   return prisma.contentCluster.findFirst({
     where: {
       fingerprint,
@@ -47,21 +58,27 @@ export async function findActiveClusterByFingerprint(fingerprint: string, since:
       items: {
         some: clusterableItemWhere(),
       },
-      latestPublishedAt: {
-        gte: since,
-        lte: until,
-      },
+      ...timeFilter,
     },
-    orderBy: [{ latestPublishedAt: "desc" }],
+    orderBy: timeField === "createdAt" ? [{ createdAt: "desc" }] : [{ latestPublishedAt: "desc" }],
   });
 }
 
-export async function findActiveClusterByTitle(title: string, since: Date, until?: Date) {
+export async function findActiveClusterByTitle(
+  title: string,
+  since: Date,
+  until?: Date,
+  timeField: ClusterCandidateTimeField = "latestPublishedAt",
+) {
   const normalizedTitle = title.trim();
 
   if (!normalizedTitle) {
     return null;
   }
+
+  const timeFilter = timeField === "createdAt"
+    ? { createdAt: { gte: since, ...(until ? { lte: until } : {}) } }
+    : { latestPublishedAt: { gte: since, ...(until ? { lte: until } : {}) } };
 
   return prisma.contentCluster.findFirst({
     where: {
@@ -70,26 +87,31 @@ export async function findActiveClusterByTitle(title: string, since: Date, until
       items: {
         some: clusterableItemWhere(),
       },
-      latestPublishedAt: {
-        gte: since,
-        lte: until,
-      },
+      ...timeFilter,
     },
-    orderBy: [{ latestPublishedAt: "desc" }, { updatedAt: "desc" }],
+    orderBy: timeField === "createdAt"
+      ? [{ createdAt: "desc" }, { updatedAt: "desc" }]
+      : [{ latestPublishedAt: "desc" }, { updatedAt: "desc" }],
   });
 }
 
-export async function findRecentActiveClusterCandidates(options: { since: Date; until: Date }) {
+export async function findRecentActiveClusterCandidates(options: {
+  since: Date;
+  until: Date;
+  timeField?: ClusterCandidateTimeField;
+}) {
+  const timeField = options.timeField ?? "latestPublishedAt";
+  const timeFilter = timeField === "createdAt"
+    ? { createdAt: { gte: options.since, lte: options.until } }
+    : { latestPublishedAt: { gte: options.since, lte: options.until } };
+
   return prisma.contentCluster.findMany({
     where: {
       status: "active",
       items: {
         some: clusterableItemWhere(),
       },
-      latestPublishedAt: {
-        gte: options.since,
-        lte: options.until,
-      },
+      ...timeFilter,
     },
     select: {
       id: true,
@@ -106,7 +128,9 @@ export async function findRecentActiveClusterCandidates(options: { since: Date; 
       latestPublishedAt: true,
       itemCount: true,
     },
-    orderBy: [{ latestPublishedAt: "desc" }, { updatedAt: "desc" }],
+    orderBy: timeField === "createdAt"
+      ? [{ createdAt: "desc" }, { updatedAt: "desc" }]
+      : [{ latestPublishedAt: "desc" }, { updatedAt: "desc" }],
   }) as Promise<ClusterAssignmentCandidate[]>;
 }
 

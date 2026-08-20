@@ -14,8 +14,9 @@ import { type AiEventSignature, type AiProvider } from "@/lib/ai/provider";
 import { shouldRegenerateChineseSummary } from "@/lib/ai/summary-language";
 import type { ClusterAssignmentCandidate } from "@/lib/clusters/repository";
 import {
-  areEventDatesCompatible,
+  areEventDatesCompatibleForClustering,
   areEventDatesExactlyEqual,
+  getEventDatePrecision,
   normalizeEventActionForStorage,
   normalizeEventDateForStorage,
   normalizeEventObjectForStorage,
@@ -32,6 +33,8 @@ export type ClusterAssignmentCoordinator = {
   exactMatches: Map<string, ClusterAssignmentCandidate | null>;
   recentCandidates: Map<string, { sinceMs: number; untilMs: number; candidates: ClusterAssignmentCandidate[] }>;
 };
+
+export type ClusterCandidateTimeField = "latestPublishedAt" | "createdAt";
 
 export function createClusterAssignmentCoordinator(): ClusterAssignmentCoordinator {
   return {
@@ -51,6 +54,10 @@ export function normalizeFingerprint(value: string): string {
 
 export function buildItemSummary(item: ItemWithSource): string {
   return getDisplaySummary(item.summaryText, item.rssExcerpt, item.fullText ?? item.rssContent);
+}
+
+export function getEventIdentityAnchor(item: Pick<ItemWithSource, "publishedAt" | "publishedAtKnown" | "createdAt">) {
+  return item.publishedAtKnown ? item.publishedAt : item.createdAt;
 }
 
 function normalizeOptionalText(value: string | null | undefined): string | null {
@@ -131,18 +138,30 @@ export function hasCompleteClusterMatchSignature(eventSignature?: AiEventSignatu
 }
 
 export function buildCandidateRange(item: ItemWithSource, lookbackMs: number) {
+  const anchor = getEventIdentityAnchor(item);
+
   return {
-    since: new Date(item.publishedAt.getTime() - lookbackMs),
-    until: new Date(item.publishedAt.getTime() + lookbackMs),
+    since: new Date(anchor.getTime() - lookbackMs),
+    until: new Date(anchor.getTime() + lookbackMs),
+    timeField: (item.publishedAtKnown ? "latestPublishedAt" : "createdAt") as ClusterCandidateTimeField,
   };
 }
 
-export function buildCandidateRangeKey(since: Date, until: Date) {
-  return `${since.getTime()}:${until.getTime()}`;
+export function buildCandidateRangeKey(
+  since: Date,
+  until: Date,
+  timeField: ClusterCandidateTimeField = "latestPublishedAt",
+) {
+  return `${timeField}:${since.getTime()}:${until.getTime()}`;
 }
 
-export function buildExactMatchKey(fingerprint: string, since: Date, until: Date) {
-  return `${fingerprint}:${buildCandidateRangeKey(since, until)}`;
+export function buildExactMatchKey(
+  fingerprint: string,
+  since: Date,
+  until: Date,
+  timeField: ClusterCandidateTimeField = "latestPublishedAt",
+) {
+  return `${fingerprint}:${buildCandidateRangeKey(since, until, timeField)}`;
 }
 
 export function toClusterAssignmentCandidate(cluster: {
@@ -332,7 +351,14 @@ function scoreClusterCandidate(
   const actionExact = Boolean(currentAction && candidateAction && currentAction === candidateAction);
   const objectExact = Boolean(currentObject && candidateObject && currentObject === candidateObject);
   const dateExact = areEventDatesExactlyEqual(currentDate, candidateDate);
-  const dateCompatible = areEventDatesCompatible(currentDate, candidateDate);
+  const dateCompatible = areEventDatesCompatibleForClustering(currentDate, candidateDate);
+  const preciseDateDrift = Boolean(
+    currentDate &&
+      candidateDate &&
+      !dateExact &&
+      getEventDatePrecision(currentDate) === "day" &&
+      getEventDatePrecision(candidateDate) === "day",
+  );
 
   if (subjectExact) {
     score += 45;
@@ -385,12 +411,14 @@ function scoreClusterCandidate(
     candidate,
     score,
     dateCompatible,
+    preciseDateDrift,
     hardConflict,
     strongMatch:
       subjectExact &&
       objectExact &&
       Boolean(actionExact || normalizedCurrentSignature.eventType === normalizedCandidateSignature.eventType) &&
       dateCompatible &&
+      !preciseDateDrift &&
       !hardConflict,
   };
 }
@@ -1049,7 +1077,7 @@ function scoreClusterMergePair(left: ClusterMergeCandidate, right: ClusterMergeC
     };
   }
 
-  if (leftDate && rightDate && !areEventDatesCompatible(leftDate, rightDate)) {
+  if (leftDate && rightDate && !areEventDatesCompatibleForClustering(leftDate, rightDate)) {
     return {
       rejected: true,
       rejectedReason: "date_conflict",
@@ -1075,7 +1103,7 @@ function scoreClusterMergePair(left: ClusterMergeCandidate, right: ClusterMergeC
 
   if (leftDate && rightDate && areEventDatesExactlyEqual(leftDate, rightDate)) {
     score += 15;
-  } else if (leftDate && rightDate && areEventDatesCompatible(leftDate, rightDate)) {
+  } else if (leftDate && rightDate && areEventDatesCompatibleForClustering(leftDate, rightDate)) {
     score += 6;
   }
 
@@ -1164,7 +1192,11 @@ function rankClusterMergeLiveNeighbor(left: ClusterMergeNeighborMeta, right: Clu
 
   if (left.eventDate && right.eventDate && areEventDatesExactlyEqual(left.eventDate, right.eventDate)) {
     rank += 60;
-  } else if (left.eventDate && right.eventDate && areEventDatesCompatible(left.eventDate, right.eventDate)) {
+  } else if (
+    left.eventDate &&
+    right.eventDate &&
+    areEventDatesCompatibleForClustering(left.eventDate, right.eventDate)
+  ) {
     rank += 30;
   }
 

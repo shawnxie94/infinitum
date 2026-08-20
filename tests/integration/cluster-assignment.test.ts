@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiProvider } from "@/lib/ai/provider";
 import { CLUSTER_MERGE_SCAN_CLUSTER_LIMIT } from "@/config/constants";
+import { buildEventIdentity } from "@/lib/clusters/identity";
+import { normalizeFingerprint } from "@/lib/clusters/helpers";
 import {
   assignItemToCluster,
   detachItemFromCluster,
@@ -51,6 +53,101 @@ describe("cluster assignment", () => {
       executeRawSpy.mockRestore();
       findManySpy.mockRestore();
     }
+  });
+
+  it("uses cluster creation time when an incoming item's publication time is unknown", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Unknown Publication Feed",
+        rssUrl: "https://unknown-publication.example.com/feed.xml",
+        siteUrl: "https://unknown-publication.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    const eventSignature = {
+      eventType: "launch" as const,
+      eventSubject: "Acme",
+      eventAction: "发布",
+      eventObject: "Widget",
+      eventDate: null,
+    };
+    const identity = buildEventIdentity({
+      eventSignature,
+      publishedAt: new Date("2026-04-10T10:00:00.000Z"),
+    });
+    const clusterId = "unknown-publication-cluster";
+    await prisma.contentCluster.create({
+      data: {
+        id: clusterId,
+        kind: "topic",
+        title: "Acme 发布 Widget（已有聚合）",
+        summary: "已有事件聚合",
+        score: 80,
+        itemCount: 1,
+        latestPublishedAt: new Date("2020-01-01T10:00:00.000Z"),
+        createdAt: new Date("2026-04-10T09:00:00.000Z"),
+        status: "active",
+        fingerprint: normalizeFingerprint(identity!.eventIdentityKey),
+        eventFingerprint: identity!.eventFingerprint,
+        eventBucket: identity!.eventBucket,
+        eventType: eventSignature.eventType,
+        eventSubject: eventSignature.eventSubject,
+        eventAction: eventSignature.eventAction,
+        eventObject: eventSignature.eventObject,
+      },
+    });
+    await prisma.item.create({
+      data: {
+        id: "unknown-publication-seed",
+        sourceId: source.id,
+        clusterId,
+        originalUrl: "https://unknown-publication.example.com/seed",
+        canonicalUrl: "https://unknown-publication.example.com/seed",
+        urlHash: "unknown-publication-seed-hash",
+        originalTitle: "已有来源标题",
+        publishedAt: new Date("2020-01-01T10:00:00.000Z"),
+        publishedAtKnown: false,
+        createdAt: new Date("2026-04-10T09:00:00.000Z"),
+        summaryText: "已有来源内容",
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 80,
+        qualityRationale: "test",
+        eventType: eventSignature.eventType,
+        eventSubject: eventSignature.eventSubject,
+        eventAction: eventSignature.eventAction,
+        eventObject: eventSignature.eventObject,
+      },
+    });
+    const incoming = await prisma.item.create({
+      data: {
+        id: "unknown-publication-incoming",
+        sourceId: source.id,
+        originalUrl: "https://unknown-publication.example.com/incoming",
+        canonicalUrl: "https://unknown-publication.example.com/incoming",
+        urlHash: "unknown-publication-incoming-hash",
+        originalTitle: "Acme launches Widget",
+        publishedAt: new Date("2026-04-10T10:00:00.000Z"),
+        publishedAtKnown: false,
+        createdAt: new Date("2026-04-10T10:00:00.000Z"),
+        summaryText: "新的来源内容",
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 82,
+        qualityRationale: "test",
+        eventType: eventSignature.eventType,
+        eventSubject: eventSignature.eventSubject,
+        eventAction: eventSignature.eventAction,
+        eventObject: eventSignature.eventObject,
+      },
+    });
+
+    const assignment = await assignItemToCluster(incoming.id, { eventSignature });
+
+    expect(assignment.clusterId).toBe(clusterId);
+    expect(assignment.matchSource).toBe("exact_match");
   });
 
   it("loads affected clusters outside the ordinary merge scan limit", async () => {
@@ -248,6 +345,29 @@ describe("cluster assignment", () => {
         eventDate: "2026-04-10",
       },
     });
+
+    const smallDriftItem = await prisma.item.create({
+      data: {
+        ...baseItemData,
+        sourceId: source.id,
+        eventDate: "2026-04-11",
+        originalUrl: "https://date-guard.example.com/acme-widget-april-11",
+        canonicalUrl: "https://date-guard.example.com/acme-widget-april-11",
+        urlHash: "date-guard-april-11",
+      },
+    });
+    const smallDriftAssignment = await assignItemToCluster(smallDriftItem.id, {
+      eventSignature: {
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Widget",
+        eventDate: "2026-04-11",
+      },
+    });
+
+    expect(smallDriftAssignment.createdNewCluster).toBe(true);
+    expect(smallDriftAssignment.clusterId).not.toBe(firstAssignment.clusterId);
 
     const secondItem = await prisma.item.create({
       data: {

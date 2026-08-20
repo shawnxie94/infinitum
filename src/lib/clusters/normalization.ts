@@ -250,6 +250,35 @@ export function areEventDatesCompatible(
   );
 }
 
+export function areEventDatesCompatibleForClustering(
+  left: string | null | undefined,
+  right: string | null | undefined,
+  maxExactDateDriftDays = 2,
+) {
+  if (areEventDatesCompatible(left, right)) {
+    return true;
+  }
+
+  const normalizedLeft = normalizeEventDateForStorage(left);
+  const normalizedRight = normalizeEventDateForStorage(right);
+  if (
+    !normalizedLeft ||
+    !normalizedRight ||
+    getEventDatePrecision(normalizedLeft) !== "day" ||
+    getEventDatePrecision(normalizedRight) !== "day"
+  ) {
+    return false;
+  }
+
+  const leftMs = Date.parse(`${normalizedLeft}T00:00:00.000Z`);
+  const rightMs = Date.parse(`${normalizedRight}T00:00:00.000Z`);
+  if (!Number.isFinite(leftMs) || !Number.isFinite(rightMs)) {
+    return false;
+  }
+
+  return Math.abs(leftMs - rightMs) <= maxExactDateDriftDays * 24 * 60 * 60 * 1000;
+}
+
 export function normalizeEventSignatureForStorage(signature?: AiEventSignature | null): AiEventSignature | null {
   if (!signature) {
     return null;
