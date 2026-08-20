@@ -7,19 +7,16 @@ import {
   MODEL_API_CIRCUIT_BREAKER_WINDOW_MS,
 } from "@/config/constants";
 import {
-  DEFAULT_CLUSTER_MATCH_PROMPT,
-  DEFAULT_CLUSTER_MATCH_USER_PROMPT_TEMPLATE,
-  DEFAULT_CLUSTER_MERGE_PROMPT,
-  DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE,
-  DEFAULT_CLUSTER_SUMMARY_PROMPT,
-  DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE,
-  DEFAULT_DAILY_REPORT_PROMPT,
-  DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
-  DEFAULT_ITEM_UNDERSTANDING_PROMPT,
-  DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
+  DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE,
 } from "@/config/prompts";
+import {
+  buildAiUserContent,
+  getAiTaskContract,
+  normalizeAiUserInstruction,
+} from "@/lib/ai/contracts";
 import type { RuntimeConfig } from "@/config/runtime";
+import type { PromptConfigType } from "@/lib/settings/types";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import type {
@@ -30,11 +27,14 @@ import type {
   DailyReportPlanningCandidate,
   DailyReportPlanningCandidateBrief,
   DailyReportRepairPatchResult,
+  DailyReportReviewFeedback,
+  DailyReportReviewInput,
+  DailyReportReviewResult,
   DailyReportSelectedTopic,
   DailyReportViolation,
   RecentDailyReportTopic,
 } from "@/lib/daily-report/types";
-import { isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
+import { DAILY_REPORT_REVIEW_VIOLATION_CODES, isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
 import type {
   DailyReportTemplateSectionBlock,
   NormalizedDailyReportTemplate,
@@ -148,12 +148,14 @@ export type AiProvider = {
     recentTopicLookbackDays?: number;
     stageContext?: DailyReportStageContext;
     validationFeedback?: DailyReportStageValidationFeedback;
+    reviewFeedback?: DailyReportReviewFeedback;
   }): Promise<DailyReportPlanSelection>;
   writeDailyReport(input: {
     selectedTopics: DailyReportSelectedTopic[];
     template: NormalizedDailyReportTemplate;
     stageContext?: DailyReportStageContext;
     validationFeedback?: DailyReportStageValidationFeedback;
+    reviewFeedback?: DailyReportReviewFeedback;
   }): Promise<DailyReportModelDraft>;
   repairDailyReportDraft(input: {
     draft: DailyReportModelDraft;
@@ -161,6 +163,7 @@ export type AiProvider = {
     selectedTopics: DailyReportSelectedTopic[];
     template: NormalizedDailyReportTemplate;
   }): Promise<DailyReportRepairPatchResult>;
+  reviewDailyReport(input: DailyReportReviewInput): Promise<DailyReportReviewResult>;
 };
 
 export type DailyReportStage = "assess" | "plan" | "write";
@@ -215,6 +218,14 @@ type CompletionResponse = {
       reasoning_content?: string | null;
     };
   }>;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+    };
+  };
 };
 
 type OpenAICompatibleClient = {
@@ -227,7 +238,9 @@ type OpenAICompatibleClient = {
 
 type PromptRuntimeConfig = {
   systemPrompt: string;
-  promptTemplate: string;
+  /** User-configurable business instruction. Legacy promptTemplate is accepted only for compatibility. */
+  userInstruction?: string;
+  promptTemplate?: string;
   temperature?: number | null;
   maxTokens?: number | null;
   topP?: number | null;
@@ -240,20 +253,36 @@ type PromptOverrides = {
   clusterMatch?: PromptRuntimeConfig;
   clusterMerge?: PromptRuntimeConfig;
   dailyReport?: PromptRuntimeConfig;
+  dailyReportReview?: PromptRuntimeConfig | null;
 };
 
 export type AiProviderOptions = {
   aggregationSplitMaxEvents?: number;
+  /** 每次底层模型调用返回时回调实际（或估算）的 token 用量，用于任务上下文消耗统计。 */
+  onUsage?: (usage: AiCallUsage, usageKey?: string) => void;
 };
 
 type CompletionResponseFormat = {
   type: "json_object";
 };
 
+export type AiCallUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cachedTokens: number;
+  tokenUsageSource?: "provider" | "estimated" | "mixed";
+  model?: string;
+  attemptType?: "initial" | "transient_retry" | "json_retry";
+};
+
 type CompletionOptions = {
   responseFormat?: CompletionResponseFormat;
   requireCompleteJson?: boolean;
   messages?: DailyReportStageMessage[];
+  usageKey?: string;
+  attemptType?: AiCallUsage["attemptType"];
+  onUsage?: (usage: AiCallUsage) => void;
 };
 
 const DEFAULT_PARSED_AGGREGATION_MAX_EVENTS = 20;
@@ -418,10 +447,6 @@ function getClientForConfig(
   return client;
 }
 
-function renderPromptTemplate(template: string, values: Record<string, string | number>): string {
-  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => String(values[key] ?? ""));
-}
-
 const DAILY_REPORT_MODEL_CANDIDATE_KEYS = [
   "id",
   "clusterId",
@@ -521,6 +546,13 @@ const DAILY_REPORT_WRITE_FIELD_GUIDE = [
   "每个 selectedTopics[] 必须生成一个 section item；item.topicId 必须原样复制对应 topicId；不要输出 sourceIds、candidateIds 或其他来源映射字段，来源关系由代码根据 Topic 映射生成。",
   "template.blocks：完整栏目与正文规则；text block 只写模板定义的文本块，section block 按 type/key/title、item.bodyInstruction/bodyRequired 和 notes 规则输出。",
   "输出结构：输出 JSON 对象本身就是日报内容，顶层必须直接包含 headline 和 blocks。合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止使用 draft、result、data、output 等外层包装键。",
+].join("\n");
+
+const DAILY_REPORT_REVIEW_FEEDBACK_GUIDE = [
+  "reviewFeedback：仅在 Review 触发的重试中出现，包含上一次审核发现的问题、输入证据和具体修复指导。它是系统维护的定向反馈，不是用户可编辑的输出协议。",
+  "reviewFeedback.violations：优先处理 severity=error 的问题；每条 guidance 都是下一次重试的修复方向，必须结合 evidence 和当前阶段输入执行，不得臆测输入之外的事实。",
+  "PLAN 重试可以调整主题归纳、候选覆盖和栏目分配；WRITE 重试只能在 selectedTopics 和候选证据范围内修正正文、主题表达和重复内容，不得改变主题候选关系或补造事实。",
+  "如果某条指导与当前阶段职责冲突，保留当前阶段边界并在可执行范围内修复；不能因为 reviewFeedback 而输出内部协议、解释文字或额外字段。",
 ].join("\n");
 
 const DAILY_REPORT_REPAIR_FIELD_GUIDE = [
@@ -749,6 +781,15 @@ function parseClusterSummaryOutput(rawContent: string): string {
     throw new InvalidJsonModelResponseError(
       `聚合摘要模型返回了无法解析的 JSON：${getJsonParseErrorMessage(error)}`,
     );
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new InvalidJsonModelResponseError("聚合摘要 JSON 顶层必须是对象。");
+  }
+
+  const unknownFields = Object.keys(parsed).filter((key) => key !== "title" && key !== "summary");
+  if (unknownFields.length > 0) {
+    throw new InvalidJsonModelResponseError(`聚合摘要 JSON 包含未知字段：${unknownFields.join(", ")}`);
   }
 
   const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
@@ -1171,16 +1212,20 @@ function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeIn
   for (const rawDecision of parsed.decisions) {
     const decision = normalizeClusterMergeDecision(rawDecision, metadata);
     if (!decision) {
-      continue;
+      throw new InvalidJsonModelResponseError("聚合合并 decisions 包含无效或不在输入 Pair 中的决定。");
     }
 
     const pairKey = buildClusterMergePairKey(decision.leftClusterId, decision.rightClusterId);
     if (seenPairKeys.has(pairKey)) {
-      continue;
+      throw new InvalidJsonModelResponseError("聚合合并 decisions 不能重复判断同一个 Pair。");
     }
 
     seenPairKeys.add(pairKey);
     decisions.push(decision);
+  }
+
+  if (seenPairKeys.size !== metadata.allowedPairKeys.size) {
+    throw new InvalidJsonModelResponseError("聚合合并 decisions 必须逐一覆盖输入中的每个 Pair。");
   }
 
   return decisions;
@@ -1191,8 +1236,14 @@ function parseClusterMatchCandidateId(rawContent: string, candidateIds: string[]
   let parseError: unknown = null;
 
   try {
-    const parsed = JSON.parse(normalized) as { clusterId?: string | null };
-    const clusterId = parsed.clusterId?.trim() || "";
+    const parsed = JSON.parse(normalized) as { clusterId?: unknown };
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !("clusterId" in parsed)) {
+      throw new InvalidJsonModelResponseError('归组判定 JSON 必须包含 "clusterId" 字段。');
+    }
+    if (parsed.clusterId !== null && typeof parsed.clusterId !== "string") {
+      throw new InvalidJsonModelResponseError('归组判定 "clusterId" 必须是字符串或 null。');
+    }
+    const clusterId = typeof parsed.clusterId === "string" ? parsed.clusterId.trim() : "";
 
     if (clusterId && candidateIds.includes(clusterId)) {
       return clusterId;
@@ -1219,14 +1270,19 @@ function parseClusterMatchCandidateId(rawContent: string, candidateIds: string[]
 }
 
 function resolvePromptConfig(
-  defaultSystemPrompt: string,
-  defaultPromptTemplate: string,
+  type: PromptConfigType,
   runtimeOverride: PromptRuntimeConfig | undefined,
 ): PromptRuntimeConfig {
+  const contract = getAiTaskContract(type);
   if (runtimeOverride) {
     return {
-      systemPrompt: runtimeOverride.systemPrompt || defaultSystemPrompt,
-      promptTemplate: runtimeOverride.promptTemplate || defaultPromptTemplate,
+      // The persisted systemPrompt is legacy data and is deliberately ignored.
+      systemPrompt: contract.systemPrompt,
+      userInstruction: type === "daily_report"
+        ? ""
+        : normalizeAiUserInstruction(
+            runtimeOverride.userInstruction ?? runtimeOverride.promptTemplate ?? contract.defaultUserInstruction,
+          ),
       temperature: runtimeOverride.temperature,
       maxTokens: runtimeOverride.maxTokens,
       topP: runtimeOverride.topP,
@@ -1235,8 +1291,8 @@ function resolvePromptConfig(
   }
 
   return {
-    systemPrompt: defaultSystemPrompt,
-    promptTemplate: defaultPromptTemplate,
+    systemPrompt: contract.systemPrompt,
+    userInstruction: type === "daily_report" ? "" : contract.defaultUserInstruction,
   };
 }
 
@@ -1246,19 +1302,20 @@ async function completeText(
   promptConfig: PromptRuntimeConfig,
   userContent: string,
   options?: CompletionOptions,
-): Promise<string> {
+): Promise<{ text: string; usage: AiCallUsage | null }> {
+  const messages = options?.messages ?? [
+    {
+      role: "system",
+      content: promptConfig.systemPrompt,
+    },
+    {
+      role: "user",
+      content: userContent,
+    },
+  ];
   const request: Record<string, unknown> = {
     model: config.model,
-    messages: options?.messages ?? [
-      {
-        role: "system",
-        content: promptConfig.systemPrompt,
-      },
-      {
-        role: "user",
-        content: userContent,
-      },
-    ],
+    messages,
     max_tokens: promptConfig.maxTokens ?? undefined,
     temperature: promptConfig.temperature ?? undefined,
     top_p: promptConfig.topP ?? undefined,
@@ -1275,6 +1332,15 @@ async function completeText(
   }
 
   const response = await client.chat.completions.create(request) as CompletionResponse;
+  const rawText = response.choices?.[0]?.message?.content?.trim() ?? "";
+  const usage = normalizeCompletionUsage(
+    response.usage,
+    messages,
+    rawText,
+    config,
+    options?.attemptType ?? "initial",
+  );
+  options?.onUsage?.(usage);
 
   const choice = response.choices?.[0];
   const message = choice?.message;
@@ -1288,12 +1354,54 @@ async function completeText(
   }
 
   if (content) {
-    return normalizeModelResponseText(content);
+    const text = normalizeModelResponseText(content);
+    return {
+      text,
+      usage,
+    };
   }
 
   // Thinking is disabled for every model call, so reasoning content must not
   // be treated as the final response or leak into JSON/text persistence.
-  return "";
+  return { text: "", usage };
+}
+
+function estimatePromptTokens(messages: Array<{ role: string; content: string }>) {
+  return Math.max(1, Math.ceil(messages.reduce((total, message) => total + message.content.length, 0) / 4));
+}
+
+function estimateCompletionTokens(text: string) {
+  return Math.max(0, Math.ceil(text.length / 4));
+}
+
+function normalizeCompletionUsage(
+  rawUsage: NonNullable<CompletionResponse["usage"]> | undefined,
+  messages: Array<{ role: string; content: string }>,
+  outputText: string,
+  config: RuntimeConfig["modelApi"],
+  attemptType: AiCallUsage["attemptType"],
+): AiCallUsage {
+  const promptTokens = rawUsage?.prompt_tokens ?? estimatePromptTokens(messages);
+  const completionTokens = rawUsage?.completion_tokens ?? estimateCompletionTokens(outputText);
+  const totalTokens = rawUsage?.total_tokens ?? promptTokens + completionTokens;
+  const cachedTokens = rawUsage?.prompt_tokens_details?.cached_tokens ?? 0;
+  const hasPromptTokens = typeof rawUsage?.prompt_tokens === "number";
+  const hasCompletionTokens = typeof rawUsage?.completion_tokens === "number";
+  const hasTotalTokens = typeof rawUsage?.total_tokens === "number";
+  const providerFieldCount = [hasPromptTokens, hasCompletionTokens, hasTotalTokens].filter(Boolean).length;
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    cachedTokens,
+    tokenUsageSource: providerFieldCount === 3
+      ? "provider"
+      : providerFieldCount === 0
+        ? "estimated"
+        : "mixed",
+    model: config.model,
+    attemptType,
+  };
 }
 
 async function completeTextWithTransientRetry(
@@ -1302,12 +1410,15 @@ async function completeTextWithTransientRetry(
   promptConfig: PromptRuntimeConfig,
   userContent: string,
   options?: CompletionOptions,
-) {
+): Promise<{ text: string; usage: AiCallUsage | null }> {
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt <= TRANSIENT_MODEL_API_RETRY_COUNT; attempt += 1) {
     try {
-      return await completeText(client, config, promptConfig, userContent, options);
+      return await completeText(client, config, promptConfig, userContent, {
+        ...options,
+        attemptType: attempt > 0 ? "transient_retry" : options?.attemptType ?? "initial",
+      });
     } catch (error) {
       lastError = error;
       if (attempt >= TRANSIENT_MODEL_API_RETRY_COUNT || !isTransientModelApiError(error)) {
@@ -1325,44 +1436,44 @@ export function createAiProvider(
   clientOverrideArg?: OpenAICompatibleClient | null,
   options?: AiProviderOptions,
 ): AiProvider {
+  const providerOptions = options;
   const globalClient = clientOverrideArg ?? getClient(config);
   const aggregationSplitMaxEvents = normalizeAggregationSplitMaxEvents(options?.aggregationSplitMaxEvents);
   const clientCache = new Map<string, OpenAICompatibleClient | null>();
   const resolvedItemUnderstandingConfig = resolvePromptConfig(
-    DEFAULT_ITEM_UNDERSTANDING_PROMPT,
-    DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
+    "item_understanding",
     promptOverrides?.itemUnderstanding,
   );
   const itemUnderstandingConfig = promptOverrides?.itemUnderstanding
     ? {
         ...resolvedItemUnderstandingConfig,
-        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
+        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.replaceAll("{{maxEvents}}", String(aggregationSplitMaxEvents)).trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
       }
     : {
         ...resolvedItemUnderstandingConfig,
-        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
+        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.replaceAll("{{maxEvents}}", String(aggregationSplitMaxEvents)).trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
         temperature: 0,
         maxTokens: 8000,
       };
   const clusterSummaryConfig = resolvePromptConfig(
-    DEFAULT_CLUSTER_SUMMARY_PROMPT,
-    DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE,
+    "cluster_summary",
     promptOverrides?.clusterSummary,
   );
   const clusterMatchConfig = resolvePromptConfig(
-    DEFAULT_CLUSTER_MATCH_PROMPT,
-    DEFAULT_CLUSTER_MATCH_USER_PROMPT_TEMPLATE,
+    "cluster_match",
     promptOverrides?.clusterMatch,
   );
   const clusterMergeConfig = resolvePromptConfig(
-    DEFAULT_CLUSTER_MERGE_PROMPT,
-    DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE,
+    "cluster_merge",
     promptOverrides?.clusterMerge,
   );
   const dailyReportConfig = resolvePromptConfig(
-    DEFAULT_DAILY_REPORT_PROMPT,
-    DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
+    "daily_report",
     promptOverrides?.dailyReport,
+  );
+  const dailyReportReviewConfig = resolvePromptConfig(
+    "daily_report_review",
+    promptOverrides?.dailyReportReview ?? undefined,
   );
 
   const getExecutionConfig = (promptConfig: PromptRuntimeConfig) => promptConfig.modelApi ?? config;
@@ -1377,7 +1488,7 @@ export function createAiProvider(
     promptConfig: PromptRuntimeConfig,
     userContent: string,
     options?: CompletionOptions,
-  ) => {
+  ): Promise<{ text: string; usage: AiCallUsage | null } | null> => {
     const executionConfig = getExecutionConfig(promptConfig);
     const isDefaultModel = isSameModelApiConfig(executionConfig, config);
     const selectedConfig = !isDefaultModel && isCircuitOpen(executionConfig) ? config : executionConfig;
@@ -1388,13 +1499,16 @@ export function createAiProvider(
     }
 
     try {
-      const output = await completeTextWithTransientRetry(selectedClient, selectedConfig, promptConfig, userContent, options);
+      const result = await completeTextWithTransientRetry(selectedClient, selectedConfig, promptConfig, userContent, {
+        ...options,
+        onUsage: (usage) => providerOptions?.onUsage?.(usage, options?.usageKey),
+      });
 
       if (!isDefaultModel && isSameModelApiConfig(selectedConfig, executionConfig)) {
         recordModelApiSuccess(executionConfig);
       }
 
-      return output;
+      return result;
     } catch (error) {
       if (isInvalidJsonModelResponseError(error)) {
         throw error;
@@ -1415,7 +1529,10 @@ export function createAiProvider(
         throw error;
       }
 
-      return completeTextWithTransientRetry(defaultClient, config, promptConfig, userContent, options);
+      return completeTextWithTransientRetry(defaultClient, config, promptConfig, userContent, {
+        ...options,
+        onUsage: (usage) => providerOptions?.onUsage?.(usage, options?.usageKey),
+      });
     }
   };
 
@@ -1423,18 +1540,21 @@ export function createAiProvider(
     promptConfig: PromptRuntimeConfig,
     userContent: string,
     parseOutput: (output: string) => T,
+    completionOptions?: { usageKey?: string },
   ): Promise<T | null> => {
     let lastParseError: InvalidJsonModelResponseError | null = null;
 
     for (let attempt = 0; attempt <= JSON_PARSE_RETRY_COUNT; attempt += 1) {
-      let output: string | null;
+      let result: { text: string; usage: AiCallUsage | null } | null;
       try {
-        output = await completeTextWithCircuitBreaker(
+        result = await completeTextWithCircuitBreaker(
           promptConfig,
           attempt === 0 || !lastParseError ? userContent : buildJsonParseRetryPrompt(userContent, lastParseError),
           {
             responseFormat: { type: "json_object" },
             requireCompleteJson: true,
+            usageKey: completionOptions?.usageKey,
+            attemptType: attempt > 0 ? "json_retry" : "initial",
           },
         );
       } catch (error) {
@@ -1446,12 +1566,12 @@ export function createAiProvider(
         continue;
       }
 
-      if (output == null) {
+      if (result == null) {
         return null;
       }
 
       try {
-        return parseOutput(output);
+        return parseOutput(result.text);
       } catch (error) {
         if (!isInvalidJsonModelResponseError(error) || attempt >= JSON_PARSE_RETRY_COUNT) {
           throw error;
@@ -1470,6 +1590,7 @@ export function createAiProvider(
     parseOutput: (output: string) => T,
     stageContext: DailyReportStageContext,
     validationFeedback?: DailyReportStageValidationFeedback,
+    usageKey?: string,
   ): Promise<T> => {
     if (stageContext.messages.length === 0) {
       stageContext.messages.push(
@@ -1498,15 +1619,17 @@ export function createAiProvider(
     stageContext.contextTokenEstimate = Math.ceil(
       stageContext.messages.reduce((total, message) => total + message.content.length, 0) / 4,
     );
-    const output = await completeTextWithCircuitBreaker(
+    const result = await completeTextWithCircuitBreaker(
       promptConfig,
       "",
       {
         responseFormat: { type: "json_object" },
         requireCompleteJson: true,
+        usageKey,
         messages: stageContext.messages,
       },
     );
+    const output = result?.text ?? null;
     const normalizedOutput = output?.trim() ?? "";
     stageContext.lastOutput = normalizedOutput;
     stageContext.messages.push({ role: "assistant", content: normalizedOutput });
@@ -1626,13 +1749,64 @@ export function createAiProvider(
     }
     return { patches: parsed.patches as DailyReportRepairPatchResult["patches"] };
   };
+  const parseReviewOutput = (output: string): DailyReportReviewResult => {
+    const parsed = parseDailyReportStageObject(output) as Record<string, unknown>;
+    if (parsed.verdict !== "pass" && parsed.verdict !== "reject") {
+      throw new InvalidJsonModelResponseError("REVIEW 返回的 verdict 必须是 pass 或 reject。");
+    }
+    if (!Array.isArray(parsed.violations)) {
+      throw new InvalidJsonModelResponseError("REVIEW 返回必须包含 violations 数组。");
+    }
+    const violations = parsed.violations.map((rawViolation) => {
+      if (!rawViolation || typeof rawViolation !== "object") {
+        throw new InvalidJsonModelResponseError("REVIEW violations 包含无效对象。");
+      }
+      const violation = rawViolation as Record<string, unknown>;
+      if (!DAILY_REPORT_REVIEW_VIOLATION_CODES.includes(violation.code as typeof DAILY_REPORT_REVIEW_VIOLATION_CODES[number])) {
+        throw new InvalidJsonModelResponseError(`REVIEW 返回未知 violation code：${String(violation.code)}`);
+      }
+      if (violation.severity !== "error" && violation.severity !== "warning") {
+        throw new InvalidJsonModelResponseError("REVIEW violation severity 必须是 error 或 warning。");
+      }
+      const topicIds = violation.topicIds === undefined
+        ? undefined
+        : Array.isArray(violation.topicIds) && violation.topicIds.every((value) => typeof value === "string")
+          ? violation.topicIds as string[]
+          : null;
+      const candidateIds = violation.candidateIds === undefined
+        ? undefined
+        : Array.isArray(violation.candidateIds) && violation.candidateIds.every((value) => typeof value === "number" && Number.isInteger(value))
+          ? violation.candidateIds as number[]
+          : null;
+      if (topicIds === null || candidateIds === null || typeof violation.message !== "string") {
+        throw new InvalidJsonModelResponseError("REVIEW violation 字段格式无效。");
+      }
+      if (typeof violation.evidence !== "string" || !violation.evidence.trim()) {
+        throw new InvalidJsonModelResponseError("REVIEW violation 必须包含非空 evidence。");
+      }
+      if (typeof violation.guidance !== "string" || !violation.guidance.trim()) {
+        throw new InvalidJsonModelResponseError("REVIEW violation 必须包含非空 guidance。");
+      }
+      return {
+        code: violation.code as DailyReportReviewResult["violations"][number]["code"],
+        severity: violation.severity as "error" | "warning",
+        message: violation.message,
+        ...(topicIds ? { topicIds } : {}),
+        ...(candidateIds ? { candidateIds } : {}),
+        evidence: violation.evidence,
+        guidance: violation.guidance,
+      };
+    });
+    const summary = typeof parsed.summary === "string" ? parsed.summary : "";
+    return { verdict: parsed.verdict, violations, summary };
+  };
   return {
     async understandItem(inputText, metadata) {
       const fallback = getFallbackUnderstanding(metadata);
-      const userContent = renderPromptTemplate(itemUnderstandingConfig.promptTemplate, {
+      const userContent = buildAiUserContent(itemUnderstandingConfig.userInstruction, {
         title: metadata.title,
         sourceName: metadata.sourceName ?? "未知来源",
-        translateTitle: metadata.translateTitle ? "是" : "否",
+        translateTitle: metadata.translateTitle,
         maxEvents: aggregationSplitMaxEvents,
         inputText,
       });
@@ -1646,6 +1820,7 @@ export function createAiProvider(
           metadata.translateTitle,
           aggregationSplitMaxEvents,
         ),
+        { usageKey: "item_understanding" },
       );
 
       if (result == null) {
@@ -1655,7 +1830,7 @@ export function createAiProvider(
       return result;
     },
     async summarizeCluster(inputText, metadata) {
-      const userContent = renderPromptTemplate(clusterSummaryConfig.promptTemplate, {
+      const userContent = buildAiUserContent(clusterSummaryConfig.userInstruction, {
         title: metadata.title,
         inputText,
       });
@@ -1663,6 +1838,7 @@ export function createAiProvider(
         clusterSummaryConfig,
         userContent,
         parseClusterSummaryOutput,
+        { usageKey: "cluster_summary" },
       );
 
       return output ?? "";
@@ -1672,7 +1848,7 @@ export function createAiProvider(
         return null;
       }
 
-      const userContent = renderPromptTemplate(clusterMatchConfig.promptTemplate, {
+      const userContent = buildAiUserContent(clusterMatchConfig.userInstruction, {
         title: metadata.title,
         inputText,
         candidatesJson: JSON.stringify(metadata.candidates),
@@ -1685,6 +1861,7 @@ export function createAiProvider(
           output,
           metadata.candidates.map((candidate) => candidate.id),
         ),
+        { usageKey: "cluster_match" },
       ).catch((error) => {
         if (isInvalidJsonModelResponseError(error)) {
           return null;
@@ -1694,14 +1871,15 @@ export function createAiProvider(
     },
     async assessClusterMergePairs(clustersJson) {
       const metadata = parseClusterMergeInputMetadata(clustersJson);
-      const userContent = renderPromptTemplate(clusterMergeConfig.promptTemplate, {
-        clustersJson,
+      const userContent = buildAiUserContent(clusterMergeConfig.userInstruction, {
+        ...JSON.parse(clustersJson) as Record<string, unknown>,
       });
 
       const decisions = await completeJsonWithParseRetry(
         clusterMergeConfig,
         userContent,
         (output) => parseClusterMergeDecisions(output, metadata),
+        { usageKey: "cluster_merge" },
       );
 
       return decisions ?? [];
@@ -1724,14 +1902,14 @@ export function createAiProvider(
           `${DAILY_REPORT_CANDIDATE_FIELD_GUIDE}\n${DAILY_REPORT_ASSESSMENT_FIELD_GUIDE}`,
         );
       const output = input.stageContext
-        ? await completeJsonInStageContext(promptConfig, userContent, parseAssessmentOutput, input.stageContext, input.validationFeedback)
-        : await completeJsonWithParseRetry(promptConfig, userContent, parseAssessmentOutput);
+        ? await completeJsonInStageContext(promptConfig, userContent, parseAssessmentOutput, input.stageContext, input.validationFeedback, "daily_report_assess")
+        : await completeJsonWithParseRetry(promptConfig, userContent, parseAssessmentOutput, { usageKey: "daily_report_assess" });
       return output ?? [];
     },
     async planDailyReport(input) {
       const promptConfig = buildDailyReportStageConfig(
           "PLAN",
-          `必须返回 schemaVersion=2；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于 sections。每个 topics[].candidateIds 必须非空；一个 candidateId 只能属于一个 topic。topicId 由代码生成，不要输出。\n${DAILY_REPORT_PLAN_TOPIC_CONTRACT}`,
+          `必须返回 schemaVersion=2；template.sections 是唯一可规划栏目清单；sections 中的 blockKey 只能使用 template.sections[].blockKey，禁止使用 text、type、栏目标题或自造 key；text block 不属于 sections。每个 topics[].candidateIds 必须非空；一个 candidateId 只能属于一个 topic。topicId 由代码生成，不要输出。若输入包含 reviewFeedback，必须优先根据其中的 guidance 修复对应问题，并继续遵守 candidateBriefs、template 和 recentTopics 的输入边界。\n${DAILY_REPORT_PLAN_TOPIC_CONTRACT}`,
         );
       const userContent = buildDailyReportStagePrompt(
           "PLAN",
@@ -1741,13 +1919,14 @@ export function createAiProvider(
             input: {
               candidateBriefs: input.candidateBriefs,
               recentTopics: input.recentTopics ?? [],
+              ...(input.reviewFeedback ? { reviewFeedback: input.reviewFeedback } : {}),
             },
           },
-          `${DAILY_REPORT_PLAN_TOPIC_CONTRACT}\n${DAILY_REPORT_PLAN_FIELD_GUIDE}`,
+          `${DAILY_REPORT_PLAN_TOPIC_CONTRACT}\n${DAILY_REPORT_PLAN_FIELD_GUIDE}\n${DAILY_REPORT_REVIEW_FEEDBACK_GUIDE}`,
         );
       const output = input.stageContext
-        ? await completeJsonInStageContext(promptConfig, userContent, parsePlanOutput, input.stageContext, input.validationFeedback)
-        : await completeJsonWithParseRetry(promptConfig, userContent, parsePlanOutput);
+        ? await completeJsonInStageContext(promptConfig, userContent, parsePlanOutput, input.stageContext, input.validationFeedback, "daily_report_plan")
+        : await completeJsonWithParseRetry(promptConfig, userContent, parsePlanOutput, { usageKey: "daily_report_plan" });
       if (!output) throw new Error("PLAN 阶段没有返回结果。");
       return output;
     },
@@ -1755,17 +1934,20 @@ export function createAiProvider(
       const selectedBlockKeys = Array.from(new Set(input.selectedTopics.map((topic) => topic.blockKey)));
       const promptConfig = buildDailyReportStageConfig(
           "WRITE",
-          "只能使用 selectedTopics 中的主题和候选；不得重新归纳主题、换栏目、增加栏目或补造事实。输出对象本身就是日报内容，顶层必须直接包含 headline 和 blocks，合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止输出 draft、result、data、output 等外层包装键。text block 返回 {type:\"text\",title,body}，section block 返回 {type:\"section\",blockKey,title,items}，item 返回 {topicId,title,body,notes}；每个 selectedTopics 必须生成一个 item，topicId 必须原样复制；不要输出 sourceIds、candidateIds 或其他来源映射字段；notes 必须是 {label:string,text:string} 数组，模板中的 required 和 instruction 只是规则元数据，绝不能原样输出到 notes；模板中 required=true 的 note 必须按模板 label 原样输出且 text 非空，required=false 的 note 可按内容需要输出；只使用模板中定义的 text block 和已规划的 section block。正文只写内容本身，不要带栏目名、字段名或标签前缀；除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。",
+          "只能使用 selectedTopics 中的主题和候选；不得重新归纳主题、换栏目、增加栏目或补造事实。若输入包含 reviewFeedback，必须优先根据其中的 guidance 修复对应问题，并继续遵守 selectedTopics、template 和候选事实边界。输出对象本身就是日报内容，顶层必须直接包含 headline 和 blocks，合法结构为 {\"headline\":\"...\",\"blocks\":[...]}；禁止输出 draft、result、data、output 等外层包装键。text block 返回 {type:\"text\",title,body}，section block 返回 {type:\"section\",blockKey,title,items}，item 返回 {topicId,title,body,notes}；每个 selectedTopics 必须生成一个 item，topicId 必须原样复制；不要输出 sourceIds、candidateIds 或其他来源映射字段；notes 必须是 {label:string,text:string} 数组，模板中的 required 和 instruction 只是规则元数据，绝不能原样输出到 notes；模板中 required=true 的 note 必须按模板 label 原样输出且 text 非空，required=false 的 note 可按内容需要输出；只使用模板中定义的 text block 和已规划的 section block。正文只写内容本身，不要带栏目名、字段名或标签前缀；除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。",
         );
       const userContent = buildDailyReportStagePrompt(
           "WRITE",
           "严格按照 selectedTopics 和对应 Block 写作，只返回完整日报内容 JSON。输出对象本身就是日报内容，顶层直接包含 headline 和 blocks，不得包在 draft、result、data 或 output 字段中。不得重新选题、合并主题、换栏目、增加栏目或补造事实。每个 section block 必须包含与输入一致的 blockKey 和模板 title；每个 section item 必须包含 topicId、title、body 和 notes，不要输出 sourceIds 或 candidateIds；每个计划主题必须且只能对应一个 item；当模板中该栏目 item.bodyRequired=false 时 body 必须为空字符串或省略，不能输出正文，否则 body 必须非空；每个 notes 元素只能是 {label,text}，不要输出 required 或 instruction；notes 中必须包含模板配置的全部 required=true note，label 必须逐字匹配、text 必须非空；每个 text block 必须包含 type、title、body。",
-          { template: buildDailyReportWritingTemplate(input.template, selectedBlockKeys), input: { selectedTopics: input.selectedTopics.map((topic) => ({ ...topic, requiredNotes: getRequiredNotesForBlock(input.template, topic.blockKey), candidates: topic.candidates.map(compactDailyReportWritingCandidate) })) } },
-          DAILY_REPORT_WRITE_FIELD_GUIDE,
+          { template: buildDailyReportWritingTemplate(input.template, selectedBlockKeys), input: {
+            selectedTopics: input.selectedTopics.map((topic) => ({ ...topic, requiredNotes: getRequiredNotesForBlock(input.template, topic.blockKey), candidates: topic.candidates.map(compactDailyReportWritingCandidate) })),
+            ...(input.reviewFeedback ? { reviewFeedback: input.reviewFeedback } : {}),
+          } },
+          `${DAILY_REPORT_WRITE_FIELD_GUIDE}\n${DAILY_REPORT_REVIEW_FEEDBACK_GUIDE}`,
         );
       const output = input.stageContext
-        ? await completeJsonInStageContext(promptConfig, userContent, parseDraftOutput, input.stageContext, input.validationFeedback)
-        : await completeJsonWithParseRetry(promptConfig, userContent, parseDraftOutput);
+        ? await completeJsonInStageContext(promptConfig, userContent, parseDraftOutput, input.stageContext, input.validationFeedback, "daily_report_write")
+        : await completeJsonWithParseRetry(promptConfig, userContent, parseDraftOutput, { usageKey: "daily_report_write" });
       if (!output) throw new Error("WRITE 阶段没有返回结果。");
       return output;
     },
@@ -1822,8 +2004,53 @@ export function createAiProvider(
           DAILY_REPORT_REPAIR_FIELD_GUIDE,
         ),
         parseRepairPatchOutput,
+        { usageKey: "daily_report_repair" },
       );
       if (!output) throw new Error("REPAIR 阶段没有返回补丁。");
+      return output;
+    },
+    async reviewDailyReport(input) {
+      const customInstruction = normalizeAiUserInstruction(dailyReportReviewConfig.userInstruction);
+      const userContent = [
+        customInstruction,
+        "以下是由系统生成的审核输入 JSON，请只基于其中的内容进行审核：",
+        JSON.stringify(input),
+      ].filter(Boolean).join("\n\n");
+      const output = await completeJsonWithParseRetry(
+        {
+          ...dailyReportReviewConfig,
+          // The Review system contract is owned by the application.
+          // A persisted systemPrompt is legacy data and is not user-overridable.
+          systemPrompt: DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+        },
+        userContent,
+        parseReviewOutput,
+        { usageKey: "daily_report_review" },
+      );
+      if (!output) throw new Error("REVIEW 阶段没有返回结果。");
+      const knownTopicIds = new Set(input.selectedTopics.map((topic) => topic.topicId));
+      const knownCandidateIds = new Set([
+        ...input.selectedTopics.flatMap((topic) => topic.candidateIds),
+        ...input.candidatePool.topUnselectedCandidates.map((candidate) => candidate.candidateId),
+      ]);
+      for (const violation of output.violations) {
+        if (violation.topicIds?.some((topicId) => !knownTopicIds.has(topicId))) {
+          throw new InvalidJsonModelResponseError("REVIEW violation 引用了不存在的 topicId。");
+        }
+        if (violation.candidateIds?.some((candidateId) => !knownCandidateIds.has(candidateId))) {
+          throw new InvalidJsonModelResponseError("REVIEW violation 引用了不在审核输入中的 candidateId。");
+        }
+      }
+      if (output.verdict === "pass" && output.violations.some((violation) => violation.severity === "error")) {
+        return {
+          ...output,
+          verdict: "reject",
+          summary: output.summary || "Review 返回了错误级问题。",
+        };
+      }
+      if (output.verdict === "reject" && !output.violations.some((violation) => violation.severity === "error")) {
+        throw new InvalidJsonModelResponseError("REVIEW reject 必须包含至少一个 error 级 violation。");
+      }
       return output;
     },
   };

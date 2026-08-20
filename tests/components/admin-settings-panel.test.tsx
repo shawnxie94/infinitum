@@ -18,10 +18,6 @@ vi.mock("next/navigation", () => ({
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { ToastProvider } from "@/components/ui/toast";
 import {
-  DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE,
-} from "@/config/prompts";
-import {
-  compileDailyReportTemplatePrompt,
   parseDailyReportTemplateJson,
 } from "@/lib/daily-report/template";
 import type { AdminSettingsSnapshot } from "@/lib/settings/types";
@@ -709,9 +705,10 @@ describe("AdminSettingsPanel", () => {
     await user.click(screen.getAllByRole("button", { name: /创建配置/i })[0]);
     await user.clear(screen.getByLabelText(/配置名称/));
     await user.type(screen.getByLabelText(/配置名称/), "新的条目摘要提示词");
-    await user.clear(screen.getByLabelText(/系统提示词/));
-    await user.type(screen.getByLabelText(/系统提示词/), "总结单条内容");
-    fireEvent.change(screen.getByLabelText(/提示词模板/), {
+    const userPromptInput = screen.getByRole("textbox", { name: /用户提示词/ });
+    await user.clear(userPromptInput);
+    await user.type(userPromptInput, "总结单条内容");
+    fireEvent.change(userPromptInput, {
       target: { value: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}" },
     });
     await user.click(screen.getByRole("button", { name: "创建" }));
@@ -726,7 +723,7 @@ describe("AdminSettingsPanel", () => {
           name: "新的条目摘要提示词",
           type: "item_understanding",
           prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
-          systemPrompt: "总结单条内容",
+          userPrompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
           templateJson: null,
           temperature: null,
           maxTokens: null,
@@ -739,7 +736,7 @@ describe("AdminSettingsPanel", () => {
     });
   });
 
-  it("shows the real placeholders for prompt types with custom input variables", async () => {
+  it("hides internal input placeholders from prompt configuration", async () => {
     const user = userEvent.setup();
 
     renderWithProviders(
@@ -750,15 +747,17 @@ describe("AdminSettingsPanel", () => {
       />,
     );
 
+    expect(screen.queryByText(/内部协议|协议版本/)).not.toBeInTheDocument();
+
     await user.click(screen.getAllByRole("button", { name: /创建配置/i })[0]);
     let dialog = screen.getByRole("dialog", { name: "创建新提示词配置" });
-    expect(within(dialog).getByText(/可使用占位符：\s+\{\{clustersJson\}\}/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/可使用占位符/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
 
     await user.click(screen.getByRole("button", { name: "条目理解" }));
     await user.click(screen.getAllByRole("button", { name: /创建配置/i })[0]);
     dialog = screen.getByRole("dialog", { name: "创建新提示词配置" });
-    expect(within(dialog).getByText(/\{\{maxEvents\}\}/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/\{\{maxEvents\}\}/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
 
     await user.click(screen.getByRole("button", { name: "AI 日报" }));
@@ -767,6 +766,7 @@ describe("AdminSettingsPanel", () => {
     expect(within(dialog).queryByLabelText("系统提示词")).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText("提示词模板")).not.toBeInTheDocument();
     expect(within(dialog).getByText("日报模板")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("textbox", { name: /用户提示词/ })).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/这里配置日报的选题/)).not.toBeInTheDocument();
     expect(within(dialog).getByLabelText("标题规则")).toBeInTheDocument();
     expect(within(dialog).getByLabelText("历史主题识别策略")).toBeInTheDocument();
@@ -774,6 +774,17 @@ describe("AdminSettingsPanel", () => {
     expect(within(dialog).queryByText(/栏目要求用自然语言描述关注范围/)).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/建议同时说明“关注什么”/)).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "取消" }));
+
+    await user.click(screen.getByRole("button", { name: "AI 日报审核" }));
+    await user.click(screen.getAllByRole("button", { name: /创建配置/i })[0]);
+    dialog = screen.getByRole("dialog", { name: "创建新提示词配置" });
+    expect(within(dialog).queryByLabelText("系统提示词")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("textbox", { name: /用户提示词/ })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "查看用户提示词说明" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("tooltip")).toHaveTextContent(/事实准确性|重要进展遗漏/);
+    expect(within(dialog).getByRole("tooltip")).not.toHaveTextContent(/系统自动准备|判定方式/);
+    expect(within(dialog).queryByText(/violation|输入数据|输出格式/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/可使用占位符/)).not.toBeInTheDocument();
   });
 
   it("keeps prompt advanced settings collapsed and reorders daily report blocks by drag", async () => {
@@ -836,14 +847,14 @@ describe("AdminSettingsPanel", () => {
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
     const payload = JSON.parse(String(request.body)) as {
       prompt: string;
-      systemPrompt: string;
+      userPrompt: string;
       templateJson: string;
     };
-    expect(payload.prompt).toBe(DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE);
+    expect(payload.prompt).toBe("");
+    expect(payload.userPrompt).toBeNull();
     const template = parseDailyReportTemplateJson(payload.templateJson);
     expect(template).not.toBeNull();
     if (!template) throw new Error("日报模板 JSON 无法解析");
-    expect(payload.systemPrompt).toBe(compileDailyReportTemplatePrompt(template));
     expect(template.headlineInstruction).toContain("热点事件");
     expect(template.recentTopicRules[0]).toContain("历史主题召回窗口");
     expect(template.blocks[0].title).toBe("其他值得看");

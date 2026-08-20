@@ -8,9 +8,16 @@ import {
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+  PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
 } from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
 import type { RuntimeConfig } from "@/config/runtime";
+import {
+  getAiTaskContract,
+  isLegacyDefaultAiUserInstruction,
+  normalizeAiUserInstruction,
+} from "@/lib/ai/contracts";
 import { prisma } from "@/lib/db";
 import {
   compileDailyReportTemplatePrompt,
@@ -106,7 +113,8 @@ export type FetchModelApiModelsInput = {
 export type SavePromptConfigInput = {
   name: string;
   type: PromptConfigTypeValue;
-  prompt: string;
+  prompt?: string;
+  userPrompt?: string | null;
   systemPrompt?: string | null;
   templateJson?: string | null;
   temperature?: number | null;
@@ -290,6 +298,7 @@ export function serializeAdminPromptConfig(
     name: string;
     type: PromptConfigType;
     prompt: string;
+    userPrompt?: string | null;
     systemPrompt: string | null;
     templateJson: string | null;
     temperature: number | null;
@@ -312,12 +321,24 @@ export function serializeAdminPromptConfig(
   const isUsingDefaultModel = config.modelApiConfigId === null;
   const effectiveModelConfigName = isUsingDefaultModel ? defaultModelConfig?.name : config.modelApiConfig?.name;
 
+  const legacyUserPrompt = config.userPrompt ?? config.prompt;
+  const userPrompt = config.type === PromptConfigType.daily_report
+    ? null
+    : config.isDefault && isLegacyDefaultAiUserInstruction(config.type, legacyUserPrompt)
+      ? getDefaultPromptTemplate(config.type)
+      : normalizeAiUserInstruction(legacyUserPrompt);
+
   return {
     id: config.id,
     name: config.name,
     type: config.type,
-    prompt: config.prompt,
-    systemPrompt: config.systemPrompt,
+    // Keep the legacy field name for API compatibility, but never expose the
+    // persisted protocol/template value to administrators.
+    prompt: userPrompt ?? "",
+    userPrompt,
+    systemPrompt: resolvePromptSystemPrompt(config),
+    contractVersion: getAiTaskContract(config.type).contractVersion,
+    contractHash: getAiTaskContract(config.type).contractHash,
     templateJson: config.templateJson,
     temperature: config.temperature,
     maxTokens: config.maxTokens,
@@ -340,6 +361,7 @@ export function resolvePromptSystemPrompt(config: {
   type: PromptConfigType;
   systemPrompt: string | null;
   prompt: string;
+  userPrompt?: string | null;
   templateJson?: string | null;
 }) {
   if (config.type === PromptConfigType.daily_report && config.templateJson) {
@@ -354,7 +376,7 @@ export function resolvePromptSystemPrompt(config: {
     }
   }
 
-  return config.systemPrompt || config.prompt;
+  return getAiTaskContract(config.type).systemPrompt;
 }
 
 export function resolveTemplateJsonForSave(input: SavePromptConfigInput) {
@@ -370,7 +392,7 @@ export function resolveTemplateJsonForSave(input: SavePromptConfigInput) {
   const template = parseDailyReportTemplateJson(templateJson);
   return {
     templateJson: template ? stringifyDailyReportTemplate(template) : templateJson,
-    systemPrompt: template ? compileDailyReportTemplatePrompt(template) : input.systemPrompt?.trim() || null,
+    systemPrompt: template ? compileDailyReportTemplatePrompt(template) : null,
   };
 }
 
@@ -415,15 +437,8 @@ export async function validatePromptConfigInput(
   if (!normalizeText(input.name)) {
     throw new Error("请填写提示词配置名称。");
   }
-  const savedTemplate = resolveTemplateJsonForSave(input);
-
-  if (!savedTemplate && !normalizeText(input.systemPrompt)) {
-    throw new Error("请填写系统提示词。");
-  }
-  if (!normalizeText(input.prompt)) {
-    throw new Error("请填写提示词模板。");
-  }
   validateClusterMergePromptProtocol(input);
+
   if (input.temperature != null && (input.temperature < 0 || input.temperature > 2)) {
     throw new Error("温度必须在 0 到 2 之间。");
   }
@@ -453,7 +468,7 @@ export async function validatePromptConfigInput(
       },
     });
 
-    if (existingDefault && !input.isEnabled) {
+    if (existingDefault && !input.isEnabled && input.type !== PromptConfigType.daily_report_review) {
       throw new Error("默认提示词配置不能被保存为禁用状态。");
     }
   }
@@ -464,7 +479,7 @@ function validateClusterMergePromptProtocol(input: SavePromptConfigInput) {
     return;
   }
 
-  const content = `${input.systemPrompt ?? ""}\n${input.prompt}`;
+  const content = `${input.systemPrompt ?? ""}\n${input.userPrompt ?? ""}\n${input.prompt ?? ""}`;
   const usesLegacyOutput = ["approvedPairs", "mergeGroups"].some((marker) => content.includes(marker));
 
   if (usesLegacyOutput) {
@@ -478,6 +493,7 @@ const ALL_PROMPT_TYPES = [
   PromptConfigType.cluster_match,
   PromptConfigType.cluster_merge,
   PromptConfigType.daily_report,
+  PromptConfigType.daily_report_review,
 ] as const;
 
 const REMOVED_PROMPT_CONFIG_TYPES = [
@@ -510,12 +526,39 @@ function resolveSystemPromptByType(type: PromptConfigType, fileConfig: RuntimeCo
       return fileConfig.prompts.clusterMerge;
     case PromptConfigType.daily_report:
       return fileConfig.prompts.dailyReport;
+    case PromptConfigType.daily_report_review:
+      return fileConfig.prompts.dailyReportReview;
   }
 }
 
 export type RuntimeConfigSeedOptions = {
   migrateDailyReportTemplates?: boolean;
 };
+
+async function upgradePromptUserInstructions() {
+  const legacyConfigs = await prisma.promptConfig.findMany({
+    select: { id: true, type: true, isDefault: true, prompt: true, userPrompt: true },
+  });
+
+  for (const config of legacyConfigs) {
+    const legacyUserPrompt = config.userPrompt ?? config.prompt;
+    const userPrompt = config.type === PromptConfigType.daily_report
+      ? ""
+      : config.isDefault && isLegacyDefaultAiUserInstruction(config.type, legacyUserPrompt)
+        ? getDefaultPromptTemplate(config.type)
+        : normalizeAiUserInstruction(legacyUserPrompt);
+    const persistedUserPrompt = config.type === PromptConfigType.daily_report ? null : userPrompt;
+
+    if (config.userPrompt === persistedUserPrompt && config.prompt === userPrompt) {
+      continue;
+    }
+
+    await prisma.promptConfig.update({
+      where: { id: config.id },
+      data: { prompt: userPrompt, userPrompt: persistedUserPrompt },
+    });
+  }
+}
 
 async function ensureModelAndPromptConfigsSeeded(options: RuntimeConfigSeedOptions = {}) {
   await deleteRemovedPromptConfigTypes();
@@ -532,6 +575,8 @@ async function ensureModelAndPromptConfigsSeeded(options: RuntimeConfigSeedOptio
   await upgradePreviousDefaultItemUnderstandingPrompt();
   await upgradeLegacyClusterMergePrompt();
   await upgradePreviousDefaultClusterMergePrompt();
+  await upgradePreviousDefaultDailyReportReviewPrompt();
+  await upgradePromptUserInstructions();
   if (options.migrateDailyReportTemplates !== false) {
     await upgradeLegacyDailyReportPrompt(fileConfig);
   }
@@ -578,13 +623,14 @@ async function ensureModelAndPromptConfigsSeeded(options: RuntimeConfigSeedOptio
             name: getDefaultPromptConfigName(type),
             type,
             prompt: getDefaultPromptTemplate(type),
+            userPrompt: getDefaultPromptTemplate(type) || null,
             systemPrompt: resolveSystemPromptByType(type, fileConfig),
             templateJson: type === PromptConfigType.daily_report ? DEFAULT_DAILY_REPORT_TEMPLATE_JSON : null,
             temperature: sampling.temperature,
             maxTokens: sampling.maxTokens,
             topP: sampling.topP,
             modelApiConfigId: null,
-            isEnabled: true,
+            isEnabled: type !== PromptConfigType.daily_report_review,
             isDefault: true,
           };
         }),
@@ -607,13 +653,14 @@ async function ensureModelAndPromptConfigsSeeded(options: RuntimeConfigSeedOptio
           name: getDefaultPromptConfigName(type),
           type,
           prompt: getDefaultPromptTemplate(type),
+          userPrompt: getDefaultPromptTemplate(type) || null,
           systemPrompt: resolveSystemPromptByType(type, fileConfig),
           templateJson: type === PromptConfigType.daily_report ? DEFAULT_DAILY_REPORT_TEMPLATE_JSON : null,
           temperature: sampling.temperature,
           maxTokens: sampling.maxTokens,
           topP: sampling.topP,
           modelApiConfigId: null,
-          isEnabled: true,
+          isEnabled: type !== PromptConfigType.daily_report_review,
           isDefault: true,
         },
       });
@@ -734,6 +781,21 @@ async function upgradePreviousDefaultClusterMergePrompt() {
     },
     data: {
       systemPrompt: DEFAULT_CLUSTER_MERGE_PROMPT,
+    },
+  });
+}
+
+async function upgradePreviousDefaultDailyReportReviewPrompt() {
+  await prisma.promptConfig.updateMany({
+    where: {
+      type: PromptConfigType.daily_report_review,
+      isDefault: true,
+      prompt: PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+      systemPrompt: PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+    },
+    data: {
+      prompt: getDefaultPromptTemplate(PromptConfigType.daily_report_review),
+      systemPrompt: getRuntimeConfig().prompts.dailyReportReview,
     },
   });
 }
@@ -893,6 +955,7 @@ export function serializeSelectedPromptConfig(
     systemPrompt: string | null;
     templateJson?: string | null;
     prompt: string;
+    userPrompt?: string | null;
     temperature: number | null;
     maxTokens: number | null;
     topP: number | null;
@@ -903,12 +966,23 @@ export function serializeSelectedPromptConfig(
       customHeaders?: string;
       isEnabled: boolean;
     } | null;
+    isEnabled: boolean;
+    isDefault?: boolean;
   },
 ) {
+  const legacyUserPrompt = config.userPrompt ?? config.prompt;
+  const userPrompt = config.type === PromptConfigType.daily_report
+    ? ""
+    : config.isDefault && isLegacyDefaultAiUserInstruction(config.type, legacyUserPrompt)
+      ? getDefaultPromptTemplate(config.type)
+      : normalizeAiUserInstruction(legacyUserPrompt);
+
   return {
     name: config.name,
+    userPrompt,
     systemPrompt: resolvePromptSystemPrompt(config),
-    promptTemplate: config.prompt,
+    // Keep this alias for old callers while the API/UI migrate to userPrompt.
+    promptTemplate: userPrompt,
     templateJson: config.templateJson ?? null,
     temperature: config.temperature,
     maxTokens: config.maxTokens,
@@ -917,6 +991,7 @@ export function serializeSelectedPromptConfig(
       config.modelApiConfig && config.modelApiConfig.isEnabled
         ? serializeRuntimeModelApi(config.modelApiConfig)
         : null,
+    enabled: config.isEnabled,
   };
 }
 
@@ -927,6 +1002,7 @@ export function pickPromptConfigByType(
     systemPrompt: string | null;
     templateJson?: string | null;
     prompt: string;
+    userPrompt?: string | null;
     temperature: number | null;
     maxTokens: number | null;
     topP: number | null;
@@ -936,6 +1012,7 @@ export function pickPromptConfigByType(
       modelName: string;
       isEnabled: boolean;
     } | null;
+    isEnabled: boolean;
   }>,
   type: PromptConfigType,
 ) {

@@ -4,6 +4,7 @@ export const PROMPT_CONFIG_TYPES = [
   "cluster_match",
   "cluster_merge",
   "daily_report",
+  "daily_report_review",
 ] as const;
 
 export type PromptConfigType = typeof PROMPT_CONFIG_TYPES[number];
@@ -32,7 +33,10 @@ export type AdminPromptConfig = {
   name: string;
   type: PromptConfigType;
   prompt: string;
+  userPrompt?: string | null;
   systemPrompt: string | null;
+  contractVersion?: string;
+  contractHash?: string;
   templateJson: string | null;
   temperature: number | null;
   maxTokens: number | null;

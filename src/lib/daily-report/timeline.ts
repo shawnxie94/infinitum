@@ -10,6 +10,7 @@ export type DailyReportPipelineStage =
   | "plan"
   | "plan_validate"
   | "write"
+  | "review"
   | "validate"
   | "repair"
   | "persist_publish";
@@ -40,6 +41,9 @@ type DailyReportTaskTimelineInput = {
   activeStage?: DailyReportPipelineStage | null;
   batchCount?: number | null;
   batchSize?: number | null;
+  reviewStatus?: "disabled" | "passed" | "rejected" | "unavailable";
+  reviewAttempts?: number | null;
+  reviewRetryCount?: number | null;
   finishedAt?: Date | null;
 };
 
@@ -47,7 +51,7 @@ export function normalizeDailyReportTimelineStage(stage: string | null | undefin
   if (!stage) return null;
   if (stage === "plan_validate") return "plan";
   if (stage === "validate" || stage === "repair") return "write";
-  return ["prepare", "assess", "merge", "plan", "write", "persist_publish"].includes(stage as DailyReportPipelineStage)
+  return ["prepare", "assess", "merge", "plan", "write", "review", "persist_publish"].includes(stage as DailyReportPipelineStage)
     ? stage as DailyReportPipelineStage
     : null;
 }
@@ -68,13 +72,14 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
   const durationMs = input.finishedAt ? input.finishedAt.getTime() - taskStartedAt.getTime() : null;
   const stages = [
     ["daily_report_prepare", "准备候选"],
-    ["daily_report_assess", "分批选题评估"],
+    ["daily_report_assess", "评估"],
     ["daily_report_merge", "准备规划输入"],
-    ["daily_report_plan", "全局规划"],
-    ["daily_report_write", "按计划写作"],
+    ["daily_report_plan", "规划"],
+    ["daily_report_write", "写作"],
+    ["daily_report_review", "审核"],
     ["daily_report_persist_publish", "持久化/发布"],
   ] as const;
-  const stageNames: DailyReportPipelineStage[] = ["prepare", "assess", "merge", "plan", "write", "persist_publish"];
+  const stageNames: DailyReportPipelineStage[] = ["prepare", "assess", "merge", "plan", "write", "review", "persist_publish"];
   const activeIndex = input.activeStage ? stageNames.indexOf(input.activeStage) : -1;
   // A null configured batch size means ASSESS runs as one batch containing all
   // candidates. Show the effective size in the task timeline instead of the
@@ -93,7 +98,11 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
         : input.status === "skipped" ? "skipped" : "succeeded";
   const nodes = stages.map(([key, label], index) => {
     const terminalFailureIndex = Math.max(activeIndex, 0);
-    const nodeStatus = input.status === "failed"
+    const reviewFailed = key === "daily_report_review"
+      && (input.reviewStatus === "rejected" || input.reviewStatus === "unavailable");
+    const nodeStatus = reviewFailed
+        ? "partial"
+        : input.status === "failed"
         ? index < terminalFailureIndex ? "succeeded" : index === terminalFailureIndex ? "failed" : "pending"
         : input.status === "cancelled"
           ? index < terminalFailureIndex ? "succeeded" : index === terminalFailureIndex ? "cancelled" : "pending"
@@ -134,6 +143,18 @@ export function buildDailyReportTaskTimeline(input: DailyReportTaskTimelineInput
           { label: "修复轮数", value: input.writeRepairCount ?? input.repairCount ?? 0 },
           { label: "完整重试", value: input.writeRetryCount ?? 0 },
           { label: "上下文超限", value: input.contextOverflowCount ?? 0 },
+        ] : []),
+        ...(index === 5 ? [
+          { label: "审核次数", value: input.reviewAttempts ?? 0 },
+          { label: "审核调用重试", value: input.reviewRetryCount ?? 0 },
+          {
+            label: "审核阻断发布",
+            value: input.reviewStatus === "passed"
+              ? 0
+              : input.reviewStatus === "rejected"
+                ? 1
+                : input.reviewStatus === "unavailable" ? 1 : 0,
+          },
         ] : []),
       ],
       ...(key === "daily_report_plan" && input.planningAudit ? { audit: { planning: input.planningAudit } } : {}),

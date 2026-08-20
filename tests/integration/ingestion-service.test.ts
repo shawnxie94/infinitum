@@ -131,6 +131,11 @@ describe("runIngestion", () => {
       { key: "cluster_summary", label: "聚合摘要", actual: 1, estimated: 1 },
       { key: "cluster_merge", label: "聚合合并", actual: 0, estimated: 0 },
       { key: "daily_report", label: "AI 日报", actual: 0, estimated: 0 },
+      { key: "daily_report_assess", label: "评估", actual: 0, estimated: 0 },
+      { key: "daily_report_plan", label: "规划", actual: 0, estimated: 0 },
+      { key: "daily_report_write", label: "写作", actual: 0, estimated: 0 },
+      { key: "daily_report_repair", label: "修复", actual: 0, estimated: 0 },
+      { key: "daily_report_review", label: "审核", actual: 0, estimated: 0 },
     ]);
     expect(taskTimeline.map((node) => node.key)).toEqual([
       "source_fetch",

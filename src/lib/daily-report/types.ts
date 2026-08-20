@@ -1,3 +1,5 @@
+import type { NormalizedDailyReportTemplate } from "@/lib/daily-report/template";
+
 export const DAILY_REPORT_TIMEZONE = "Asia/Shanghai";
 
 export const DEFAULT_OPENING_LABEL = "摘要";
@@ -9,6 +11,67 @@ export const DAILY_REPORT_TITLE_MAX_LENGTH = 64;
 export const DAILY_REPORT_HEADLINE_MAX_LENGTH = 64;
 
 export type DailyReportStatus = "draft" | "published" | "failed";
+
+export type DailyReportReviewStatus = "disabled" | "passed" | "rejected" | "unavailable";
+
+export const DAILY_REPORT_REVIEW_VIOLATION_CODES = [
+  "coverage_insufficient",
+  "candidate_omitted",
+  "topic_not_independent",
+  "factual_inconsistency",
+  "duplicated_content",
+  "padding_content",
+] as const;
+
+export type DailyReportReviewViolationCode = typeof DAILY_REPORT_REVIEW_VIOLATION_CODES[number];
+
+export type DailyReportReviewViolation = {
+  code: DailyReportReviewViolationCode;
+  severity: "error" | "warning";
+  message: string;
+  topicIds?: string[];
+  candidateIds?: number[];
+  evidence: string;
+  /** Concrete, evidence-bounded direction for the next PLAN/WRITE retry. */
+  guidance: string;
+};
+
+export type DailyReportReviewFeedback = {
+  violations: DailyReportReviewViolation[];
+  instruction: string;
+};
+
+export type DailyReportReviewCandidatePool = {
+  rawCandidateCount: number;
+  eligibleCandidateCount: number;
+  excludedByAssessCount: number;
+  historyFilteredCount: number;
+  candidatesByBlock: Record<string, number>;
+  topUnselectedCandidates: DailyReportPlanningCandidateBrief[];
+  inputTruncatedCount: number;
+};
+
+export type DailyReportReviewSelectionAudit = {
+  candidateCoverage: Record<string, unknown>;
+  planningAudit: Record<string, unknown> | null;
+  selectedCount: number;
+  selectedByBlock: Record<string, number>;
+};
+
+export type DailyReportReviewInput = {
+  date: string;
+  draft: DailyReportModelDraft;
+  selectedTopics: DailyReportSelectedTopic[];
+  candidatePool: DailyReportReviewCandidatePool;
+  selectionAudit: DailyReportReviewSelectionAudit;
+  template: NormalizedDailyReportTemplate;
+};
+
+export type DailyReportReviewResult = {
+  verdict: "pass" | "reject";
+  violations: DailyReportReviewViolation[];
+  summary: string;
+};
 
 export type DailyReportCandidate = {
   id: number;

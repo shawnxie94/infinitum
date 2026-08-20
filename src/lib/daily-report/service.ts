@@ -8,6 +8,7 @@ import {
   type AiEventSignature,
   type DailyReportStageContext,
 } from "@/lib/ai/provider";
+import { getAiTaskContract } from "@/lib/ai/contracts";
 import { prisma } from "@/lib/db";
 import { getDailyReportDateRange, getTodayDailyReportDate, normalizeDailyReportDate } from "@/lib/daily-report/date";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
@@ -44,6 +45,10 @@ import {
   type DailyReportPlanningAudit,
   type DailyReportPlanningCandidate,
   type DailyReportContent,
+  type DailyReportReviewInput,
+  type DailyReportReviewFeedback,
+  type DailyReportReviewStatus,
+  type DailyReportReviewViolation,
   type DailyReportItem,
   type DailyReportSourceRegistryEntry,
   type RecentDailyReportTopic,
@@ -107,6 +112,8 @@ const DAILY_REPORT_RECENT_TOPIC_CONTEXT_LIMIT = 120;
 const MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE = 5;
 const MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE = 3;
 const DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES = ["allowed", "restored"] as const;
+const DAILY_REPORT_REVIEW_TOP_UNSELECTED_CANDIDATE_LIMIT = 20;
+const DAILY_REPORT_PIPELINE_VERSION = "daily-report-topic-first-review-v1";
 
 function getFallbackDailyReportHeadline(content: DailyReportContent) {
   const sectionTitles = getDailyReportSectionBlocks(content)
@@ -163,9 +170,11 @@ function buildDailyReportGenerationSignature(input: {
 }) {
   const prompt = input.runtimeConfig.selectedPromptConfigs?.dailyReport;
   const modelApi = prompt?.modelApi ?? input.runtimeConfig.modelApi;
+  const reviewPrompt = input.runtimeConfig.selectedPromptConfigs?.dailyReportReview;
+  const reviewModelApi = reviewPrompt?.modelApi ?? input.runtimeConfig.modelApi;
   return createHash("sha256")
     .update(JSON.stringify({
-      pipelineVersion: "daily-report-topic-first-v2",
+      pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
       templateSignature: input.templateSignature,
       planningBatchSize: input.planningBatchSize,
       recentTopicLookbackDays: input.recentTopicLookbackDays,
@@ -177,11 +186,31 @@ function buildDailyReportGenerationSignature(input: {
       },
       prompt: prompt
         ? {
+            userPrompt: prompt.userPrompt,
+            contractVersion: getAiTaskContract("daily_report").contractVersion,
+            contractHash: getAiTaskContract("daily_report").contractHash,
             temperature: prompt.temperature ?? null,
             maxTokens: prompt.maxTokens ?? null,
             topP: prompt.topP ?? null,
           }
         : null,
+      review: reviewPrompt
+        ? {
+            enabled: reviewPrompt.enabled,
+            modelApi: {
+              baseURL: reviewModelApi.baseURL,
+              model: reviewModelApi.model,
+              apiKeyConfigured: Boolean(reviewModelApi.apiKey),
+              customHeaderNames: Object.keys(reviewModelApi.customHeaders ?? {}).sort(),
+            },
+            userPrompt: reviewPrompt.userPrompt,
+            contractVersion: getAiTaskContract("daily_report_review").contractVersion,
+            contractHash: getAiTaskContract("daily_report_review").contractHash,
+            temperature: reviewPrompt.temperature ?? null,
+            maxTokens: reviewPrompt.maxTokens ?? null,
+            topP: reviewPrompt.topP ?? null,
+          }
+        : { enabled: false },
     }))
     .digest("hex");
 }
@@ -500,6 +529,55 @@ export function buildDailyReportCandidateCoverage(
     selectedSameDayCount,
     lowRankSelectedCount: selectedCandidates.filter((candidate) => !topRankIds.has(candidate.id)).length,
     warnings,
+  };
+}
+
+export function buildDailyReportReviewContext(input: {
+  date: string;
+  draft: DailyReportModelDraft;
+  selectedTopics: ReturnType<typeof buildDailyReportSelectedTopics>;
+  candidates: DailyReportCandidate[];
+  rawCandidateCount?: number;
+  candidateBriefs: Awaited<ReturnType<typeof buildDailyReportCandidateBriefs>>;
+  historyFilteredCount: number;
+  candidateCoverage: DailyReportCandidateCoverageDTO;
+  planningAudit: DailyReportPlanningAudit | null;
+  template: ReturnType<typeof normalizeDailyReportTemplateConfig>;
+}): DailyReportReviewInput {
+  const selectedIds = new Set(input.selectedTopics.flatMap((topic) => topic.candidateIds));
+  const selectedByBlock = input.selectedTopics.reduce<Record<string, number>>((counts, topic) => {
+    counts[topic.blockKey] = (counts[topic.blockKey] ?? 0) + 1;
+    return counts;
+  }, {});
+  const candidatesByBlock = input.candidateBriefs.reduce<Record<string, number>>((counts, candidate) => {
+    const blockKey = candidate.suggestedBlockKey ?? "unassigned";
+    counts[blockKey] = (counts[blockKey] ?? 0) + 1;
+    return counts;
+  }, {});
+  const unselectedCandidates = input.candidateBriefs
+    .filter((candidate) => !selectedIds.has(candidate.candidateId))
+    .sort((left, right) => right.candidateScore - left.candidateScore || left.candidateId - right.candidateId);
+
+  return {
+    date: input.date,
+    draft: input.draft,
+    selectedTopics: input.selectedTopics,
+    candidatePool: {
+      rawCandidateCount: input.rawCandidateCount ?? input.candidates.length,
+      eligibleCandidateCount: input.candidateBriefs.length,
+      excludedByAssessCount: Math.max(0, input.candidates.length - input.candidateBriefs.length),
+      historyFilteredCount: input.historyFilteredCount,
+      candidatesByBlock,
+      topUnselectedCandidates: unselectedCandidates.slice(0, DAILY_REPORT_REVIEW_TOP_UNSELECTED_CANDIDATE_LIMIT),
+      inputTruncatedCount: Math.max(0, unselectedCandidates.length - DAILY_REPORT_REVIEW_TOP_UNSELECTED_CANDIDATE_LIMIT),
+    },
+    selectionAudit: {
+      candidateCoverage: input.candidateCoverage as unknown as Record<string, unknown>,
+      planningAudit: input.planningAudit as unknown as Record<string, unknown> | null,
+      selectedCount: input.selectedTopics.length,
+      selectedByBlock,
+    },
+    template: input.template,
   };
 }
 
@@ -1229,6 +1307,8 @@ async function generateDailyReportInternal(input: {
       historyFilteredCount: 0,
       batchCount: 0,
       batchSize: schedule.dailyReportPlanningBatchSize ?? null,
+      reviewStatus: "disabled" as const,
+      reviewAttempts: 0,
       aiUsage: { actual: 0, estimated: 0, breakdown: [] },
     };
   }
@@ -1253,18 +1333,25 @@ async function generateDailyReportInternal(input: {
       historyFilteredCount: 0,
       batchCount: 0,
       batchSize: schedule.dailyReportPlanningBatchSize ?? null,
+      reviewStatus: "disabled" as const,
+      reviewAttempts: 0,
       aiUsage: { actual: 0, estimated: 0, breakdown: [] },
     };
   }
 
-  const baseProvider = createAiProvider(runtimeConfig.modelApi, runtimeConfig.selectedPromptConfigs);
   // Track every AI call made during generation (main call + repair fallback)
   // so the background task run records accurate `aiCallCountActual` / breakdown.
-  const aiUsage = createTaskAiUsageTracker(0, "daily_report");
+  const aiUsage = createTaskAiUsageTracker(0, "daily_report_assess");
+  const baseProvider = createAiProvider(runtimeConfig.modelApi, runtimeConfig.selectedPromptConfigs, undefined, {
+    onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+  });
   const provider = aiUsage.wrapProvider(baseProvider);
   let content: DailyReportContent;
   let finalizationPlan: DailyReportPlan | null = null;
+  let finalizationPlanningCandidates: DailyReportPlanningCandidate[] = [];
   let finalizationSelectedCandidates: DailyReportPlanningCandidate[] = [];
+  let finalizationSelectedTopics: ReturnType<typeof buildDailyReportSelectedTopics> = [];
+  let finalizationCandidateBriefs: Awaited<ReturnType<typeof buildDailyReportCandidateBriefs>> = [];
   let finalizationTemplate: ReturnType<typeof normalizeDailyReportTemplateConfig> | null = null;
   finalizationTemplate = template;
   let planningBatchCount = 0;
@@ -1290,6 +1377,13 @@ async function generateDailyReportInternal(input: {
   let latestPlanViolations: ReturnType<typeof validateDailyReportPlan> | null = null;
   let latestPlanningAudit: DailyReportPlanningAudit | null = null;
   let planOverflowFeedbackUsed = false;
+  let reviewStatus: DailyReportReviewStatus = runtimeConfig.selectedPromptConfigs?.dailyReportReview?.enabled
+    ? "unavailable"
+    : "disabled";
+  let reviewAttempts = 0;
+  let reviewRetryStage: "plan" | "write" | null = null;
+  let reviewViolations: DailyReportReviewViolation[] = [];
+  let reviewAudit: Record<string, unknown> | null = null;
   const buildFailureCheckpoint = (error: unknown) => {
     if (!latestCheckpoint) return null;
     const contextOverflow = isDailyReportContextOverflowError(error);
@@ -1422,6 +1516,7 @@ async function generateDailyReportInternal(input: {
   const assessments: DailyReportCandidateAssessment[] = [];
   try {
     const planningCandidates = candidates.map(toDailyReportPlanningCandidate);
+    finalizationPlanningCandidates = planningCandidates;
     const batchSize = schedule.dailyReportPlanningBatchSize ?? null;
     const batches = splitDailyReportCandidates(planningCandidates, batchSize);
     planningBatchCount = batches.length;
@@ -1432,7 +1527,7 @@ async function generateDailyReportInternal(input: {
       checkpoint.inputHash === inputHash &&
       checkpoint.candidateSnapshotHash === candidateSnapshotHash &&
       checkpoint.templateSignature === templateSignature &&
-      checkpoint.pipelineVersion === "daily-report-topic-first-v2",
+      checkpoint.pipelineVersion === DAILY_REPORT_PIPELINE_VERSION,
     );
     if (input.resumeCheckpoint && !canResume) {
       throw new DailyReportGenerationError(
@@ -1449,7 +1544,7 @@ async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-topic-first-v2",
+      pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
       stage: "prepare",
       completedStages: canResume ? checkpoint?.completedStages ?? ["prepare"] : ["prepare"],
       lastCompletedStage: "prepare",
@@ -1517,7 +1612,7 @@ async function generateDailyReportInternal(input: {
       historyFilteredCount = getHistoryFilteredCount();
       await saveCheckpoint({
         version: 1,
-        pipelineVersion: "daily-report-topic-first-v2",
+        pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
         stage: "assess",
         completedStages: ["prepare", "assess"],
         lastCompletedStage: "assess",
@@ -1570,10 +1665,11 @@ async function generateDailyReportInternal(input: {
     const candidateBriefs = canResume && Array.isArray(checkpoint?.planningCandidateBriefs)
       ? checkpoint.planningCandidateBriefs as Awaited<ReturnType<typeof buildDailyReportCandidateBriefs>>
       : buildDailyReportCandidateBriefs(planningCandidates, assessments);
+    finalizationCandidateBriefs = candidateBriefs;
     planningCandidateCount = candidateBriefs.length;
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-topic-first-v2",
+      pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
       stage: "merge",
       completedStages: ["prepare", "assess", "merge"],
       lastCompletedStage: "merge",
@@ -1666,7 +1762,7 @@ async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: "daily-report-topic-first-v2",
+      pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
       stage: "plan",
       completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
       lastCompletedStage: "plan",
@@ -1703,6 +1799,7 @@ async function generateDailyReportInternal(input: {
     const selectedTopics = buildDailyReportSelectedTopics(plan, planningCandidates, assessments);
     finalizationPlan = plan;
     finalizationSelectedCandidates = selectedCandidates;
+    finalizationSelectedTopics = selectedTopics;
     await input.onStageUpdate?.("write");
     let modelDraft: DailyReportModelDraft | null = null;
     let draft: DailyReportDraft | null = null;
@@ -1936,6 +2033,201 @@ async function generateDailyReportInternal(input: {
     throw new DailyReportGenerationError(error, aiUsage.snapshot(), buildFailureCheckpoint(error));
   }
   content = deduplication.content;
+
+  // Reviewer runs after deterministic WRITE validation. A rejection can ask
+  // for exactly one intermediate PLAN/WRITE regeneration; a reviewer failure
+  // keeps the valid draft but permanently disables automatic publication.
+  if (runtimeConfig.selectedPromptConfigs?.dailyReportReview?.enabled && finalizationPlan) {
+    currentStage = "review";
+    currentAttemptKey = "REVIEW";
+    await input.onStageUpdate?.("review");
+    const reviewRetryPlanCodes = new Set([
+      "coverage_insufficient",
+      "candidate_omitted",
+      "topic_not_independent",
+      "padding_content",
+    ]);
+    const evaluateReview = async (reviewContent: DailyReportContent) => {
+      const normalized = deduplicateDailyReportContentByCandidate(
+        reviewContent,
+        finalizationSelectedCandidates,
+        { refillEmptySections: false },
+      ).content;
+      const deterministicViolations = validateDailyReportDraft(
+        normalized,
+        finalizationPlan!,
+        finalizationSelectedCandidates,
+        template,
+        omittedTopicIds,
+      );
+      if (deterministicViolations.length > 0) {
+        throw new Error(`Review 输入日报未通过最终校验：${deterministicViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
+      }
+      const coverage = buildDailyReportCandidateCoverage(normalized, candidates);
+      const reviewInput = buildDailyReportReviewContext({
+        date,
+        draft: toDailyReportModelDraft(normalized),
+        selectedTopics: finalizationSelectedTopics,
+        candidates,
+        rawCandidateCount: rawCandidates.length,
+        candidateBriefs: finalizationCandidateBriefs,
+        historyFilteredCount,
+        candidateCoverage: coverage,
+        planningAudit: latestPlanningAudit,
+        template,
+      });
+      const result = await runStageWithAttempts(
+        "review",
+        async () => provider.reviewDailyReport(reviewInput),
+        { attemptKey: "REVIEW", matrixStage: "REVIEW" },
+      );
+      return { content: normalized, coverage, result };
+    };
+    const firstReview = await (async () => {
+      try {
+        return await evaluateReview(content);
+      } catch (error) {
+        reviewAttempts = 1;
+        reviewStatus = "unavailable";
+        reviewAudit = { attempts: 1, error: error instanceof Error ? error.message : String(error) };
+        return null;
+      }
+    })();
+
+    if (firstReview) {
+      reviewAttempts = 1;
+      reviewViolations = firstReview.result.violations;
+      reviewStatus = firstReview.result.verdict === "pass" ? "passed" : "rejected";
+      content = firstReview.content;
+      reviewAudit = {
+        attempts: 1,
+        first: firstReview.result,
+        candidateCoverage: firstReview.coverage,
+      };
+
+      if (firstReview.result.verdict === "reject") {
+        reviewRetryStage = firstReview.result.violations.some((violation) => reviewRetryPlanCodes.has(violation.code))
+          ? "plan"
+          : "write";
+        const reviewFeedback: DailyReportReviewFeedback = {
+          violations: firstReview.result.violations,
+          instruction: "这是上一次审核发现的问题和修复指导。请优先解决所有 error 级问题，并逐条落实 guidance；只能使用本次重试输入中的候选、主题、模板和事实，不得补造事实。",
+        };
+        const originalFinalization = {
+          plan: finalizationPlan,
+          selectedCandidates: finalizationSelectedCandidates,
+          selectedTopics: finalizationSelectedTopics,
+        };
+        try {
+          if (reviewRetryStage === "plan") {
+            const rawPlan = materializeDailyReportPlan(await provider.planDailyReport({
+              candidateBriefs: finalizationCandidateBriefs,
+              template,
+              recentTopics,
+              recentTopicLookbackDays,
+              reviewFeedback,
+            }));
+            const ordered = orderAndLimitDailyReportPlanWithAudit(
+              rawPlan,
+              template,
+              finalizationPlanningCandidates,
+              assessments,
+            );
+            const planViolations = validateDailyReportPlan(
+              ordered.plan,
+              finalizationPlanningCandidates,
+              assessments,
+              template,
+            );
+            if (planViolations.length > 0) {
+              throw new Error(`Review 触发的 PLAN 重试未通过校验：${planViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
+            }
+            finalizationPlan = ordered.plan;
+            latestPlanningAudit = ordered.audit;
+            finalizationSelectedCandidates = finalizationPlanningCandidates.filter((candidate) =>
+              new Set(getDailyReportPlanCandidateIds(ordered.plan)).has(candidate.id),
+            );
+            finalizationSelectedTopics = buildDailyReportSelectedTopics(
+              ordered.plan,
+              finalizationPlanningCandidates,
+              assessments,
+            );
+          }
+
+          const retryModelDraft = await provider.writeDailyReport({
+            selectedTopics: finalizationSelectedTopics,
+            template,
+            reviewFeedback,
+          });
+          const retryDraft = normalizeDailyReportDraftForTemplate(
+            orderDailyReportDraft(
+              attachDailyReportTopicSources(retryModelDraft, finalizationPlan),
+              finalizationPlan,
+              template,
+            ),
+            template,
+          );
+          const retryViolations = validateDailyReportDraft(
+            retryDraft,
+            finalizationPlan,
+            finalizationSelectedCandidates,
+            template,
+            omittedTopicIds,
+          );
+          if (retryViolations.length > 0) {
+            throw new Error(`Review 触发的 WRITE 重试未通过校验：${retryViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
+          }
+          const secondReview = await evaluateReview(retryDraft);
+          reviewAttempts = 2;
+          reviewViolations = secondReview.result.violations;
+          reviewStatus = secondReview.result.verdict === "pass" ? "passed" : "rejected";
+          content = secondReview.content;
+          reviewAudit = {
+            ...(reviewAudit ?? {}),
+            attempts: 2,
+            retryStage: reviewRetryStage,
+            second: secondReview.result,
+            secondCandidateCoverage: secondReview.coverage,
+          };
+        } catch (error) {
+          // Keep the last deterministic draft, but never let a failed review
+          // or review-triggered regeneration reach the auto-publish gate.
+          finalizationPlan = originalFinalization.plan;
+          finalizationSelectedCandidates = originalFinalization.selectedCandidates;
+          finalizationSelectedTopics = originalFinalization.selectedTopics;
+          reviewStatus = "unavailable";
+          reviewAudit = {
+            ...(reviewAudit ?? {}),
+            attempts: 2,
+            retryStage: reviewRetryStage,
+            retryError: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+    }
+
+    if (latestCheckpoint) {
+      await saveCheckpoint({
+        ...latestCheckpoint,
+        stage: "review",
+        completedStages: [...new Set([...latestCheckpoint.completedStages, "review"])],
+        lastCompletedStage: "review",
+        failedStage: null,
+        failureCode: null,
+        resumeEligible: reviewStatus === "passed",
+        reviewStatus,
+        reviewAttempts,
+        reviewRetryStage,
+        reviewViolations,
+        reviewAudit,
+        data: {
+          ...(latestCheckpoint.data ?? {}),
+          reviewAttempts,
+          reviewRetryStage,
+        },
+      });
+    }
+  }
   const sourceRows = getSectionSourceIds(content);
   const candidateCoverage = buildDailyReportCandidateCoverage(content, candidates);
   if (candidateCoverage.warnings.length > 0) {
@@ -1972,9 +2264,18 @@ async function generateDailyReportInternal(input: {
     removedEmptySections: deduplication.removedEmptySectionTitles,
     omittedRepairTopics: Array.from(omittedTopicIds),
     candidateCoverage,
+    review: {
+      status: reviewStatus,
+      attempts: reviewAttempts,
+      retryStage: reviewRetryStage,
+      violations: reviewViolations,
+      audit: reviewAudit,
+    },
     candidateCount: candidates.length,
   });
-  const shouldAutoPublish = schedule.dailyReportAutoPublish && !partial;
+  const shouldAutoPublish = schedule.dailyReportAutoPublish
+    && !partial
+    && (reviewStatus === "disabled" || reviewStatus === "passed");
   const publishedAt = shouldAutoPublish ? new Date() : null;
   const persistIdempotencyKey = `generated:${input.taskRunId ?? `direct-${Date.now()}`}:${inputHash}`;
 
@@ -2021,6 +2322,11 @@ async function generateDailyReportInternal(input: {
     omittedTopicIds: Array.from(omittedTopicIds),
     historyFilteredCount,
     validationViolationCount,
+    reviewStatus,
+    reviewAttempts,
+    reviewRetryStage,
+    reviewViolations,
+    reviewAudit,
     batchSize: schedule.dailyReportPlanningBatchSize ?? null,
     aiUsage: aiUsage.snapshot(),
   };
@@ -2080,6 +2386,9 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
   let omittedTopicCount = 0;
   let batchCount = 0;
   let batchSize: number | null = null;
+  let reviewStatus: DailyReportReviewStatus = "disabled";
+  let reviewAttempts = 0;
+  let reviewRetryCount = 0;
   let activeStage: DailyReportPipelineStage | null = "prepare";
   let resumeCheckpoint: TaskPipelineCheckpoint | null = null;
   if (taskRun.pipelineCheckpointJson) {
@@ -2100,7 +2409,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       }),
       aiCallCountEstimated: 1,
       aiCallBreakdown: [
-        { key: "daily_report", label: "AI 日报", actual: 0, estimated: 1 } as TaskAiCallBreakdownSnapshot,
+        { key: "daily_report_assess", label: "评估", actual: 0, estimated: 1 } as TaskAiCallBreakdownSnapshot,
       ],
     });
 
@@ -2187,6 +2496,11 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         if (typeof checkpoint.data?.writeRetryCount === "number") {
           writeRetryCount = checkpoint.data.writeRetryCount;
         }
+        if (checkpoint.reviewStatus) reviewStatus = checkpoint.reviewStatus;
+        if (typeof checkpoint.reviewAttempts === "number") reviewAttempts = checkpoint.reviewAttempts;
+        if (typeof checkpoint.stageAttempts?.REVIEW === "number") {
+          reviewRetryCount = Math.max(0, checkpoint.stageAttempts.REVIEW - 1);
+        }
         await updateTaskRun(taskRun.id, { pipelineCheckpoint: checkpoint });
         resumeCheckpoint = checkpoint;
       },
@@ -2195,17 +2509,21 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
 
     const finishedAt = new Date();
     const finalAiUsage = result.aiUsage;
-    const finalStatus = result.partial ? "partial" : "succeeded";
+    reviewStatus = result.reviewStatus;
+    reviewAttempts = result.reviewAttempts;
+    const finalStatus = result.partial || reviewStatus === "rejected" || reviewStatus === "unavailable"
+      ? "partial"
+      : "succeeded";
     omittedTopicCount = result.omittedTopicIds.length;
     const totalActual = result.skipped ? 0 : finalAiUsage.actual;
     const totalEstimated = finalAiUsage.estimated;
-    // Always include the daily_report key so the breakdown is non-empty when
-    // the task runs at all, even if the call count is zero.
+    // Always include the first concrete daily-report stage so the breakdown is
+    // non-empty when the task runs at all, even if the call count is zero.
     const finalBreakdown: TaskAiCallBreakdownSnapshot[] = result.skipped
-      ? [{ key: "daily_report", label: "AI 日报", actual: 0, estimated: totalEstimated }]
-      : finalAiUsage.breakdown.some((entry) => entry.key === "daily_report")
+      ? [{ key: "daily_report_assess", label: "评估", actual: 0, estimated: totalEstimated }]
+      : finalAiUsage.breakdown.some((entry) => entry.key.startsWith("daily_report_") || entry.key === "daily_report")
         ? finalAiUsage.breakdown
-        : [{ key: "daily_report", label: "AI 日报", actual: totalActual, estimated: totalEstimated }];
+        : [{ key: "daily_report_assess", label: "评估", actual: totalActual, estimated: totalEstimated }];
     const completedCheckpoint = resumeCheckpoint
       && resumeCheckpoint.resumeEligible
       && getDailyReportRecoveryStages(resumeCheckpoint).length > 0
@@ -2219,6 +2537,8 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
           stageLoop: undefined,
         }
       : null;
+    const finalPipelineCheckpoint = completedCheckpoint
+      ?? (resumeCheckpoint?.reviewStatus ? resumeCheckpoint : null);
     await updateTaskRun(taskRun.id, {
       status: finalStatus,
       progressCurrent: 1,
@@ -2252,6 +2572,9 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         repairCount: result.repairCount,
         contextOverflowCount: contextOverflowStages.size,
         omittedTopicCount,
+        reviewStatus,
+        reviewAttempts,
+        reviewRetryCount,
         batchCount: result.batchCount,
         batchSize: result.batchSize,
         activeStage: result.skipped ? null : "persist_publish",
@@ -2259,7 +2582,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       }),
       // Keep the final planning inputs and plan so a completed report can be
       // regenerated from ASSESS/PLAN/WRITE as a new task.
-      pipelineCheckpoint: completedCheckpoint,
+      pipelineCheckpoint: finalPipelineCheckpoint,
       finishedAt,
     });
     await markDailyScheduleRunFinished(taskRun, finalStatus);

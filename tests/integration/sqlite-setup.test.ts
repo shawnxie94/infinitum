@@ -80,6 +80,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'model_api_configs'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'prompt_configs'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('prompt_configs') WHERE "name" = 'templateJson'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('prompt_configs') WHERE "name" = 'userPrompt'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'aggregation_split_links'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'sourceConcurrency'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'fullTextFetchThreshold'`)).toBe("1");
@@ -196,6 +197,7 @@ describe("sqlite setup", () => {
     });
 
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('prompt_configs') WHERE "name" = 'templateJson'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT "userPrompt" FROM "prompt_configs" WHERE "id" = 'prompt-old'`)).toBe("模板");
     expect(runSqlite(dbPath, `SELECT "name" FROM "prompt_configs" WHERE "id" = 'prompt-old'`)).toBe("旧日报提示词");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('daily_report_refinement_chat', 'daily_report_refinement_generate')`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('item_summary', 'item_analysis', 'item_aggregation')`)).toBe("0");

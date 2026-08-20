@@ -8,8 +8,21 @@ import {
   validatePromptConfigInput,
 } from "@/lib/settings/core";
 import { normalizeText } from "@/lib/utils/text";
+import { getDefaultPromptTemplate } from "@/lib/settings/ai-config";
+import { normalizeAiUserInstruction } from "@/lib/ai/contracts";
 
 type DefaultModelConfigReader = Pick<typeof prisma, "modelApiConfig">;
+
+function getPersistedUserPrompt(
+  input: SavePromptConfigInput,
+  fallback?: string | null,
+) {
+  if (input.type === "daily_report") {
+    return null;
+  }
+
+  return normalizeAiUserInstruction(input.userPrompt ?? input.prompt ?? fallback ?? getDefaultPromptTemplate(input.type));
+}
 
 async function getDefaultModelConfigSummary(reader: DefaultModelConfigReader = prisma) {
   return reader.modelApiConfig.findFirst({
@@ -84,7 +97,8 @@ export async function createPromptConfig(input: SavePromptConfigInput) {
       data: {
         name: normalizeText(input.name),
         type: input.type,
-        prompt: input.prompt.trim(),
+        prompt: input.type === "daily_report" ? "" : input.prompt?.trim() || getDefaultPromptTemplate(input.type),
+        userPrompt: getPersistedUserPrompt(input),
         systemPrompt: templateSave?.systemPrompt ?? (input.systemPrompt?.trim() || null),
         templateJson: templateSave?.templateJson ?? null,
         temperature: coerceNullableNumber(input.temperature),
@@ -140,7 +154,8 @@ export async function updatePromptConfig(id: string, input: SavePromptConfigInpu
       data: {
         name: normalizeText(input.name),
         type: input.type,
-        prompt: input.prompt.trim(),
+        prompt: input.type === "daily_report" ? "" : input.prompt?.trim() || current.prompt,
+        userPrompt: getPersistedUserPrompt(input, current.userPrompt ?? current.prompt),
         systemPrompt: templateSave?.systemPrompt ?? (input.systemPrompt?.trim() || null),
         templateJson: templateSave?.templateJson ?? null,
         temperature: coerceNullableNumber(input.temperature),

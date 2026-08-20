@@ -73,6 +73,7 @@ export const DEFAULT_MAX_FEED_ITEMS_TO_SCAN = 500;
 type ResolvedRunOptions = RunIngestionOptions & {
   now: Date;
   taskTimelineModelNames: IngestionTimelineModelNames;
+  aiUsage: ReturnType<typeof createTaskAiUsageTracker>;
 };
 
 // 摄入进度刷新间隔常量已移至 @/config/constants
@@ -141,6 +142,7 @@ function resolvePromptModelName(
 
 async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promise<ResolvedRunOptions> {
   const now = options?.now ?? new Date();
+  const aiUsage = createTaskAiUsageTracker();
   const runtimeConfig =
     !options?.aiProvider || !options?.sourceConfigs || !options?.blacklist ? await getIngestionRuntimeConfig() : null;
   const defaultModelName = runtimeConfig?.modelApi.model ?? null;
@@ -176,6 +178,7 @@ async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promis
         undefined,
         {
           aggregationSplitMaxEvents: runtimeConfig?.ingestion.aggregationSplitMaxEvents,
+          onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
         },
       ),
     sourceConfigs: options?.sourceConfigs ?? runtimeConfig?.rssSources ?? [],
@@ -216,6 +219,7 @@ async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promis
           clusterMerge: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.clusterMerge, defaultModelName),
         }
       : createIngestionTimelineModelNames(),
+    aiUsage,
   };
 }
 
@@ -373,7 +377,7 @@ async function executeIngestion(run: FetchRun, options: ResolvedRunOptions) {
     clusterFinalize: null,
   };
   let sources: Awaited<ReturnType<typeof syncSources>> = [];
-  const aiUsage = createTaskAiUsageTracker();
+  const aiUsage = options.aiUsage;
   const trackedAiProvider = aiUsage.wrapProvider(aiProvider, {
     understandItemEstimated: false,
   });

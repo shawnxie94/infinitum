@@ -48,7 +48,7 @@ import {
 } from "@/lib/tasks/types";
 import { prisma } from "@/lib/db";
 import { parseTaskPipelineCheckpointJson, serializeTaskPipelineCheckpoint } from "@/lib/tasks/checkpoint";
-import { getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
+import { DAILY_REPORT_RECOVERY_STAGE_LABELS, getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
 
 export const TASK_RUN_CANCELLED_MESSAGE = "管理员手动终止任务。";
 export const TASK_RUN_CANCELLED_LABEL = "任务已终止";
@@ -60,6 +60,18 @@ const TASK_AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
   cluster_summary: "聚合摘要",
   cluster_merge: "聚合合并",
   daily_report: "AI 日报",
+  daily_report_assess: "评估",
+  daily_report_plan: "规划",
+  daily_report_write: "写作",
+  daily_report_repair: "修复",
+  daily_report_review: "审核",
+};
+
+const DAILY_REPORT_TIMELINE_LABELS: Partial<Record<TaskTimelineNodeKey, string>> = {
+  daily_report_assess: "评估",
+  daily_report_plan: "规划",
+  daily_report_write: "写作",
+  daily_report_review: "审核",
 };
 
 function getDefaultTaskAiCallBreakdown(): TaskAiCallBreakdownSnapshot[] {
@@ -69,6 +81,10 @@ function getDefaultTaskAiCallBreakdown(): TaskAiCallBreakdownSnapshot[] {
     actual: 0,
     estimated: 0,
   }));
+}
+
+function normalizeTokenField(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdownSnapshot | null {
@@ -83,17 +99,28 @@ function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdo
     maybeSnapshot.key !== "cluster_match" &&
     maybeSnapshot.key !== "cluster_summary" &&
     maybeSnapshot.key !== "cluster_merge" &&
-    maybeSnapshot.key !== "daily_report"
+    maybeSnapshot.key !== "daily_report" &&
+    maybeSnapshot.key !== "daily_report_assess" &&
+    maybeSnapshot.key !== "daily_report_plan" &&
+    maybeSnapshot.key !== "daily_report_write" &&
+    maybeSnapshot.key !== "daily_report_repair" &&
+    maybeSnapshot.key !== "daily_report_review"
   ) {
     return null;
   }
 
+  const promptTokens = normalizeTokenField(maybeSnapshot.promptTokens);
+  const completionTokens = normalizeTokenField(maybeSnapshot.completionTokens);
+  const totalTokens = normalizeTokenField(maybeSnapshot.totalTokens);
+  const cachedTokens = normalizeTokenField(maybeSnapshot.cachedTokens);
+  const tokenUsageSource = maybeSnapshot.tokenUsageSource === "provider"
+    || maybeSnapshot.tokenUsageSource === "estimated"
+    || maybeSnapshot.tokenUsageSource === "mixed"
+    ? maybeSnapshot.tokenUsageSource
+    : undefined;
   return {
     key: maybeSnapshot.key,
-    label:
-      typeof maybeSnapshot.label === "string"
-        ? maybeSnapshot.label
-        : TASK_AI_CALL_BREAKDOWN_LABELS[maybeSnapshot.key],
+    label: TASK_AI_CALL_BREAKDOWN_LABELS[maybeSnapshot.key],
     actual:
       typeof maybeSnapshot.actual === "number" && Number.isFinite(maybeSnapshot.actual)
         ? maybeSnapshot.actual
@@ -102,6 +129,15 @@ function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdo
       typeof maybeSnapshot.estimated === "number" && Number.isFinite(maybeSnapshot.estimated)
         ? maybeSnapshot.estimated
         : 0,
+    ...(totalTokens !== undefined || promptTokens !== undefined || completionTokens !== undefined
+      ? {
+          promptTokens: promptTokens ?? 0,
+          completionTokens: completionTokens ?? 0,
+          totalTokens: totalTokens ?? (promptTokens ?? 0) + (completionTokens ?? 0),
+          cachedTokens: cachedTokens ?? 0,
+          ...(tokenUsageSource ? { tokenUsageSource } : {}),
+        }
+      : {}),
   };
 }
 
@@ -236,6 +272,7 @@ function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnap
     "daily_report_plan_validate",
     "daily_report_validate",
     "daily_report_write",
+    "daily_report_review",
     "daily_report_repair",
     "daily_report_persist_publish",
     "task_finished",
@@ -293,7 +330,7 @@ function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnap
 
   return {
     key: key as TaskTimelineNodeKey,
-    label: maybeNode.label,
+    label: DAILY_REPORT_TIMELINE_LABELS[key as TaskTimelineNodeKey] ?? maybeNode.label,
     status: status as TaskTimelineNodeStatus,
     startedAt,
     finishedAt,
@@ -769,6 +806,7 @@ function resetStageAttemptsForDailyReportRecovery(
     assess: ["ASSESS", "MERGE", "PLAN", "PLAN_VALIDATE", "WRITE", "JSON_REPAIR", "VALIDATE", "REPAIR", "PERSIST_PUBLISH"],
     plan: ["PLAN", "PLAN_VALIDATE", "WRITE", "JSON_REPAIR", "VALIDATE", "REPAIR", "PERSIST_PUBLISH"],
     write: ["WRITE", "JSON_REPAIR", "VALIDATE", "REPAIR", "PERSIST_PUBLISH"],
+    review: ["REVIEW", "PERSIST_PUBLISH"],
   };
   const prefixes = resetPrefixes[retryFrom];
 
@@ -821,6 +859,14 @@ function resetDailyReportCheckpointForRecovery(
     nextCheckpoint.completedStages = ["prepare", "assess", "merge", "plan", "plan_validate"];
     delete nextCheckpoint.draft;
     delete nextCheckpoint.violations;
+  } else if (retryFrom === "review") {
+    nextCheckpoint.completedStages = nextCheckpoint.completedStages.filter((stage) => stage !== "review");
+    nextCheckpoint.lastCompletedStage = "validate";
+    delete nextCheckpoint.reviewStatus;
+    delete nextCheckpoint.reviewAttempts;
+    delete nextCheckpoint.reviewRetryStage;
+    delete nextCheckpoint.reviewViolations;
+    delete nextCheckpoint.reviewAudit;
   }
 
   return nextCheckpoint;
@@ -844,7 +890,7 @@ export async function resumeTaskRun(id: string, options: { retryFrom?: DailyRepo
     ? (() => {
         const recoveryStages = getDailyReportRecoveryStages(checkpoint);
         if (!recoveryStages.includes(retryFrom)) {
-          throw new Error(`当前任务不支持从 ${retryFrom.toUpperCase()} 阶段继续，请选择其他阶段或全部重试。`);
+          throw new Error(`当前任务不支持从 ${DAILY_REPORT_RECOVERY_STAGE_LABELS[retryFrom]} 阶段继续，请选择其他阶段或全部重试。`);
         }
         return resetDailyReportCheckpointForRecovery(checkpoint, retryFrom);
       })()
@@ -863,7 +909,7 @@ export async function resumeTaskRun(id: string, options: { retryFrom?: DailyRepo
         kind: taskRun.kind,
         triggerType: "admin_action",
         status: "queued",
-        label: `${taskRun.label}（从 ${retryFrom.toUpperCase()} 重新生成）`,
+        label: `${taskRun.label}（从 ${DAILY_REPORT_RECOVERY_STAGE_LABELS[retryFrom]} 重新生成）`,
         entityId: taskRun.entityId,
         pipelineCheckpointJson: JSON.stringify(nextCheckpoint),
       },

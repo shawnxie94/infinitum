@@ -302,6 +302,16 @@ export function IconCheck(props: IconProps) {
   );
 }
 
+export function IconCircleHelp(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.75 9a2.25 2.25 0 1 1 3.86 1.58c-.7.7-1.61 1.17-1.61 2.42" />
+      <path d="M12 16.5h.01" />
+    </IconBase>
+  );
+}
+
 export function IconX(props: IconProps) {
   return (
     <IconBase {...props}>

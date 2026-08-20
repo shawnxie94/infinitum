@@ -2,12 +2,19 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_CLUSTER_MERGE_PROMPT,
+  DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE,
+  DEFAULT_CLUSTER_SUMMARY_PROMPT,
   DEFAULT_DAILY_REPORT_PROMPT,
+  DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+  DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+  DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+  PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
 } from "@/config/prompts";
 import { prisma } from "@/lib/db";
 import {
@@ -61,22 +68,30 @@ describe("admin settings service", () => {
     expect(runtimeConfig.modelApi.baseURL).toBe("");
     expect(runtimeConfig.modelApi.model).toBe("gpt-4.1-mini");
     expect(runtimeConfig.prompts.itemUnderstanding).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
-    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.promptTemplate).toContain("{{sourceName}}");
-    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.promptTemplate).toContain("{{title}}");
-    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.promptTemplate).toContain("{{inputText}}");
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.userPrompt).toBe(
+      DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
+    );
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.promptTemplate).not.toContain("{{inputText}}");
 
     expect(settings.modelApiConfigs).toHaveLength(1);
     expect(settings.modelApiConfigs[0]?.baseUrl).toBe("");
     expect(settings.modelApiConfigs[0]?.apiKeyMasked).toBe("");
     expect(settings.modelApiConfigs[0]?.ingestionItemConcurrency).toBe(3);
     expect(settings.taskSchedule.aggregationSplitMaxEvents).toBe(20);
-    expect(settings.promptConfigs).toHaveLength(5);
-    expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toContain("AI 新闻日报");
+    expect(settings.promptConfigs).toHaveLength(6);
+    expect(settings.promptConfigs.find((config) => config.type === "daily_report_review")?.isEnabled).toBe(false);
+    expect(settings.promptConfigs.find((config) => config.type === "daily_report_review")?.prompt).toBe(
+      DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+    );
+   expect(runtimeConfig.selectedPromptConfigs?.dailyReportReview?.enabled).toBe(false);
+    expect(runtimeConfig.prompts.dailyReportReview).toBe(DEFAULT_DAILY_REPORT_REVIEW_PROMPT);
+    expect(runtimeConfig.selectedPromptConfigs?.dailyReportReview?.systemPrompt).toBe(DEFAULT_DAILY_REPORT_REVIEW_PROMPT);
+   expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toContain("AI 新闻日报");
     expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.templateJson).toBe(
       DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
     );
     expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toBe(
-      DEFAULT_DAILY_REPORT_PROMPT,
+      compileDailyReportTemplatePrompt(DEFAULT_DAILY_REPORT_TEMPLATE),
     );
     expect(settings.taskSchedule.key).toBe("ingestion_default");
     expect(settings.taskSchedule.enabled).toBe(false);
@@ -303,6 +318,28 @@ describe("admin settings service", () => {
     expect(Number(staleRows[0]?.count ?? 0)).toBe(0);
   });
 
+  it("migrates the old default review template to the fixed contract", async () => {
+    await getIngestionRuntimeConfig();
+    await prisma.promptConfig.updateMany({
+      where: {
+        type: "daily_report_review",
+        isDefault: true,
+      },
+      data: {
+        prompt: PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+        systemPrompt: PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const config = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report_review", isDefault: true },
+    });
+    expect(config.prompt).toBe(DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE);
+    expect(config.systemPrompt).toBe(DEFAULT_DAILY_REPORT_REVIEW_PROMPT);
+  });
+
   it("does not overwrite a customized cluster summary prompt", async () => {
     await getIngestionRuntimeConfig();
     await prisma.promptConfig.updateMany({
@@ -321,7 +358,7 @@ describe("admin settings service", () => {
     const runtimeConfig = await getIngestionRuntimeConfig();
     const clusterSummaryConfig = runtimeConfig.selectedPromptConfigs?.clusterSummary;
 
-    expect(clusterSummaryConfig?.systemPrompt).toBe("自定义聚合摘要提示词");
+    expect(clusterSummaryConfig?.systemPrompt).toBe(DEFAULT_CLUSTER_SUMMARY_PROMPT);
     expect(clusterSummaryConfig?.maxTokens).toBe(300);
   });
 
@@ -335,6 +372,7 @@ describe("admin settings service", () => {
       data: {
         systemPrompt: "自定义聚合合并提示词",
         prompt: "候选：{{clustersJson}}",
+        userPrompt: "候选：{{clustersJson}}",
       },
     });
 
@@ -343,8 +381,58 @@ describe("admin settings service", () => {
     const runtimeConfig = await getIngestionRuntimeConfig();
     const clusterMergeConfig = runtimeConfig.selectedPromptConfigs?.clusterMerge;
 
-    expect(clusterMergeConfig?.systemPrompt).toBe("自定义聚合合并提示词");
-    expect(clusterMergeConfig?.promptTemplate).toBe("候选：{{clustersJson}}");
+    expect(clusterMergeConfig?.systemPrompt).toBe(DEFAULT_CLUSTER_MERGE_PROMPT);
+    expect(clusterMergeConfig?.userPrompt).toBe("候选：");
+  });
+
+  it("cleans legacy input placeholders from existing user prompt values", async () => {
+    await getIngestionRuntimeConfig();
+    await prisma.promptConfig.updateMany({
+      where: {
+        type: "item_understanding",
+        isDefault: true,
+      },
+      data: {
+        userPrompt: "标题：{{title}}\n来源：{{sourceName}}\n是否需要翻译标题：{{translateTitle}}\n最多拆分事件数：{{maxEvents}}\n正文：{{inputText}}",
+      },
+    });
+    await prisma.promptConfig.updateMany({
+      where: {
+        type: "daily_report",
+        isDefault: true,
+      },
+      data: {
+        userPrompt: "日期：{{date}}\n时区：{{timezone}}\n最近 7 天已写主题 JSON：{{recentTopicsJson}}\n候选内容 JSON：{{articlesJson}}",
+      },
+    });
+    await prisma.promptConfig.updateMany({
+      where: {
+        type: "cluster_merge",
+        isDefault: true,
+      },
+      data: {
+        userPrompt: "请基于系统提供的 Pair 证据保守判断是否为同一具体事件；证据不足时选择 ambiguous。",
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const config = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "item_understanding", isDefault: true },
+    });
+    expect(config.userPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE);
+    expect(config.userPrompt).not.toMatch(/\{\{.+\}\}/);
+
+    const dailyReportConfig = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report", isDefault: true },
+    });
+    expect(dailyReportConfig.userPrompt).toBeNull();
+
+    const clusterMergeConfig = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "cluster_merge", isDefault: true },
+    });
+    expect(clusterMergeConfig.userPrompt).toBe(DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE);
+    expect(clusterMergeConfig.userPrompt).not.toContain("Pair");
   });
 
   it("compiles the default daily report template for runtime settings", async () => {
@@ -448,7 +536,7 @@ describe("admin settings service", () => {
     expect(runtimeConfig.ingestion.fullTextFetchThreshold).toBe(80);
     expect(runtimeConfig.ingestion.aggregationSplitMaxEvents).toBe(20);
     expect(runtimeConfig.modelApi.model).toBe("gpt-live");
-    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.systemPrompt).toBe("条目理解系统提示词");
+    expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.systemPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
     expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.modelApi?.model).toBe("gpt-live");
     expect(runtimeConfig.selectedPromptConfigs?.itemUnderstanding.maxTokens).toBe(8000);
     expect(runtimeConfig.selectedPromptConfigs?.clusterSummary.maxTokens).toBe(300);
@@ -826,7 +914,7 @@ describe("admin settings service", () => {
     });
 
     const runtimeConfig = await getIngestionRuntimeConfig();
-    expect(runtimeConfig.selectedPromptConfigs?.dailyReport.systemPrompt).toBe(customSystemPrompt);
+    expect(runtimeConfig.selectedPromptConfigs?.dailyReport.systemPrompt).toBe(DEFAULT_DAILY_REPORT_PROMPT);
     await expect(prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } }))
       .resolves.toMatchObject({ templateJson: customTemplateJson });
   });

@@ -31,6 +31,7 @@ export const DAILY_REPORT_ATTEMPT_MATRIX = [
   { stage: "MERGE", maxAttempts: 1, retry: "none" },
   { stage: "PLAN", maxAttempts: 2, retry: "same_ledger" },
   { stage: "WRITE", maxAttempts: 2, retry: "same_plan" },
+  { stage: "REVIEW", maxAttempts: 2, retry: "same_draft" },
   { stage: "VALIDATE", maxAttempts: 1, retry: "none" },
   { stage: "PERSIST_PUBLISH", maxAttempts: 2, retry: "db_only" },
 ] as const;

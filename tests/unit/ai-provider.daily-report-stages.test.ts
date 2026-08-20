@@ -31,15 +31,21 @@ const candidate: DailyReportPlanningCandidate = {
 
 describe("daily report staged provider", () => {
   it("uses isolated ASSESS/PLAN/WRITE calls and repairs WRITE in the same context", async () => {
+    const completion = (content: string) => ({
+      choices: [{ message: { content } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    });
     const create = vi.fn()
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ assessments: [{ candidateId: 1, relevanceScore: 90, isWorthReading: true, suggestedBlockKey: "hot-topics", historyDecision: "new", matchedRecentTopicTitle: null }] }) } }] })
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ schemaVersion: 2, sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: [1] }] }] }) } }] })
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "正文", sourceIds: [1] }] }] }) } }] })
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布（修复）", body: "修复后的正文", sourceIds: [1] }] }] }) } }] });
+      .mockResolvedValueOnce(completion(JSON.stringify({ assessments: [{ candidateId: 1, relevanceScore: 90, isWorthReading: true, suggestedBlockKey: "hot-topics", historyDecision: "new", matchedRecentTopicTitle: null }] })))
+      .mockResolvedValueOnce(completion(JSON.stringify({ schemaVersion: 2, sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: [1] }] }] })))
+      .mockResolvedValueOnce(completion(JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "正文", sourceIds: [1] }] }] })))
+      .mockResolvedValueOnce(completion(JSON.stringify({ blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布（修复）", body: "修复后的正文", sourceIds: [1] }] }] })));
+    const onUsage = vi.fn();
     const provider = createAiProvider(
       { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
       { dailyReport: { systemPrompt: "日报", promptTemplate: "{{articlesJson}}" } },
       { chat: { completions: { create } } },
+      { onUsage },
     );
     const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
     const assessments = await provider.assessDailyReportCandidates({
@@ -99,6 +105,12 @@ describe("daily report staged provider", () => {
     const retriedSection = retriedDraft.blocks.find((block) => block.type === "section");
     expect(retriedSection?.items[0]?.title).toBe("模型发布（修复）");
     expect(create).toHaveBeenCalledTimes(4);
+    expect(onUsage.mock.calls.map(([, usageKey]) => usageKey)).toEqual([
+      "daily_report_assess",
+      "daily_report_plan",
+      "daily_report_write",
+      "daily_report_write",
+    ]);
     const userPrompts = create.mock.calls.map((call) => call[0]?.messages?.[1]?.content as string).join("\n");
     expect(userPrompts).toContain("阶段：ASSESS");
     expect(userPrompts).toContain("阶段：PLAN");
@@ -234,5 +246,56 @@ describe("daily report staged provider", () => {
     expect(userPrompt).toContain("noteLabel");
     expect(userPrompt).toContain("missingNotes");
     expect(userPrompt).not.toContain('"sourceIds"');
+  });
+
+  it("carries Review guidance into PLAN and WRITE retry prompts", async () => {
+    const create = vi.fn()
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: JSON.stringify({ schemaVersion: 2, sections: [{ blockKey: "hot-topics", topics: [{ candidateIds: [1] }] }] }) } }],
+      })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: JSON.stringify({ headline: "日报", blocks: [{ type: "section", blockKey: "hot-topics", title: "热点事件", items: [{ topicId: "topic-1", title: "模型发布", body: "修复后的正文", notes: [] }] }] }) } }],
+      });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      { dailyReport: { systemPrompt: "日报", promptTemplate: "{{articlesJson}}" } },
+      { chat: { completions: { create } } },
+    );
+    const template = normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE);
+    const reviewFeedback = {
+      violations: [{
+        code: "candidate_omitted" as const,
+        severity: "error" as const,
+        message: "重要候选未进入日报",
+        candidateIds: [1],
+        evidence: "候选 1 为当日高价值内容，但当前草稿没有对应主题。",
+        guidance: "重新规划时优先将候选 1 纳入合适栏目，并避免挤掉其他高价值主题。",
+      }],
+      instruction: "优先修复 Review 发现的问题。",
+    };
+
+    await provider.planDailyReport({
+      candidateBriefs: [],
+      template,
+      reviewFeedback,
+    });
+    await provider.writeDailyReport({
+      selectedTopics: [{
+        topicId: "topic-1",
+        blockKey: "hot-topics",
+        candidateIds: [1],
+        representativeCandidateId: 1,
+        candidates: [candidate],
+      }],
+      template,
+      reviewFeedback,
+    });
+
+    const prompts = create.mock.calls.map((call) => call[0]?.messages?.map((message: { content?: string }) => message.content ?? "").join("\n") ?? "").join("\n");
+    expect(prompts).toContain('"reviewFeedback"');
+    expect(prompts).toContain("重新规划时优先将候选 1 纳入合适栏目");
+    expect(prompts).toContain("优先修复 Review 发现的问题");
+    expect(prompts).toContain("PLAN 重试可以调整主题归纳");
+    expect(prompts).toContain("WRITE 重试只能在 selectedTopics");
   });
 });

@@ -572,6 +572,36 @@ describe("background task persistence", () => {
         actual: 0,
         estimated: 0,
       },
+      {
+        key: "daily_report_assess",
+        label: "评估",
+        actual: 0,
+        estimated: 0,
+      },
+      {
+        key: "daily_report_plan",
+        label: "规划",
+        actual: 0,
+        estimated: 0,
+      },
+      {
+        key: "daily_report_write",
+        label: "写作",
+        actual: 0,
+        estimated: 0,
+      },
+      {
+        key: "daily_report_repair",
+        label: "修复",
+        actual: 0,
+        estimated: 0,
+      },
+      {
+        key: "daily_report_review",
+        label: "审核",
+        actual: 0,
+        estimated: 0,
+      },
     ]);
     expect(snapshot.recentTasks[0]?.stageTimings).toEqual([
       {
@@ -744,7 +774,7 @@ describe("background task persistence", () => {
     await updateTaskRun(taskRun.id, {
       pipelineCheckpoint: {
         version: 1,
-        pipelineVersion: "daily-report-topic-first-v2",
+        pipelineVersion: "daily-report-topic-first-review-v1",
         stage: "validate",
         completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write"],
         inputHash: "input-hash",
@@ -794,7 +824,7 @@ describe("background task persistence", () => {
     await updateTaskRun(taskRun.id, {
       pipelineCheckpoint: {
         version: 1,
-        pipelineVersion: "daily-report-topic-first-v2",
+        pipelineVersion: "daily-report-topic-first-review-v1",
         stage: "repair",
         completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write"],
         inputHash: "input-hash",
@@ -841,7 +871,7 @@ describe("background task persistence", () => {
     await updateTaskRun(taskRun.id, {
       pipelineCheckpoint: {
         version: 1,
-        pipelineVersion: "daily-report-topic-first-v2",
+        pipelineVersion: "daily-report-topic-first-review-v1",
         stage: "validate",
         completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate"],
         inputHash: "input-hash",
@@ -861,7 +891,7 @@ describe("background task persistence", () => {
 
     expect(regenerated.id).not.toBe(taskRun.id);
     expect(regenerated.status).toBe("queued");
-    expect(regenerated.label).toContain("从 WRITE 重新生成");
+    expect(regenerated.label).toContain("从 写作 重新生成");
     expect(checkpoint).toMatchObject({
       stage: "write",
       resumeEligible: true,
@@ -873,6 +903,55 @@ describe("background task persistence", () => {
       status: "succeeded",
     });
     await expect(prisma.backgroundTaskRun.count()).resolves.toBe(2);
+  });
+
+  it("creates a separate task when a daily report restarts from REVIEW", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "partial",
+        label: "AI 日报生成",
+        entityId: "2026-04-12",
+      },
+    });
+
+    await updateTaskRun(taskRun.id, {
+      pipelineCheckpoint: {
+        version: 1,
+        pipelineVersion: "daily-report-topic-first-review-v1",
+        stage: "review",
+        completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "review"],
+        inputHash: "input-hash",
+        templateSignature: "template-signature",
+        candidateSnapshotHash: "candidate-hash",
+        resumeEligible: false,
+        reviewStatus: "unavailable",
+        reviewAttempts: 1,
+        reviewViolations: [],
+        reviewAudit: { attempts: 1, error: "模型服务暂时不可用" },
+        plan: { schemaVersion: 2, sections: [] },
+        draft: { headline: "保留草稿", blocks: [] },
+      },
+    });
+
+    const retried = await resumeTaskRun(taskRun.id, { retryFrom: "review" });
+    const checkpoint = JSON.parse(retried.pipelineCheckpointJson ?? "{}");
+
+    expect(retried.id).not.toBe(taskRun.id);
+    expect(retried.status).toBe("queued");
+    expect(retried.label).toContain("从 审核 重新生成");
+    expect(checkpoint).toMatchObject({
+      stage: "review",
+      resumeEligible: true,
+      resumeFrom: "review",
+      completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate"],
+      data: { manualRetryFrom: "review" },
+    });
+    expect(checkpoint.plan).toEqual({ schemaVersion: 2, sections: [] });
+    expect(checkpoint.draft).toEqual({ headline: "保留草稿", blocks: [] });
+    expect(checkpoint).not.toHaveProperty("reviewStatus");
+    expect(checkpoint).not.toHaveProperty("reviewAudit");
   });
 
   it("refreshes the scheduler heartbeat while a task is reporting progress", async () => {

@@ -11,8 +11,11 @@ import { PROMPT_CONFIG_TYPES } from "@/lib/settings/types";
 const promptConfigSchema = z.object({
   name: z.string().min(1),
   type: z.enum(PROMPT_CONFIG_TYPES),
-  prompt: z.string().min(1),
-  systemPrompt: z.string().min(1),
+  prompt: z.string().optional(),
+  userPrompt: z.string().nullable().optional(),
+  // Accepted during the compatibility window but never used as the runtime
+  // system contract. Internal protocols are code-owned.
+  systemPrompt: z.string().nullable().optional(),
   templateJson: z.string().nullable().optional(),
   temperature: z.number().min(0).max(2).nullable().optional(),
   maxTokens: z.number().int().positive().nullable().optional(),

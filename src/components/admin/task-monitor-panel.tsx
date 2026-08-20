@@ -83,6 +83,15 @@ function getTaskKindLabel(kind: string) {
   return kindLabels[kind as TaskRunSnapshot["kind"]] ?? kind;
 }
 
+function getDailyReportReviewStatusLabel(task: TaskRunSnapshot) {
+  const status = task.pipelineCheckpoint?.reviewStatus;
+  if (status === "passed") return "已通过";
+  if (status === "rejected") return "未通过（草稿）";
+  if (status === "unavailable") return "审核不可用（草稿）";
+  if (status === "disabled") return "未启用";
+  return null;
+}
+
 function canResumeDailyReportTask(task: TaskRunSnapshot | null) {
   return Boolean(
     task?.kind === "daily_report_generate" &&
@@ -118,7 +127,9 @@ function getDailyReportRetryOptions(task: TaskRunSnapshot | null) {
         ? "复用 PLAN 结果，丢弃旧草稿并重新生成完整日报；阶段内会自动处理校验反馈。"
         : stage === "plan"
         ? "复用 ASSESS 结果，重新规划主题和栏目。"
-        : "从候选评估开始重新执行后续阶段。",
+        : stage === "review"
+          ? "复用已经生成的日报草稿，仅重新执行审核；审核不可用时不会自动发布草稿。"
+          : "从候选评估开始重新执行后续阶段。",
       recommended: stage === getRecommendedDailyReportRecoveryStage(task.pipelineCheckpoint),
     })),
   ];
@@ -327,6 +338,10 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
       return `草稿结构校验 · 违规 ${getValue("违规数")} 条`;
     case "daily_report_write":
       return `按计划写作 ${getValue("入选数")} 条`;
+    case "daily_report_review":
+      return `审核 ${getValue("审核次数")} 次 · 调用重试 ${getValue("审核调用重试")} 次 · ${
+        getValue("审核阻断发布") > 0 ? "已阻断自动发布" : "未阻断自动发布"
+      }`;
     case "daily_report_repair":
       return node.status === "skipped"
         ? "无违规，跳过语义修复"
@@ -376,6 +391,16 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
 
 function formatTaskTimelineTitle(node: NonNullable<TaskRunSnapshot["taskTimeline"]>[number]) {
   return node.modelName ? `${node.label} · 模型 ${node.modelName}` : node.label;
+}
+
+function formatTokenCount(value: number) {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return String(value);
 }
 
 function buildTaskTimeline(task: TaskRunSnapshot) {
@@ -600,17 +625,65 @@ function TaskDetailModal({
                 <span className="break-words text-[var(--text-2)]">{task.entityTitle}</span>
               </div>
             ) : null}
+            {task.kind === "daily_report_generate" && getDailyReportReviewStatusLabel(task) ? (
+              <div>
+                <span className="text-[var(--text-3)]">日报审核:</span>{" "}
+                {getDailyReportReviewStatusLabel(task)}
+              </div>
+            ) : null}
           </div>
         </div>
 
-        {summaryDetail ? (
+        {summaryDetail || task.aiCallBreakdown?.some((entry) => entry.actual > 0 || (entry.totalTokens ?? 0) > 0) ? (
           <section className="space-y-2">
             <h4 className="text-sm font-semibold text-[var(--text-1)]">
               摘要
             </h4>
-            <div className="rounded-md border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">
-              {summaryDetail}
-            </div>
+            {summaryDetail ? (
+              <div className="rounded-md border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">
+                {summaryDetail}
+              </div>
+            ) : null}
+            {task.aiCallBreakdown?.some((entry) => entry.actual > 0 || (entry.totalTokens ?? 0) > 0) ? (
+              <div className="overflow-x-auto rounded-md border border-[color:var(--line)] bg-[var(--bg-muted)]">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[color:var(--line)] text-xs text-[var(--text-3)]">
+                      <th className="px-3 py-2 font-medium">用途</th>
+                      <th className="px-3 py-2 font-medium">调用</th>
+                      <th className="px-3 py-2 font-medium">输入 tokens</th>
+                      <th className="px-3 py-2 font-medium">输出 tokens</th>
+                      <th className="px-3 py-2 font-medium">缓存 tokens</th>
+                      <th className="px-3 py-2 font-medium">总 tokens</th>
+                      <th className="px-3 py-2 font-medium">统计来源</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {task.aiCallBreakdown
+                      .filter((entry) => entry.actual > 0 || (entry.totalTokens ?? 0) > 0)
+                      .map((entry) => (
+                        <tr key={entry.key} className="border-b border-[color:var(--line)] last:border-0">
+                          <td className="px-3 py-2 text-[var(--text-1)]">{entry.label}</td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">
+                            {entry.estimated > 0 ? `${entry.actual} / ${entry.estimated}` : entry.actual}
+                          </td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.promptTokens ?? 0)}</td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.completionTokens ?? 0)}</td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.cachedTokens ?? 0)}</td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.totalTokens ?? 0)}</td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">
+                            {entry.tokenUsageSource === "provider"
+                              ? "模型返回"
+                              : entry.tokenUsageSource === "mixed"
+                                ? "混合"
+                                : "估算"}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </section>
         ) : null}
 

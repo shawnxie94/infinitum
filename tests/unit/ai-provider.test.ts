@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createAiProvider } from "@/lib/ai/provider";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
+import type { DailyReportReviewInput } from "@/lib/daily-report/types";
+
 describe("ai provider", () => {
   it("understands a regular item in one structured call", async () => {
     const create = vi.fn().mockResolvedValue({
@@ -51,7 +53,7 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("页面附加内容不代表正文主体");
   });
 
-  it("appends the fixed moderation reason enum to custom item prompts", async () => {
+  it("keeps the item protocol fixed while sending custom instructions separately", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
         message: {
@@ -74,6 +76,7 @@ describe("ai provider", () => {
       {
         itemUnderstanding: {
           systemPrompt: "这是管理员自定义的条目理解提示词。",
+          userInstruction: "这是管理员自定义的条目理解提示词。",
           promptTemplate: "正文：{{inputText}}",
         },
       },
@@ -86,8 +89,13 @@ describe("ai provider", () => {
     });
 
     const systemPrompt = create.mock.calls[0]?.[0]?.messages?.[0]?.content as string;
-    expect(systemPrompt).toContain("这是管理员自定义的条目理解提示词。");
+    const userPrompt = create.mock.calls[0]?.[0]?.messages?.[1]?.content as string;
+    expect(systemPrompt).not.toContain("这是管理员自定义的条目理解提示词。");
     expect(systemPrompt).toContain("moderationReason 只能是 marketing、low_quality、duplicate_noise、rule_filter、rule_blacklist、other 或 null");
+    expect(systemPrompt).not.toContain("{{maxEvents}}");
+    expect(userPrompt).toContain("这是管理员自定义的条目理解提示词。");
+    expect(userPrompt).toContain("正文内容");
+    expect(userPrompt).not.toContain("{{inputText}}");
   });
 
   it("repairs a syntactically invalid item understanding response before retrying the model", async () => {
@@ -496,7 +504,7 @@ describe("ai provider", () => {
     }]);
   });
 
-  it("ignores merge decisions that were not present in the local pair input", async () => {
+  it("rejects merge decisions that are not present in the local pair input", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
@@ -537,7 +545,7 @@ describe("ai provider", () => {
       },
     );
 
-    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
+    await expect(provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
           left: { id: "cluster-a", title: "A", summary: "A", itemCount: 3 },
@@ -545,16 +553,10 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }));
-
-    expect(decisions).toEqual([expect.objectContaining({
-      leftClusterId: "cluster-a",
-      rightClusterId: "cluster-b",
-      verdict: "approved",
-    })]);
+    }))).rejects.toThrow("不在输入 Pair");
   });
 
-  it("returns no merge groups when decisions is empty", async () => {
+  it("rejects an empty merge decision list when input pairs exist", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
@@ -580,7 +582,7 @@ describe("ai provider", () => {
       },
     );
 
-    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
+    await expect(provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
           left: { id: "cluster-a", title: "A", summary: "A", itemCount: 3 },
@@ -588,9 +590,7 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }));
-
-    expect(decisions).toEqual([]);
+    }))).rejects.toThrow("逐一覆盖");
   });
 
   it("retries cluster merge once when the first response is invalid json", async () => {
@@ -680,10 +680,12 @@ describe("ai provider", () => {
       {
         itemUnderstanding: {
           systemPrompt: "内容分析提示词",
+          userInstruction: "条目理解补充要求",
           promptTemplate: "标题：{{title}}\n正文：{{inputText}}",
         },
         clusterSummary: {
           systemPrompt: "聚合摘要专用提示词",
+          userInstruction: "聚合摘要专用提示词",
           promptTemplate: "主题：{{title}}\n候选内容：{{inputText}}",
         },
       },
@@ -702,7 +704,8 @@ describe("ai provider", () => {
 
     expect(summary).toBe(JSON.stringify(presentation));
     expect(create).toHaveBeenCalledTimes(1);
-    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("聚合摘要专用提示词");
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).not.toContain("聚合摘要专用提示词");
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain("聚合摘要专用提示词");
     expect(create.mock.calls[0]?.[0]?.response_format).toEqual({ type: "json_object" });
   });
 
@@ -760,14 +763,17 @@ describe("ai provider", () => {
       {
         itemUnderstanding: {
           systemPrompt: "内容分析提示词",
+          userInstruction: "条目理解补充要求",
           promptTemplate: "标题：{{title}}\n正文：{{inputText}}",
         },
         clusterSummary: {
           systemPrompt: "聚合摘要专用提示词",
+          userInstruction: "聚合摘要补充要求",
           promptTemplate: "主题：{{title}}\n候选内容：{{inputText}}",
         },
         clusterMatch: {
           systemPrompt: "归组判定专用提示词",
+          userInstruction: "归组判定专用提示词",
           promptTemplate: "当前内容标题：{{title}}\n候选聚合组：{{candidatesJson}}",
         },
       },
@@ -793,7 +799,8 @@ describe("ai provider", () => {
 
     expect(matchedClusterId).toBe("cluster-1");
     expect(create).toHaveBeenCalledTimes(1);
-    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("归组判定专用提示词");
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).not.toContain("归组判定专用提示词");
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain("归组判定专用提示词");
   });
 
   it("uses a strict event-only cluster match prompt by default", async () => {
@@ -894,6 +901,122 @@ describe("ai provider", () => {
     expect(matchedClusterId).toBe("cluster-1");
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[1]?.[0]?.messages?.[1]?.content).toContain("上一次输出不是合法 JSON");
+  });
+
+  it("sends the internal review contract together with the custom user prompt and reports usage", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ verdict: "pass", violations: [], summary: "通过" }) } }],
+      usage: {
+        prompt_tokens: 120,
+        completion_tokens: 12,
+        total_tokens: 132,
+        prompt_tokens_details: { cached_tokens: 10 },
+      },
+    });
+    const onUsage = vi.fn();
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "review-model" },
+      {
+        dailyReportReview: {
+          systemPrompt: "内部 Review 自定义扩展",
+          promptTemplate: "用户补充要求：优先检查事实一致性。",
+          modelApi: {
+            apiKey: "sk-test",
+            baseURL: "https://example.com/v1",
+            model: "review-model",
+          },
+        },
+      },
+      { chat: { completions: { create } } },
+      { onUsage },
+    );
+
+    const input = {
+      date: "2026-08-20",
+      draft: { blocks: [] },
+      selectedTopics: [],
+      candidatePool: { topUnselectedCandidates: [] },
+    } as unknown as DailyReportReviewInput;
+    await expect(provider.reviewDailyReport(input)).resolves.toEqual({
+      verdict: "pass",
+      violations: [],
+      summary: "通过",
+    });
+
+    const messages = create.mock.calls[0]?.[0]?.messages ?? [];
+    expect(messages[0]?.content).not.toContain("内部 Review 自定义扩展");
+    expect(messages[0]?.content).toContain("输出合同");
+    expect(messages[0]?.content).toContain("factual_inconsistency");
+    expect(messages[0]?.content).toContain("evidence");
+    expect(messages[1]?.content).toContain("用户补充要求");
+    expect(messages[1]?.content).toContain("2026-08-20");
+    expect(messages[1]?.content).not.toContain("{{reviewContextJson}}");
+    expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({
+      promptTokens: 120,
+      completionTokens: 12,
+      totalTokens: 132,
+      cachedTokens: 10,
+      tokenUsageSource: "provider",
+    }), "daily_report_review");
+  });
+
+  it("does not inject a free-form user prompt into daily report stages", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ assessments: [] }) } }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "daily-model" },
+      {
+        dailyReport: {
+          systemPrompt: "旧日报系统提示词",
+          userInstruction: "这段日报用户提示词不应被注入",
+        },
+      },
+      { chat: { completions: { create } } },
+    );
+
+    await expect(provider.assessDailyReportCandidates({
+      candidates: [],
+      template: { schemaVersion: 2, blocks: [], recentTopicRules: [] } as never,
+      recentTopics: [],
+    })).resolves.toEqual([]);
+
+    const messages = create.mock.calls[0]?.[0]?.messages ?? [];
+    expect(messages[0]?.content).not.toContain("旧日报系统提示词");
+    expect(messages[0]?.content).not.toContain("这段日报用户提示词不应被注入");
+    expect(messages[1]?.content).not.toContain("用户补充指令");
+  });
+
+  it("rejects a review violation without evidence", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            verdict: "reject",
+            violations: [{
+              code: "factual_inconsistency",
+              severity: "error",
+              message: "事实冲突",
+            }],
+            summary: "未通过",
+          }),
+        },
+      }],
+    });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "review-model" },
+      undefined,
+      { chat: { completions: { create } } },
+    );
+
+    const input = {
+      date: "2026-08-20",
+      draft: { blocks: [] },
+      selectedTopics: [],
+      candidatePool: { topUnselectedCandidates: [] },
+    } as unknown as DailyReportReviewInput;
+    await expect(provider.reviewDailyReport(input)).rejects.toThrow("必须包含非空 evidence");
+    expect(create).toHaveBeenCalledTimes(2);
   });
 
 });

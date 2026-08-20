@@ -14,11 +14,13 @@ const {
   assessDailyReportCandidatesMock,
   planDailyReportMock,
   repairDailyReportMock,
+  reviewDailyReportMock,
   writeDailyReportMock,
 } = vi.hoisted(() => ({
   assessDailyReportCandidatesMock: vi.fn(),
   planDailyReportMock: vi.fn(),
   repairDailyReportMock: vi.fn(),
+  reviewDailyReportMock: vi.fn(),
   writeDailyReportMock: vi.fn(),
 }));
 
@@ -27,6 +29,7 @@ vi.mock("@/lib/ai/provider", () => ({
     assessDailyReportCandidates: assessDailyReportCandidatesMock,
     planDailyReport: planDailyReportMock,
     repairDailyReportDraft: repairDailyReportMock,
+    reviewDailyReport: reviewDailyReportMock,
     writeDailyReport: async (input: unknown) => {
       const output = await writeDailyReportMock(input);
       return typeof output === "string" ? JSON.parse(output) : output;
@@ -691,6 +694,7 @@ describe("daily report service", () => {
     assessDailyReportCandidatesMock.mockReset();
     planDailyReportMock.mockReset();
     repairDailyReportMock.mockReset();
+    reviewDailyReportMock.mockReset();
     writeDailyReportMock.mockReset();
     assessDailyReportCandidatesMock.mockImplementation(async ({ candidates }: { candidates: Array<{ id: number; eventType: string | null; eventSubject: string | null; eventAction: string | null; eventObject: string | null; eventDate: string | null }> }) => candidates.map((candidate) => ({
       candidateId: candidate.id,
@@ -700,6 +704,7 @@ describe("daily report service", () => {
       historyDecision: "new",
     })));
     repairDailyReportMock.mockResolvedValue({ patches: [] });
+    reviewDailyReportMock.mockResolvedValue({ verdict: "pass", violations: [], summary: "通过" });
     planDailyReportMock.mockImplementation(async ({ candidateBriefs }: { candidateBriefs: Array<{ candidateId: number; clusterId?: string | null }> }) => ({
       schemaVersion: 2,
       sections: (() => {
@@ -1646,6 +1651,71 @@ describe("daily report service", () => {
     expect(report.publishedAt).toBeInstanceOf(Date);
   });
 
+  it("keeps a rejected review as a draft and retries WRITE only once", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockResolvedValue({
+      verdict: "reject",
+      violations: [{
+        code: "factual_inconsistency",
+        severity: "error",
+        message: "事实需要重新核对",
+        evidence: "草稿中的数字与候选摘要不一致。",
+        guidance: "WRITE 重试时重新核对该主题的数字，只保留候选证据明确支持的表述。",
+      }],
+      summary: "未通过",
+    });
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+
+    expect(result.reviewStatus).toBe("rejected");
+    expect(result.reviewAttempts).toBe(2);
+    expect(result.reviewRetryStage).toBe("write");
+    expect(reviewDailyReportMock).toHaveBeenCalledTimes(2);
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(2);
+    expect(writeDailyReportMock.mock.calls[1]?.[0]).toMatchObject({
+      reviewFeedback: {
+        instruction: expect.stringContaining("优先解决所有 error 级问题"),
+        violations: [expect.objectContaining({
+          code: "factual_inconsistency",
+          guidance: "WRITE 重试时重新核对该主题的数字，只保留候选证据明确支持的表述。",
+        })],
+      },
+    });
+    expect(report.status).toBe("draft");
+    expect(report.publishedAt).toBeNull();
+  });
+
+  it("persists a draft without publishing when the reviewer is unavailable", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockRejectedValue(new Error("review service unavailable"));
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+
+    expect(result.reviewStatus).toBe("unavailable");
+    expect(result.reviewAttempts).toBe(1);
+    expect(reviewDailyReportMock).toHaveBeenCalledTimes(2);
+    expect(result.reviewRetryStage).toBeNull();
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(1);
+    expect(report.status).toBe("draft");
+    expect(report.publishedAt).toBeNull();
+  });
+
   it("passes the full recent topic set to ASSESS and records model history filtering", async () => {
     await createReportCandidates();
     await createDailyReportSchedule({ autoPublish: true });
@@ -1776,7 +1846,7 @@ describe("daily report service", () => {
       }),
       expect.objectContaining({
         key: "daily_report_assess",
-        label: "分批选题评估",
+        label: "评估",
         metrics: [
           { label: "批次数", value: 1 },
           { label: "批次大小", value: 4 },
@@ -1813,6 +1883,15 @@ describe("daily report service", () => {
           { label: "修复轮数", value: 0 },
           { label: "完整重试", value: 0 },
           { label: "上下文超限", value: 0 },
+        ],
+      }),
+      expect.objectContaining({
+        key: "daily_report_review",
+        label: "审核",
+        metrics: [
+          { label: "审核次数", value: 0 },
+          { label: "审核调用重试", value: 0 },
+          { label: "审核阻断发布", value: 0 },
         ],
       }),
       expect.objectContaining({
@@ -2155,7 +2234,9 @@ describe("daily report service", () => {
       }),
     }));
     expect(JSON.parse(failedTaskRun.aiCallBreakdownJson ?? "[]")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ key: "daily_report", actual: 8, estimated: 8 }),
+      expect.objectContaining({ key: "daily_report_assess", actual: 1, estimated: 1 }),
+      expect.objectContaining({ key: "daily_report_plan", actual: 1, estimated: 1 }),
+      expect.objectContaining({ key: "daily_report_write", actual: 6, estimated: 6 }),
     ]));
     expect(JSON.parse(failedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
       failedStage: "write",

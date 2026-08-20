@@ -54,6 +54,10 @@ function buildMonitorSnapshot(): BackgroundTaskMonitorSnapshot {
             label: "条目理解",
             actual: 1,
             estimated: 2,
+            promptTokens: 1200,
+            completionTokens: 300,
+            totalTokens: 1500,
+            cachedTokens: 120,
           },
           {
             key: "cluster_match",
@@ -242,6 +246,13 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).getByText("聚合收尾 · 模型 gpt-4.1-mini-cluster")).toBeInTheDocument();
     expect(within(dialog).queryByText("进度")).not.toBeInTheDocument();
     expect(within(dialog).getByText("摘要")).toBeInTheDocument();
+    expect(within(dialog).queryByText("AI 用量")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("协议")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("1.2k")).toBeInTheDocument();
+    expect(within(dialog).getByText("缓存 tokens")).toBeInTheDocument();
+    expect(within(dialog).getByText("120")).toBeInTheDocument();
+    expect(within(dialog).getByText("300")).toBeInTheDocument();
+    expect(within(dialog).getByText("1.5k")).toBeInTheDocument();
     expect(
       within(dialog).getByText("7/10 已精确分类 = 1 (最终新增) + 2 (AI 过滤) + 1 (更新/重处理) + 1 (重复过滤) + 2 (规则过滤)"),
     ).toBeInTheDocument();
@@ -777,7 +788,7 @@ describe("TaskMonitorPanel", () => {
       errorSummary: null,
       pipelineCheckpoint: {
         version: 1 as const,
-        pipelineVersion: "daily-report-topic-first-v2",
+        pipelineVersion: "daily-report-topic-first-review-v1",
         stage: "validate",
         completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write"],
         inputHash: "input",
@@ -812,7 +823,7 @@ describe("TaskMonitorPanel", () => {
     const recoverySelect = within(dialog).getByLabelText("日报重试方式");
     expect(recoverySelect).toHaveValue("write");
     expect(within(dialog).getByRole("option", { name: "全部重试" })).toBeInTheDocument();
-    expect(within(dialog).getByRole("option", { name: "从 WRITE 继续" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("option", { name: "从 写作 继续" })).toBeInTheDocument();
     expect(within(dialog).queryByText("从 REPAIR 继续")).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/推荐/)).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/当前 checkpoint/)).not.toBeInTheDocument();
@@ -829,5 +840,100 @@ describe("TaskMonitorPanel", () => {
         }),
       );
     });
+  });
+
+  it("offers REVIEW recovery for an unavailable reviewer", async () => {
+    const user = userEvent.setup();
+    const dailyReportTask = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "daily-report-review-unavailable",
+      kind: "daily_report_generate" as const,
+      label: "AI 日报生成 2026-04-21",
+      entityId: "2026-04-21",
+      status: "partial" as const,
+      pipelineCheckpoint: {
+        version: 1 as const,
+        pipelineVersion: "daily-report-topic-first-review-v1",
+        stage: "review",
+        completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "review"],
+        inputHash: "input",
+        templateSignature: "template",
+        candidateSnapshotHash: "candidates",
+        resumeEligible: false,
+        reviewStatus: "unavailable" as const,
+        reviewAttempts: 1,
+        plan: { schemaVersion: 2, sections: [] },
+        draft: { headline: "草稿", blocks: [] },
+      },
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        ...buildMonitorSnapshot(),
+        runningTasks: [],
+        recentTasks: [dailyReportTask],
+        recentTotal: 1,
+      })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<TaskMonitorPanel runningTasks={[]} recentTasks={[dailyReportTask]} />);
+
+    await screen.findByText("AI 日报生成 2026-04-21");
+    await user.click(screen.getByTitle("重新生成"));
+    const dialog = await screen.findByRole("dialog", { name: "选择日报重试方式" });
+    const recoverySelect = within(dialog).getByLabelText("日报重试方式");
+
+    expect(recoverySelect).toHaveValue("review");
+    expect(within(dialog).getByRole("option", { name: "从 审核 继续" })).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "确认重试" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/admin/monitor/tasks/daily-report-review-unavailable/retrigger",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ retryFrom: "review" }),
+        }),
+      );
+    });
+  });
+
+  it("shows dedicated Review metrics in the daily report timeline", async () => {
+    const baseTask = buildMonitorSnapshot().runningTasks[0];
+    const reviewTask: BackgroundTaskMonitorSnapshot["recentTasks"][number] = {
+      ...baseTask,
+      id: "daily-report-review-detail",
+      kind: "daily_report_generate",
+      label: "AI 日报生成",
+      entityId: "2026-08-20",
+      status: "partial",
+      progressLabel: "已生成草稿（审核未通过）",
+      taskTimeline: [
+        {
+          key: "daily_report_review",
+          label: "审核",
+          status: "partial",
+          startedAt: "2026-08-20T08:00:00.000Z",
+          finishedAt: "2026-08-20T08:00:03.000Z",
+          durationMs: 3_000,
+          metrics: [
+            { label: "审核次数", value: 2 },
+            { label: "审核调用重试", value: 1 },
+            { label: "审核阻断发布", value: 1 },
+          ],
+        },
+      ],
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel
+        runningTasks={[]}
+        recentTasks={[reviewTask]}
+        initialFocusTaskId={reviewTask.id}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(within(dialog).getByText("审核 2 次 · 调用重试 1 次 · 已阻断自动发布")).toBeInTheDocument();
   });
 });

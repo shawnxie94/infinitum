@@ -805,6 +805,13 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
+  addColumnIfMissing("prompt_configs", "userPrompt", "TEXT");
+  if (ftsTableExists("prompt_configs")) {
+    runSqlite([dbPath], {
+      input: 'UPDATE "prompt_configs" SET "userPrompt" = "prompt" WHERE "userPrompt" IS NULL;\n',
+    });
+  }
+
   addColumnIfMissing("task_schedules", "dailyReportChannelIdsJson", "TEXT NOT NULL DEFAULT '[\"important\"]'");
   addColumnIfMissing("task_schedules", "dailyReportPlanningBatchSize", "INTEGER");
   addColumnIfMissing("task_schedules", "dailyReportRecentTopicLookbackDays", "INTEGER NOT NULL DEFAULT 7");

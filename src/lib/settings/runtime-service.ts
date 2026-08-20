@@ -1,4 +1,5 @@
 import { PromptConfigType } from "@prisma/client";
+import { DEFAULT_DAILY_REPORT_REVIEW_PROMPT } from "@/config/prompts";
 
 import type { RuntimeConfig } from "@/config/runtime";
 import { prisma } from "@/lib/db";
@@ -51,7 +52,6 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
     }),
     prisma.promptConfig.findMany({
       where: {
-        isEnabled: true,
         isDefault: true,
       },
       include: {
@@ -67,11 +67,15 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
     throw new Error("缺少启用中的默认模型配置。");
   }
 
-  const itemUnderstandingConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.item_understanding);
-  const clusterSummaryConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.cluster_summary);
-  const clusterMatchConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.cluster_match);
-  const clusterMergeConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.cluster_merge);
-  const dailyReportConfig = pickPromptConfigByType(promptConfigs, PromptConfigType.daily_report);
+  const enabledPromptConfigs = promptConfigs.filter((config) => config.isEnabled);
+  const itemUnderstandingConfig = pickPromptConfigByType(enabledPromptConfigs, PromptConfigType.item_understanding);
+  const clusterSummaryConfig = pickPromptConfigByType(enabledPromptConfigs, PromptConfigType.cluster_summary);
+  const clusterMatchConfig = pickPromptConfigByType(enabledPromptConfigs, PromptConfigType.cluster_match);
+  const clusterMergeConfig = pickPromptConfigByType(enabledPromptConfigs, PromptConfigType.cluster_merge);
+  const dailyReportConfig = pickPromptConfigByType(enabledPromptConfigs, PromptConfigType.daily_report);
+  const dailyReportReviewConfig = promptConfigs.find(
+    (config) => config.type === PromptConfigType.daily_report_review,
+  ) ?? null;
 
   return {
     rssSources: sources.map((source) => toSourceConfig(source)),
@@ -92,6 +96,9 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
       clusterMatch: resolvePromptSystemPrompt(clusterMatchConfig),
       clusterMerge: resolvePromptSystemPrompt(clusterMergeConfig),
       dailyReport: resolvePromptSystemPrompt(dailyReportConfig),
+    dailyReportReview: dailyReportReviewConfig
+        ? DEFAULT_DAILY_REPORT_REVIEW_PROMPT
+        : "",
     },
     selectedPromptConfigs: {
       itemUnderstanding: serializeSelectedPromptConfig(itemUnderstandingConfig),
@@ -99,6 +106,12 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
       clusterMatch: serializeSelectedPromptConfig(clusterMatchConfig),
       clusterMerge: serializeSelectedPromptConfig(clusterMergeConfig),
       dailyReport: serializeSelectedPromptConfig(dailyReportConfig),
+      dailyReportReview: dailyReportReviewConfig
+        ? {
+            ...serializeSelectedPromptConfig(dailyReportReviewConfig),
+            systemPrompt: DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+          }
+        : null,
     },
   };
 }

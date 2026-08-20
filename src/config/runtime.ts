@@ -4,6 +4,7 @@ import {
   DEFAULT_CLUSTER_MERGE_PROMPT,
   DEFAULT_CLUSTER_SUMMARY_PROMPT,
   DEFAULT_DAILY_REPORT_PROMPT,
+  DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
 } from "@/config/prompts";
 import { DEFAULT_SOURCE_CONFIGS } from "@/config/sources";
@@ -48,10 +49,12 @@ export type RuntimeConfig = {
     clusterMatch: string;
     clusterMerge: string;
     dailyReport: string;
+    dailyReportReview: string;
   };
   selectedPromptConfigs?: {
     itemUnderstanding: {
       name: string;
+      userPrompt: string;
       systemPrompt: string;
       promptTemplate: string;
       templateJson?: string | null;
@@ -62,6 +65,7 @@ export type RuntimeConfig = {
     };
     clusterSummary: {
       name: string;
+      userPrompt: string;
       systemPrompt: string;
       promptTemplate: string;
       templateJson?: string | null;
@@ -72,6 +76,7 @@ export type RuntimeConfig = {
     };
     clusterMatch: {
       name: string;
+      userPrompt: string;
       systemPrompt: string;
       promptTemplate: string;
       temperature?: number | null;
@@ -81,6 +86,7 @@ export type RuntimeConfig = {
     };
     clusterMerge: {
       name: string;
+      userPrompt: string;
       systemPrompt: string;
       promptTemplate: string;
       temperature?: number | null;
@@ -90,6 +96,7 @@ export type RuntimeConfig = {
     };
     dailyReport: {
       name: string;
+      userPrompt: string;
       systemPrompt: string;
       promptTemplate: string;
       templateJson?: string | null;
@@ -98,6 +105,17 @@ export type RuntimeConfig = {
       topP?: number | null;
       modelApi?: RuntimeConfig["modelApi"] | null;
     };
+    dailyReportReview: {
+      name: string;
+      userPrompt: string;
+      systemPrompt: string;
+      promptTemplate: string;
+      temperature?: number | null;
+      maxTokens?: number | null;
+      topP?: number | null;
+      modelApi?: RuntimeConfig["modelApi"] | null;
+      enabled: boolean;
+    } | null;
   };
 };
 
@@ -136,6 +154,7 @@ export function getRuntimeConfig(): RuntimeConfig {
       clusterMatch: DEFAULT_CLUSTER_MATCH_PROMPT,
       clusterMerge: DEFAULT_CLUSTER_MERGE_PROMPT,
       dailyReport: DEFAULT_DAILY_REPORT_PROMPT,
+      dailyReportReview: DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
     },
   };
 }

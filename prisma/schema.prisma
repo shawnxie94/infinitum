@@ -124,6 +124,7 @@ enum PromptConfigType {
   cluster_match
   cluster_merge
   daily_report
+  daily_report_review
 }
 
 enum DailyReportStatus {
@@ -850,6 +851,7 @@ model PromptConfig {
   name             String
   type             PromptConfigType
   prompt           String
+  userPrompt       String?
   systemPrompt     String?
   templateJson     String?
   temperature      Float?

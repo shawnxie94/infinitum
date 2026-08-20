@@ -1,9 +1,10 @@
 import type { TaskPipelineCheckpoint, DailyReportRecoveryStage } from "@/lib/tasks/types";
 
 export const DAILY_REPORT_RECOVERY_STAGE_LABELS: Record<DailyReportRecoveryStage, string> = {
-  assess: "ASSESS",
-  plan: "PLAN",
-  write: "WRITE",
+  assess: "评估",
+  plan: "规划",
+  write: "写作",
+  review: "审核",
 };
 
 function hasCompletedStage(checkpoint: TaskPipelineCheckpoint, stage: string) {
@@ -25,6 +26,9 @@ export function getDailyReportRecoveryStages(checkpoint: TaskPipelineCheckpoint 
   if ((hasCompletedStage(checkpoint, "plan") || hasCompletedStage(checkpoint, "plan_validate")) && checkpoint.plan !== undefined) {
     stages.push("write");
   }
+  if (hasCompletedStage(checkpoint, "review") && checkpoint.draft !== undefined) {
+    stages.push("review");
+  }
 
   return stages;
 }
@@ -34,6 +38,13 @@ export function getRecommendedDailyReportRecoveryStage(
 ): DailyReportRecoveryStage | null {
   const stages = getDailyReportRecoveryStages(checkpoint);
   if (stages.length === 0) return null;
+
+  if (
+    stages.includes("review") &&
+    (checkpoint?.reviewStatus === "unavailable" || checkpoint?.reviewStatus === "rejected")
+  ) {
+    return "review";
+  }
 
   if (stages.includes("write") && Array.isArray(checkpoint?.violations) && checkpoint.violations.length > 0) return "write";
 

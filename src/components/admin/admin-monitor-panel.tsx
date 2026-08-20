@@ -124,11 +124,24 @@ function getAiCallLabel(task: TaskRunSnapshot) {
     return null;
   }
 
-  if (task.aiCallCountEstimated > 0) {
-    return `AI 调用：${task.aiCallCountActual} / ${task.aiCallCountEstimated}`;
-  }
+  const countLabel = task.aiCallCountEstimated > 0
+    ? `AI 调用：${task.aiCallCountActual} / ${task.aiCallCountEstimated}`
+    : `AI 调用：${task.aiCallCountActual}`;
+  const totalTokens = (task.aiCallBreakdown ?? []).reduce(
+    (sum, entry) => sum + (entry.totalTokens ?? 0),
+    0,
+  );
+  return totalTokens > 0 ? `${countLabel} · 上下文 ${formatTokenCount(totalTokens)}` : countLabel;
+}
 
-  return `AI 调用：${task.aiCallCountActual}`;
+function formatTokenCount(value: number) {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return String(value);
 }
 
 function isMonitorSnapshot(

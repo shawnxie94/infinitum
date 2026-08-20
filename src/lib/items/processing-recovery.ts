@@ -231,6 +231,7 @@ export async function executeItemProcessingRecoveryTask(
       clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
     }, undefined, {
       aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents,
+      onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
     });
   }
   const trackedAiProvider = aiUsage.wrapProvider(baseProvider);

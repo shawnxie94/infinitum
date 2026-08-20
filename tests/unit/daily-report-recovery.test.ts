@@ -9,7 +9,7 @@ import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
 function buildCheckpoint(overrides: Partial<TaskPipelineCheckpoint> = {}): TaskPipelineCheckpoint {
   return {
     version: 1,
-    pipelineVersion: "daily-report-topic-first-v2",
+    pipelineVersion: "daily-report-topic-first-review-v1",
     stage: "validate",
     completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write"],
     inputHash: "input",
@@ -53,5 +53,17 @@ describe("daily report recovery options", () => {
 
     expect(getDailyReportRecoveryStages(checkpoint)).toEqual(["assess", "plan", "write"]);
     expect(getRecommendedDailyReportRecoveryStage(checkpoint)).toBe("write");
+  });
+
+  it("offers REVIEW for a completed draft when review was rejected or unavailable", () => {
+    const checkpoint = buildCheckpoint({
+      completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "review"],
+      reviewStatus: "unavailable",
+      reviewAttempts: 1,
+      violations: [],
+    });
+
+    expect(getDailyReportRecoveryStages(checkpoint)).toEqual(["assess", "plan", "write", "review"]);
+    expect(getRecommendedDailyReportRecoveryStage(checkpoint)).toBe("review");
   });
 });

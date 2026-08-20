@@ -26,7 +26,7 @@ export type BackgroundTaskRunTrigger = "scheduled" | "manual" | "admin_action";
 
 export type BackgroundTaskRunStatus = "queued" | "running" | "succeeded" | "failed" | "partial" | "cancelled";
 
-export const DAILY_REPORT_RECOVERY_STAGES = ["assess", "plan", "write"] as const;
+export const DAILY_REPORT_RECOVERY_STAGES = ["assess", "plan", "write", "review"] as const;
 export const DAILY_REPORT_LEGACY_RECOVERY_STAGES = ["repair"] as const;
 export type DailyReportRecoveryStage = typeof DAILY_REPORT_RECOVERY_STAGES[number];
 
@@ -64,6 +64,7 @@ export type TaskTimelineNodeKey =
   | "daily_report_plan_validate"
   | "daily_report_validate"
   | "daily_report_write"
+  | "daily_report_review"
   | "daily_report_repair"
   | "daily_report_persist_publish"
   | "task_finished"
@@ -141,6 +142,11 @@ export type TaskPipelineCheckpoint = {
   plan?: unknown;
   draft?: unknown;
   violations?: unknown[];
+  reviewStatus?: "disabled" | "passed" | "rejected" | "unavailable";
+  reviewAttempts?: number;
+  reviewRetryStage?: "plan" | "write" | null;
+  reviewViolations?: unknown[];
+  reviewAudit?: unknown;
   data?: Record<string, unknown>;
 };
 
@@ -149,13 +155,28 @@ export type TaskAiCallBreakdownKey =
   | "cluster_match"
   | "cluster_summary"
   | "cluster_merge"
-  | "daily_report";
+  /** Legacy aggregate key retained for historical task snapshots. */
+  | "daily_report"
+  | "daily_report_assess"
+  | "daily_report_plan"
+  | "daily_report_write"
+  | "daily_report_repair"
+  | "daily_report_review";
+
+export type TaskAiTokenUsageSource = "provider" | "estimated" | "mixed";
 
 export type TaskAiCallBreakdownSnapshot = {
   key: TaskAiCallBreakdownKey;
   label: string;
+  contractVersion?: string;
+  contractHash?: string;
   actual: number;
   estimated: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  cachedTokens?: number;
+  tokenUsageSource?: TaskAiTokenUsageSource;
 };
 
 export type TaskRunSnapshot = {

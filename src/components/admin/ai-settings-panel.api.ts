@@ -20,8 +20,9 @@ export type ModelApiConfigPayload = {
 export type PromptConfigPayload = {
   name: string;
   type: PromptConfigType;
-  prompt: string;
-  systemPrompt: string;
+  prompt?: string;
+  userPrompt: string | null;
+  systemPrompt?: string | null;
   templateJson: string | null;
   temperature: number | null;
   maxTokens: number | null;

@@ -4,7 +4,7 @@ import {
   AGGREGATION_PARSE_STATUS,
   RETRIABLE_AGGREGATION_PARSE_STATUSES,
 } from "@/lib/aggregation/status";
-import { createAiProvider, type AiEventSignature, type AiProvider, type ItemUnderstandingResult } from "@/lib/ai/provider";
+import { createAiProvider, type AiCallUsage, type AiEventSignature, type AiProvider, type ItemUnderstandingResult } from "@/lib/ai/provider";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import {
@@ -125,7 +125,10 @@ function serializeEventSignature(eventSignature?: {
   };
 }
 
-async function resolveAiProvider(aiProvider?: AiProvider) {
+async function resolveAiProvider(
+  aiProvider?: AiProvider,
+  options?: { onUsage?: (usage: AiCallUsage, usageKey?: string) => void },
+) {
   if (aiProvider) {
     return aiProvider;
   }
@@ -137,6 +140,7 @@ async function resolveAiProvider(aiProvider?: AiProvider) {
     clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
   }, undefined, {
     aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents,
+    ...(options?.onUsage ? { onUsage: options.onUsage } : {}),
   });
 }
 
@@ -234,7 +238,9 @@ export async function executeItemRegenerationTask(
   // call, while persisting only the requested target field.
   const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
   const trackedAiProvider = aiUsage.wrapProvider(
-    await resolveAiProvider(options?.aiProvider),
+    await resolveAiProvider(options?.aiProvider, {
+      onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+    }),
     { understandItemEstimated: false },
   );
   const initialAiUsage = aiUsage.snapshot();
@@ -858,7 +864,9 @@ export async function executeItemReanalyzeTask(
   const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
   aiUsage.addEstimated(2, "cluster_summary");
   const trackedAiProvider = aiUsage.wrapProvider(
-    await resolveAiProvider(options?.aiProvider),
+    await resolveAiProvider(options?.aiProvider, {
+      onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+    }),
     { understandItemEstimated: false },
   );
   const initialAiUsage = aiUsage.snapshot();
@@ -1340,8 +1348,10 @@ export async function executeItemReparseAggregationsTask(
     return;
   }
 
-  const aiProvider = await resolveAiProvider(options?.aiProvider);
   const aiUsage = createTaskAiUsageTracker(totalCandidates, "item_understanding");
+  const aiProvider = await resolveAiProvider(options?.aiProvider, {
+    onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+  });
   const trackedAiProvider = aiUsage.wrapProvider(aiProvider);
   const initialAiUsage = aiUsage.snapshot();
 

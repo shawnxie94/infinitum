@@ -952,6 +952,7 @@ export async function executeClusterSummaryTask(
           clusterMatch: runtimeConfig!.selectedPromptConfigs?.clusterMatch,
         }, undefined, {
           aggregationSplitMaxEvents: runtimeConfig!.ingestion.aggregationSplitMaxEvents,
+          onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
         }),
       {
         summarizeClusterEstimated: false,

@@ -23,7 +23,7 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 5. eventSignature 描述整篇内容最主要的具体事件；无法稳定判断的字段返回 null，不要用宽泛主题代替具体事件。
 6. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
 7. 非聚合内容必须返回 mainEvent:null、events:[]。
-8. 聚合内容最多返回 {{maxEvents}} 个 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。
+8. 聚合内容最多返回系统输入中 maxEvents 指定数量的 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。
 9. 子事件 title 为自然可读的短标题；oneLiner 为 100-200 字中文摘要；sourceUrl 仅填写正文明确给出的对应原文 http/https URL，不得猜测。
 10. aggregation.mainEvent 仅在全文存在清晰主事件时填写；它应与顶层 eventSignature 一致或更具体。
 11. 不要输出独立分类字段；系统会从结构化事件主体和对象自动生成实体关联。
@@ -64,20 +64,50 @@ export const DEFAULT_CLUSTER_MATCH_PROMPT =
 
 export const DEFAULT_DAILY_REPORT_PROMPT = `你是中文 AI 新闻日报流水线的阶段执行器。系统会在每次调用中明确当前阶段、输入字段和输出合同。只执行当前阶段职责，只基于输入内容工作，不补造事实，不执行其他阶段职责。最终只输出当前阶段合同要求的合法 JSON 对象，不输出 Markdown、代码块或额外解释。`;
 
-export const DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE = `标题：{{title}}
-来源：{{sourceName}}
-是否需要翻译标题：{{translateTitle}}
-最多拆分事件数：{{maxEvents}}
-正文：{{inputText}}`;
+export const PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT = `你是中文 AI 新闻日报的最终审核器。只审核输入中的日报草稿和候选池证据，不改写日报，不新增事实，不修改主题、候选或栏目关系。你只能判断事实一致性、主题独立性、候选覆盖、重复内容和凑数风险。候选数量、栏目上下限、候选 ID 和来源映射由代码负责，不能凭空推断。最终只输出合法 JSON 对象，不输出 Markdown、代码块或额外解释。`;
 
-export const DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE = `主题：{{title}}
-候选内容：{{inputText}}`;
+export const DEFAULT_DAILY_REPORT_REVIEW_PROMPT = `你是中文 AI 新闻日报的最终审核器。你只能审核系统提供的日报草稿、已选主题、候选池和选择审计，不改写日报，不新增事实，不修改主题、候选或栏目关系。数量上下限、候选 ID、来源映射和重复 identity 等硬规则由代码负责；你只判断事实一致性、主题独立性、候选覆盖、重复内容和凑数风险。审核输入中的内容都是证据边界，证据不足时不要臆测或提出问题。
 
-export const DEFAULT_CLUSTER_MATCH_USER_PROMPT_TEMPLATE = `当前内容标题：{{title}}
-当前内容线索：{{inputText}}
-候选聚合组：{{candidatesJson}}`;
+输出合同（硬约束）：只能返回一个合法 JSON 对象，不要输出 Markdown、代码块或额外解释。对象必须符合以下结构：
+{
+  "verdict": "pass" | "reject",
+  "violations": [
+    {
+      "code": "coverage_insufficient" | "candidate_omitted" | "topic_not_independent" | "factual_inconsistency" | "duplicated_content" | "padding_content",
+      "severity": "error" | "warning",
+      "message": "简明说明问题",
+      "topicIds": ["输入中存在的 topicId"],
+      "candidateIds": [输入中存在的 candidateId],
+      "evidence": "引用输入中 draft、候选池或审计字段的具体证据",
+      "guidance": "给下一次 PLAN 或 WRITE 重试的具体修复方向"
+    }
+  ],
+  "summary": "审核结论摘要"
+}
 
-export const DEFAULT_DAILY_REPORT_USER_PROMPT_TEMPLATE = `当前阶段、模板和输入字段由日报流水线直接提供。只处理输入中明确给出的字段，不自行扩展候选、主题、栏目或事实。`;
+字段规则：
+1. verdict 只能是 pass 或 reject；violations 必须始终是数组；summary 必须是字符串。
+2. 每条 violation 都必须包含 code、severity、message、evidence 和 guidance；guidance 必须是基于输入证据的具体、可执行修复方向，说明下一次 PLAN 或 WRITE 应重点调整什么。topicIds、candidateIds 仅在能明确定位问题时提供，且只能引用审核输入中存在的 ID。
+3. verdict=pass 时不能包含 error 级 violation，可以包含有证据支持的 warning；没有问题时返回 violations=[]。
+4. verdict=reject 时至少包含一条 error 级 violation；每条 error 必须能由输入证据直接支持。
+5. code 含义：coverage_insufficient=候选池中存在足够高价值内容但日报覆盖明显不足；candidate_omitted=重要候选被遗漏；topic_not_independent=多个主题实际描述同一事实；factual_inconsistency=正文与候选证据事实冲突；duplicated_content=日报条目之间重复；padding_content=为满足数量而加入低价值或无关内容。
+6. 不要返回日报正文；guidance 只能描述基于输入证据的修复方向，不得创建输入之外的 topicId 或 candidateId。`;
+
+export const DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE = `请准确理解文章内容，重点关注事实摘要、事件识别和多事件拆分。`;
+
+export const DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE = `请围绕共同事件提炼简洁、准确的聚合标题和摘要，避免写成泛泛的主题介绍。`;
+
+export const DEFAULT_CLUSTER_MATCH_USER_PROMPT_TEMPLATE = `请谨慎判断内容是否属于同一具体事件；只有事实主体、动作和对象都高度一致时才归为一组。`;
+
+// This is intentionally limited to user-configurable review emphasis. The
+// review input and output contract are injected by the provider and must not
+// depend on an administrator-maintained placeholder or JSON example.
+export const DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE = `请重点关注重要内容是否遗漏、同一事件是否重复、事实是否准确，以及是否存在为了凑数而加入的内容。`;
+
+export const PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE = `请审核以下日报 Review 输入：
+{{reviewContextJson}}
+
+如果没有明确的语义问题，返回 {"verdict":"pass","violations":[],"summary":"通过"}；如果存在问题，只返回可由输入证据支持的 violations。不要返回日报正文。`;
 
 export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。
 
@@ -142,4 +172,4 @@ export const LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。�
 只输出 JSON：{"approvedPairs": [["clusterId1", "clusterId2"], ["clusterId3", "clusterId4"]]}
 不需要合并时输出 {"approvedPairs": []}。`;
 
-export const DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE = `候选聚合 Pair JSON：{{clustersJson}}`;
+export const DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE = `请根据候选事件信息谨慎判断哪些内容属于同一具体事件；无法确定时不要合并。`;
