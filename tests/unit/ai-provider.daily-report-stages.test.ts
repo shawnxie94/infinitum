@@ -142,6 +142,7 @@ describe("daily report staged provider", () => {
     expect(planUserPrompt).toContain("数量是硬约束");
     expect(planUserPrompt).toContain("topics 不是候选池");
     expect(planUserPrompt).toContain("达到 maxItems 后立即停止");
+    expect(planUserPrompt).toContain("应尽量接近 maxItems");
     expect(planUserPrompt).not.toContain('"type":"text"');
     expect(planUserPrompt).not.toContain('"title":"摘要"');
     expect(planUserPrompt).not.toContain('"headlineInstruction"');
