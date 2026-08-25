@@ -242,7 +242,7 @@ export function DailyReportList({
 
   return (
     <>
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="flex min-w-0 w-full flex-col gap-6 lg:flex-row">
         <aside className="hidden w-64 flex-shrink-0 lg:block">
           <div className="panel-raised sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-sm border border-[color:var(--line)] p-4">
             <div className="mb-4 flex items-center justify-between">

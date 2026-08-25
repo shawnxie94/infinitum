@@ -47,5 +47,9 @@ describe("DailyReportList", () => {
     expect(screen.getByRole("heading", { name: "时间筛选" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /全部周/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "AI 日报" }).closest("section")?.className).toContain("border-b");
+
+    const reportListLayout = screen.getByRole("heading", { name: "AI 日报" }).closest("section")?.parentElement?.parentElement;
+    expect(reportListLayout?.className).toContain("min-w-0");
+    expect(reportListLayout?.className).toContain("w-full");
   });
 });

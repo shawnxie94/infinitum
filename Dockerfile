@@ -11,6 +11,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 FROM base AS builder
 
 ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+# Keep Next.js TypeScript/build workers within the default Docker Desktop
+# memory budget. Runtime stages do not inherit this builder-only setting.
+ENV NODE_OPTIONS=--max-old-space-size=1024
 
 COPY package.json package-lock.json ./
 RUN npm ci
