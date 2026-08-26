@@ -487,6 +487,77 @@ describe("AdminSettingsPanel", () => {
     });
   });
 
+  it("applies the OrcaRouter provider preset to a new model config", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          config: {
+            id: "model-orca",
+            name: "OrcaRouter",
+            baseUrl: "https://api.orcarouter.ai/v1",
+            modelName: "orcarouter/auto",
+            ingestionItemConcurrency: 3,
+            customHeaders: {},
+            apiKeyMasked: "••••••••••••",
+            hasApiKey: true,
+            isEnabled: true,
+            isDefault: false,
+            createdAt: "2026-04-20T11:00:00.000Z",
+            updatedAt: "2026-04-20T11:00:00.000Z",
+          },
+        }),
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
+
+    await user.click(screen.getByRole("button", { name: /\+ 创建配置/i }));
+    expect(screen.getByRole("option", { name: "自定义（OpenAI 兼容）" })).toBeInTheDocument();
+    expect(screen.getByLabelText(/API地址/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("服务商"), "orcarouter");
+    expect(screen.queryByLabelText(/API地址/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/配置名称/)).toHaveValue("OrcaRouter");
+    expect(screen.getByLabelText(/模型名称/)).toHaveValue("orcarouter/auto");
+    await user.clear(screen.getByLabelText(/API密钥/));
+    await user.type(screen.getByLabelText(/API密钥/), "sk-orca-test");
+    await user.click(screen.getByRole("button", { name: "创建" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/model-api-configs", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "OrcaRouter",
+          baseUrl: "https://api.orcarouter.ai/v1",
+          apiKey: "sk-orca-test",
+          apiKeyMode: "replace",
+          modelName: "orcarouter/auto",
+          ingestionItemConcurrency: 3,
+          customHeaders: {},
+          isEnabled: true,
+          isDefault: false,
+        }),
+      });
+    });
+  });
+
+  it("preserves a manually entered model config name when selecting a provider", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
+
+    await user.click(screen.getByRole("button", { name: /\+ 创建配置/i }));
+    await user.type(screen.getByLabelText(/配置名称/), "我的模型配置");
+    await user.selectOptions(screen.getByLabelText("服务商"), "orcarouter");
+
+    expect(screen.getByLabelText(/配置名称/)).toHaveValue("我的模型配置");
+  });
+
   it("fetches model options with unsaved custom headers", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(

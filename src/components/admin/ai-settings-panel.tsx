@@ -45,6 +45,12 @@ import {
   getDefaultPromptTemplate,
 } from "@/lib/settings/ai-config";
 import {
+  getModelApiProviderPreset,
+  inferModelApiProvider,
+  MODEL_API_PROVIDER_PRESETS,
+  type ModelApiProviderId,
+} from "@/lib/settings/model-providers";
+import {
   compileDailyReportTemplatePrompt,
   DEFAULT_DAILY_REPORT_TEMPLATE,
   DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
@@ -70,6 +76,7 @@ type AiSettingsPanelProps = {
 type HeaderEntry = { key: string; value: string };
 
 type ModelFormState = {
+  providerId: ModelApiProviderId;
   name: string;
   baseUrl: string;
   apiKey: string;
@@ -160,6 +167,7 @@ function toNullableNumber(value: string) {
 
 function buildEmptyModelForm(): ModelFormState {
   return {
+    providerId: "custom",
     name: "",
     baseUrl: "https://api.openai.com/v1",
     apiKey: "",
@@ -169,6 +177,22 @@ function buildEmptyModelForm(): ModelFormState {
     customHeaders: [],
     isEnabled: true,
     isDefault: false,
+  };
+}
+
+function applyModelApiProvider(current: ModelFormState, providerId: ModelApiProviderId): ModelFormState {
+  const preset = getModelApiProviderPreset(providerId);
+  const currentPreset = getModelApiProviderPreset(current.providerId);
+  return {
+    ...current,
+    providerId,
+    name:
+      !current.name.trim() || current.name === currentPreset.name
+        ? preset.name
+        : current.name,
+    baseUrl: preset.baseUrl,
+    modelName: preset.modelName,
+    customHeaders: Object.entries(preset.customHeaders).map(([key, value]) => ({ key, value })),
   };
 }
 
@@ -361,6 +385,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
     setEditingModelConfig(config);
     setEditingModelApiKeyRaw("");
     setModelForm({
+      providerId: inferModelApiProvider(config.baseUrl),
       name: config.name,
       baseUrl: config.baseUrl,
       apiKey: config.apiKeyMasked || "",
@@ -808,15 +833,34 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             />
           </FormBlock>
 
-          <FormBlock label="API地址（Base URL）" required>
-            <TextInput
-              value={modelForm.baseUrl}
-              onChange={(event) =>
-                setModelForm((current) => ({ ...current, baseUrl: event.target.value }))
-              }
-              placeholder="https://api.openai.com/v1"
+          <FormBlock label="服务商" required>
+            <SelectField
+              aria-label="服务商"
+              value={modelForm.providerId}
+              onChange={(value) => {
+                const providerId = String(value) as ModelApiProviderId;
+                setModelForm((current) => applyModelApiProvider(current, providerId));
+                setModelNameManual(true);
+              }}
+              options={MODEL_API_PROVIDER_PRESETS.map((preset) => ({
+                value: preset.id,
+                label: preset.label,
+              }))}
+              className="w-full"
             />
           </FormBlock>
+
+          {modelForm.providerId === "custom" ? (
+            <FormBlock label="API地址（Base URL）" required>
+              <TextInput
+                value={modelForm.baseUrl}
+                onChange={(event) =>
+                  setModelForm((current) => ({ ...current, baseUrl: event.target.value }))
+                }
+                placeholder="https://api.openai.com/v1"
+              />
+            </FormBlock>
+          ) : null}
 
           <FormBlock label="API密钥" required>
             <div className="flex flex-wrap items-center gap-2">

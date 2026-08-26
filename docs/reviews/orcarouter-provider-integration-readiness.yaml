@@ -1,0 +1,47 @@
+schema_version: 1
+id: infinitum-orcarouter-provider-integration-v1-plan-to-build
+feature_id: infinitum-orcarouter-provider-integration-v1
+stage: plan_to_build
+status: ready
+iteration: 1
+source_artifacts:
+  - name: execution-plan
+    uri: docs/plans/orcarouter-provider-integration-execution-plan.md
+    sha256: de1087ab1b8b46d23c0f61886bfbd4e2b5799e0bc4569828082f267841c3f217
+findings:
+  - id: DR-ORCA-001
+    severity: warning
+    status: accepted_risk
+    title: Partner Dashboard 的源码匹配规则未公开
+    evidence: 计划明确加入 OrcaRouter Provider 标识、Base URL 和无密钥环境变量说明，但外部扫描器的精确匹配规则无法在本地验证。
+    next_action: 提交源码后由用户在 Partner Dashboard 发起复查；若未识别，再根据页面反馈调整显式配置位置。
+traceability:
+  - requirement: source-level-orcarouter-provider
+    design: src/lib/settings/model-providers.ts and model API form preset application
+    plan_unit: U1,U2
+    acceptance_ids: [AC-ORCA-001, AC-ORCA-004]
+  - requirement: preserve-generic-model-api-configuration
+    design: existing ModelApiConfig payload and runtime path remain unchanged
+    plan_unit: U2,U3
+    acceptance_ids: [AC-ORCA-002, AC-ORCA-003]
+  - requirement: focused-regression-validation
+    design: admin settings component regression tests and lint/type checks
+    plan_unit: U3
+    acceptance_ids: [AC-ORCA-002, AC-ORCA-003, AC-ORCA-004]
+  - requirement: public-provider-attribution
+    design: README user-confirmed OrcaRouter referral badge
+    plan_unit: U4
+    acceptance_ids: [AC-ORCA-005]
+decisions:
+  - 不修改 Prisma schema，不引入真实 API Key，不改变默认模型 Provider。
+  - Provider 选择只负责填充已有配置字段；运行时仍走现有 OpenAI-compatible API 链路。
+  - 外部 Partner Dashboard 复查属于用户确认的外部动作，不在本次 Build 中自动执行。
+assumptions:
+  - OrcaRouter 扫描器接受公开源码中的显式 Provider preset 和 Base URL 线索，或审核人可据此确认接入。
+  - OrcaRouter 继续使用现有 OpenAI-compatible API 请求链路，不要求额外自定义请求头。
+evidence:
+  - execution-plan status is approved and uses base commit 54814f9c030ba8bb056ceb05e13adb0f5e257bc5.
+  - 工作区在计划创建前无业务代码改动，当前实施采用单 writer 串行策略。
+waiting_on: none
+next_action: proceed
+notes: plan_to_build gate for the bounded OrcaRouter Provider integration batch.
