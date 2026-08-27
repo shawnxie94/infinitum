@@ -9,6 +9,7 @@ import {
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
 import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
 import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
+import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
 
 const {
   assessDailyReportCandidatesMock,
@@ -1691,6 +1692,58 @@ describe("daily report service", () => {
     });
     expect(report.status).toBe("draft");
     expect(report.publishedAt).toBeNull();
+  });
+
+  it("reviews the persisted draft even when the candidate pool changes afterward", async () => {
+    await createDailyReportSchedule({ autoPublish: false });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockResolvedValue({
+      verdict: "reject",
+      violations: [{
+        code: "factual_inconsistency",
+        severity: "error",
+        message: "事实需要重新核对",
+        evidence: "草稿中的数字与候选摘要不一致。",
+        guidance: "WRITE 重试时重新核对该主题的数字，只保留候选证据明确支持的表述。",
+      }],
+      summary: "未通过",
+    });
+
+    let checkpoint: TaskPipelineCheckpoint | null = null;
+    const firstResult = await generateDailyReport({
+      date: REPORT_DATE,
+      force: true,
+      onCheckpoint: async (nextCheckpoint) => {
+        checkpoint = nextCheckpoint;
+      },
+    });
+    expect(firstResult.reviewStatus).toBe("rejected");
+    if (!checkpoint) throw new Error("日报生成未保存 checkpoint。");
+    const recoveryCheckpoint = checkpoint as TaskPipelineCheckpoint;
+
+    await prisma.item.updateMany({
+      where: { urlHash: "daily-item-a" },
+      data: { originalTitle: "OpenAI 发布新模型（审核后更新）" },
+    });
+    reviewDailyReportMock.mockResolvedValue({ verdict: "pass", violations: [], summary: "通过" });
+
+    const recoveryResult = await generateDailyReport({
+      date: REPORT_DATE,
+      force: true,
+      resumeCheckpoint: {
+        ...recoveryCheckpoint,
+        resumeFrom: "review",
+        resumeEligible: true,
+      },
+    });
+
+    expect(recoveryResult.reviewStatus).toBe("passed");
+    expect(reviewDailyReportMock).toHaveBeenCalledTimes(3);
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(2);
   });
 
   it("persists a draft without publishing when the reviewer is unavailable", async () => {

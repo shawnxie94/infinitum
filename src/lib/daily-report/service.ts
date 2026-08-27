@@ -14,7 +14,7 @@ import { getDailyReportDateRange, getTodayDailyReportDate, normalizeDailyReportD
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { withDailyReportLock } from "@/lib/daily-report/history";
 import { DailyReportCancellationError, DailyReportGenerationError } from "@/lib/daily-report/errors";
-import { getDailyReportSectionBlocks } from "@/lib/daily-report/content";
+import { getDailyReportSectionBlocks, normalizeDailyReportContent } from "@/lib/daily-report/content";
 import { getDailyReportAttemptLimit, isDailyReportContextOverflowError } from "@/lib/daily-report/attempts";
 import {
   DailyReportStageLoopError,
@@ -859,6 +859,116 @@ function toCandidateSnapshotEntry(candidate: DailyReportCandidate): DailyReportC
   };
 }
 
+function parseDailyReportCandidateSnapshot(value: unknown): DailyReportCandidateSnapshotEntry[] {
+  const candidates = value && typeof value === "object" && !Array.isArray(value)
+    ? (value as { candidates?: unknown }).candidates
+    : value;
+  if (!Array.isArray(candidates)) return [];
+
+  return candidates.filter((candidate): candidate is DailyReportCandidateSnapshotEntry => {
+    if (!candidate || typeof candidate !== "object") return false;
+    const entry = candidate as Partial<DailyReportCandidateSnapshotEntry>;
+    return Number.isInteger(entry.id)
+      && typeof entry.sourceKey === "string"
+      && typeof entry.title === "string"
+      && typeof entry.sourceName === "string"
+      && typeof entry.url === "string"
+      && typeof entry.candidateScore === "number"
+      && typeof entry.sourceCount === "number"
+      && typeof entry.itemCount === "number";
+  });
+}
+
+function buildDailyReportRecoveryPlan(
+  content: DailyReportContent,
+  template: ReturnType<typeof normalizeDailyReportTemplateConfig>,
+): DailyReportPlan {
+  let fallbackTopicSequence = 0;
+  const templateSections = template.blocks.filter((block) => block.type === "section");
+  return {
+    schemaVersion: 2,
+    sections: getDailyReportSectionBlocks(content).map((section) => {
+      const templateSection = templateSections.find((block) => (
+        (section.blockKey && block.key === section.blockKey) || block.title === section.title
+      ));
+      return {
+        blockKey: templateSection?.key ?? section.blockKey ?? section.title,
+        topics: section.items.map((item) => ({
+          topicId: item.topicId ?? `recovery-topic-${++fallbackTopicSequence}`,
+          candidateIds: [...item.sourceIds],
+        })),
+      };
+    }),
+  };
+}
+
+function buildDailyReportRecoveryCandidates(input: {
+  snapshot: DailyReportCandidateSnapshotEntry[];
+  planningCandidateBriefs: Awaited<ReturnType<typeof buildDailyReportCandidateBriefs>>;
+  currentCandidates: DailyReportCandidate[];
+  persistedSources: Array<{
+    sourceNumber: number | null;
+    sourceKey: string | null;
+    itemId: string | null;
+    clusterId: string | null;
+    sourceName: string;
+    title: string;
+    url: string;
+    sourceSummary: string | null;
+    sourcePublishedAt: Date | null;
+    sourceQualityScore: number | null;
+    eventType: string | null;
+    eventSubject: string | null;
+    eventAction: string | null;
+    eventObject: string | null;
+    eventDate: string | null;
+  }>,
+}) {
+  const currentById = new Map(input.currentCandidates.map((candidate) => [candidate.id, candidate]));
+  const currentBySourceKey = new Map(input.currentCandidates.map((candidate) => [candidate.sourceKey, candidate]));
+  const briefById = new Map(input.planningCandidateBriefs.map((brief) => [brief.candidateId, brief]));
+  const sourceByNumber = new Map<number, (typeof input.persistedSources)[number]>();
+  for (const source of input.persistedSources) {
+    if (source.sourceNumber !== null && !sourceByNumber.has(source.sourceNumber)) {
+      sourceByNumber.set(source.sourceNumber, source);
+    }
+  }
+
+  return input.snapshot.map((entry) => {
+    const source = sourceByNumber.get(entry.id);
+    const brief = briefById.get(entry.id);
+    const current = currentBySourceKey.get(entry.sourceKey) ?? currentById.get(entry.id);
+    const publishedAt = source?.sourcePublishedAt?.toISOString() ?? brief?.publishedAt ?? current?.publishedAt ?? "";
+    return {
+      id: entry.id,
+      sourceKey: source?.sourceKey ?? entry.sourceKey,
+      itemId: source?.itemId ?? entry.itemId ?? current?.itemId ?? "",
+      clusterId: source?.clusterId ?? entry.clusterId ?? current?.clusterId ?? null,
+      title: source?.title ?? entry.title,
+      itemTitle: entry.itemTitle ?? current?.itemTitle ?? source?.title ?? entry.title,
+      sourceName: source?.sourceName ?? entry.sourceName,
+      url: source?.url ?? entry.url,
+      summary: source?.sourceSummary ?? current?.summary ?? brief?.summaryExcerpt ?? "",
+      qualityScore: source?.sourceQualityScore ?? brief?.qualityScore ?? current?.qualityScore ?? 0,
+      candidateScore: entry.candidateScore,
+      sourceCount: entry.sourceCount,
+      itemCount: entry.itemCount,
+      createdAt: current?.createdAt ?? publishedAt,
+      publishedAt,
+      publishedAtKnown: entry.publishedAtKnown,
+      eventType: source?.eventType ?? entry.eventType ?? current?.eventType ?? brief?.eventType ?? null,
+      eventSubject: source?.eventSubject ?? entry.eventSubject ?? current?.eventSubject ?? brief?.eventSubject ?? null,
+      eventAction: source?.eventAction ?? entry.eventAction ?? current?.eventAction ?? brief?.eventAction ?? null,
+      eventObject: source?.eventObject ?? entry.eventObject ?? current?.eventObject ?? brief?.eventObject ?? null,
+      eventDate: source?.eventDate ?? entry.eventDate ?? current?.eventDate ?? brief?.eventDate ?? null,
+      isFollowUp: entry.isFollowUp ?? current?.isFollowUp ?? brief?.isFollowUp ?? false,
+      newItemCountOnDate: entry.newItemCountOnDate ?? current?.newItemCountOnDate ?? brief?.newItemCountOnDate ?? 0,
+      newSourceCountOnDate: entry.newSourceCountOnDate ?? current?.newSourceCountOnDate ?? brief?.newSourceCountOnDate ?? 0,
+      evidenceItems: current?.evidenceItems ?? [],
+    } satisfies DailyReportCandidate;
+  });
+}
+
 function buildDailyReportExcludedRecentDuplicateSnapshots(
   candidates: DailyReportCandidate[],
   recentSources: RecentDailyReportSourceSnapshot[],
@@ -1240,11 +1350,9 @@ async function generateDailyReportInternal(input: {
     dailyReportSourceGroupIds,
   );
   const deduplicated = deduplicateDailyReportCandidates(candidateResult.candidates);
-  const rawCandidates = deduplicated.candidates;
-  const excludedRecentDuplicates = buildDailyReportExcludedRecentDuplicateSnapshots(rawCandidates, recentSources);
-  const candidates = filterRecentDailyReportDuplicates(rawCandidates, recentSources, schedule.dailyReportCandidateLimit);
-  await input.onCandidatesLoaded?.(candidates.length);
-  await input.onStageUpdate?.("prepare");
+  let rawCandidates = deduplicated.candidates;
+  let excludedRecentDuplicates = buildDailyReportExcludedRecentDuplicateSnapshots(rawCandidates, recentSources);
+  let candidates = filterRecentDailyReportDuplicates(rawCandidates, recentSources, schedule.dailyReportCandidateLimit);
   const runtimeConfig = await getIngestionRuntimeConfig();
   let template;
   const templateJson = runtimeConfig.selectedPromptConfigs?.dailyReport.templateJson;
@@ -1286,6 +1394,87 @@ async function generateDailyReportInternal(input: {
       },
     },
   });
+
+  const reviewRecoveryCheckpoint = input.resumeCheckpoint?.resumeFrom === "review"
+    ? input.resumeCheckpoint
+    : null;
+  let effectiveResumeCheckpoint = input.resumeCheckpoint;
+  let reviewRecoveryContextReady = false;
+  if (reviewRecoveryCheckpoint && existing) {
+    let persistedContent: DailyReportContent | null = null;
+    try {
+      persistedContent = normalizeDailyReportContent(JSON.parse(existing.summaryJson));
+    } catch {
+      persistedContent = null;
+    }
+
+    let persistedSnapshot: unknown = reviewRecoveryCheckpoint.candidateSnapshot;
+    if (persistedSnapshot === undefined && existing.candidateSnapshot) {
+      try {
+        persistedSnapshot = JSON.parse(existing.candidateSnapshot);
+      } catch {
+        persistedSnapshot = null;
+      }
+    }
+    const snapshot = parseDailyReportCandidateSnapshot(persistedSnapshot);
+    const planningCandidateBriefs = Array.isArray(reviewRecoveryCheckpoint.planningCandidateBriefs)
+      ? reviewRecoveryCheckpoint.planningCandidateBriefs as Awaited<ReturnType<typeof buildDailyReportCandidateBriefs>>
+      : [];
+    if (persistedContent && snapshot.length > 0 && planningCandidateBriefs.length > 0) {
+      const persistedSources = await prisma.dailyReportSource.findMany({
+        where: { dailyReportId: existing.id },
+        select: {
+          sourceNumber: true,
+          sourceKey: true,
+          itemId: true,
+          clusterId: true,
+          sourceName: true,
+          title: true,
+          url: true,
+          sourceSummary: true,
+          sourcePublishedAt: true,
+          sourceQualityScore: true,
+          eventType: true,
+          eventSubject: true,
+          eventAction: true,
+          eventObject: true,
+          eventDate: true,
+        },
+      });
+      const recoveryCandidates = buildDailyReportRecoveryCandidates({
+        snapshot,
+        planningCandidateBriefs,
+        currentCandidates: candidates,
+        persistedSources,
+      });
+      const recoveryPlan = buildDailyReportRecoveryPlan(persistedContent, template);
+      rawCandidates = recoveryCandidates;
+      candidates = recoveryCandidates;
+      excludedRecentDuplicates = buildDailyReportExcludedRecentDuplicateSnapshots(rawCandidates, recentSources);
+      effectiveResumeCheckpoint = {
+        ...reviewRecoveryCheckpoint,
+        plan: recoveryPlan,
+        draft: persistedContent,
+        completedStages: [...new Set([
+          ...reviewRecoveryCheckpoint.completedStages,
+          "prepare",
+          "assess",
+          "merge",
+          "plan",
+          "plan_validate",
+          "write",
+          "validate",
+        ])],
+        data: {
+          ...(reviewRecoveryCheckpoint.data ?? {}),
+          reviewRecoverySource: "persisted_daily_report",
+        },
+      };
+      reviewRecoveryContextReady = true;
+    }
+  }
+  await input.onCandidatesLoaded?.(candidates.length);
+  await input.onStageUpdate?.("prepare");
 
   if (existing && existing.inputHash === inputHash && !input.force) {
     return {
@@ -1367,8 +1556,8 @@ async function generateDailyReportInternal(input: {
   let validationViolationCount = 0;
   let partial = false;
   let omittedTopicIds = new Set<string>();
-  let latestCheckpoint: TaskPipelineCheckpoint | null = input.resumeCheckpoint ?? null;
-  const stageAttempts: Record<string, number> = { ...(input.resumeCheckpoint?.stageAttempts ?? {}) };
+  let latestCheckpoint: TaskPipelineCheckpoint | null = effectiveResumeCheckpoint ?? null;
+  const stageAttempts: Record<string, number> = { ...(effectiveResumeCheckpoint?.stageAttempts ?? {}) };
   let currentStage: DailyReportPipelineStage = "prepare";
   let currentBatchIndex: number | null = null;
   let currentAttemptKey = "PREPARE";
@@ -1521,20 +1710,27 @@ async function generateDailyReportInternal(input: {
     const batches = splitDailyReportCandidates(planningCandidates, batchSize);
     planningBatchCount = batches.length;
     const candidateSnapshotHash = createHash("sha256").update(JSON.stringify(candidates.map(toCandidateSnapshotEntry))).digest("hex");
-    const checkpoint = input.resumeCheckpoint;
+    const checkpoint = effectiveResumeCheckpoint;
     const canResume = Boolean(
       checkpoint?.resumeEligible &&
-      checkpoint.inputHash === inputHash &&
-      checkpoint.candidateSnapshotHash === candidateSnapshotHash &&
+      (
+        (checkpoint.inputHash === inputHash && checkpoint.candidateSnapshotHash === candidateSnapshotHash)
+        || (
+          checkpoint.resumeFrom === "review"
+          && reviewRecoveryContextReady
+          && checkpoint.templateSignature === templateSignature
+          && checkpoint.pipelineVersion === DAILY_REPORT_PIPELINE_VERSION
+        )
+      ) &&
       checkpoint.templateSignature === templateSignature &&
       checkpoint.pipelineVersion === DAILY_REPORT_PIPELINE_VERSION,
     );
-    if (input.resumeCheckpoint && !canResume) {
+    if (checkpoint && !canResume) {
       throw new DailyReportGenerationError(
         new Error("日报输入、模板或 Pipeline 版本已变化，旧 checkpoint 不可继续执行，请重新生成。"),
         aiUsage.snapshot(),
         {
-          ...input.resumeCheckpoint,
+          ...checkpoint,
           stage: "prepare",
           failedStage: "prepare",
           failureCode: "checkpoint_mismatch",
