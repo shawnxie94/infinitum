@@ -1769,6 +1769,41 @@ describe("daily report service", () => {
     expect(report.publishedAt).toBeNull();
   });
 
+  it("records the reviewer failure reason on a partial task run", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockRejectedValue(new Error("review service unavailable"));
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "AI 日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+
+    await executeDailyReportTask(taskRun);
+
+    const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(storedTaskRun).toMatchObject({
+      status: "partial",
+      errorSummary: "审核调用失败：review service unavailable",
+    });
+    expect(JSON.parse(storedTaskRun.pipelineCheckpointJson ?? "{}")).toMatchObject({
+      reviewStatus: "unavailable",
+      reviewAttempts: 1,
+      reviewAudit: {
+        attempts: 1,
+        error: "review service unavailable",
+      },
+    });
+  });
+
   it("passes the full recent topic set to ASSESS and records model history filtering", async () => {
     await createReportCandidates();
     await createDailyReportSchedule({ autoPublish: true });

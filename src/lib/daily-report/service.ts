@@ -15,6 +15,7 @@ import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { withDailyReportLock } from "@/lib/daily-report/history";
 import { DailyReportCancellationError, DailyReportGenerationError } from "@/lib/daily-report/errors";
 import { getDailyReportSectionBlocks, normalizeDailyReportContent } from "@/lib/daily-report/content";
+import { getDailyReportFailureSummary } from "@/lib/daily-report/review";
 import { getDailyReportAttemptLimit, isDailyReportContextOverflowError } from "@/lib/daily-report/attempts";
 import {
   DailyReportStageLoopError,
@@ -2394,7 +2395,7 @@ async function generateDailyReportInternal(input: {
           reviewStatus = "unavailable";
           reviewAudit = {
             ...(reviewAudit ?? {}),
-            attempts: 2,
+            attempts: reviewAttempts,
             retryStage: reviewRetryStage,
             retryError: error instanceof Error ? error.message : String(error),
           };
@@ -2711,6 +2712,13 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       ? "partial"
       : "succeeded";
     omittedTopicCount = result.omittedTopicIds.length;
+    const completionIssueSummary = getDailyReportFailureSummary({
+      status: result.reviewStatus,
+      audit: result.reviewAudit,
+      violations: result.reviewViolations,
+      partial: result.partial,
+      omittedTopicCount,
+    });
     const totalActual = result.skipped ? 0 : finalAiUsage.actual;
     const totalEstimated = finalAiUsage.estimated;
     // Always include the first concrete daily-report stage so the breakdown is
@@ -2742,6 +2750,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       progressLabel: result.skipped
         ? result.reason
         : `已生成 ${date} AI 日报${result.report?.status === "published" ? "并发布" : "草稿"}${result.partial ? "（部分条目因校验失败被剔除）" : ""}`,
+      errorSummary: completionIssueSummary,
       aiCallCountActual: totalActual,
       aiCallCountEstimated: totalEstimated,
       aiCallBreakdown: finalBreakdown,

@@ -17,6 +17,7 @@ import {
   getDailyReportRecoveryStages,
   getRecommendedDailyReportRecoveryStage,
 } from "@/lib/daily-report/recovery";
+import { getDailyReportFailureSummary } from "@/lib/daily-report/review";
 import type {
   BackgroundTaskMonitorSnapshot,
   BackgroundTaskRunStatus,
@@ -90,6 +91,20 @@ function getDailyReportReviewStatusLabel(task: TaskRunSnapshot) {
   if (status === "unavailable") return "审核不可用（草稿）";
   if (status === "disabled") return "未启用";
   return null;
+}
+
+function getDailyReportTaskIssueSummary(task: TaskRunSnapshot) {
+  if (task.kind !== "daily_report_generate") return null;
+  const checkpoint = task.pipelineCheckpoint;
+  return getDailyReportFailureSummary({
+    status: checkpoint?.reviewStatus,
+    audit: checkpoint?.reviewAudit,
+    violations: checkpoint?.reviewViolations,
+    partial: task.status === "partial",
+    omittedTopicCount: checkpoint?.data && typeof checkpoint.data.omittedTopicCount === "number"
+      ? checkpoint.data.omittedTopicCount
+      : undefined,
+  });
 }
 
 function canResumeDailyReportTask(task: TaskRunSnapshot | null) {
@@ -443,6 +458,7 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
   }
 
   if (task.finishedAt) {
+    const issueSummary = getDailyReportTaskIssueSummary(task);
     timeline.push({
       key: "task_finished",
       title:
@@ -454,7 +470,7 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
               ? "部分成功"
               : "已完成",
       time: task.finishedAt,
-      detail: task.errorSummary ?? task.progressLabel ?? statusLabels[task.status],
+      detail: task.errorSummary?.trim() || issueSummary || task.progressLabel || statusLabels[task.status],
       isActive: false,
     });
   }
@@ -554,6 +570,7 @@ function TaskDetailModal({
   if (!task) return null;
 
   const summaryDetail = buildIngestionSummaryDetail(task);
+  const issueSummary = task.errorSummary?.trim() || getDailyReportTaskIssueSummary(task);
 
   return (
     <ModalShell
@@ -744,13 +761,13 @@ function TaskDetailModal({
         </div>
 
         {/* Error */}
-        {task.errorSummary && (
+        {issueSummary && (
           <div className="space-y-2">
             <h4 className="text-sm font-semibold text-[var(--danger-ink)]">
               错误信息
             </h4>
             <div className="rounded-md border border-[var(--danger-line)] bg-[var(--danger-surface)] p-3 text-sm text-[var(--danger-ink)]">
-              {task.errorSummary}
+              {issueSummary}
             </div>
           </div>
         )}

@@ -936,4 +936,44 @@ describe("TaskMonitorPanel", () => {
     const dialog = await screen.findByRole("dialog", { name: "任务详情" });
     expect(within(dialog).getByText("审核 2 次 · 调用重试 1 次 · 已阻断自动发布")).toBeInTheDocument();
   });
+
+  it("shows the review retry failure reason for historical daily report tasks", async () => {
+    const dailyReportTask = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "daily-report-review-retry-failed",
+      kind: "daily_report_generate" as const,
+      label: "AI 日报生成 2026-08-27",
+      entityId: "2026-08-27",
+      status: "partial" as const,
+      errorSummary: null,
+      pipelineCheckpoint: {
+        version: 1 as const,
+        pipelineVersion: "daily-report-topic-first-review-v1",
+        stage: "review",
+        completedStages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "review"],
+        inputHash: "input",
+        templateSignature: "template",
+        candidateSnapshotHash: "candidates",
+        resumeEligible: false,
+        reviewStatus: "unavailable" as const,
+        reviewAttempts: 1,
+        reviewRetryStage: "plan" as const,
+        reviewAudit: {
+          retryError: "Review 触发的 WRITE 重试未通过校验：安全与风险缺少必填要点 建议。",
+        },
+      },
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel
+        runningTasks={[]}
+        recentTasks={[dailyReportTask]}
+        initialFocusTaskId={dailyReportTask.id}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(within(dialog).getByText("错误信息")).toBeInTheDocument();
+    expect(within(dialog).getByText("审核触发的 WRITE 重试未通过校验：安全与风险缺少必填要点 建议。")).toBeInTheDocument();
+  });
 });
