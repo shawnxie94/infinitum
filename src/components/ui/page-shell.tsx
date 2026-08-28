@@ -78,7 +78,7 @@ export function PageShell({
       <div className="flex flex-1 flex-col">
         <div
           className={cx(
-            "mx-auto flex w-full flex-1 flex-col gap-6",
+            "mx-auto flex min-w-0 w-full flex-1 flex-col gap-6",
             contentPaddingClassName,
             contentWidth === "workspace" ? "max-w-[92rem]" : "max-w-7xl",
             contentClassName,

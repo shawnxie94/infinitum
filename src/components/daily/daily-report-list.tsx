@@ -280,7 +280,7 @@ export function DailyReportList({
 
         <section className="grid w-full min-w-0 flex-1 gap-4">
           {isLgUp ? (
-<section className="panel-raised min-h-[110px] w-full rounded-sm border border-[color:var(--line)] p-4 sm:p-6">
+<section className="panel-raised min-h-[110px] min-w-0 w-full rounded-sm border border-[color:var(--line)] p-4 sm:p-6">
             <div className="flex h-full min-h-[62px] w-full items-center justify-between gap-6">
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl font-semibold text-[var(--foreground)]">AI 日报</h1>
@@ -314,7 +314,7 @@ export function DailyReportList({
             {feedback ? <div className="mt-4 rounded-sm bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-2)]">{feedback}</div> : null}
           </section>
           ) : (
-<section className="w-full border-b border-[color:var(--line)] pb-3">
+<section className="min-w-0 w-full border-b border-[color:var(--line)] pb-3">
             <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
               <div className="min-w-0 flex-1">
                 <h1 className="text-xl font-semibold text-[var(--foreground)]">AI 日报</h1>
@@ -373,11 +373,11 @@ export function DailyReportList({
             </div>
           ) : (
             <>
-              <div className="space-y-3">
+              <div className="min-w-0 space-y-3">
                 {reports.map((report) => (
                   <article
                     key={report.id}
-                    className="relative w-full rounded-lg border border-[color:var(--line)] bg-[var(--surface)] px-4 py-4 shadow-[var(--shadow-sm)] transition hover:border-[color:var(--line-strong)] hover:shadow-md sm:px-6 sm:py-5"
+                    className="relative min-w-0 w-full rounded-lg border border-[color:var(--line)] bg-[var(--surface)] px-4 py-4 shadow-[var(--shadow-sm)] transition hover:border-[color:var(--line-strong)] hover:shadow-md sm:px-6 sm:py-5"
                   >
                     {isAdmin ? (
                       <div className="absolute right-4 top-4 flex items-center gap-1 sm:right-5 sm:top-5">

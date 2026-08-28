@@ -52,4 +52,36 @@ describe("DailyReportList", () => {
     expect(reportListLayout?.className).toContain("min-w-0");
     expect(reportListLayout?.className).toContain("w-full");
   });
+
+  it("keeps authenticated report cards inside the grid track", () => {
+    render(
+      <DailyReportList
+        reports={[
+          {
+            id: "report-1",
+            date: "2026-08-27",
+            timezone: "Asia/Shanghai",
+            status: "published",
+            title: "OpenAI 自研推理芯片首测数据公布与多模态新模型发布",
+            openingSummary: "https://example.com/a-very-long-unbroken-report-reference-that-must-not-expand-the-card-track",
+            sourceCount: 1,
+            generatedAt: "2026-08-27T00:00:00.000Z",
+            publishedAt: "2026-08-27T00:00:00.000Z",
+            errorMessage: null,
+          },
+        ]}
+        weeks={[]}
+        isAdmin
+        selectedWeek={null}
+        selectedStatus="all"
+        total={1}
+        page={1}
+        pageSize={20}
+      />,
+    );
+
+    const card = screen.getByRole("article");
+    expect(card.className).toContain("min-w-0");
+    expect(card.parentElement?.className).toContain("min-w-0");
+  });
 });
