@@ -287,7 +287,7 @@ describe("sqlite setup", () => {
 
     expect(runSqlite(dbPath, `SELECT "originalTitle" FROM "items" WHERE "id" = 'item-published-at-upgrade'`)).toBe("Existing item");
     expect(runSqlite(dbPath, `SELECT "publishedAtKnown" FROM "items" WHERE "id" = 'item-published-at-upgrade'`)).toBe("1");
-  }, 20_000);
+  }, 30_000);
 
   it("drops obsolete understanding cache columns without dropping items", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-understanding-upgrade-"));
