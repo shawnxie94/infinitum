@@ -1,9 +1,9 @@
 ---
 id: entity-governance-candidate-quality
 type: execution_plan
-status: approved
+status: completed
 created_at: 2026-08-17
-updated_at: 2026-08-17
+updated_at: 2026-09-05
 sources:
   - src/lib/entities/similarity.ts
   - src/lib/entities/service.ts

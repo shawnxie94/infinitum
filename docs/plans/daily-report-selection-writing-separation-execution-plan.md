@@ -1,9 +1,9 @@
 ---
 id: daily-report-selection-writing-separation-v1
 type: execution_plan
-status: approved
+status: completed
 created_at: 2026-08-14
-updated_at: 2026-08-14
+updated_at: 2026-09-05
 sources:
   - docs/trd/daily-report-selection-writing-separation.md
   - AGENTS.md
