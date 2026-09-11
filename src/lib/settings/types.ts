@@ -20,12 +20,40 @@ export type AdminModelApiConfig = {
   hasApiKey: boolean;
   isEnabled: boolean;
   isDefault: boolean;
+  /** Which of the two OrcaRouter authentication choices produced the stored key. */
+  authMethod: "api-key" | "pkce";
+  oauthAccountId: string;
+  oauthScope: string;
+  credentialGeneration: number;
+  /** Terminal `401` from the relay: the exact account must sign in again. */
+  needsReauth: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
 export type AdminModelApiConfigDetail = AdminModelApiConfig & {
   apiKeyRaw: string;
+};
+
+export type OrcaRouterModelOption = {
+  id: string;
+  name: string | null;
+  contextLength: number | null;
+  inputModalities: string[];
+  reasoning: boolean;
+  reasoningEfforts: string[];
+};
+
+export type OrcaRouterConnectSessionView = {
+  attemptId: string;
+  generation: number;
+  status: "idle" | "pending" | "exchange-error" | "denied" | "timeout" | "cancelled" | "success";
+  authorizeUrl: string;
+  requestedScope: string;
+  callbackMode: "loopback" | "out-of-band";
+  accountId: string | null;
+  grantedScope: string | null;
+  error: string | null;
 };
 
 export type AdminPromptConfig = {

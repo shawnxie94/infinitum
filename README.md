@@ -125,6 +125,12 @@ npm run worker   # 终端 2：后台任务 Worker
 
 默认配置只在初始化阶段导入一次。系统启动并写入数据库后，运行以数据库中的配置为准，请通过后台设置页修改。
 
+### 模型服务商怎么接入 OrcaRouter？
+
+后台「设置 → AI 配置 → 模型 API」中选择 `OrcaRouter` 即可。它同时提供两种接入方式：粘贴
+`sk-orca-…` API Key，或使用 OrcaRouter 账号登录（OAuth 2.0 + PKCE）。模型名称从真实目录
+按入口能力过滤后选择，无需手填。详见 [docs/orcarouter-provider.md](docs/orcarouter-provider.md)。
+
 ### 为什么手动触发抓取后没有执行？
 
 Web 只负责创建任务，真正执行抓取、AI 分析、归组和日报的是 Worker。请先确认 `worker` 服务在运行。
