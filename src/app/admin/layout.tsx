@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/admin",
   },
   openGraph: {
-    title: `管理后台 | ${SITE_NAME}`,
+    title: `${SITE_NAME} - 管理后台`,
   },
 };
 

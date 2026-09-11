@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   applicationName: SITE_NAME,
   title: {
     default: SITE_DEFAULT_TITLE,
-    template: `%s | ${SITE_NAME}`,
+    template: `${SITE_NAME} - %s`,
   },
   description: SITE_DEFAULT_DESCRIPTION,
   keywords: SEO_KEYWORDS,

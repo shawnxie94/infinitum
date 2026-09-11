@@ -1,9 +1,9 @@
 import { ImageResponse } from "next/og";
 
 import { getBrandMarkDataUrl } from "@/lib/brand/asset";
-import { SITE_DEFAULT_DESCRIPTION, SITE_DEFAULT_TITLE, SITE_NAME } from "@/lib/seo/metadata";
+import { SITE_DEFAULT_DESCRIPTION, SITE_DEFAULT_TITLE, SITE_HOME_TITLE, SITE_NAME } from "@/lib/seo/metadata";
 
-export const alt = `${SITE_NAME} - ${SITE_DEFAULT_TITLE}`;
+export const alt = SITE_DEFAULT_TITLE;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const revalidate = 86400;
@@ -54,7 +54,7 @@ export default function OpenGraphImage() {
               maxWidth: 960,
             }}
           >
-            {SITE_DEFAULT_TITLE}
+            {SITE_HOME_TITLE}
           </div>
           <div
             style={{

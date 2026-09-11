@@ -7,6 +7,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
+      # 首页页签标题后缀，默认“资讯聚合平台”；如需自定义，在 .env 或 shell 中设置 SITE_HOME_TITLE
+      SITE_HOME_TITLE: "${SITE_HOME_TITLE:-资讯聚合平台}"
       DATABASE_URL: file:/app/data/dev.db
       # Canonical public origin for RSS links, e.g. https://your-domain.example
       # SITE_URL: ""

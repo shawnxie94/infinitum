@@ -3,7 +3,13 @@ import type { Metadata } from "next";
 import { resolveOriginFromHeaders } from "@/lib/http/public-origin";
 
 export const SITE_NAME = "Infinitum";
-export const SITE_DEFAULT_TITLE = "Infinitum 资讯聚合";
+
+// 首页页签标题后缀，可通过环境变量 SITE_HOME_TITLE 自定义（docker-compose 注入，重启生效）。
+// 后续可作为后台设置项，届时以 DB 配置为准。
+export const SITE_HOME_TITLE =
+  (process.env.SITE_HOME_TITLE ?? "").trim() || "资讯聚合平台";
+
+export const SITE_DEFAULT_TITLE = `${SITE_NAME} - ${SITE_HOME_TITLE}`;
 export const SITE_DEFAULT_DESCRIPTION = "Infinitum 聚合、分析与整理来自多个来源的技术资讯，提供高密度信息流、主题聚类和 AI 日报。";
 
 export const SEO_KEYWORDS = [

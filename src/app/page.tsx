@@ -17,6 +17,7 @@ import {
   PUBLIC_ROBOTS,
   serializeJsonLd,
   SITE_DEFAULT_DESCRIPTION,
+  SITE_HOME_TITLE,
   SITE_NAME,
   toSeoDescription,
 } from "@/lib/seo/metadata";
@@ -67,7 +68,7 @@ function hasNonDefaultFeedFilter(filters: FeedFilters, page: number) {
 }
 
 function buildFeedMetadataText(filters: FeedFilters) {
-  const titleParts = ["资讯聚合"];
+  const titleParts = [SITE_HOME_TITLE];
 
   if (filters.title) {
     titleParts.unshift(`"${filters.title}" 搜索`);
@@ -88,7 +89,9 @@ function buildFeedMetadataText(filters: FeedFilters) {
   }
 
   return {
-    title: titleParts.join(" - "),
+    // 首页是 root layout + page 两层（无中间 layout），root title.template 不会套用到本页，
+    // 因此这里直接产出完整页签标题（含品牌前缀），保持与其他页面“Infinitum - XXX”一致。
+    title: `${SITE_NAME} - ${titleParts.join(" - ")}`,
     description: toSeoDescription(descriptionParts.join(" "), SITE_DEFAULT_DESCRIPTION),
   };
 }

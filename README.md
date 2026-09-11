@@ -92,6 +92,13 @@ WORKER_CPUS=0.75
 - `ADMIN_SESSION_SECRET`：Session 签名密钥
 - `SITE_URL`：生产环境建议设置为实际访问域名，用于 RSS 中的站点与订阅链接
 
+浏览器页签标题统一为 `Infinitum - XXX` 格式，首页默认 `Infinitum - 资讯聚合平台`。
+如需自定义首页标题，在 compose 同目录的 `.env` 或 shell 环境中设置（重启生效，无需重新构建）：
+
+```bash
+SITE_HOME_TITLE=我的资讯平台
+```
+
 启动后访问：
 
 - Web：<http://localhost:3001>

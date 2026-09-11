@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     canonical: "/login",
   },
   openGraph: {
-    title: `管理员登录 | ${SITE_NAME}`,
+    title: `${SITE_NAME} - 管理员登录`,
   },
 };
 
