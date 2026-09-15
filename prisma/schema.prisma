@@ -834,6 +834,15 @@ model ModelApiConfig {
   baseUrl                  String
   apiKey                   String         @default("")
   modelName                String
+  // OrcaRouter credential lifecycle. `authMethod` records which of the two
+  // user-facing choices produced the stored key: a pasted API key or the
+  // OAuth 2.0 + PKCE connect flow. A PKCE-issued key is durable and is reused
+  // until OrcaRouter revokes it; there is no refresh grant.
+  authMethod               String         @default("api-key")
+  oauthAccountId           String         @default("")
+  oauthScope               String         @default("")
+  credentialGeneration     Int            @default(1)
+  needsReauth              Boolean        @default(false)
   ingestionItemConcurrency Int            @default(3)
   customHeaders            String         @default("")
   isEnabled                Boolean        @default(true)

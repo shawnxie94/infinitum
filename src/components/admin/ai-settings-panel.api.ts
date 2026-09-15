@@ -2,6 +2,8 @@ import type {
   AdminModelApiConfig,
   AdminModelApiConfigDetail,
   AdminPromptConfig,
+  OrcaRouterConnectSessionView,
+  OrcaRouterModelOption,
   PromptConfigType,
 } from "@/lib/settings/types";
 
@@ -82,6 +84,64 @@ export function createModelApiConfig(input: ModelApiConfigPayload) {
     "/api/admin/settings/model-api-configs",
     "POST",
     input,
+  );
+}
+
+export type OrcaRouterCatalogResponse = {
+  success: boolean;
+  source: "live" | "seed";
+  degraded: boolean;
+  error: string | null;
+  capability: string;
+  credentialSource: "api-key" | "pkce" | null;
+  models: OrcaRouterModelOption[];
+};
+
+/**
+ * Live OrcaRouter catalog. The server holds the API key; the browser only
+ * receives minimal model metadata.
+ */
+export function fetchOrcaRouterModels(input: {
+  configId: string;
+  capability: "chat" | "embedding" | "image" | "video" | "rerank";
+  requiredInputModalities?: string[];
+}) {
+  return requestAiSettingsJson<OrcaRouterCatalogResponse>(
+    "/api/admin/settings/orcarouter/models",
+    "POST",
+    input,
+  );
+}
+
+export function startOrcaRouterConnect(input: {
+  configId: string;
+  callbackMode?: "loopback" | "out-of-band";
+  callbackUrl?: string;
+}) {
+  return requestAiSettingsJson<{ success: boolean; session: OrcaRouterConnectSessionView }>(
+    "/api/admin/settings/orcarouter/connect",
+    "POST",
+    input,
+  );
+}
+
+export function completeOrcaRouterConnect(input: {
+  configId: string;
+  generation: number;
+  code: string;
+}) {
+  return requestAiSettingsJson<{
+    success: boolean;
+    session: OrcaRouterConnectSessionView;
+    error: string | null;
+  }>("/api/admin/settings/orcarouter/connect", "PUT", input);
+}
+
+export function cancelOrcaRouterConnect(configId: string) {
+  return requestAiSettingsJson<{ success: boolean; session: OrcaRouterConnectSessionView }>(
+    "/api/admin/settings/orcarouter/connect",
+    "DELETE",
+    { configId },
   );
 }
 
