@@ -69,5 +69,3 @@ next-env.d.ts
 /daily-detail*.png
 /graphify-out
 
-# agent-brain local
-.agent/

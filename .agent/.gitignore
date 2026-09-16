@@ -1,0 +1,5 @@
+# agent-brain local attach (personal harness) — self-exclusion, the same
+# pattern as .codegraph/: everything in .agent/ is local runtime state and
+# never reaches git; this file itself is the only committable piece.
+*
+!.gitignore
