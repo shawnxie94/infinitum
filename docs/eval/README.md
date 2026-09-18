@@ -43,6 +43,18 @@ INFINITUM_EMBED_URL=... INFINITUM_EMBED_MODEL=... INFINITUM_EMBED_KEY=... \
   npx tsx scripts/mine-embedding-pairs.ts --db <快照db> --out docs/eval/embedding-mined-pairs.csv
 ```
 
+## 人工反馈闭环（Phase 3）
+
+标注不再靠批量人工标注，而是管理台动作自动回写进生产库 `cluster_pair_labels` 表：
+
+- 复核候选「合并」→ approved；复核候选「忽略」→ declined
+- 聚类详情「移出条目」→ declined；「加入聚类」→ approved
+
+标签带双侧文本快照，随快照自动进入评估：`eval-embedding-recall` 读取为
+`feedback-approved` / `feedback-declined` 分层（旧快照无此表自动跳过），
+并输出每层 rule分带分布（≥95 / 55-95 / 35-55 / <35 / rejected）——人工判定
+落在规则分轴的位置即阈值校准依据。
+
 注意：embedding 评估的银标口径有边界——approved 决策对的被合并侧已删除无法取文本，
 正例主要来自灰区候选表与向量挖掘标注集；「规则完全漏掉但语义同事件」的增量召回
 需等人工反馈闭环（Phase 3）积累真值后才能完整度量。

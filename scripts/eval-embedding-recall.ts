@@ -9,7 +9,12 @@
  * 分层（银标，非人工全量真值）：
  *   gray-positives : cluster_merge_clean_pair_candidates（双侧存活，规则分>=灰区）
  *   declined-negs  : cluster_decisions verdict=declined 且双侧存活（不应被召回）
- *   human-approved : docs/eval/eval-sample-30d.csv verdictStored=approved（人工标注正例，量少）
+ *   csv-approved / csv-declined : --csv 标注集（eval-sample-30d + 向量挖掘标注集）
+ *   feedback-approved / feedback-declined : cluster_pair_labels（Phase 3 人工反馈，
+ *     来自管理台复核/拆分/移动动作的回写；旧快照无此表则自动跳过）
+ *
+ * 每个分层输出 rule分带(B侧) 分布（≥95/55-95/35-55/<35/rejected）——人工判定
+ * 落在规则分轴的哪个位置，即阈值校准视图。
  *
  * 口径说明：approved 决策对的被合并侧 cluster 已删除、无法取文本，因此正例主要来自
  * 灰区候选表；「规则完全漏掉但语义同事件」的增量召回无法用生产数据度量，
@@ -218,6 +223,14 @@ async function embedTexts(
 }
 
 // ---- metrics ----
+type RuleScoreBands = {
+  strong: number; // ≥95 且未被拒
+  gray: number; // 55-95
+  low: number; // 35-55
+  below: number; // <35
+  rejected: number; // 规则拒绝（任意 rejectedReason）
+};
+
 type StratumMetrics = {
   pairs: number;
   ruleRecallAt5: number;
@@ -231,6 +244,7 @@ type StratumMetrics = {
   negativePromoted: number;
   negativePromoted15: number;
   sliceChurn: number;
+  ruleScoreBands: RuleScoreBands | null;
 };
 
 function median(values: number[]): number | null {
@@ -366,8 +380,50 @@ async function main() {
       else humanNegatives.push(spec);
     }
   }
+  // Phase 3 人工反馈标签（cluster_pair_labels，可选：旧快照无此表则跳过）。
+  // 同一对多次标注时保留最新判定。
+  const feedbackPositives: PairSpec[] = [];
+  const feedbackNegatives: PairSpec[] = [];
+  try {
+    const labelRows = db
+      .prepare(
+        `SELECT verdict, leftId, rightId, titleA, titleB, summaryA, summaryB,
+                subjectA, subjectB, objectA, objectB, actionA, actionB, typeA, typeB,
+                dateA, dateB, itemCountA, itemCountB, createdAt
+           FROM cluster_pair_labels
+          WHERE createdAt >= ?
+          ORDER BY createdAt DESC
+          LIMIT ?`,
+      )
+      .all(since, args.maxPerStratum * 2) as SqlRow[];
+    const seen = new Set<string>();
+    for (const row of labelRows) {
+      const dedupeKey = `${row.leftId}:${row.rightId}`;
+      if (seen.has(dedupeKey)) continue;
+      if (row.verdict !== "approved" && row.verdict !== "declined") continue;
+      seen.add(dedupeKey);
+      const mkSide = (side: "A" | "B"): MergeCandidate => ({
+        id: side === "A" ? row.leftId : row.rightId,
+        title: row[`title${side}`] ?? "",
+        summary: row[`summary${side}`] ?? "",
+        fingerprint: "",
+        eventType: row[`type${side}`] ?? null,
+        eventSubject: row[`subject${side}`] ?? null,
+        eventAction: row[`action${side}`] ?? null,
+        eventObject: row[`object${side}`] ?? null,
+        eventDate: row[`date${side}`] ?? null,
+        itemCount: Number(row[`itemCount${side}`]) || 1,
+        latestPublishedAt: new Date(Number(row.createdAt) || now),
+      });
+      const spec = { key: `feedback:${dedupeKey}`, a: mkSide("A"), b: mkSide("B") };
+      if (row.verdict === "approved") feedbackPositives.push(spec);
+      else feedbackNegatives.push(spec);
+    }
+  } catch {
+    console.log("[eval] cluster_pair_labels 表不存在（旧快照），跳过 human-feedback 分层");
+  }
   console.log(
-    `[eval] strata: gray-positives=${positives.length}, declined-negatives=${negatives.length}, csv-approved=${humanPositives.length}, csv-declined=${humanNegatives.length}`,
+    `[eval] strata: gray-positives=${positives.length}, declined-negatives=${negatives.length}, csv-approved=${humanPositives.length}, csv-declined=${humanNegatives.length}, feedback-approved=${feedbackPositives.length}, feedback-declined=${feedbackNegatives.length}`,
   );
 
   const cache = loadCache(args.cache, args.embedModel);
@@ -405,16 +461,24 @@ async function main() {
       negativePromoted: 0,
       negativePromoted15: 0,
       sliceChurn: 0,
+      ruleScoreBands: null,
     };
     const ruleRanks: number[] = [];
     const fusedRanks: number[] = [];
+    const bands = { strong: 0, gray: 0, low: 0, below: 0, rejected: 0 };
 
     for (const pair of pairs) {
       const rng = mulberry32(fnv1a(pair.key));
       const pool: MergeCandidate[] = [pair.b];
       const excluded = new Set([pair.a.id, pair.b.id]);
-      while (pool.length < args.poolSize && distractors.length > 0) {
-        const candidate = distractors[Math.floor(rng() * distractors.length)]!;
+      // 确定性洗牌后单次遍历取 distractor；候选去重后不足 poolSize 时自然终止
+      const shuffled = [...distractors];
+      for (let i = shuffled.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(rng() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+      }
+      for (const candidate of shuffled) {
+        if (pool.length >= args.poolSize) break;
         if (excluded.has(candidate.id)) continue;
         excluded.add(candidate.id);
         pool.push(candidate);
@@ -433,6 +497,16 @@ async function main() {
             eligible: !conflictVeto && entry.result.score >= RULE_MIN_SCORE,
           };
         });
+
+      // 校准视图：B 侧的规则分落在哪个带（人判同/异事件 vs 规则打分的分布）
+      const bEntry = ruleScored.find((entry) => entry.candidate.id === pair.b.id);
+      if (bEntry) {
+        if (bEntry.result.rejected) bands.rejected += 1;
+        else if (bEntry.result.score >= 95) bands.strong += 1;
+        else if (bEntry.result.score >= 55) bands.gray += 1;
+        else if (bEntry.result.score >= RULE_MIN_SCORE) bands.low += 1;
+        else bands.below += 1;
+      }
 
       // rule 切片口径：仅 eligible 参与，按分排序（生产现状）
       const ruleOrder = ruleScored
@@ -479,10 +553,10 @@ async function main() {
         if (fusedRankOfB < 10) metrics.fusedRecallAt10 += 1;
         if (fusedRankOfB < 15) metrics.fusedRecallAt15 += 1;
       }
-      if ((name === "declined-negatives" || name === "csv-declined") && fusedRankOfB >= 0 && fusedRankOfB < 10 && ruleRankOfB < 0) {
+      if (name.endsWith("declined") && fusedRankOfB >= 0 && fusedRankOfB < 10 && ruleRankOfB < 0) {
         metrics.negativePromoted += 1;
       }
-      if ((name === "declined-negatives" || name === "csv-declined") && fusedRankOfB >= 0 && fusedRankOfB < 15 && ruleRankOfB < 0) {
+      if (name.endsWith("declined") && fusedRankOfB >= 0 && fusedRankOfB < 15 && ruleRankOfB < 0) {
         metrics.negativePromoted15 += 1;
       }
       const ruleTop10 = new Set(ruleOrder.slice(0, 10));
@@ -503,6 +577,16 @@ async function main() {
     metrics.negativePromoted = pct(metrics.negativePromoted, metrics.pairs);
     metrics.negativePromoted15 = pct(metrics.negativePromoted15, metrics.pairs);
     metrics.sliceChurn = pct(metrics.sliceChurn, metrics.pairs);
+    metrics.ruleScoreBands =
+      metrics.pairs > 0
+        ? {
+            strong: pct(bands.strong, metrics.pairs),
+            gray: pct(bands.gray, metrics.pairs),
+            low: pct(bands.low, metrics.pairs),
+            below: pct(bands.below, metrics.pairs),
+            rejected: pct(bands.rejected, metrics.pairs),
+          }
+        : null;
 
     console.log(`\n== ${name} (n=${metrics.pairs}) ==`);
     console.log(
@@ -517,7 +601,13 @@ async function main() {
     console.log(
       `  rankB median rule=${metrics.ruleRankBMedian ?? "-"}  fused=${metrics.fusedRankBMedian ?? "-"}`,
     );
-    if (name === "declined-negatives" || name === "csv-declined") {
+    if (metrics.ruleScoreBands) {
+      const b = metrics.ruleScoreBands;
+      console.log(
+        `  rule分带(B侧): ≥95 ${b.strong.toFixed(1)}% | 55-95 ${b.gray.toFixed(1)}% | 35-55 ${b.low.toFixed(1)}% | <35 ${b.below.toFixed(1)}% | rejected ${b.rejected.toFixed(1)}%`,
+      );
+    }
+    if (name === "declined-negatives" || name === "csv-declined" || name === "feedback-declined") {
       console.log(`  负例新进入 top10/top15（rule 不可见 → fused 进入）: ${metrics.negativePromoted.toFixed(1)}% / ${metrics.negativePromoted15.toFixed(1)}%`);
     }
     console.log(`  切片变化率: ${metrics.sliceChurn.toFixed(1)}%`);
@@ -529,6 +619,8 @@ async function main() {
   if (negatives.length > 0) results["declined-negatives"] = await evaluateStratum("declined-negatives", negatives);
   if (humanPositives.length > 0) results["csv-approved"] = await evaluateStratum("csv-approved", humanPositives);
   if (humanNegatives.length > 0) results["csv-declined"] = await evaluateStratum("csv-declined", humanNegatives);
+  if (feedbackPositives.length > 0) results["feedback-approved"] = await evaluateStratum("feedback-approved", feedbackPositives);
+  if (feedbackNegatives.length > 0) results["feedback-declined"] = await evaluateStratum("feedback-declined", feedbackNegatives);
 
   fs.writeFileSync(args.cache, JSON.stringify(cache));
   console.log(`\n[eval] embedding cache: ${Object.keys(cache.vectors).length} entries → ${args.cache}`);
