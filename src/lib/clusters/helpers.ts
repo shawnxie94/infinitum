@@ -122,11 +122,13 @@ export function buildClusterFingerprintSeed(options: { eventSignature?: AiEventS
 
   // Time-free: excludes eventDate so same-event fingerprints never diverge on
   // noisy/missing dates. Time separation happens via the match time window.
+  // Space-insensitive (removes all whitespace) so AI extraction inconsistency
+  // in brand/product names never fragments the same event.
   return [
     signature.eventType || "",
-    signature.eventSubject,
+    (signature.eventSubject || "").replace(/\s+/gu, ""),
     signature.eventAction || "",
-    signature.eventObject,
+    (signature.eventObject || "").replace(/\s+/gu, ""),
   ].join("|");
 }
 

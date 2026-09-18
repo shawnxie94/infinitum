@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildEventBucket, buildEventIdentity } from "@/lib/clusters/identity";
+import { buildEventBucket, buildEventFingerprint, buildEventIdentity } from "@/lib/clusters/identity";
 import { buildCandidateRange } from "@/lib/clusters/helpers";
 
 describe("cluster event identity", () => {
@@ -36,5 +36,39 @@ describe("cluster event identity", () => {
     expect(range.timeField).toBe("createdAt");
     expect(range.since.toISOString()).toBe("2026-04-03T10:00:00.000Z");
     expect(range.until.toISOString()).toBe("2026-04-17T10:00:00.000Z");
+  });
+
+  it("is space-insensitive for brand/product name extraction drift", () => {
+    const publishedAt = new Date("2026-09-03T10:00:00.000Z");
+    const withSpace = buildEventFingerprint({
+      eventType: "release",
+      eventSubject: "OpenAI",
+      eventAction: "发布",
+      eventObject: "GPT-6 Astra 模型",
+      eventDate: "2026-09-04",
+    });
+    const withoutSpace = buildEventFingerprint({
+      eventType: "release",
+      eventSubject: "OpenAI",
+      eventAction: "发布",
+      eventObject: "GPT-6 Astra模型",
+      eventDate: "2026-09-04",
+    });
+    const fullWidth = buildEventFingerprint({
+      eventType: "release",
+      eventSubject: "OpenAI",
+      eventAction: "发布",
+      eventObject: "GPT-6 Astra　模型",
+      eventDate: "2026-09-04",
+    });
+
+    expect(withSpace).toBe(withoutSpace);
+    expect(withSpace).toBe(fullWidth);
+    expect(buildEventIdentity({ eventSignature: { eventType: "release", eventSubject: "OpenAI", eventAction: "发布", eventObject: "GPT-6 Astra 模型", eventDate: "2026-09-04" }, publishedAt })?.eventFingerprint)
+      .toBe(buildEventIdentity({ eventSignature: { eventType: "release", eventSubject: "OpenAI", eventAction: "发布", eventObject: "GPT-6 Astra模型", eventDate: "2026-09-03" }, publishedAt })?.eventFingerprint);
+
+    // Date drift stays irrelevant to identity
+    expect(buildEventFingerprint({ eventType: "release", eventSubject: "OpenAI", eventAction: "发布", eventObject: "GPT-6 Astra 模型", eventDate: "2026-09-08" }))
+      .toBe(withSpace);
   });
 });

@@ -62,9 +62,16 @@ export function buildEventFingerprint(signature?: AiEventSignature | null) {
     .update(
       JSON.stringify({
         eventType: normalized.eventType ?? "",
-        eventSubject: normalized.eventSubject,
+        // Space-insensitive identity: AI extraction is inconsistent about
+        // spaces inside brand/product names ("GPT-6 Astra 模型" vs
+        // "GPT-6 Astra模型"), fragmenting the same event into multiple
+        // fingerprints. Removing all whitespace (incl. full-width) for the
+        // hash keeps "Hugging Face" and "huggingface" the same fingerprint
+        // while cross-event collisions stay improbable (verified: no other
+        // collision in the production cluster set).
+        eventSubject: normalized.eventSubject.replace(/\s+/gu, ""),
         eventAction: normalized.eventAction ?? "",
-        eventObject: normalized.eventObject,
+        eventObject: normalized.eventObject.replace(/\s+/gu, ""),
       }),
     )
     .digest("hex");
