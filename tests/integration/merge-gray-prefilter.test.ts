@@ -221,11 +221,11 @@ describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
     // 前置条件：规则确实以 object_conflict 拒绝该对
     expect(scoreRawPair(left!, right!).rejectedReason).toBe("object_conflict");
 
-    // cos ≈ 0.85（< 0.9 豁免线）：实体冲突仍否决
+    // cos ≈ 0.65（< 0.72 豁免线，B4 校准后豁免线与向量准入线对齐）：实体冲突仍否决
     const result = await precomputeClusterMergeCleanPairs(NOW, {
       embedTexts: fakeEmbedTexts({
         "苹果": [1, 0],
-        "甲骨文": [0.85, 0.5268],
+        "甲骨文": [0.65, 0.76],
       }),
     });
 

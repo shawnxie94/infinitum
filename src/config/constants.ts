@@ -86,10 +86,11 @@ export const CLUSTER_MERGE_AI_PAIR_GRAY_SCORE = 55;
 export const CLUSTER_MERGE_VECTOR_GRAY_SIM = 0.72;
 
 /**
- * object_conflict 否决的向量相似度豁免线：sim ≥ 此值时实体冲突视为 AI 抽取噪声
- * （标注集实测：sim 0.94-0.97 的 object_conflict 对 23/27 为人工正例），仍交 LLM 终审
+ * object_conflict 否决的向量相似度豁免线：sim ≥ 此值时实体冲突不再额外否决，
+ * 与向量准入线对齐（B4 校准：0.72-0.9 带标注 4 approved : 2 declined，原 0.9
+ * 否决了 DRAM 行情重复、Pixel/GrapheneOS 对立表述等真实同事件对）；仍交 LLM 终审
  */
-export const CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM = 0.9;
+export const CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM = 0.72;
 
 /** 聚合合并高置信候选分数 */
 export const CLUSTER_MERGE_AI_PAIR_STRONG_SCORE = 95;
