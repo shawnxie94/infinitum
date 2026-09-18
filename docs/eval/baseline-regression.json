@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "title": "Infinitum 事件聚合评估基线（回归守护基准）",
+  "description": "回归守护基准真源。sample_metrics 由 scripts/baseline-gate.ts 基于固定评测集（docs/eval/eval-sample-30d.csv，240 对）生成；全量快照指标（verdict/ruleStrong 全量/fragmentation）由 eval-cluster-baseline.ts --json 生成，作参考。聚合逻辑改动前后用固定评测集跑 gate，指标变差应阻断发布。",
+  "reference_document": "docs/eval/eval-cluster-baseline.md",
+  "baseline": {
+    "snapshot": "prod snapshot 2026-09-18 (dev-read.db)",
+    "windowDays": 30,
+    "generatedAt": "2026-09-18T08:02:15.226Z",
+    "verdict": {
+      "approved": 69,
+      "declined": 1972,
+      "ambiguous": 4,
+      "failed": 261
+    },
+    "ruleStrong": {
+      "total": 298,
+      "declined": 182,
+      "declinedRatePct": 61.1
+    },
+    "fragmentation": {
+      "groups": 8,
+      "fragmentClusters": 23
+    },
+    "role": "全量快照参考（2026-09-18 快照），不作为 gate 判定依据"
+  },
+  "guard_rules": {
+    "sample_metrics.ruleStrongDeclinedRatePct": "固定评测集内规则>=95被stored判定declined的占比（规则精度代理）。>基准+5pp → 召回过度激进，阻断。",
+    "sample_metrics.ruleStrongTotal": "固定评测集内规则>=95的对数（高分候选稳健性）。>基准x1.2+5 → 异常增多，阻断。",
+    "sample_metrics.approvedRecallPairs": "评测集内 approved 且规则>=55 的对数（召回代理）。<基准x0.5 → 召回退化，阻断。",
+    "全量快照指标（参考，不阻断）": "verdict 分布 / ruleStrong 全量 / fragmentation（8组/23）由 eval --json 输出；碎片数应用于部署后人工观察，不自动阻断（快照随数据漂移）。",
+    "snapshot_gate": "快照维度（冻结重放）：判定变化数 > 阈值(默认10/strict 0) → 规则回归，阻断。冻结文件 baseline-snapshot-*.json 与快照 DB 一一对应。"
+  },
+  "notes": [
+    "基线 CSV 的 recomputed score 列在 2026-09-18 因 date_conflict 从 reject 改为降分而更新（5 行 71/91/51/31/78 → 0），verdict 全部保持 declined，行为质量不变；主指标（rule-strong 假阳率、碎片数）不受影响。",
+    "碎片检测以 eventFingerprint 相同为锚，是保守下限；描述改写导致的签名差异无法被精确指纹捕获。",
+    "部署 + 迁移（recompute-event-fingerprint）后应重跑基线：空格不敏感指纹会合并 GPT-6 等碎片，预期碎片组数下降。",
+    "2026-09-18：回归门从「快照全量指标」改为「固定评测集样本指标」（用户指出快照数据漂移导致跨版本不可比）。sample_metrics 为当前代码在固定评测集上的首个稳定值。",
+    "2026-09-18：新增快照冻结维度（方案A）——冻结当前快照的 pair 级基线（2190 对），gate 对同一快照重放检测逐 pair 判定变化，弥补固定 240 对样本对不同类型事件的盲区。"
+  ],
+  "sample_metrics": {
+    "ruleStrongDeclinedRatePct": 97.2,
+    "ruleStrongTotal": 36,
+    "approvedRecallPairs": 0,
+    "evaluatedPairs": 244,
+    "alivePairs": 221,
+    "verdictApproved": 12,
+    "generatedAt": "2026-09-18T13:35:41.067Z"
+  },
+  "snapshot_freeze": {
+    "db_path": "/tmp/infinitum-prod/dev-read.db（2026-09-18 生产快照，本地产物不 git 化）",
+    "freeze_file": "docs/eval/baseline-snapshot-2026-09-18.json",
+    "pairs": 2190,
+    "generatedAt": "2026-09-18T00:00:00.000Z",
+    "usage": "npx tsx scripts/snapshot-gate.ts --snapshot <同 db> --freeze docs/eval/baseline-snapshot-2026-09-18.json [--strict]",
+    "note": "快照维度：对同一冻结快照重放当前代码，逐 pair 判定变化（score 跨95 / reject 翻转）即回归信号；无数据漂移。默认阈值 10（小噪声容忍），--strict 阈值 0。换基线时用 eval --freeze 重建此文件。"
+  }
+}

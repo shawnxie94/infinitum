@@ -72,11 +72,13 @@ type DecisionRecord = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function parseArgs(argv: string[]) {
-  const args: { db: string; days: number; samples: number; out: string } = {
+  const args: { db: string; days: number; samples: number; out: string; json: string; freeze: string } = {
     db: process.env.INFINITUM_EVAL_DB ?? "",
     days: 30,
     samples: 0,
     out: "",
+    json: "",
+    freeze: "",
   };
   for (let i = 2; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -84,6 +86,8 @@ function parseArgs(argv: string[]) {
     else if (arg === "--days") args.days = Number(argv[++i] ?? 30);
     else if (arg === "--samples") args.samples = Number(argv[++i] ?? 0);
     else if (arg === "--out") args.out = argv[++i] ?? "";
+    else if (arg === "--json") args.json = argv[++i] ?? "";
+    else if (arg === "--freeze") args.freeze = argv[++i] ?? "";
   }
   if (!args.db) throw new Error("missing DB snapshot: pass --db <path> or set INFINITUM_EVAL_DB");
   if (!fs.existsSync(args.db)) throw new Error(`DB snapshot not found: ${args.db}`);
@@ -358,9 +362,74 @@ async function main() {
     )
     .all(since);
   console.log("\n=== fragmentation (same eventFingerprint split into multiple clusters) ===");
-  console.log(`groups: ${fragGroups.length}, fragment clusters: ${fragGroups.reduce((s: number, g: any) => s + g.n, 0)}`);
+  const fragmentClusters = fragGroups.reduce((s: number, g: any) => s + g.n, 0);
+  console.log(`groups: ${fragGroups.length}, fragment clusters: ${fragmentClusters}`);
   for (const g of fragGroups) {
     console.log(`  fp=${g.eventFingerprint.slice(0, 14)}... n=${g.n} items=${g.items}`);
+  }
+
+  // ---- 7b. Machine-readable regression metrics (--json <out>) ----
+  if (args.json) {
+    const recomputedStrong = aliveRows.filter((r) => !r.rejected && r.recomputedScore >= 95);
+    const strongDeclined = recomputedStrong.filter((r) => r.verdict === "declined");
+    const metrics = {
+      schema_version: 1,
+      windowDays: args.days,
+      generatedAt: new Date(now).toISOString(),
+      snapshot: args.db,
+      verdict: {
+        approved: verdictCount.get("approved") ?? 0,
+        declined: verdictCount.get("declined") ?? 0,
+        ambiguous: verdictCount.get("ambiguous") ?? 0,
+        failed: verdictCount.get("failed") ?? 0,
+      },
+      ruleStrong: {
+        total: recomputedStrong.length,
+        declined: strongDeclined.length,
+        declinedRatePct: recomputedStrong.length
+          ? Number(((strongDeclined.length / recomputedStrong.length) * 100).toFixed(1))
+          : 0,
+      },
+      fragmentation: {
+        groups: fragGroups.length,
+        fragmentClusters,
+      },
+    };
+    const jsonText = `${JSON.stringify(metrics, null, 2)}\n`;
+    if (args.json === "-") {
+      process.stdout.write(jsonText);
+    } else {
+      fs.mkdirSync(path.dirname(args.json), { recursive: true });
+      fs.writeFileSync(args.json, jsonText);
+      console.log(`[eval] regression metrics written to ${args.json}`);
+    }
+  }
+
+  // ---- 7c. Snapshot freeze (--freeze <out.json>) ----
+  // Pair-level baseline of THIS snapshot: every alive pair with its recomputed
+  // rule score and stored verdict. The gate replays the same snapshot against
+  // this freeze to detect per-pair judgment changes without data drift.
+  if (args.freeze) {
+    const freezeDoc = {
+      schema_version: 1,
+      generatedAt: new Date(now).toISOString(),
+      snapshot: args.db,
+      windowDays: args.days,
+      pairs: aliveRows.map((r) => ({
+        key: `${r.leftClusterId}_${r.rightClusterId}`,
+        score: r.recomputedScore,
+        rejected: r.rejected,
+        verdict: r.verdict,
+      })),
+    };
+    const freezeText = `${JSON.stringify(freezeDoc, null, 2)}\n`;
+    if (args.freeze === "-") {
+      process.stdout.write(freezeText);
+    } else {
+      fs.mkdirSync(path.dirname(args.freeze), { recursive: true });
+      fs.writeFileSync(args.freeze, freezeText);
+      console.log(`[eval] snapshot freeze written to ${args.freeze} (${freezeDoc.pairs.length} pairs)`);
+    }
   }
 
   // ---- 8. Stratified sample for labeling ----
