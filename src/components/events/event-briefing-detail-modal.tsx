@@ -8,9 +8,20 @@ import { ChevronIcon } from "@/components/ui/chevron-icon";
 import { ModalShell } from "@/components/ui/modal-shell";
 import type { EventBriefingEntryDTO, EventBriefingItemDTO } from "@/lib/events/types";
 
+type FeedbackStatus = "idle" | "submitting" | "done" | "exists" | "error";
+
 type EventBriefingDetailModalProps = {
   entry: EventBriefingEntryDTO | null;
+  isAdmin?: boolean;
   onClose: () => void;
+};
+
+const FEEDBACK_BUTTON_LABEL: Record<FeedbackStatus, string> = {
+  idle: "聚合反馈",
+  submitting: "提交中…",
+  done: "已记录，待分析",
+  exists: "已在待分析列表",
+  error: "提交失败，点击重试",
 };
 
 function formatDateTime(value: string) {
@@ -79,14 +90,34 @@ function EventSourceItem({ item }: { item: EventBriefingItemDTO }) {
   );
 }
 
-export function EventBriefingDetailModal({ entry, onClose }: EventBriefingDetailModalProps) {
+export function EventBriefingDetailModal({ entry, isAdmin = false, onClose }: EventBriefingDetailModalProps) {
   const [expanded, setExpanded] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState<FeedbackStatus>("idle");
 
   if (!entry) {
     return null;
   }
 
   const isCluster = entry.type === "cluster";
+
+  const submitFeedback = async () => {
+    setFeedbackStatus("submitting");
+    try {
+      const response = await fetch(`/api/admin/clusters/${entry.id}/feedback`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) {
+        setFeedbackStatus("error");
+        return;
+      }
+      const payload = (await response.json()) as { flagged?: boolean };
+      setFeedbackStatus(payload.flagged === false ? "exists" : "done");
+    } catch {
+      setFeedbackStatus("error");
+    }
+  };
   const statusLabel = entry.isFollowUp ? "新进展" : "新内容";
   const primaryOriginalUrl = !isCluster ? entry.items[0]?.originalUrl : null;
   const primaryItemId = !isCluster ? entry.items[0]?.id : null;
@@ -123,7 +154,20 @@ export function EventBriefingDetailModal({ entry, onClose }: EventBriefingDetail
       headerClassName="border-b border-[color:var(--line)] px-4 py-3 sm:px-5"
       footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] px-4 py-3 sm:px-5"
       footer={
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-between">
+          {isAdmin && isCluster ? (
+            <button
+              className="rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-2)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--text-1)] disabled:cursor-default disabled:opacity-70"
+              type="button"
+              disabled={feedbackStatus === "submitting" || feedbackStatus === "done" || feedbackStatus === "exists"}
+              title={feedbackStatus === "idle" || feedbackStatus === "error" ? "聚合不符合预期？点击记录，事后集中分析" : undefined}
+              onClick={submitFeedback}
+            >
+              {FEEDBACK_BUTTON_LABEL[feedbackStatus]}
+            </button>
+          ) : (
+            <span />
+          )}
           <button
             className="rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-2)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--text-1)]"
             type="button"

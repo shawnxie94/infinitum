@@ -970,3 +970,19 @@ model ClusterPairLabel {
   @@index([verdict, createdAt])
   @@map("cluster_pair_labels")
 }
+
+model ClusterFeedback {
+  id             String    @id @default(cuid())
+  clusterId      String
+  clusterTitle   String
+  clusterSummary String    @default("")
+  itemCount      Int       @default(0)
+  status         String    @default("open")
+  note           String?
+  createdAt      DateTime  @default(now())
+  resolvedAt     DateTime?
+  resolvedNote   String?
+
+  @@index([status, createdAt])
+  @@map("cluster_feedback")
+}

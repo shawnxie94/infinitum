@@ -300,6 +300,7 @@ export function EventBriefingList({
       <EventBriefingDetailModal
         key={selectedEntry ? `${selectedEntry.type}:${selectedEntry.id}` : "empty"}
         entry={selectedEntry}
+        isAdmin={isAdmin}
         onClose={() => setSelectedEntry(null)}
       />
     </div>

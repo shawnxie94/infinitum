@@ -142,3 +142,60 @@ export async function recordClusterPairLabelFromItem(input: {
     right: clusterToLabelSide(cluster),
   });
 }
+
+/**
+ * 一键反馈（聚类级问题队列）：不拆解、不判定 pair，只记录「这个聚合看起来
+ * 不对劲」，攒着事后集中分析。与 pair 级标签互补——分析时的拆解动作
+ * （split/join/复核）会经上方回写产出精确标签。同一聚类已有 open 记录时去重。
+ * 这是用户主动点击的主操作，失败直接抛错而非吞掉。
+ */
+export async function flagClusterForReview(input: {
+  clusterId: string;
+  note?: string | null;
+}): Promise<{ flagged: boolean }> {
+  const cluster = await prisma.contentCluster.findUnique({
+    where: { id: input.clusterId },
+    select: { id: true, title: true, summary: true, itemCount: true },
+  });
+  if (!cluster) {
+    throw new Error("聚类不存在或已删除。");
+  }
+
+  const existing = await prisma.clusterFeedback.findFirst({
+    where: { clusterId: cluster.id, status: "open" },
+    select: { id: true },
+  });
+  if (existing) {
+    return { flagged: false };
+  }
+
+  await prisma.clusterFeedback.create({
+    data: {
+      clusterId: cluster.id,
+      clusterTitle: snapshotText(cluster.title),
+      clusterSummary: snapshotText(cluster.summary).slice(0, 600),
+      itemCount: cluster.itemCount,
+      note: input.note ?? null,
+    },
+  });
+  return { flagged: true };
+}
+
+export async function listOpenClusterFeedback(limit = 500) {
+  return prisma.clusterFeedback.findMany({
+    where: { status: "open" },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
+export async function resolveClusterFeedback(input: { id: string; note?: string | null }) {
+  return prisma.clusterFeedback.update({
+    where: { id: input.id },
+    data: {
+      status: "resolved",
+      resolvedAt: new Date(),
+      resolvedNote: input.note ?? null,
+    },
+  });
+}
