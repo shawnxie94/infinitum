@@ -72,6 +72,7 @@ import {
   recordClusterDecision,
 } from "@/lib/clusters/decisions";
 import { buildEventIdentity } from "@/lib/clusters/identity";
+import { loadMentionResolver } from "@/lib/entities/mention-resolution";
 import { buildEmbeddingText, createEmbedTexts, type EmbedTextsFn } from "@/lib/ai/embeddings";
 import {
   type ClusterAssignmentCandidate,
@@ -1901,6 +1902,30 @@ export async function precomputeClusterMergeCleanPairs(
   let scoredPairsInSlice = 0;
   let vectorAdmittedPairs = 0;
 
+  // 实体 Mention 规范化（AGG-01）：subject/object 先解析为 canonical 实体名再评分，
+  // 同实体异名（如 智谱/Z.ai）不再因 Mention 字符串不同而丢分；不可解析回退原字符串，
+  // 行为单调（canonical 名不同当且仅当实体不同）。记录的 inputHash 仍取原始聚类。
+  let canonicalClusters = cleanClusters;
+  try {
+    const resolveMention = await loadMentionResolver(
+      cleanClusters.flatMap((cluster) => [cluster.eventSubject, cluster.eventObject]),
+    );
+    canonicalClusters = cleanClusters.map((cluster) => {
+      const subject = resolveMention(cluster.eventSubject);
+      const object = resolveMention(cluster.eventObject);
+      if (subject === null && object === null) {
+        return cluster;
+      }
+      return {
+        ...cluster,
+        eventSubject: subject ?? cluster.eventSubject,
+        eventObject: object ?? cluster.eventObject,
+      };
+    });
+  } catch {
+    canonicalClusters = cleanClusters;
+  }
+
   // 向量预筛通道：与规则灰区并集提名；embedding 不可用时保持纯规则行为
   let vecMatrix: { flat: Float32Array; dim: number } | null = null;
   if (options?.embedTexts && cleanClusters.length > 1) {
@@ -1924,7 +1949,10 @@ export async function precomputeClusterMergeCleanPairs(
 
       for (let rightIndex = leftIndex + 1; rightIndex < cleanClusters.length; rightIndex += 1) {
         const right = cleanClusters[rightIndex]!;
-        const result = scoreClusterMergeCandidatePair(left, right);
+        const result = scoreClusterMergeCandidatePair(
+          canonicalClusters[leftIndex]!,
+          canonicalClusters[rightIndex]!,
+        );
         scoredPairs += 1;
         scoredPairsInSlice += 1;
 
