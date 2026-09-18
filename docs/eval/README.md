@@ -10,6 +10,8 @@
 - `embedding-recall-result.json` — Phase 1 语义召回评估结果（rule vs RRF 融合，见下文）
 - `merge-gray-gate-result.json` — 第二层灰区门评测结果（合并预筛 rule-only vs 规则+向量，见下文）
 - `embedding-mined-pairs.csv` — 向量挖掘扩充标注集（120 对高相似 ≥0.72 + 25 对中相似对照 0.60-0.72；AI 辅助标注 117 approved / 26 declined / 2 failed，待人工抽检）
+- `below-gray-truth-2026-09-19.md` — B0 真值补盲报告（below-gray/anchor/conflict 三层正例率、object_conflict 误杀形态；与 embedding-mined-pairs 互补）
+- `below-gray-truth-2026-09-19.csv` — B0 真值集（107 对 AI 辅助标注，reviewVerdict 列待人工抽检）
 - `label-cases.md` — 238 unique pair 抽样标注记录（AI 辅助标注，人工抽样建议；逐条覆盖 approved 12 + strong-declined 36 + failed 抽查）
 - `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 行 / 238 unique pair，含 2 重复 failed pair）
 
