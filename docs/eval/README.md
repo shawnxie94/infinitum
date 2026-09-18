@@ -5,8 +5,8 @@
 ## 文件
 
 - `eval-cluster-baseline.md` — 基线报告（主文档，含数据、方法、发现、结论）
-- `label-cases.md` — 240 对抽样标注记录（AI 辅助标注，人工抽样建议）
-- `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 对）
+- `label-cases.md` — 238 unique pair 抽样标注记录（AI 辅助标注，人工抽样建议；逐条覆盖 approved 12 + strong-declined 36 + failed 抽查）
+- `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 行 / 238 unique pair，含 2 重复 failed pair）
 
 ## 复跑
 

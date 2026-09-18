@@ -1,7 +1,8 @@
-# 标注记录：Event Merge Evaluation Baseline（抽样 240 对）
+# 标注记录：Event Merge Evaluation Baseline（抽样 240 行 / 238 unique pair）
 
 - 窗口：2026-08-19 ~ 2026-09-18（30 天），生产库快照 dev.db
-- 样本：240 对（分层：规则分 >=95/70-95/55-70/<55/无，各 60 对）
+- 样本：240 行 CSV（去重后 238 unique pair；2 个 failed pair 出现重复为 240 行——同一对在 `cluster_decisions` 有多次重试记录，抽样未对 pairKey 去重）
+- 分层：4 桶填满各 60 行（≥95 / 70-95 / 55-70 / <55）；nullscore 桶为 0（快照中无 stored=null 的 pair）
 - 标注类别：`same`（同一具体事件）/ `diff`（不同事件）/ `uncertain`（不确定，边缘情况）
 - 标注方式：AI 助读者逐对判断（见批次），关键样本给出依据
 
@@ -79,15 +80,17 @@
   - Waymo Gemini 集成 vs Waymo Ojai Robotaxi 开放（118 分，**uncertain→same 边界**，同一公司同一车型同天两个动作，**fail→静默跳过**）
   - 其他（科研工作流 vs Terminal-Bench、OpenAI 千禧年 vs macOS 攻击、阿里配股 vs 东风日产宕机）为 diff 正确拒绝。
 
-## 汇总统计（240 对标注结论）
+## 汇总统计（238 unique pair 标注结论）
 
 - approved 12 对：全部 same（正确合并）
 - declined 204 对：202 diff + 2 uncertain（其中 strong-declined 36 对里 33 diff + 2 uncertain + 1 数据不完整）
-- failed 23 对：22 diff + 1 uncertain（Waymo 案例，潜在漏合并）
+- failed 21 unique（CSV 23 行，含 2 重复 pair）：22 diff + 1 uncertain（Waymo 案例，潜在漏合并）
 - ambiguous 1 对：uncertain（待人工）
 
+> 汇总口径：基于 238 unique pair 的判断。CSV 240 行含 2 个 failed pair 重复，重复样本不增加信息量，下文汇总全部基于去重后的 238 unique pair。逐条逐桶标注只覆盖 approved 12 + strong-declined 36 + failed 抽查（~7 对），其余 mid/gray/low 桶未逐对标注，仅抽查结论。
+
 **核心结论**：
-1. **AI 决策层精度高**：对送入的判断，approved 全对（12/12），declined 也几乎全对（202/207 正确拒绝）。
+1. **AI 决策层精度高**：对送入的判断，approved 全对（12/12），declined 也几乎全对（202/204 unique 正确拒绝）。剩余 2 个 declined 错误均在 low 桶（score=0），见基线报告 § 4.3。
 2. **规则召回层假阳性极高**：规则分 ≥95 的候选 36 对里 33 对是不同事件（91.7% 假阳性）——规则分只是"相似"信号，不是"同事件"信号。
 3. **真实碎片化（召回缺口）**：30 天窗口内探测到 8 组同事件签名(同一 eventFingerprint)被拆成 ≥2 个 cluster（共 23 个碎片 cluster、68 items），含 GPT-6 Astra(6碎片)、OpenRouter 收购(4碎片)、HuggingFace 收购(3碎片)等热点事件。这些碎片 cluster 的 fingerprint 字段为 `single-*`/`pending-*`，事件指纹未落入精确匹配路径。
 4. **failed 决策静默丢弃**：模型调用失败的对被跳过，其中 Waymo 案例(118分) 是确定同事件，形成漏合并。
