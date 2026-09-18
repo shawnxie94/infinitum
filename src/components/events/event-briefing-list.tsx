@@ -49,6 +49,46 @@ function buildEventsHref(input: { date: string; pageSize: number; channelId: str
   return `/events?${params.toString()}`;
 }
 
+function ChannelNav({ briefing, pageSize }: { briefing: EventBriefingDTO; pageSize: number }) {
+  // 当前频道不渲染成 Link：href 等于当前 URL 时会被视口预取，造成同 URL 重复 RSC 请求。
+  return (
+    <nav aria-label="速览频道" className="flex flex-wrap items-center gap-1.5">
+      {briefing.channels.map((channel) => {
+        const isActive = briefing.channel.id === channel.id;
+        const className = cx(
+          "inline-flex h-7 items-center rounded-sm border px-2 text-xs font-medium transition",
+          isActive
+            ? "border-[var(--accent)] bg-[rgba(59,130,246,0.10)] text-[var(--accent)]"
+            : "border-[color:var(--line)] bg-[var(--surface)] text-[var(--text-3)] hover:border-[var(--accent)] hover:text-[var(--accent)]",
+        );
+
+        if (isActive) {
+          return (
+            <span key={channel.id} aria-current="page" className={className}>
+              {channel.name} {channel.count}
+            </span>
+          );
+        }
+
+        return (
+          <Link
+            key={channel.id}
+            className={className}
+            href={buildEventsHref({
+              date: briefing.date,
+              pageSize,
+              channelId: channel.id,
+              tag: briefing.tag,
+            })}
+          >
+            {channel.name} {channel.count}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 function EventTagSelect({ briefing, pageSize }: { briefing: EventBriefingDTO; pageSize: number }) {
   const router = useRouter();
 
@@ -188,32 +228,7 @@ export function EventBriefingList({
         <h1 className="sr-only">事件速览</h1>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-col">
-            <nav aria-label="速览频道" className="flex flex-wrap items-center gap-1.5">
-              {briefing.channels.map((channel) => {
-                const isActive = briefing.channel.id === channel.id;
-
-                return (
-                  <Link
-                    key={channel.id}
-                    aria-current={isActive ? "page" : undefined}
-                    className={cx(
-                      "inline-flex h-7 items-center rounded-sm border px-2 text-xs font-medium transition",
-                      isActive
-                        ? "border-[var(--accent)] bg-[rgba(59,130,246,0.10)] text-[var(--accent)]"
-                        : "border-[color:var(--line)] bg-[var(--surface)] text-[var(--text-3)] hover:border-[var(--accent)] hover:text-[var(--accent)]",
-                    )}
-                    href={buildEventsHref({
-                      date: briefing.date,
-                      pageSize,
-                      channelId: channel.id,
-                      tag: briefing.tag,
-                    })}
-                  >
-                    {channel.name} {channel.count}
-                  </Link>
-                );
-              })}
-            </nav>
+            <ChannelNav briefing={briefing} pageSize={pageSize} />
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <EventTagSelect briefing={briefing} pageSize={pageSize} />
@@ -226,32 +241,7 @@ export function EventBriefingList({
         <h1 className="sr-only">事件速览</h1>
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-col">
-            <nav aria-label="速览频道" className="flex flex-wrap items-center gap-1.5">
-              {briefing.channels.map((channel) => {
-                const isActive = briefing.channel.id === channel.id;
-
-                return (
-                  <Link
-                    key={channel.id}
-                    aria-current={isActive ? "page" : undefined}
-                    className={cx(
-                      "inline-flex h-7 items-center rounded-sm border px-2 text-xs font-medium transition",
-                      isActive
-                        ? "border-[var(--accent)] bg-[rgba(59,130,246,0.10)] text-[var(--accent)]"
-                        : "border-[color:var(--line)] bg-[var(--surface)] text-[var(--text-3)] hover:border-[var(--accent)] hover:text-[var(--accent)]",
-                    )}
-                    href={buildEventsHref({
-                      date: briefing.date,
-                      pageSize,
-                      channelId: channel.id,
-                      tag: briefing.tag,
-                    })}
-                  >
-                    {channel.name} {channel.count}
-                  </Link>
-                );
-              })}
-            </nav>
+            <ChannelNav briefing={briefing} pageSize={pageSize} />
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <EventTagSelect briefing={briefing} pageSize={pageSize} />

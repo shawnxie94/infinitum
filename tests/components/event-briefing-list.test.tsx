@@ -161,7 +161,8 @@ describe("EventBriefingList", () => {
     expect(screen.queryByText("日期：")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "查看" })).not.toBeInTheDocument();
     expect(screen.getByRole("banner").className).toContain("panel-raised");
-    expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("重点事件 96")).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("link", { name: "重点事件 96" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "观点实践 24" })).toHaveAttribute(
       "href",
       "/events?date=2026-06-30&channel=insight",
@@ -464,10 +465,7 @@ describe("EventBriefingList", () => {
       },
     }));
 
-    expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute(
-      "href",
-      "/events?date=2026-06-30&channel=important&size=50",
-    );
+    expect(screen.getByText("重点事件 96")).toHaveAttribute("aria-current", "page");
     expect(screen.getByLabelText("选择日期")).toHaveValue("2026-06-30");
     expect(container.querySelector('input[name="view"]')).not.toBeInTheDocument();
 

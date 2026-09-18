@@ -308,6 +308,7 @@ export function GlobalHeader({
                   className={navLinkClassName(isActive)}
                   href={item.href}
                   onClick={item.key === "home" ? handleHomeClick : undefined}
+                  prefetch={isActive ? false : undefined}
                 >
                   {item.label}
                 </Link>
@@ -506,6 +507,7 @@ export function GlobalHeader({
                     className={mobileNavLinkClassName(isActive)}
                     href={item.href}
                     onClick={item.key === "home" ? handleHomeClick : closeMobileNav}
+                    prefetch={isActive ? false : undefined}
                   >
                     {item.label}
                   </Link>
