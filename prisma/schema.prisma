@@ -287,7 +287,15 @@ model ContentCluster {
   itemCount                Int                              @default(0)
   latestPublishedAt        DateTime
   status                   ContentClusterStatus             @default(active)
+  // Write-time uniqueness key: eventFingerprint + eventBucket (or single-*/
+  // pending-* placeholders for non-aggregatable / incomplete-signature
+  // clusters). Matching is time-free via eventFingerprint inside the candidate
+  // window; this bucketed key only keeps same-signature writes outside the
+  // window from upserting into each other.
   fingerprint              String                           @unique
+  // Pure event identity: sha256(eventType|subject|action|object).
+  // Deliberately time-free — event dates are noisy and the data lifecycle is
+  // short (~3 months), so same-signature events inside the match window merge.
   eventFingerprint         String?
   eventBucket              String?
   eventType                String?

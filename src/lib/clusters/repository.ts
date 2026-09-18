@@ -87,7 +87,10 @@ export async function findActiveClusterByEventFingerprint(
       },
       ...timeFilter,
     },
-    orderBy: timeField === "createdAt" ? [{ createdAt: "desc" }] : [{ latestPublishedAt: "desc" }],
+    // Prefer the dominant (most items) cluster as the absorption target, then
+    // the freshest — matches pickDominantSignatureValue semantics and keeps
+    // single fragments from hijacking the anchor.
+    orderBy: [{ itemCount: "desc" }, { latestPublishedAt: "desc" }],
   });
 }
 

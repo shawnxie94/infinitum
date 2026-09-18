@@ -293,7 +293,7 @@ describe("cluster assignment", () => {
     await expect(prisma.contentCluster.count()).resolves.toBe(2);
   });
 
-  it("does not use title fallback across incompatible event dates", async () => {
+  it("time-free identity merges same-signature events and window separates distant ones", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Date Guard Feed",
@@ -331,6 +331,7 @@ describe("cluster assignment", () => {
         ...baseItemData,
         sourceId: source.id,
         eventDate: "2026-04-10",
+        publishedAt: new Date("2026-04-10T08:00:00.000Z"),
         originalUrl: "https://date-guard.example.com/acme-widget-april",
         canonicalUrl: "https://date-guard.example.com/acme-widget-april",
         urlHash: "date-guard-april",
@@ -351,6 +352,7 @@ describe("cluster assignment", () => {
         ...baseItemData,
         sourceId: source.id,
         eventDate: "2026-04-11",
+        publishedAt: new Date("2026-04-11T08:00:00.000Z"),
         originalUrl: "https://date-guard.example.com/acme-widget-april-11",
         canonicalUrl: "https://date-guard.example.com/acme-widget-april-11",
         urlHash: "date-guard-april-11",
@@ -366,14 +368,17 @@ describe("cluster assignment", () => {
       },
     });
 
-    expect(smallDriftAssignment.createdNewCluster).toBe(true);
-    expect(smallDriftAssignment.clusterId).not.toBe(firstAssignment.clusterId);
+    // Time-free identity: a one-day drift in eventDate is treated as date
+    // noise, not a different event — same-signature events merge.
+    expect(smallDriftAssignment.createdNewCluster).toBe(false);
+    expect(smallDriftAssignment.clusterId).toBe(firstAssignment.clusterId);
 
     const secondItem = await prisma.item.create({
       data: {
         ...baseItemData,
         sourceId: source.id,
         eventDate: "2026-05-10",
+        publishedAt: new Date("2026-05-10T08:00:00.000Z"),
         originalUrl: "https://date-guard.example.com/acme-widget-may",
         canonicalUrl: "https://date-guard.example.com/acme-widget-may",
         urlHash: "date-guard-may",
@@ -576,7 +581,7 @@ describe("cluster assignment", () => {
     });
   });
 
-  it("does not attach same-signature undated events to a previous week cluster", async () => {
+  it("separates same-signature undated events outside the match window", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Weekly Identity Feed",
@@ -647,6 +652,9 @@ describe("cluster assignment", () => {
       select: { eventBucket: true, eventFingerprint: true, fingerprint: true },
     });
     expect(clusters).toHaveLength(2);
+    // Same signature, same identity — but publishedAt anchors are 8 days apart,
+    // outside the ±7-day match window, so they stay separate clusters.
+    // eventBucket is still recorded for write-time uniqueness only.
     expect(clusters[0]?.eventBucket).toBe("week:2026-04-20");
     expect(clusters[1]?.eventBucket).toBe("week:2026-04-27");
     expect(clusters[0]?.eventFingerprint).toBe(clusters[1]?.eventFingerprint);
@@ -1813,4 +1821,82 @@ describe("cluster assignment", () => {
     });
     expect(mergeClustersAi).not.toHaveBeenCalled();
   });
+  it("prefers the dominant cluster as the event-fingerprint absorption target", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Dominant Absorption Feed",
+        rssUrl: "https://dominant-abs.example.com/feed.xml",
+        siteUrl: "https://dominant-abs.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    const signature = {
+      eventType: "launch" as const,
+      eventSubject: "Acme",
+      eventAction: "发布",
+      eventObject: "Widget",
+      eventDate: "2026-04-20",
+    };
+    // 建一个"主导"cluster（3 items）和一个"碎片"cluster（1 item），同 fingerprint
+    const anchorItem = await prisma.item.create({
+      data: {
+        sourceId: source.id, eventDate: "2026-04-20", publishedAt: new Date("2026-04-20T08:00:00.000Z"),
+        originalUrl: "https://dominant-abs.example.com/a1", canonicalUrl: "https://dominant-abs.example.com/a1",
+        urlHash: "dominant-a1", originalTitle: "Acme 发布 Widget", summaryText: "Acme 发布 Widget。", language: "zh",
+        status: "processed", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "relevant",
+        eventType: "launch", eventSubject: "Acme", eventAction: "发布", eventObject: "Widget",
+      },
+    });
+    const firstAssignment = await assignItemToCluster(anchorItem.id, { eventSignature: signature });
+    expect(firstAssignment.clusterId).toBeTruthy();
+    // 补两个 item 进同一个 cluster
+    for (const i of [2, 3]) {
+      const extra = await prisma.item.create({
+        data: {
+          sourceId: source.id, eventDate: "2026-04-20", publishedAt: new Date(`2026-04-20T08:0${i}:00.000Z`),
+          originalUrl: `https://dominant-abs.example.com/e${i}`, canonicalUrl: `https://dominant-abs.example.com/e${i}`,
+          urlHash: `dominant-e${i}`, originalTitle: "Acme 发布 Widget", summaryText: "Acme 发布 Widget。", language: "zh",
+          status: "processed", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "relevant",
+          eventType: "launch", eventSubject: "Acme", eventAction: "发布", eventObject: "Widget",
+        },
+      });
+      const a = await assignItemToCluster(extra.id, { eventSignature: signature });
+      expect(a.clusterId).toBe(firstAssignment.clusterId);
+    }
+    // 再建一个同指纹的碎片 cluster（fingerprint 占位导致 miss，走 pending/single）
+    const fragSource = await prisma.source.create({
+      data: {
+        name: "Frag Feed", rssUrl: "https://frag-feed.example.com/feed.xml", siteUrl: "https://frag-feed.example.com",
+        enabled: true, aiParsingEnabled: true, aggregationEnabled: false,
+      },
+    });
+    const fragItem = await prisma.item.create({
+      data: {
+        sourceId: fragSource.id, eventDate: "2026-04-20", publishedAt: new Date("2026-04-21T08:00:00.000Z"),
+        originalUrl: "https://frag-feed.example.com/f1", canonicalUrl: "https://frag-feed.example.com/f1",
+        urlHash: "frag-f1", originalTitle: "Acme 发布 Widget", summaryText: "Acme 发布 Widget。", language: "zh",
+        status: "processed", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "relevant",
+        eventType: "launch", eventSubject: "Acme", eventAction: "发布", eventObject: "Widget",
+      },
+    });
+    const fragAssignment = await assignItemToCluster(fragItem.id, { eventSignature: signature });
+    // 碎片源 aggregationEnabled=false → single 占位 cluster，独立存在
+    expect(fragAssignment.clusterId).not.toBe(firstAssignment.clusterId);
+
+    // 新 item（窗口内、同指纹）应吸收进主导 cluster（3 items）而非碎片（1 item）
+    const newcomer = await prisma.item.create({
+      data: {
+        sourceId: source.id, eventDate: "2026-04-21", publishedAt: new Date("2026-04-22T08:00:00.000Z"),
+        originalUrl: "https://dominant-abs.example.com/n1", canonicalUrl: "https://dominant-abs.example.com/n1",
+        urlHash: "dominant-n1", originalTitle: "Acme 发布 Widget", summaryText: "Acme 发布 Widget。", language: "zh",
+        status: "processed", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "relevant",
+        eventType: "launch", eventSubject: "Acme", eventAction: "发布", eventObject: "Widget",
+      },
+    });
+    const newAssignment = await assignItemToCluster(newcomer.id, { eventSignature: { ...signature, eventDate: "2026-04-21" } });
+    expect(newAssignment.clusterId).toBe(firstAssignment.clusterId);
+  });
+
 });

@@ -95,6 +95,12 @@ export function buildEventIdentity(input: {
   return {
     eventFingerprint,
     eventBucket,
+    // Storage-uniqueness key: eventFingerprint + eventBucket. The bucket keeps
+    // write-time separation for same-signature events outside the match window
+    // (a May release must not overwrite an April cluster via upsert). Matching
+    // itself is time-free: callers match on eventFingerprint inside the
+    // candidate time window, and only fall back to this bucketed key for the
+    // create/upsert path.
     eventIdentityKey: `${eventFingerprint}:${eventBucket}`,
     identityConfidence: Math.min(100, identityConfidence),
   };

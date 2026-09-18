@@ -293,7 +293,7 @@ describe("buildClusterMergeCandidates", () => {
     ).toEqual(["zibo-ai-comic-base"]);
   });
 
-  it("rejects multi-subject bridge pairs when explicit event dates differ", () => {
+  it("rejects multi-subject bridge pairs lacking a shared object anchor", () => {
     const candidates = buildClusterMergeCandidates([
       createCandidate({
         id: "openai-stargate-shift",
@@ -750,6 +750,45 @@ describe("buildClusterMergeCandidates", () => {
     );
 
     expect(candidates).toHaveLength(CLUSTER_MERGE_CANDIDATE_LIMIT);
+  });
+
+  it("does not hard-reject a date-conflicted same-signature pair; it scores lower", () => {
+    const fp = "date-conflict-fp";
+    const april = createCandidate({
+      id: "release-april",
+      title: "Acme 发布 Widget 四月版",
+      summary: "Acme 发布 Widget 四月版本，改进稳定性。",
+      fingerprint: "acme-widget-april",
+      eventFingerprint: fp,
+      eventType: "release",
+      eventSubject: "Acme",
+      eventAction: "发布",
+      eventObject: "Widget",
+      eventDate: "2026-04-20",
+      latestPublishedAt: new Date("2026-04-20T09:00:00.000Z"),
+    });
+    const may = createCandidate({
+      id: "release-may",
+      title: "Acme 发布 Widget 五月版",
+      summary: "Acme 发布 Widget 五月版本，优化性能。",
+      fingerprint: "acme-widget-may",
+      eventFingerprint: fp,
+      eventType: "release",
+      eventSubject: "Acme",
+      eventAction: "发布",
+      eventObject: "Widget",
+      eventDate: "2026-05-10",
+      latestPublishedAt: new Date("2026-05-10T09:00:00.000Z"),
+    });
+
+    const result = buildClusterMergeCandidateSelection([april, may]);
+    // Same event fingerprint forces the pair into candidates; the conflicting
+    // dates only reduce the score instead of vetoing it.
+    expect(result.candidates.map((c) => c.id).sort()).toEqual(["release-april", "release-may"]);
+    expect(result.allowedPairs).toHaveLength(1);
+    // A same-signature pair without the shared-date bonus still clears the
+    // strong-match floor granted by the event fingerprint path.
+    expect(result.allowedPairs[0]?.score).toBeGreaterThanOrEqual(95);
   });
 
   it("force-pairs clusters sharing the same event fingerprint (fragmentation fix)", () => {

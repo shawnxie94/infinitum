@@ -120,12 +120,13 @@ export function buildClusterFingerprintSeed(options: { eventSignature?: AiEventS
     return "";
   }
 
+  // Time-free: excludes eventDate so same-event fingerprints never diverge on
+  // noisy/missing dates. Time separation happens via the match time window.
   return [
     signature.eventType || "",
     signature.eventSubject,
     signature.eventAction || "",
     signature.eventObject,
-    signature.eventDate || "",
   ].join("|");
 }
 
@@ -1070,18 +1071,18 @@ function scoreClusterMergePair(left: ClusterMergeCandidate, right: ClusterMergeC
     distinctiveTextOverlapCount,
   });
 
+  // Date conflict used to hard-reject the pair. With a time-free event
+  // fingerprint as the identity anchor, noisy event dates (AI mis-extraction,
+  // e.g. 2025 vs 2026) must not block merging genuinely same-signature events.
+  // Instead we keep the pair alive and let the AI verdict decide; the score
+  // simply loses the date bonus below.
+  const dateConflict =
+    Boolean(leftDate && rightDate && !areEventDatesCompatibleForClustering(leftDate, rightDate));
+
   if (leftObject && rightObject && !objectSimilarity.strong && !relationalObjectOverlap && !multiSubjectBridge) {
     return {
       rejected: true,
       rejectedReason: "object_conflict",
-      score: 0,
-    };
-  }
-
-  if (leftDate && rightDate && !areEventDatesCompatibleForClustering(leftDate, rightDate)) {
-    return {
-      rejected: true,
-      rejectedReason: "date_conflict",
       score: 0,
     };
   }
@@ -1106,6 +1107,10 @@ function scoreClusterMergePair(left: ClusterMergeCandidate, right: ClusterMergeC
     score += 15;
   } else if (leftDate && rightDate && areEventDatesCompatibleForClustering(leftDate, rightDate)) {
     score += 6;
+  } else if (dateConflict) {
+    // Soft negative signal: noisy/conflicting dates alone must not veto the
+    // pair, but a real date disagreement lowers the candidate's priority.
+    score -= 12;
   }
 
   if (textOverlap.strong) {

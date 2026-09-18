@@ -84,8 +84,6 @@ import {
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import {
   normalizeEventSignatureForStorage,
-  areEventDatesExactlyEqual,
-  normalizeEventDateForStorage,
 } from "@/lib/clusters/normalization";
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
@@ -138,6 +136,35 @@ async function findClusterForItem(
       : "";
   const { since, until, timeField } = buildCandidateRange(item, CLUSTER_LOOKBACK_MS);
   const rangeKey = buildCandidateRangeKey(since, until, timeField);
+
+  // Time-free event identity match first: same signature inside the time
+  // window is the same event. The window (based on publishedAt/createdAt) is
+  // the only time separation — event dates that are noisy/missing never block
+  // the merge.
+  const eventFp = identity?.eventFingerprint ?? null;
+  let eventFpMatch = eventFp ? options.coordinator?.exactMatches.get(`efp:${eventFp}:${rangeKey}`) : undefined;
+
+  if (eventFp && typeof eventFpMatch === "undefined") {
+    eventFpMatch = await findActiveClusterByEventFingerprint(eventFp, since, until, timeField);
+    options.coordinator?.exactMatches.set(
+      `efp:${eventFp}:${rangeKey}`,
+      eventFpMatch ? toClusterAssignmentCandidate(eventFpMatch) : null,
+    );
+  }
+
+  if (eventFpMatch && eventFpMatch.id !== item.id) {
+    // Same event signature inside the match window is the same event. Event
+    // dates are noisy (AI mis-extraction, missing values) and the data
+    // lifecycle is short (~3 months), so no additional date equality guard:
+    // the time window + downstream AI verdict handle separation.
+    return {
+      cluster: eventFpMatch,
+      fingerprint: eventFp as string,
+      matchSource: "exact_match" as const,
+      skippedIncompleteSignature: false,
+    };
+  }
+
   const exactMatchKey = fingerprint ? buildExactMatchKey(fingerprint, since, until, timeField) : "";
   let exactMatch = fingerprint ? options.coordinator?.exactMatches.get(exactMatchKey) : undefined;
 
@@ -153,41 +180,6 @@ async function findClusterForItem(
       matchSource: "exact_match" as const,
       skippedIncompleteSignature: false,
     };
-  }
-
-  // Event-fingerprint exact match: a cluster with the same normalized event
-  // signature (type+subject+action+object) inside the time window is the same
-  // event, even when its `fingerprint` column is single-*/pending-* (fragment
-  // clusters created before the event identity was derivable).
-  const eventFp = identity?.eventFingerprint ?? null;
-  let eventFpMatch = eventFp ? options.coordinator?.exactMatches.get(`efp:${eventFp}:${rangeKey}`) : undefined;
-
-  if (eventFp && typeof eventFpMatch === "undefined") {
-    eventFpMatch = await findActiveClusterByEventFingerprint(eventFp, since, until, timeField);
-    options.coordinator?.exactMatches.set(
-      `efp:${eventFp}:${rangeKey}`,
-      eventFpMatch ? toClusterAssignmentCandidate(eventFpMatch) : null,
-    );
-  }
-
-  if (eventFpMatch && eventFpMatch.id !== item.id) {
-    const candidateDate = eventFpMatch.eventDate;
-    const currentDate = normalizeEventDateForStorage(options.eventSignature?.eventDate);
-    // Strict date equality guards against same-signature-but-different-day
-    // events (e.g. two releases one day apart). Fragmented same-event clusters
-    // still merge downstream via the merge-pass sameFp pairing.
-    const datesCompatible =
-      !currentDate ||
-      !candidateDate ||
-      areEventDatesExactlyEqual(currentDate, candidateDate);
-    if (datesCompatible) {
-      return {
-        cluster: eventFpMatch,
-        fingerprint,
-        matchSource: "exact_match" as const,
-        skippedIncompleteSignature: false,
-      };
-    }
   }
 
   const titleFallback = options.titleFallback?.trim() ?? "";
