@@ -222,11 +222,14 @@ type StratumMetrics = {
   pairs: number;
   ruleRecallAt5: number;
   ruleRecallAt10: number;
+  ruleRecallAt15: number;
   fusedRecallAt5: number;
   fusedRecallAt10: number;
+  fusedRecallAt15: number;
   ruleRankBMedian: number | null;
   fusedRankBMedian: number | null;
   negativePromoted: number;
+  negativePromoted15: number;
   sliceChurn: number;
 };
 
@@ -395,9 +398,12 @@ async function main() {
       ruleRecallAt10: 0,
       fusedRecallAt5: 0,
       fusedRecallAt10: 0,
+      ruleRecallAt15: 0,
+      fusedRecallAt15: 0,
       ruleRankBMedian: null,
       fusedRankBMedian: null,
       negativePromoted: 0,
+      negativePromoted15: 0,
       sliceChurn: 0,
     };
     const ruleRanks: number[] = [];
@@ -465,14 +471,19 @@ async function main() {
         ruleRanks.push(ruleRankOfB + 1);
         if (ruleRankOfB < 5) metrics.ruleRecallAt5 += 1;
         if (ruleRankOfB < 10) metrics.ruleRecallAt10 += 1;
+        if (ruleRankOfB < 15) metrics.ruleRecallAt15 += 1;
       }
       if (fusedRankOfB >= 0) {
         fusedRanks.push(fusedRankOfB + 1);
         if (fusedRankOfB < 5) metrics.fusedRecallAt5 += 1;
         if (fusedRankOfB < 10) metrics.fusedRecallAt10 += 1;
+        if (fusedRankOfB < 15) metrics.fusedRecallAt15 += 1;
       }
       if ((name === "declined-negatives" || name === "csv-declined") && fusedRankOfB >= 0 && fusedRankOfB < 10 && ruleRankOfB < 0) {
         metrics.negativePromoted += 1;
+      }
+      if ((name === "declined-negatives" || name === "csv-declined") && fusedRankOfB >= 0 && fusedRankOfB < 15 && ruleRankOfB < 0) {
+        metrics.negativePromoted15 += 1;
       }
       const ruleTop10 = new Set(ruleOrder.slice(0, 10));
       const fusedTop10 = new Set(fusedOrder.slice(0, 10));
@@ -483,11 +494,14 @@ async function main() {
 
     metrics.ruleRecallAt5 = pct(metrics.ruleRecallAt5, metrics.pairs);
     metrics.ruleRecallAt10 = pct(metrics.ruleRecallAt10, metrics.pairs);
+    metrics.ruleRecallAt15 = pct(metrics.ruleRecallAt15, metrics.pairs);
     metrics.fusedRecallAt5 = pct(metrics.fusedRecallAt5, metrics.pairs);
     metrics.fusedRecallAt10 = pct(metrics.fusedRecallAt10, metrics.pairs);
+    metrics.fusedRecallAt15 = pct(metrics.fusedRecallAt15, metrics.pairs);
     metrics.ruleRankBMedian = median(ruleRanks);
     metrics.fusedRankBMedian = median(fusedRanks);
     metrics.negativePromoted = pct(metrics.negativePromoted, metrics.pairs);
+    metrics.negativePromoted15 = pct(metrics.negativePromoted15, metrics.pairs);
     metrics.sliceChurn = pct(metrics.sliceChurn, metrics.pairs);
 
     console.log(`\n== ${name} (n=${metrics.pairs}) ==`);
@@ -498,10 +512,13 @@ async function main() {
       `  recall@10 rule=${metrics.ruleRecallAt10.toFixed(1)}%  fused=${metrics.fusedRecallAt10.toFixed(1)}%`,
     );
     console.log(
+      `  recall@15 rule=${metrics.ruleRecallAt15.toFixed(1)}%  fused=${metrics.fusedRecallAt15.toFixed(1)}%`,
+    );
+    console.log(
       `  rankB median rule=${metrics.ruleRankBMedian ?? "-"}  fused=${metrics.fusedRankBMedian ?? "-"}`,
     );
     if (name === "declined-negatives" || name === "csv-declined") {
-      console.log(`  负例新进入 top10（rule 不可见 → fused 进入）: ${metrics.negativePromoted.toFixed(1)}%`);
+      console.log(`  负例新进入 top10/top15（rule 不可见 → fused 进入）: ${metrics.negativePromoted.toFixed(1)}% / ${metrics.negativePromoted15.toFixed(1)}%`);
     }
     console.log(`  切片变化率: ${metrics.sliceChurn.toFixed(1)}%`);
     return metrics;

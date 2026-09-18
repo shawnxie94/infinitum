@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-18T17:42:15.686Z",
+  "generatedAt": "2026-09-18T17:53:47.033Z",
   "db": "/tmp/infinitum-prod/dev-read.db",
   "embedModel": "BAAI/bge-m3",
   "poolSize": 50,
@@ -10,9 +10,12 @@
       "ruleRecallAt10": 99.5,
       "fusedRecallAt5": 99.5,
       "fusedRecallAt10": 99.5,
+      "ruleRecallAt15": 99.5,
+      "fusedRecallAt15": 99.5,
       "ruleRankBMedian": 1,
       "fusedRankBMedian": 1,
       "negativePromoted": 0,
+      "negativePromoted15": 0,
       "sliceChurn": 28.999999999999996
     },
     "declined-negatives": {
@@ -21,9 +24,12 @@
       "ruleRecallAt10": 96.5,
       "fusedRecallAt5": 95.5,
       "fusedRecallAt10": 96.5,
+      "ruleRecallAt15": 96.5,
+      "fusedRecallAt15": 96.5,
       "ruleRankBMedian": 1,
       "fusedRankBMedian": 1,
       "negativePromoted": 0,
+      "negativePromoted15": 0,
       "sliceChurn": 27
     },
     "csv-approved": {
@@ -32,9 +38,12 @@
       "ruleRecallAt10": 69.76744186046511,
       "fusedRecallAt5": 77.51937984496125,
       "fusedRecallAt10": 78.29457364341084,
+      "ruleRecallAt15": 69.76744186046511,
+      "fusedRecallAt15": 78.29457364341084,
       "ruleRankBMedian": 1,
       "fusedRankBMedian": 1,
       "negativePromoted": 0,
+      "negativePromoted15": 0,
       "sliceChurn": 44.18604651162791
     },
     "csv-declined": {
@@ -43,9 +52,12 @@
       "ruleRecallAt10": 77.82608695652173,
       "fusedRecallAt5": 80,
       "fusedRecallAt10": 80.8695652173913,
+      "ruleRecallAt15": 77.82608695652173,
+      "fusedRecallAt15": 80.8695652173913,
       "ruleRankBMedian": 1,
       "fusedRankBMedian": 1,
       "negativePromoted": 3.0434782608695654,
+      "negativePromoted15": 3.0434782608695654,
       "sliceChurn": 23.47826086956522
     }
   }
