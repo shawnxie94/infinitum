@@ -61,7 +61,6 @@ export const ADMIN_SESSION_TTL_MS = WEEK_MS;
 
 /** 聚类查询回溯时间: 7 天 */
 export const CLUSTER_LOOKBACK_MS = 7 * DAY_MS;
-
 /** 聚类 AI 候选限制 */
 export const CLUSTER_AI_CANDIDATE_LIMIT = 10;
 
@@ -82,6 +81,15 @@ export const CLUSTER_MERGE_AI_PAIR_MIN_SCORE = 70;
 
 /** 聚合合并进入 AI 判断的灰区最低分 */
 export const CLUSTER_MERGE_AI_PAIR_GRAY_SCORE = 55;
+
+/** 聚合合并预筛的向量相似准入线（bge-m3 挖掘标定：≥0.72 的同事件精确率约 99%） */
+export const CLUSTER_MERGE_VECTOR_GRAY_SIM = 0.72;
+
+/**
+ * object_conflict 否决的向量相似度豁免线：sim ≥ 此值时实体冲突视为 AI 抽取噪声
+ * （标注集实测：sim 0.94-0.97 的 object_conflict 对 23/27 为人工正例），仍交 LLM 终审
+ */
+export const CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM = 0.9;
 
 /** 聚合合并高置信候选分数 */
 export const CLUSTER_MERGE_AI_PAIR_STRONG_SCORE = 95;

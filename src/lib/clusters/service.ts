@@ -7,6 +7,8 @@ import {
   CLUSTER_EMBEDDING_RRF_K,
   CLUSTER_LOOKBACK_MS,
   CLUSTER_MERGE_AI_PAIR_GRAY_SCORE,
+  CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM,
+  CLUSTER_MERGE_VECTOR_GRAY_SIM,
   CLUSTER_MERGE_CANDIDATE_LIMIT,
   CLUSTER_MERGE_CLEAN_PAIR_TTL_MS,
   CLUSTER_MERGE_CLEAN_PAIR_MAX_ATTEMPTS,
@@ -63,13 +65,14 @@ import {
   createMustLinkForClusters,
   findBlockingClusterPairConstraint,
 } from "@/lib/clusters/constraints";
-import { selectAiCandidatesWithEmbeddingRecall } from "@/lib/clusters/embedding-recall";
+import { selectAiCandidatesWithEmbeddingRecall, resolveMergePairAdmission } from "@/lib/clusters/embedding-recall";
 import {
   getClusterPairDecisionBlock,
   markOrphanedClusterPairDecisionsStale,
   recordClusterDecision,
 } from "@/lib/clusters/decisions";
 import { buildEventIdentity } from "@/lib/clusters/identity";
+import { buildEmbeddingText, createEmbedTexts, type EmbedTextsFn } from "@/lib/ai/embeddings";
 import {
   type ClusterAssignmentCandidate,
   createContentCluster,
@@ -1793,6 +1796,9 @@ export type ClusterMergeCleanPairPrecomputeResult = {
   scoredPairs: number;
   candidatePairs: number;
   storedPairs: number;
+  /** 仅凭向量相似（规则分不达灰区）获得提名的对数 */
+  vectorAdmittedPairs: number;
+  vectorEnabled: boolean;
   durationMs: number;
 };
 
@@ -1838,7 +1844,47 @@ async function upsertCleanPairCandidates(input: {
   );
 }
 
-export async function precomputeClusterMergeCleanPairs(now = new Date()): Promise<ClusterMergeCleanPairPrecomputeResult> {
+function buildNormalizedVectorMatrix(
+  clusters: ClusterMergeCandidate[],
+  vectors: number[][],
+): { flat: Float32Array; dim: number } | null {
+  if (vectors.length !== clusters.length || vectors.length === 0) {
+    return null;
+  }
+
+  const dim = vectors[0]!.length;
+  if (dim === 0) {
+    return null;
+  }
+
+  const flat = new Float32Array(clusters.length * dim);
+  for (let i = 0; i < clusters.length; i += 1) {
+    const vector = vectors[i]!;
+    if (vector.length !== dim) {
+      return null;
+    }
+
+    let norm = 0;
+    for (let d = 0; d < dim; d += 1) norm += vector[d]! * vector[d]!;
+    norm = Math.sqrt(norm) || 1;
+    for (let d = 0; d < dim; d += 1) flat[i * dim + d] = vector[d]! / norm;
+  }
+
+  return { flat, dim };
+}
+
+function dotAt(flat: Float32Array, dim: number, i: number, j: number): number {
+  let dot = 0;
+  const baseI = i * dim;
+  const baseJ = j * dim;
+  for (let d = 0; d < dim; d += 1) dot += flat[baseI + d]! * flat[baseJ + d]!;
+  return dot;
+}
+
+export async function precomputeClusterMergeCleanPairs(
+  now = new Date(),
+  options?: { embedTexts?: EmbedTextsFn | null },
+): Promise<ClusterMergeCleanPairPrecomputeResult> {
   const startedAt = Date.now();
   const lookbackSince = new Date(now.getTime() - CLUSTER_LOOKBACK_MS);
   const expiresAt = new Date(now.getTime() + CLUSTER_MERGE_CLEAN_PAIR_TTL_MS);
@@ -1853,6 +1899,22 @@ export async function precomputeClusterMergeCleanPairs(now = new Date()): Promis
   const candidates: Array<ReturnType<typeof toCleanPairCandidateRecord>> = [];
   let scoredPairs = 0;
   let scoredPairsInSlice = 0;
+  let vectorAdmittedPairs = 0;
+
+  // 向量预筛通道：与规则灰区并集提名；embedding 不可用时保持纯规则行为
+  let vecMatrix: { flat: Float32Array; dim: number } | null = null;
+  if (options?.embedTexts && cleanClusters.length > 1) {
+    try {
+      const vectors = await options.embedTexts(
+        cleanClusters.map((cluster) => buildEmbeddingText(cluster.title, cluster.summary)),
+      );
+      if (vectors) {
+        vecMatrix = buildNormalizedVectorMatrix(cleanClusters, vectors);
+      }
+    } catch {
+      vecMatrix = null;
+    }
+  }
 
   for (let leftStart = 0; leftStart < cleanClusters.length; leftStart += CLUSTER_MERGE_PRECOMPUTE_BATCH_SIZE) {
     const leftEnd = Math.min(cleanClusters.length, leftStart + CLUSTER_MERGE_PRECOMPUTE_BATCH_SIZE);
@@ -1866,7 +1928,16 @@ export async function precomputeClusterMergeCleanPairs(now = new Date()): Promis
         scoredPairs += 1;
         scoredPairsInSlice += 1;
 
-        if (result.rejected || result.score < CLUSTER_MERGE_AI_PAIR_GRAY_SCORE) {
+        const vectorSim = vecMatrix ? dotAt(vecMatrix.flat, vecMatrix.dim, leftIndex, rightIndex) : null;
+        const admission = resolveMergePairAdmission(
+          result,
+          vectorSim,
+          CLUSTER_MERGE_AI_PAIR_GRAY_SCORE,
+          CLUSTER_MERGE_VECTOR_GRAY_SIM,
+          CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM,
+        );
+
+        if (!admission.admitted) {
           if (
             scoredPairsInSlice >= CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_SIZE &&
             CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_DELAY_MS > 0
@@ -1877,7 +1948,10 @@ export async function precomputeClusterMergeCleanPairs(now = new Date()): Promis
           continue;
         }
 
-        candidates.push(toCleanPairCandidateRecord(left, right, result.score));
+        if (admission.source === "vector") {
+          vectorAdmittedPairs += 1;
+        }
+        candidates.push(toCleanPairCandidateRecord(left, right, admission.priorityScore));
         if (
           scoredPairsInSlice >= CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_SIZE &&
           CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_DELAY_MS > 0
@@ -1908,6 +1982,8 @@ export async function precomputeClusterMergeCleanPairs(now = new Date()): Promis
     scoredPairs,
     candidatePairs: candidates.length,
     storedPairs: topCandidates.length,
+    vectorAdmittedPairs,
+    vectorEnabled: vecMatrix !== null,
     durationMs: Date.now() - startedAt,
   };
 }
@@ -1944,12 +2020,16 @@ export async function executeClusterMergeCleanPairPrecomputeTask(taskRun: {
   });
 
   try {
-    const result = await precomputeClusterMergeCleanPairs();
+    // 配置缺失时降级纯规则预筛，不阻断预计算任务
+    const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
+    const result = await precomputeClusterMergeCleanPairs(new Date(), {
+      embedTexts: runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null,
+    });
     await updateTaskRun(taskRun.id, {
       status: "succeeded",
       progressCurrent: 1,
       progressTotal: 1,
-      progressLabel: `已预计算 ${result.storedPairs}/${result.candidatePairs} 个合并候选，扫描 ${result.scoredPairs} 对`,
+      progressLabel: `已预计算 ${result.storedPairs}/${result.candidatePairs} 个合并候选（向量提名 ${result.vectorAdmittedPairs}），扫描 ${result.scoredPairs} 对`,
       finishedAt: new Date(),
     });
     return result;

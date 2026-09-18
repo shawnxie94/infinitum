@@ -8,6 +8,7 @@ import {
 } from "@/lib/ai/embeddings";
 import {
   fuseOrdersByRrf,
+  resolveMergePairAdmission,
   selectAiCandidatesWithEmbeddingRecall,
   type ScoredClusterCandidate,
 } from "@/lib/clusters/embedding-recall";
@@ -87,6 +88,76 @@ describe("buildEmbeddingText", () => {
   it("joins title and summary with newline and trims summary", () => {
     expect(buildEmbeddingText("标题", " 摘要 ")).toBe("标题\n摘要");
     expect(buildEmbeddingText("标题", null)).toBe("标题\n");
+  });
+});
+
+describe("resolveMergePairAdmission", () => {
+  const GRAY = 55;
+  const VEC = 0.72;
+  const OVERRIDE = 0.9;
+
+  it("admits by rule when score reaches the gray zone", () => {
+    const admission = resolveMergePairAdmission(
+      { rejected: false, rejectedReason: null, score: 60 },
+      null,
+      GRAY,
+      VEC,
+      OVERRIDE,
+    );
+    expect(admission).toEqual({ admitted: true, priorityScore: 60, source: "rule" });
+  });
+
+  it("admits by vector when rule is blind to no_event_anchor pairs", () => {
+    const admission = resolveMergePairAdmission(
+      { rejected: true, rejectedReason: "no_event_anchor", score: 8 },
+      0.95,
+      GRAY,
+      VEC,
+      OVERRIDE,
+    );
+    expect(admission).toEqual({ admitted: true, priorityScore: 95, source: "vector" });
+  });
+
+  it("admits by vector when rule score is below the gray zone", () => {
+    const admission = resolveMergePairAdmission(
+      { rejected: false, rejectedReason: null, score: 30 },
+      0.8,
+      GRAY,
+      VEC,
+      OVERRIDE,
+    );
+    expect(admission).toEqual({ admitted: true, priorityScore: 80, source: "vector" });
+  });
+
+  it("vetoes object_conflict pairs below the override similarity", () => {
+    const admission = resolveMergePairAdmission(
+      { rejected: true, rejectedReason: "object_conflict", score: 0 },
+      0.85,
+      GRAY,
+      VEC,
+      OVERRIDE,
+    );
+    expect(admission.admitted).toBe(false);
+  });
+
+  it("treats very-high-similarity object_conflict as extraction noise and admits", () => {
+    const admission = resolveMergePairAdmission(
+      { rejected: true, rejectedReason: "object_conflict", score: 0 },
+      0.95,
+      GRAY,
+      VEC,
+      OVERRIDE,
+    );
+    expect(admission).toEqual({ admitted: true, priorityScore: 95, source: "vector" });
+  });
+
+  it("rejects pairs below both gates", () => {
+    expect(
+      resolveMergePairAdmission({ rejected: true, rejectedReason: "no_event_anchor", score: 8 }, 0.5, GRAY, VEC, OVERRIDE).admitted,
+    ).toBe(false);
+    expect(
+      resolveMergePairAdmission({ rejected: false, rejectedReason: null, score: 30 }, null, GRAY, VEC, OVERRIDE).admitted,
+    ).toBe(false);
   });
 });
 
