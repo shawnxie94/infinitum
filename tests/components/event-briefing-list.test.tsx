@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EventBriefingList } from "@/components/events/event-briefing-list";
 import { ToastProvider } from "@/components/ui/toast";
+import { getTodayDailyReportDate } from "@/lib/daily-report/date";
 import type { EventBriefingDTO } from "@/lib/events/types";
 
 const routerPushMock = vi.hoisted(() => vi.fn());
@@ -152,13 +153,13 @@ describe("EventBriefingList", () => {
 
     expect(screen.getByRole("heading", { name: "事件速览" })).toBeInTheDocument();
     expect(screen.queryByText(/当日采集 300 条资讯/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "上一天" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "下一天" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上一天" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下一天" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "今天" })).not.toBeInTheDocument();
     expect(screen.queryByText("共 96 个重点事件，85 个新增，11 个有新动态。")).not.toBeInTheDocument();
     expect(screen.getByLabelText("选择日期")).toHaveAttribute("type", "date");
     expect(screen.queryByText("日期：")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "查看" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看" })).not.toBeInTheDocument();
     expect(screen.getByRole("banner").className).toContain("panel-raised");
     expect(screen.getByRole("link", { name: "重点事件 96" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "观点实践 24" })).toHaveAttribute(
@@ -433,19 +434,25 @@ describe("EventBriefingList", () => {
   });
 
 
-  it("keeps the date form action for searching a selected day", () => {
-    const { container } = renderEventBriefingList(buildBriefing());
-    const form = container.querySelector('form[action="/events"]');
-    const sizeInput = form?.querySelector('input[name="size"]');
-    const channelInput = form?.querySelector('input[name="channel"]');
+  it("refreshes immediately on date change and supports prev/next day switching", () => {
+    renderEventBriefingList(buildBriefing());
 
-    expect(form).not.toBeNull();
-    expect(form?.querySelector('input[name="date"]')).toHaveAttribute("type", "date");
-    expect(sizeInput).toBeTruthy();
-    expect(sizeInput).toHaveAttribute("type", "hidden");
-    expect(channelInput).toHaveAttribute("value", "important");
-    expect(form?.querySelector('input[name="tag"]')).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "查看" })).toHaveAttribute("type", "submit");
+    fireEvent.change(screen.getByLabelText("选择日期"), { target: { value: "2026-06-29" } });
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-29&channel=important");
+
+    fireEvent.click(screen.getByRole("button", { name: "上一天" }));
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-06-29&channel=important");
+
+    fireEvent.click(screen.getByRole("button", { name: "下一天" }));
+    expect(routerPushMock).toHaveBeenCalledWith("/events?date=2026-07-01&channel=important");
+  });
+
+  it("disables next-day switching when already viewing today", () => {
+    renderEventBriefingList(buildBriefing({ date: getTodayDailyReportDate() }));
+
+    expect(screen.getByLabelText("选择日期")).toHaveAttribute("max", getTodayDailyReportDate());
+    expect(screen.getByRole("button", { name: "下一天" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "上一天" })).toBeEnabled();
   });
   it("preserves active channel in date search and pagination", () => {
     const { container } = renderEventBriefingList(buildBriefing({

@@ -11,10 +11,12 @@ import { EventBriefingCard } from "@/components/events/event-briefing-card";
 import { EventBriefingDetailModal } from "@/components/events/event-briefing-detail-modal";
 import { EventBriefingPagination } from "@/components/events/event-briefing-pagination";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterInput } from "@/components/ui/filter-input";
+import { IconChevronLeft, IconChevronRight } from "@/components/ui/icons";
 import { SelectField } from "@/components/ui/select-field";
 import { useToast } from "@/components/ui/toast";
 import { useClientAdminSession } from "@/components/ui/use-client-admin-session";
+import { getTodayDailyReportDate } from "@/lib/daily-report/date";
+import { addEventBriefingDays } from "@/lib/events/date";
 import { EVENT_BRIEFING_DEFAULT_PAGE_SIZE } from "@/lib/events/pagination";
 import {
   EVENT_BRIEFING_TAG_OPTIONS,
@@ -73,13 +75,60 @@ function EventTagSelect({ briefing, pageSize }: { briefing: EventBriefingDTO; pa
   );
 }
 
+function EventDateNavigation({ briefing, pageSize }: { briefing: EventBriefingDTO; pageSize: number }) {
+  const router = useRouter();
+  const today = getTodayDailyReportDate();
+  const isLatestDay = briefing.date >= today;
+  const pushDate = (date: string) => {
+    if (!date || date === briefing.date) {
+      return;
+    }
+
+    router.push(buildEventsHref({
+      date,
+      pageSize,
+      channelId: briefing.channel.id,
+      tag: briefing.tag,
+    }));
+  };
+
+  return (
+    <div className="flex h-8 w-fit items-center rounded-sm border border-[color:var(--line)] bg-[var(--surface)] transition focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[rgba(59,130,246,0.18)]">
+      <button
+        aria-label="上一天"
+        className="flex h-full w-7 items-center justify-center text-[var(--text-3)] transition hover:text-[var(--accent)]"
+        type="button"
+        onClick={() => pushDate(addEventBriefingDays(briefing.date, -1))}
+      >
+        <IconChevronLeft />
+      </button>
+      <input
+        aria-label="选择日期"
+        className="h-full border-x border-[color:var(--line)] bg-transparent px-1.5 text-sm text-[var(--text-1)] outline-none"
+        max={today}
+        type="date"
+        value={briefing.date}
+        onChange={(event) => pushDate(event.target.value)}
+      />
+      <button
+        aria-label="下一天"
+        className="flex h-full w-7 items-center justify-center text-[var(--text-3)] transition hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[var(--text-3)]"
+        type="button"
+        disabled={isLatestDay}
+        onClick={() => pushDate(addEventBriefingDays(briefing.date, 1))}
+      >
+        <IconChevronRight />
+      </button>
+    </div>
+  );
+}
+
 export function EventBriefingList({
   briefing,
   initialIsAdmin = false,
   hydrateAdminClient = false,
 }: EventBriefingListProps) {
   const isLgUp = useMinWidth("(min-width: 1024px)", true);
-  const router = useRouter();
   const isAdmin = useClientAdminSession(initialIsAdmin, hydrateAdminClient);
   const { showToast } = useToast();
   const [selectedEntry, setSelectedEntry] = useState<EventBriefingEntryDTO | null>(null);
@@ -166,26 +215,9 @@ export function EventBriefingList({
               })}
             </nav>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <EventTagSelect briefing={briefing} pageSize={pageSize} />
-            <form action="/events" className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-              <input
-                aria-label="选择日期"
-                className="h-8 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-2.5 text-sm text-[var(--text-1)] outline-none transition focus:border-[var(--accent)] focus:ring-2 focus:ring-[rgba(59,130,246,0.18)]"
-                name="date"
-                type="date"
-                defaultValue={briefing.date}
-              />
-              <input name="size" type="hidden" value={pageSize} />
-              <input name="channel" type="hidden" value={briefing.channel.id} />
-              {briefing.tag !== "all" ? <input name="tag" type="hidden" value={briefing.tag} /> : null}
-              <button
-                className="lumina-home-action-button lumina-home-action-button--primary inline-flex h-8 items-center justify-center rounded-sm bg-[var(--accent)] px-3 text-sm font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(59,130,246,0.35)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface)]"
-                type="submit"
-              >
-                查看
-              </button>
-            </form>
+            <EventDateNavigation briefing={briefing} pageSize={pageSize} />
           </div>
         </div>
       </header>
@@ -221,31 +253,9 @@ export function EventBriefingList({
               })}
             </nav>
           </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end sm:justify-end">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <EventTagSelect briefing={briefing} pageSize={pageSize} />
-            <FilterInput
-              label="日期"
-              ariaLabel="选择日期"
-              type="date"
-              layout="inline"
-              value={briefing.date}
-              onChange={(value) => {
-                if (!value || value === briefing.date) {
-                  return;
-                }
-                router.push(
-                  buildEventsHref({
-                    date: value,
-                    pageSize,
-                    channelId: briefing.channel.id,
-                    tag: briefing.tag,
-                  }),
-                );
-              }}
-              className="w-full sm:w-auto"
-              inputClassName="w-full sm:w-40"
-              compact
-            />
+            <EventDateNavigation briefing={briefing} pageSize={pageSize} />
           </div>
         </div>
       </header>

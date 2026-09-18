@@ -450,3 +450,19 @@ export function IconType(props: IconProps) {
     </IconBase>
   );
 }
+
+export function IconChevronLeft(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m15 18-6-6 6-6" />
+    </IconBase>
+  );
+}
+
+export function IconChevronRight(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </IconBase>
+  );
+}
