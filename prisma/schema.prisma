@@ -941,3 +941,32 @@ model EmbeddingCache {
   @@index([model, createdAt])
   @@map("embedding_cache")
 }
+
+model ClusterPairLabel {
+  id             String   @id @default(cuid())
+  verdict        String
+  source         String
+  leftKind       String   @default("cluster")
+  leftId         String
+  rightId        String
+  titleA         String
+  titleB         String
+  summaryA       String   @default("")
+  summaryB       String   @default("")
+  subjectA       String?
+  subjectB       String?
+  objectA        String?
+  objectB        String?
+  actionA        String?
+  actionB        String?
+  typeA          String?
+  typeB          String?
+  dateA          String?
+  dateB          String?
+  itemCountA     Int      @default(1)
+  itemCountB     Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([verdict, createdAt])
+  @@map("cluster_pair_labels")
+}
