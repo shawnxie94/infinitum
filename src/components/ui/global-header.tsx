@@ -281,6 +281,7 @@ export function GlobalHeader({
             className="inline-flex shrink-0 items-center gap-2 text-[var(--foreground)]"
             href="/"
             onClick={handleHomeClick}
+            prefetch={activeNav === "home" ? false : undefined}
           >
             <svg
               className="logo-mark h-7 w-7"
