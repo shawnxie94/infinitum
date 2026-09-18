@@ -16,6 +16,7 @@
     "eval:baseline-gate": "npx tsx scripts/baseline-gate.ts",
     "eval:baseline-gate:init": "npx tsx scripts/baseline-gate.ts --write-baseline",
     "eval:snapshot-gate": "npx tsx scripts/snapshot-gate.ts",
+    "eval:embedding-recall": "npx tsx scripts/eval-embedding-recall.ts --days 30",
     "test": "npm run prisma:generate && npm run db:test:setup && vitest run --coverage",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",

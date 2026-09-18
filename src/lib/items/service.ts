@@ -140,6 +140,7 @@ async function resolveAiProvider(
     clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
   }, undefined, {
     aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents,
+    embedding: runtimeConfig.embedding,
     ...(options?.onUsage ? { onUsage: options.onUsage } : {}),
   });
 }

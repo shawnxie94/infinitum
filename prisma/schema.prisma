@@ -913,3 +913,31 @@ model PageView {
   @@index([path, visitorId])
   @@map("page_views")
 }
+
+model EmbeddingConfig {
+  id         String   @id @default(cuid())
+  enabled    Boolean  @default(false)
+  baseUrl    String   @default("")
+  apiKey     String?
+  modelName  String   @default("")
+  dimensions Int?
+  batchSize  Int      @default(32)
+  timeoutMs  Int      @default(15000)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("embedding_configs")
+}
+
+model EmbeddingCache {
+  id          String   @id @default(cuid())
+  model       String
+  contentHash String   @unique
+  text        String
+  dims        Int
+  vector      Bytes
+  createdAt   DateTime @default(now())
+
+  @@index([model, createdAt])
+  @@map("embedding_cache")
+}

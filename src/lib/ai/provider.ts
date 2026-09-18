@@ -17,6 +17,7 @@ import {
 } from "@/lib/ai/contracts";
 import type { RuntimeConfig } from "@/config/runtime";
 import type { PromptConfigType } from "@/lib/settings/types";
+import { createEmbedTexts } from "@/lib/ai/embeddings";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import type {
@@ -132,6 +133,8 @@ export type AiProvider = {
     inputText: string,
     metadata: { title: string; candidates: Array<{ id: string; title: string; summary: string }> },
   ): Promise<string | null>;
+  /** 语义向量批量接口；未启用或调用失败时返回 null，调用方降级为纯规则排序。 */
+  embedTexts?(texts: string[]): Promise<number[][] | null>;
   assessClusterMergePairs(clustersJson: string): Promise<ClusterMergeDecision[]>;
   assessDailyReportCandidates(input: {
     candidates: DailyReportPlanningCandidate[];
@@ -260,6 +263,8 @@ export type AiProviderOptions = {
   aggregationSplitMaxEvents?: number;
   /** 每次底层模型调用返回时回调实际（或估算）的 token 用量，用于任务上下文消耗统计。 */
   onUsage?: (usage: AiCallUsage, usageKey?: string) => void;
+  /** Embedding 召回配置；缺省或未启用时 provider 不具备 embedTexts 能力。 */
+  embedding?: RuntimeConfig["embedding"] | null;
 };
 
 type CompletionResponseFormat = {
@@ -1437,6 +1442,7 @@ export function createAiProvider(
   options?: AiProviderOptions,
 ): AiProvider {
   const providerOptions = options;
+  const embedTexts = createEmbedTexts(providerOptions?.embedding);
   const globalClient = clientOverrideArg ?? getClient(config);
   const aggregationSplitMaxEvents = normalizeAggregationSplitMaxEvents(options?.aggregationSplitMaxEvents);
   const clientCache = new Map<string, OpenAICompatibleClient | null>();
@@ -2053,5 +2059,6 @@ export function createAiProvider(
       }
       return output;
     },
+    embedTexts,
   };
 }

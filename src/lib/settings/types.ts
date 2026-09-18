@@ -134,6 +134,19 @@ export type AdminSettingsSnapshot = {
     createdAt: string;
     updatedAt: string;
   };
+  embedding: {
+    id: string;
+    enabled: boolean;
+    baseUrl: string;
+    apiKeyMasked: string;
+    hasApiKey: boolean;
+    modelName: string;
+    dimensions: number | null;
+    batchSize: number;
+    timeoutMs: number;
+    createdAt: string;
+    updatedAt: string;
+  };
   blacklistKeywords: string[];
   taskSchedule: {
     key: "ingestion_default";

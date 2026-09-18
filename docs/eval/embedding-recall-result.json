@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-09-18T17:10:44.966Z",
+  "db": "/tmp/infinitum-prod/dev-read.db",
+  "embedModel": "BAAI/bge-m3",
+  "poolSize": 50,
+  "results": {
+    "gray-positives": {
+      "pairs": 200,
+      "ruleRecallAt5": 99.5,
+      "ruleRecallAt10": 99.5,
+      "fusedRecallAt5": 99.5,
+      "fusedRecallAt10": 99.5,
+      "ruleRankBMedian": 1,
+      "fusedRankBMedian": 1,
+      "negativePromoted": 0,
+      "sliceChurn": 28.999999999999996
+    },
+    "declined-negatives": {
+      "pairs": 200,
+      "ruleRecallAt5": 96,
+      "ruleRecallAt10": 96.5,
+      "fusedRecallAt5": 95.5,
+      "fusedRecallAt10": 96.5,
+      "ruleRankBMedian": 1,
+      "fusedRankBMedian": 1,
+      "negativePromoted": 0,
+      "sliceChurn": 27
+    },
+    "human-approved": {
+      "pairs": 12,
+      "ruleRecallAt5": 0,
+      "ruleRecallAt10": 0,
+      "fusedRecallAt5": 83.33333333333334,
+      "fusedRecallAt10": 91.66666666666666,
+      "ruleRankBMedian": null,
+      "fusedRankBMedian": 3,
+      "negativePromoted": 0,
+      "sliceChurn": 100
+    }
+  }
+}

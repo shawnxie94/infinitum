@@ -178,6 +178,7 @@ async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promis
         undefined,
         {
           aggregationSplitMaxEvents: runtimeConfig?.ingestion.aggregationSplitMaxEvents,
+          embedding: runtimeConfig?.embedding ?? null,
           onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
         },
       ),

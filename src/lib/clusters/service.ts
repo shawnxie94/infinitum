@@ -4,6 +4,7 @@ import {
   CLUSTER_AI_MIN_SCORE,
   CLUSTER_DIRECT_MATCH_MIN_GAP,
   CLUSTER_DIRECT_MATCH_MIN_SCORE,
+  CLUSTER_EMBEDDING_RRF_K,
   CLUSTER_LOOKBACK_MS,
   CLUSTER_MERGE_AI_PAIR_GRAY_SCORE,
   CLUSTER_MERGE_CANDIDATE_LIMIT,
@@ -62,6 +63,7 @@ import {
   createMustLinkForClusters,
   findBlockingClusterPairConstraint,
 } from "@/lib/clusters/constraints";
+import { selectAiCandidatesWithEmbeddingRecall } from "@/lib/clusters/embedding-recall";
 import {
   getClusterPairDecisionBlock,
   markOrphanedClusterPairDecisionsStale,
@@ -249,7 +251,8 @@ async function findClusterForItem(
     };
   }
 
-  const rankedCandidates = rankClusterCandidates(item, options.eventSignature!, candidates).filter(
+  const ruleRanked = rankClusterCandidates(item, options.eventSignature!, candidates);
+  const rankedCandidates = ruleRanked.filter(
     (entry) => entry.score >= CLUSTER_AI_MIN_SCORE && entry.dateCompatible && !entry.hardConflict,
   );
 
@@ -278,7 +281,19 @@ async function findClusterForItem(
     };
   }
 
-  const aiCandidates = rankedCandidates.slice(0, CLUSTER_AI_CANDIDATE_LIMIT).map((entry) => entry.candidate);
+  const embedTexts = options.aiProvider?.embedTexts;
+  const aiEntries = embedTexts
+    ? await selectAiCandidatesWithEmbeddingRecall({
+        embedTexts,
+        itemTitle: getDisplayTitle(item.originalTitle, item.translatedTitle),
+        itemSummary: buildItemSummary(item),
+        ruleRanked,
+        ruleQualified: rankedCandidates,
+        rrfK: CLUSTER_EMBEDDING_RRF_K,
+        limit: CLUSTER_AI_CANDIDATE_LIMIT,
+      })
+    : rankedCandidates;
+  const aiCandidates = aiEntries.slice(0, CLUSTER_AI_CANDIDATE_LIMIT).map((entry) => entry.candidate);
 
   try {
     const matchedClusterId = await options.aiProvider.matchClusterCandidate(buildClusterMatchInput(item, options), {
@@ -998,6 +1013,7 @@ export async function executeClusterSummaryTask(
           clusterMatch: runtimeConfig!.selectedPromptConfigs?.clusterMatch,
         }, undefined, {
           aggregationSplitMaxEvents: runtimeConfig!.ingestion.aggregationSplitMaxEvents,
+          embedding: runtimeConfig!.embedding,
           onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
         }),
       {

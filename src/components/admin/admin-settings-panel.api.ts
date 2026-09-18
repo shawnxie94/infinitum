@@ -306,6 +306,35 @@ export async function saveContentExtractionConfig(input: {
   return payload.config;
 }
 
+type EmbeddingPayload = {
+  error?: string;
+  config?: AdminSettingsSnapshot["embedding"];
+};
+
+export async function saveEmbeddingConfig(input: {
+  enabled: boolean;
+  baseUrl: string;
+  apiKey: string;
+  apiKeyMode: "replace" | "clear" | "keep";
+  modelName: string;
+  dimensions: number | null;
+  batchSize: number;
+  timeoutMs: number;
+}) {
+  const payload = await requestAdminSettingsJson<EmbeddingPayload>(
+    "/api/admin/settings/embedding",
+    "PATCH",
+    input,
+    "Embedding 设置保存失败。",
+  );
+
+  if (!payload.config) {
+    throw new Error("Embedding 设置保存失败。");
+  }
+
+  return payload.config;
+}
+
 export async function saveEventBriefingSettings(input: AdminSettingsSnapshot["eventBriefing"]) {
   const payload = await requestAdminSettingsJson<EventBriefingPayload>(
     "/api/admin/settings/event-briefing",

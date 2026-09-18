@@ -9,6 +9,11 @@ import {
   serializeRuntimeContentExtractionConfig,
 } from "@/lib/settings/content-extraction-service";
 import {
+  ensureEmbeddingConfig,
+  serializeAdminEmbeddingConfig,
+  serializeRuntimeEmbeddingConfig,
+} from "@/lib/settings/embedding-config-service";
+import {
   ensureBriefingPreferenceConfig,
   ensureEventBriefingConfig,
   serializeAdminBriefingPreferenceConfig,
@@ -35,7 +40,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
   // templates will remain stale when the instrumentation hook is unavailable.
   await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: true });
 
-  const [sources, blacklist, defaultModelConfig, promptConfigs, taskSchedule, contentExtractionConfig] = await Promise.all([
+  const [sources, blacklist, defaultModelConfig, promptConfigs, taskSchedule, contentExtractionConfig, embeddingConfig] = await Promise.all([
     prisma.source.findMany({
       where: { enabled: true },
       orderBy: { name: "asc" },
@@ -61,6 +66,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
     }),
     ensureDefaultIngestionSchedule(),
     ensureContentExtractionConfig(),
+    ensureEmbeddingConfig(),
   ]);
 
   if (!defaultModelConfig) {
@@ -89,6 +95,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
       processingStartAt: taskSchedule.processingStartAt,
     },
     contentExtraction: serializeRuntimeContentExtractionConfig(contentExtractionConfig),
+    embedding: serializeRuntimeEmbeddingConfig(embeddingConfig),
     modelApi: serializeRuntimeModelApi(defaultModelConfig),
     prompts: {
       itemUnderstanding: resolvePromptSystemPrompt(itemUnderstandingConfig),
@@ -129,6 +136,7 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
     dailyReportSchedule,
     cleanupSchedule,
     contentExtractionConfig,
+    embeddingConfig,
     eventBriefingConfig,
     briefingPreferenceConfig,
     headerLinks,
@@ -160,6 +168,7 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
     ensureDefaultDailyReportSchedule(),
     ensureDefaultItemCleanupSchedule(),
     ensureContentExtractionConfig(),
+    ensureEmbeddingConfig(),
     ensureEventBriefingConfig(),
     ensureBriefingPreferenceConfig(),
     listAdminHeaderLinks(),
@@ -186,6 +195,7 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
       preference: serializeAdminBriefingPreferenceConfig(briefingPreferenceConfig),
     },
     contentExtraction: serializeAdminContentExtractionConfig(contentExtractionConfig),
+    embedding: serializeAdminEmbeddingConfig(embeddingConfig),
     blacklistKeywords: blacklist.map((entry) => entry.keyword),
     taskSchedule: toTaskScheduleSnapshot(taskSchedule) as AdminSettingsSnapshot["taskSchedule"],
     dailyReportSchedule: toTaskScheduleSnapshot(dailyReportSchedule) as AdminSettingsSnapshot["dailyReportSchedule"],

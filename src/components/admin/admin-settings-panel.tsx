@@ -34,6 +34,7 @@ import {
   saveDefaultDailyReportSchedule,
   saveDefaultIngestionSchedule,
   saveDefaultItemCleanupSchedule,
+  saveEmbeddingConfig,
   saveEventBriefingSettings,
   saveHeaderLink,
   submitAdminSettingsAction,
@@ -105,6 +106,7 @@ type AdminSettingsSection =
   | "header-links"
   | "sources"
   | "content-extraction"
+  | "embedding"
   | "task-ingestion"
   | "task-daily-report"
   | "task-cleanup";
@@ -126,6 +128,7 @@ const settingsNavItems: Array<{
   { key: "header-links", label: "导航栏配置" },
   { key: "sources", label: "信息源" },
   { key: "content-extraction", label: "正文解析" },
+  { key: "embedding", label: "Embedding" },
   { key: "event-briefing", label: "速览配置" },
   { key: "task-ingestion", label: "采集任务" },
   { key: "task-daily-report", label: "日报任务" },
@@ -669,6 +672,21 @@ export function AdminSettingsPanel({
   );
   const [contentExtractionMaxChars, setContentExtractionMaxChars] = useState(
     String(initialSettings.contentExtraction.maxChars),
+  );
+  const [embeddingSnapshot, setEmbeddingSnapshot] = useState(initialSettings.embedding);
+  const [embeddingEnabled, setEmbeddingEnabled] = useState(initialSettings.embedding.enabled);
+  const [embeddingBaseUrl, setEmbeddingBaseUrl] = useState(initialSettings.embedding.baseUrl);
+  const [embeddingModelName, setEmbeddingModelName] = useState(initialSettings.embedding.modelName);
+  const [embeddingApiKey, setEmbeddingApiKey] = useState("");
+  const [embeddingApiKeyTouched, setEmbeddingApiKeyTouched] = useState(false);
+  const [embeddingDimensions, setEmbeddingDimensions] = useState(
+    initialSettings.embedding.dimensions === null ? "" : String(initialSettings.embedding.dimensions),
+  );
+  const [embeddingBatchSize, setEmbeddingBatchSize] = useState(
+    String(initialSettings.embedding.batchSize),
+  );
+  const [embeddingTimeoutMs, setEmbeddingTimeoutMs] = useState(
+    String(initialSettings.embedding.timeoutMs),
   );
   const [eventBriefingSnapshot, setEventBriefingSnapshot] = useState(initialSettings.eventBriefing);
   const [eventBriefingMinRankScore, setEventBriefingMinRankScore] = useState(
@@ -1754,6 +1772,71 @@ export function AdminSettingsPanel({
     });
   };
 
+  const saveEmbeddingSettings = () => {
+    const parsedDimensions =
+      embeddingDimensions.trim() === "" ? null : Number.parseInt(embeddingDimensions.trim(), 10);
+    const parsedBatchSize = Number.parseInt(embeddingBatchSize.trim(), 10);
+    const parsedTimeoutMs = Number.parseInt(embeddingTimeoutMs.trim(), 10);
+
+    if (
+      parsedDimensions !== null &&
+      (!Number.isInteger(parsedDimensions) || parsedDimensions < 16 || parsedDimensions > 4096)
+    ) {
+      showToast("向量维度需为 16-4096 的整数。", "error");
+      return;
+    }
+    if (!Number.isInteger(parsedBatchSize) || parsedBatchSize < 1 || parsedBatchSize > 128) {
+      showToast("批量大小需为 1-128 的整数。", "error");
+      return;
+    }
+    if (!Number.isInteger(parsedTimeoutMs) || parsedTimeoutMs < 3000 || parsedTimeoutMs > 60000) {
+      showToast("请求超时需为 3000-60000 的整数。", "error");
+      return;
+    }
+    if (embeddingEnabled && !embeddingBaseUrl.trim()) {
+      showToast("请填写 Embedding API 地址。", "error");
+      return;
+    }
+    if (embeddingEnabled && !embeddingModelName.trim()) {
+      showToast("请填写 Embedding 模型名称。", "error");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const normalizedApiKey = embeddingApiKey.trim();
+        const apiKeyMode = normalizedApiKey
+          ? "replace"
+          : embeddingApiKeyTouched
+            ? "clear"
+            : "keep";
+        const config = await saveEmbeddingConfig({
+          enabled: embeddingEnabled,
+          baseUrl: embeddingBaseUrl,
+          apiKey: normalizedApiKey,
+          apiKeyMode,
+          modelName: embeddingModelName,
+          dimensions: parsedDimensions,
+          batchSize: parsedBatchSize,
+          timeoutMs: parsedTimeoutMs,
+        });
+
+        setEmbeddingSnapshot(config);
+        setEmbeddingEnabled(config.enabled);
+        setEmbeddingBaseUrl(config.baseUrl);
+        setEmbeddingModelName(config.modelName);
+        setEmbeddingApiKey("");
+        setEmbeddingApiKeyTouched(false);
+        setEmbeddingDimensions(config.dimensions === null ? "" : String(config.dimensions));
+        setEmbeddingBatchSize(String(config.batchSize));
+        setEmbeddingTimeoutMs(String(config.timeoutMs));
+        showToast("Embedding 设置已保存。", "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "Embedding 设置保存失败。", "error");
+      }
+    });
+  };
+
   const saveEventBriefingSettingsForm = () => {
     const parsedMinRankScore = Number.parseInt(eventBriefingMinRankScore.trim(), 10);
     const parsedMaxCuratorBoost = Number.parseInt(eventBriefingMaxCuratorBoost.trim(), 10);
@@ -1949,6 +2032,16 @@ export function AdminSettingsPanel({
     contentExtractionMaxPerRun.trim() !== String(contentExtractionSnapshot.maxPerRun) ||
     contentExtractionMinChars.trim() !== String(contentExtractionSnapshot.minChars) ||
     contentExtractionMaxChars.trim() !== String(contentExtractionSnapshot.maxChars);
+  const embeddingIsDirty =
+    embeddingEnabled !== embeddingSnapshot.enabled ||
+    embeddingBaseUrl.trim() !== embeddingSnapshot.baseUrl ||
+    embeddingModelName.trim() !== embeddingSnapshot.modelName ||
+    embeddingApiKeyTouched ||
+    embeddingApiKey.trim().length > 0 ||
+    (embeddingDimensions.trim() === "" ? null : Number(embeddingDimensions.trim())) !==
+      embeddingSnapshot.dimensions ||
+    embeddingBatchSize.trim() !== String(embeddingSnapshot.batchSize) ||
+    embeddingTimeoutMs.trim() !== String(embeddingSnapshot.timeoutMs);
   const eventBriefingIsDirty =
     eventBriefingMinRankScore.trim() !== String(eventBriefingSnapshot.config.minRankScore) ||
     !areEventBriefingChannelsEqual(
@@ -3584,6 +3677,151 @@ export function AdminSettingsPanel({
                       step={1000}
                       value={contentExtractionMaxChars}
                       onChange={(event) => setContentExtractionMaxChars(event.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeSection === "embedding" ? (
+          <div
+            className={cx(
+              "w-full min-w-0",
+              embedMode
+                ? ""
+                : "rounded-sm border border-[color:var(--line)] bg-[var(--surface)] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+            )}
+          >
+            <div className="space-y-5">
+              <div className="flex flex-col gap-3 border-b border-[color:var(--line)] pb-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <h2 className="text-lg font-semibold text-[var(--text-1)]">
+                    Embedding
+                  </h2>
+                  <p className="text-sm text-[var(--text-3)]">
+                    配置聚类候选语义召回（OpenAI 兼容接口）
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full sm:w-auto"
+                  onClick={saveEmbeddingSettings}
+                  disabled={isPending || !embeddingIsDirty}
+                >
+                  保存配置
+                </Button>
+              </div>
+
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <label className="block text-sm text-[var(--muted)]">启用</label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        checked={embeddingEnabled}
+                        className={checkboxInputClassName}
+                        type="checkbox"
+                        onChange={(event) => setEmbeddingEnabled(event.target.checked)}
+                      />
+                      <span className="text-sm text-[var(--text-2)]">启用语义召回</span>
+                    </label>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="embedding-base-url" className="block text-sm text-[var(--muted)]">
+                      API 地址
+                    </label>
+                    <TextInput
+                      id="embedding-base-url"
+                      value={embeddingBaseUrl}
+                      onChange={(event) => setEmbeddingBaseUrl(event.target.value)}
+                      placeholder="https://api.example.com/v1"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="embedding-model-name" className="block text-sm text-[var(--muted)]">
+                      模型名称
+                    </label>
+                    <TextInput
+                      id="embedding-model-name"
+                      value={embeddingModelName}
+                      onChange={(event) => setEmbeddingModelName(event.target.value)}
+                      placeholder="BAAI/bge-m3"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <label htmlFor="embedding-api-key" className="block text-sm text-[var(--muted)]">
+                      API Key
+                    </label>
+                    <TextInput
+                      id="embedding-api-key"
+                      type="password"
+                      value={embeddingApiKey}
+                      onChange={(event) => {
+                        setEmbeddingApiKeyTouched(true);
+                        setEmbeddingApiKey(event.target.value);
+                      }}
+                      placeholder={
+                        embeddingSnapshot.hasApiKey ? "已配置 Key，留空保持当前 Key" : "必填"
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="embedding-dimensions" className="block text-sm text-[var(--muted)]">
+                      向量维度
+                    </label>
+                    <TextInput
+                      id="embedding-dimensions"
+                      type="number"
+                      inputMode="numeric"
+                      min={16}
+                      max={4096}
+                      step={1}
+                      value={embeddingDimensions}
+                      onChange={(event) => setEmbeddingDimensions(event.target.value)}
+                      placeholder="留空使用模型默认"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label htmlFor="embedding-batch-size" className="block text-sm text-[var(--muted)]">
+                      批量大小
+                    </label>
+                    <TextInput
+                      id="embedding-batch-size"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={128}
+                      step={1}
+                      value={embeddingBatchSize}
+                      onChange={(event) => setEmbeddingBatchSize(event.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <label htmlFor="embedding-timeout-ms" className="block text-sm text-[var(--muted)]">
+                      请求超时
+                    </label>
+                    <TextInput
+                      id="embedding-timeout-ms"
+                      type="number"
+                      inputMode="numeric"
+                      min={3000}
+                      max={60000}
+                      step={1000}
+                      value={embeddingTimeoutMs}
+                      onChange={(event) => setEmbeddingTimeoutMs(event.target.value)}
                     />
                   </div>
                 </div>

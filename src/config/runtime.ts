@@ -37,6 +37,15 @@ export type RuntimeConfig = {
     minChars: number;
     maxChars: number;
   };
+  embedding: {
+    enabled: boolean;
+    baseUrl: string;
+    apiKey: string | null;
+    modelName: string;
+    dimensions: number | null;
+    batchSize: number;
+    timeoutMs: number;
+  };
   modelApi: {
     apiKey: string;
     baseURL: string;
@@ -141,6 +150,15 @@ export function getRuntimeConfig(): RuntimeConfig {
       maxPerRun: 20,
       minChars: 500,
       maxChars: 32_000,
+    },
+    embedding: {
+      enabled: false,
+      baseUrl: "",
+      apiKey: null,
+      modelName: "",
+      dimensions: null,
+      batchSize: 32,
+      timeoutMs: 15_000,
     },
     modelApi: {
       apiKey: "",
