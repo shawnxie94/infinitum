@@ -316,10 +316,13 @@ async function main() {
     negatives.push({ key: `declined:${row.pairKeyOrOrder}`, a: toMergeCandidate(a), b: toMergeCandidate(b) });
   }
 
-  // 人工标注正例（可选）：CSV verdictStored=approved
+  // 人工/挖掘标注样本（可选）：--csv 支持逗号分隔多个文件，读 approved + declined
   const humanPositives: PairSpec[] = [];
-  if (args.csv && fs.existsSync(args.csv)) {
-    const csvText = fs.readFileSync(args.csv, "utf8").trim();
+  const humanNegatives: PairSpec[] = [];
+  const csvPaths = args.csv ? args.csv.split(",").map((p) => p.trim()).filter(Boolean) : [];
+  for (const csvPath of csvPaths) {
+    if (!fs.existsSync(csvPath)) continue;
+    const csvText = fs.readFileSync(csvPath, "utf8").trim();
     const lines = csvText.split("\n");
     const parseCsvLine = (line: string): string[] => {
       const cells: string[] = [];
@@ -340,7 +343,8 @@ async function main() {
     };
     for (const line of lines.slice(1)) {
       const cells = parseCsvLine(line);
-      if (cell(cells, "verdictStored") !== "approved") continue;
+      const verdict = cell(cells, "verdictStored");
+      if (verdict !== "approved" && verdict !== "declined") continue;
       const mk = (side: "A" | "B"): MergeCandidate => ({
         id: cell(cells, "pairKey").split("_")[side === "A" ? 0 : 1] || `side-${side}`,
         title: cell(cells, `title${side}`),
@@ -354,11 +358,13 @@ async function main() {
         itemCount: Number(cell(cells, `itemCount${side}`)) || 1,
         latestPublishedAt: new Date(Number(cell(cells, "createdAt")) || now),
       });
-      humanPositives.push({ key: `human:${cell(cells, "pairKey")}`, a: mk("A"), b: mk("B") });
+      const spec = { key: `csv:${cell(cells, "pairKey")}`, a: mk("A"), b: mk("B") };
+      if (verdict === "approved") humanPositives.push(spec);
+      else humanNegatives.push(spec);
     }
   }
   console.log(
-    `[eval] strata: gray-positives=${positives.length}, declined-negatives=${negatives.length}, human-approved=${humanPositives.length}`,
+    `[eval] strata: gray-positives=${positives.length}, declined-negatives=${negatives.length}, csv-approved=${humanPositives.length}, csv-declined=${humanNegatives.length}`,
   );
 
   const cache = loadCache(args.cache, args.embedModel);
@@ -465,7 +471,7 @@ async function main() {
         if (fusedRankOfB < 5) metrics.fusedRecallAt5 += 1;
         if (fusedRankOfB < 10) metrics.fusedRecallAt10 += 1;
       }
-      if (name === "declined-negatives" && fusedRankOfB >= 0 && fusedRankOfB < 10 && ruleRankOfB < 0) {
+      if ((name === "declined-negatives" || name === "csv-declined") && fusedRankOfB >= 0 && fusedRankOfB < 10 && ruleRankOfB < 0) {
         metrics.negativePromoted += 1;
       }
       const ruleTop10 = new Set(ruleOrder.slice(0, 10));
@@ -494,7 +500,7 @@ async function main() {
     console.log(
       `  rankB median rule=${metrics.ruleRankBMedian ?? "-"}  fused=${metrics.fusedRankBMedian ?? "-"}`,
     );
-    if (name === "declined-negatives") {
+    if (name === "declined-negatives" || name === "csv-declined") {
       console.log(`  负例新进入 top10（rule 不可见 → fused 进入）: ${metrics.negativePromoted.toFixed(1)}%`);
     }
     console.log(`  切片变化率: ${metrics.sliceChurn.toFixed(1)}%`);
@@ -504,7 +510,8 @@ async function main() {
   const results: Record<string, StratumMetrics> = {};
   if (positives.length > 0) results["gray-positives"] = await evaluateStratum("gray-positives", positives);
   if (negatives.length > 0) results["declined-negatives"] = await evaluateStratum("declined-negatives", negatives);
-  if (humanPositives.length > 0) results["human-approved"] = await evaluateStratum("human-approved", humanPositives);
+  if (humanPositives.length > 0) results["csv-approved"] = await evaluateStratum("csv-approved", humanPositives);
+  if (humanNegatives.length > 0) results["csv-declined"] = await evaluateStratum("csv-declined", humanNegatives);
 
   fs.writeFileSync(args.cache, JSON.stringify(cache));
   console.log(`\n[eval] embedding cache: ${Object.keys(cache.vectors).length} entries → ${args.cache}`);

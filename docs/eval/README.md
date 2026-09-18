@@ -8,6 +8,7 @@
 - `baseline-regression.json` — **回归守护基准**（sample_metrics + snapshot_freeze 说明，含 guard_rules）
 - `baseline-snapshot-2026-09-18.json` — 冻结快照 pair 级基线（2190 对，快照重放维度的对比基准）
 - `embedding-recall-result.json` — Phase 1 语义召回评估结果（rule vs RRF 融合，见下文）
+- `embedding-mined-pairs.csv` — 向量挖掘扩充标注集（120 对高相似 ≥0.72 + 25 对中相似对照 0.60-0.72；AI 辅助标注 117 approved / 26 declined / 2 failed，待人工抽检）
 - `label-cases.md` — 238 unique pair 抽样标注记录（AI 辅助标注，人工抽样建议；逐条覆盖 approved 12 + strong-declined 36 + failed 抽查）
 - `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 行 / 238 unique pair，含 2 重复 failed pair）
 
@@ -29,16 +30,22 @@ npm run eval:snapshot-gate -- --snapshot <快照db> --freeze docs/eval/baseline-
 # 换基线时冻结新快照：npx tsx scripts/eval-cluster-baseline.ts --db <新快照> --days 30 --freeze docs/eval/baseline-snapshot-<date>.json
 
 # Phase 1 语义召回评估：同一快照上对比 rule 切片 vs embedding+RRF 融合切片
-# 分层：灰区候选（银标正例）/ declined 双侧存活（银标负例）/ 人工标注 approved
+# 分层：灰区候选（银标正例）/ declined 双侧存活（银标负例）/ CSV 标注集（--csv 逗号分隔多个）
 # 需要 embedding 端点：INFINITUM_EMBED_URL / INFINITUM_EMBED_MODEL / INFINITUM_EMBED_KEY（env 名可换）
 # 向量落盘缓存（默认系统临时目录），重跑不重复调用
 INFINITUM_EMBED_URL=http://<gateway>/v1 INFINITUM_EMBED_MODEL=BAAI/bge-m3 INFINITUM_EMBED_KEY=<key> \
-  npm run eval:embedding-recall -- --db <快照db> --out docs/eval/embedding-recall-result.json
+  npm run eval:embedding-recall -- --db <快照db> \
+  --csv "docs/eval/eval-sample-30d.csv,docs/eval/embedding-mined-pairs.csv" \
+  --out docs/eval/embedding-recall-result.json
+
+# 扩充标注集：从快照挖掘「高相似但未合并」的候选对（输出 pending，AI 辅助标注 + 人工抽检）
+INFINITUM_EMBED_URL=... INFINITUM_EMBED_MODEL=... INFINITUM_EMBED_KEY=... \
+  npx tsx scripts/mine-embedding-pairs.ts --db <快照db> --out docs/eval/embedding-mined-pairs.csv
 ```
 
 注意：embedding 评估的银标口径有边界——approved 决策对的被合并侧已删除无法取文本，
-正例主要来自灰区候选表（规则分本就 ≥ 灰区线）；「规则完全漏掉但语义同事件」的
-增量召回需等人工反馈闭环（Phase 3）积累真值后才能度量。
+正例主要来自灰区候选表与向量挖掘标注集；「规则完全漏掉但语义同事件」的增量召回
+需等人工反馈闭环（Phase 3）积累真值后才能完整度量。
 
 基线更新：指标改善后重设 `baseline-regression.json` 基准；换冻结快照时同步重建 freeze JSON 并提交。
 

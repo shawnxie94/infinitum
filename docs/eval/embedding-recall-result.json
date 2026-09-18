@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-18T17:10:44.966Z",
+  "generatedAt": "2026-09-18T17:42:15.686Z",
   "db": "/tmp/infinitum-prod/dev-read.db",
   "embedModel": "BAAI/bge-m3",
   "poolSize": 50,
@@ -26,16 +26,27 @@
       "negativePromoted": 0,
       "sliceChurn": 27
     },
-    "human-approved": {
-      "pairs": 12,
-      "ruleRecallAt5": 0,
-      "ruleRecallAt10": 0,
-      "fusedRecallAt5": 83.33333333333334,
-      "fusedRecallAt10": 91.66666666666666,
-      "ruleRankBMedian": null,
-      "fusedRankBMedian": 3,
+    "csv-approved": {
+      "pairs": 129,
+      "ruleRecallAt5": 69.76744186046511,
+      "ruleRecallAt10": 69.76744186046511,
+      "fusedRecallAt5": 77.51937984496125,
+      "fusedRecallAt10": 78.29457364341084,
+      "ruleRankBMedian": 1,
+      "fusedRankBMedian": 1,
       "negativePromoted": 0,
-      "sliceChurn": 100
+      "sliceChurn": 44.18604651162791
+    },
+    "csv-declined": {
+      "pairs": 230,
+      "ruleRecallAt5": 77.82608695652173,
+      "ruleRecallAt10": 77.82608695652173,
+      "fusedRecallAt5": 80,
+      "fusedRecallAt10": 80.8695652173913,
+      "ruleRankBMedian": 1,
+      "fusedRankBMedian": 1,
+      "negativePromoted": 3.0434782608695654,
+      "sliceChurn": 23.47826086956522
     }
   }
 }
