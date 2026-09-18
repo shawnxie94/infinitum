@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-09-18T18:35:58.257Z",
+  "db": "/tmp/infinitum-prod/dev-read.db",
+  "grayScore": 55,
+  "vectorGraySim": 0.72,
+  "conflictOverrideSim": 0.9,
+  "csv": "docs/eval/eval-sample-30d.csv,docs/eval/embedding-mined-pairs.csv",
+  "approved": {
+    "total": 129,
+    "ruleAdmitted": 90,
+    "fusedAdmitted": 112,
+    "vectorNewFresh": 22,
+    "vectorNewBlocked": 0,
+    "ruleAdmittedPct": 69.76744186046511,
+    "fusedAdmittedPct": 86.82170542635659
+  },
+  "declined": {
+    "total": 230,
+    "ruleAdmitted": 152,
+    "fusedAdmitted": 152,
+    "vectorNewFresh": 0,
+    "vectorNewBlocked": 0,
+    "ruleAdmittedPct": 66.08695652173913,
+    "fusedAdmittedPct": 66.08695652173913
+  },
+  "note": "admitted=进入灰区获得 AI 评审提名；vectorNewFresh=向量新增且无既有决策（真实增量评审量）；vectorNewBlocked=向量新增但已有 declined/ambiguous 决策（合并 pass 会阻断，不产生评审）。评估以标注对直接重放，未模拟输入哈希过期判定。"
+}
