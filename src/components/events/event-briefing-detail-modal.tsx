@@ -17,7 +17,7 @@ type EventBriefingDetailModalProps = {
 };
 
 const FEEDBACK_BUTTON_LABEL: Record<FeedbackStatus, string> = {
-  idle: "聚合反馈",
+  idle: "聚合有误",
   submitting: "提交中…",
   done: "已记录，待分析",
   exists: "已在待分析列表",
