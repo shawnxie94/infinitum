@@ -10,6 +10,13 @@ const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES = `非聚合内容示例（所有�
 聚合内容仅将 aggregation 改为以下结构：
 {"isAggregation":true,"mainEvent":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"events":[{"eventType":"other","eventSubject":"子事件主体","eventAction":"子事件动作","eventObject":"子事件对象","eventDate":null,"title":"子事件标题","oneLiner":"子事件摘要","qualityScore":80,"sourceUrl":null}]}`;
 
+// 规范论元规则（v3）：subject/object 尽量必填 + canonical 实体名。
+// 单独提取成常量，供 PREVIOUS_DEFAULT 派生上一版文本。
+const ARGUMENT_RULE_CANONICAL = `5. eventSignature 描述整篇内容最主要的具体事件；eventType 仅在无法稳定判断整体事件时返回 null，不要用宽泛主题代替具体事件。eventSubject 与 eventObject 尽量必填：能指出具体事件时，主体（谁）与对象（对什么）通常都能确定，仅当内容中确实没有该论元时才返回 null；两者使用规范实体名——公司/机构/产品用最通用的正式名称并全文一致，不写描述性短语（如「某科技公司」），不把多个主体拼接成一个（多主体只写最核心的一个），不混入动作或结果，长度不超过 20 字。`;
+
+// 上一版规则 5（v2）：允许任意字段无判据即 null，是聚合层 no_event_anchor 泛滥的抽取侧根因。
+const ARGUMENT_RULE_PERMISSIVE = `5. eventSignature 描述整篇内容最主要的具体事件；无法稳定判断的字段返回 null，不要用宽泛主题代替具体事件。`;
+
 export const DEFAULT_ITEM_UNDERSTANDING_PROMPT = `你是资讯内容理解助手。只基于输入标题、来源和正文，一次完成摘要、内容分析、事件识别与聚合拆分。严格输出单个 JSON 对象，不要输出 Markdown、代码块或额外解释。
 
 固定输出格式（以下 JSON 示例都可直接解析，示例值仅说明结构，不得照抄）：
@@ -20,7 +27,7 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 2. translatedTitle：仅当“是否需要翻译标题”为“是”时填写忠实简洁的中文标题，否则返回空字符串。
 3. moderationStatus 默认 allowed；仅当正文主体明显属于营销宣传、低质灌水或噪声重复时返回 filtered。页眉、页脚、侧栏、底部推荐位、插入式广告等页面附加内容不代表正文主体，不要仅因这些内容将条目标记为 filtered；moderationReason 只能使用固定枚举或 null。
 4. qualityScore 为 0-100 整数；qualityRationale 用一句中文说明事实密度、独特性、完整度、可信度或时效性。
-5. eventSignature 描述整篇内容最主要的具体事件；无法稳定判断的字段返回 null，不要用宽泛主题代替具体事件。
+${ARGUMENT_RULE_CANONICAL}
 6. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
 7. 非聚合内容必须返回 mainEvent:null、events:[]。
 8. 聚合内容最多返回系统输入中 maxEvents 指定数量的 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。
@@ -30,12 +37,12 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 12. ${ITEM_UNDERSTANDING_JSON_SYNTAX_RULE}
 13. 所有文本默认中文，品牌、产品和专有名词可保留原文。最终只能输出合法 JSON。`;
 
-// The previous wording of rule 3 before "页面附加内容" guidance was added.
+// The default wording before the canonical-argument rule (v3) was introduced.
 // Used to idempotently upgrade untouched default rows in already-initialized
 // databases; custom prompts never match because equality is required.
 export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT.replace(
-  `3. moderationStatus 默认 allowed；仅当正文主体明显属于营销宣传、低质灌水或噪声重复时返回 filtered。页眉、页脚、侧栏、底部推荐位、插入式广告等页面附加内容不代表正文主体，不要仅因这些内容将条目标记为 filtered；moderationReason 只能使用固定枚举或 null。`,
-  `3. moderationStatus 默认 allowed，仅明显营销、低质灌水或噪声重复返回 filtered；moderationReason 只能使用固定枚举或 null。`,
+  ARGUMENT_RULE_CANONICAL,
+  ARGUMENT_RULE_PERMISSIVE,
 );
 
 export const LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT
