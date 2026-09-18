@@ -64,6 +64,33 @@ export async function findActiveClusterByFingerprint(
   });
 }
 
+export async function findActiveClusterByEventFingerprint(
+  eventFingerprint: string,
+  since: Date,
+  until?: Date,
+  timeField: ClusterCandidateTimeField = "latestPublishedAt",
+) {
+  if (!eventFingerprint) {
+    return null;
+  }
+
+  const timeFilter = timeField === "createdAt"
+    ? { createdAt: { gte: since, ...(until ? { lte: until } : {}) } }
+    : { latestPublishedAt: { gte: since, ...(until ? { lte: until } : {}) } };
+
+  return prisma.contentCluster.findFirst({
+    where: {
+      eventFingerprint,
+      status: "active",
+      items: {
+        some: clusterableItemWhere(),
+      },
+      ...timeFilter,
+    },
+    orderBy: timeField === "createdAt" ? [{ createdAt: "desc" }] : [{ latestPublishedAt: "desc" }],
+  });
+}
+
 export async function findActiveClusterByTitle(
   title: string,
   since: Date,

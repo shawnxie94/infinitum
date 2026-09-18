@@ -725,6 +725,7 @@ export type ClusterMergeCandidate = {
   summary: string;
   fingerprint: string;
   mergeInputHash?: string | null;
+  eventFingerprint?: string | null;
   eventType: string | null;
   eventSubject: string | null;
   eventAction: string | null;
@@ -1356,6 +1357,49 @@ export function buildClusterMergeCandidateSelection(
   const liveClusterCount = metas.filter((meta) => meta.dirty).length;
   const cleanClusterCount = clusters.length - liveClusterCount;
   diagnostics.cleanPairsSkipped = cleanClusterCount * Math.max(0, cleanClusterCount - 1);
+
+  // Group clusters by event fingerprint once; same-signature clusters are the
+  // same event and MUST be paired regardless of the neighbor-scan truncation.
+  const byEventFp = new Map<string, ClusterMergeCandidate[]>();
+  for (const cluster of clusters) {
+    if (!cluster.eventFingerprint) continue;
+    const list = byEventFp.get(cluster.eventFingerprint);
+    if (list) list.push(cluster);
+    else byEventFp.set(cluster.eventFingerprint, [cluster]);
+  }
+
+  // Same-event-signature clusters are the same event and MUST meet even when
+  // they are clean (already-marked) or truncated by the neighbor scan. This
+  // prevents fragmentation where single-*/pending-* clusters never pair.
+  for (const list of byEventFp.values()) {
+    if (list.length < 2) continue;
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) {
+        const left = list[i]!;
+        const right = list[j]!;
+        const result = scoreClusterMergePair(left, right);
+        diagnostics.totalPairs += 1;
+        if (result.rejected) {
+          incrementClusterMergeRejection(diagnostics, result.rejectedReason);
+          continue;
+        }
+        const edge: ClusterMergeCandidateEdge = {
+          leftId: left.id,
+          rightId: right.id,
+          score: Math.max(result.score, CLUSTER_MERGE_AI_PAIR_STRONG_SCORE),
+        };
+        const edgeKey = buildClusterMergeEdgeKey(left.id, right.id);
+        const existingEdge = selectedEdges.get(edgeKey);
+        selectedIds.add(left.id);
+        selectedIds.add(right.id);
+        bestScores.set(left.id, Math.max(bestScores.get(left.id) ?? 0, edge.score));
+        bestScores.set(right.id, Math.max(bestScores.get(right.id) ?? 0, edge.score));
+        if (!existingEdge || edge.score > existingEdge.score) {
+          selectedEdges.set(edgeKey, edge);
+        }
+      }
+    }
+  }
 
   for (const leftMeta of metas.filter((meta) => meta.dirty)) {
     const left = leftMeta.cluster;

@@ -751,4 +751,61 @@ describe("buildClusterMergeCandidates", () => {
 
     expect(candidates).toHaveLength(CLUSTER_MERGE_CANDIDATE_LIMIT);
   });
+
+  it("force-pairs clusters sharing the same event fingerprint (fragmentation fix)", () => {
+    // GPT-6-like fragmentation: same event signature (fingerprint identical),
+    // but different `fingerprint` columns (single-*/pending-*) and clean hashes.
+    const fp = "30033cb3e7e22391";
+    const fragmentA = createCandidate({
+      id: "frag-a",
+      title: "OpenAI 发布 GPT-6 Astra 模型",
+      summary: "OpenAI 发布 GPT-6 Astra 模型，号称最智能。",
+      fingerprint: "single-item-a",
+      eventFingerprint: fp,
+      eventType: "release",
+      eventSubject: "OpenAI",
+      eventAction: "发布",
+      eventObject: "GPT-6 Astra 模型",
+      eventDate: "2026-09-04",
+      itemCount: 1,
+    });
+    const fragmentB = createCandidate({
+      id: "frag-b",
+      title: "OpenAI发布GPT-6 Astra 总裁称迈入AGI时代",
+      summary: "OpenAI 发布 GPT-6 Astra，欢迎来到 AGI 时代。",
+      fingerprint: "pending-item-b",
+      eventFingerprint: fp,
+      eventType: "release",
+      eventSubject: "OpenAI",
+      eventAction: "发布",
+      eventObject: "GPT-6 Astra 模型",
+      eventDate: "2026-09-03",
+      itemCount: 16,
+      latestPublishedAt: new Date("2026-09-04T09:00:00.000Z"),
+    });
+    const otherEvent = createCandidate({
+      id: "other-event",
+      title: "小米发布平板",
+      summary: "小米发布新款平板。",
+      fingerprint: "xiaomi-pad",
+      eventFingerprint: "different-fp",
+      eventType: "release",
+      eventSubject: "小米",
+      eventAction: "发布",
+      eventObject: "平板",
+      eventDate: "2026-09-05",
+    });
+
+    const selection = buildClusterMergeCandidateSelection([
+      { ...fragmentA, mergeInputHash: buildClusterMergeCandidateInputHash(fragmentA) },
+      { ...fragmentB, mergeInputHash: buildClusterMergeCandidateInputHash(fragmentB) },
+      // clean (already evaluated) other event — must not be pulled in
+      { ...otherEvent, mergeInputHash: buildClusterMergeCandidateInputHash(otherEvent) },
+    ]);
+
+    // Same-signature fragments must be paired even though hashes are clean.
+    expect(selection.candidates.map((c) => c.id).sort()).toEqual(["frag-a", "frag-b"]);
+    expect(selection.allowedPairs).toHaveLength(1);
+    expect(selection.allowedPairs[0]?.score).toBeGreaterThanOrEqual(95);
+  });
 });
