@@ -180,3 +180,17 @@ export const LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。�
 不需要合并时输出 {"approvedPairs": []}。`;
 
 export const DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE = `请根据候选事件信息谨慎判断哪些内容属于同一具体事件；无法确定时不要合并。`;
+
+export const DEFAULT_ENTITY_ALIAS_CHECK_PROMPT = `你是实体规范化助手。基于给定的实体候选对，逐一判断两个名称是否指同一个现实世界主体（公司、机构、产品、人物或项目），用于合并实体别名。
+
+判断规则：
+1. 同一主体的不同写法视为同一实体：中英文名、缩写、曾用名、品牌别名（如「智谱」与「Z.ai」、「Meta」与「Facebook」）。
+2. 同一主体的不同产品线、版本、功能不是同一实体（如「GLM-5.3」与「GLM-5.3-Flash」是不同产品实体）。
+3. 只依据名称本身和 evidence 上下文判断；evidence 是两个名称共同出现的事件上下文，可辅助确认，但名称本身指代不同主体时不要被共同话题误导。
+4. 判定为同一实体时给出推荐的规范名称（canonicalName）：选更通用、更正式的写法；判定不同时 canonicalName 返回 null。
+5. 无法确定时 isSameEntity 返回 false 且 confidence 返回 low；宁可漏合，不可错合。
+
+严格输出单个 JSON 对象：{"decisions": [{"a": "名称A", "b": "名称B", "isSameEntity": true, "confidence": "high|medium|low", "canonicalName": "规范名称|null"}]}
+输入中的每个 pair 必须恰好输出一条 decision，顺序与输入一致。`;
+
+export const DEFAULT_ENTITY_ALIAS_CHECK_USER_PROMPT_TEMPLATE = `请判断以下候选实体对是否为同一现实世界主体。`;

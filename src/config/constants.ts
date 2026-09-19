@@ -99,7 +99,8 @@ export const CLUSTER_MERGE_AI_PAIR_STRONG_SCORE = 95;
 export const CLUSTER_MERGE_RELATED_PAIR_LIMIT = 3;
 
 /** 单次聚合合并最多扫描的候选聚合组数 */
-export const CLUSTER_MERGE_SCAN_CLUSTER_LIMIT = 1000;
+/** 聚合合并扫描聚类上限（2026-09 实测 7 天窗口 1837 个 active 聚类，1000 已造成窗口尾部约 800 个聚类脱离预计算） */
+export const CLUSTER_MERGE_SCAN_CLUSTER_LIMIT = 2500;
 
 /** 单次聚合合并最多消费的预计算 clean-clean 候选对 */
 export const CLUSTER_MERGE_PRECOMPUTED_CLEAN_PAIR_LIMIT = 20;
@@ -122,8 +123,8 @@ export const CLUSTER_MERGE_PRECOMPUTE_BATCH_DELAY_MS = 50;
 /** clean-clean 预计算任务单个 CPU 切片最多评分的候选对数 */
 export const CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_SIZE = 250;
 
-/** clean-clean 预计算任务 CPU 切片间隔，避免 worker 长时间独占单核 */
-export const CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_DELAY_MS = 25;
+/** clean-clean 预计算任务 CPU 切片间隔，避免 worker 长时间独占单核（2500 聚类 ≈ 3.1M 对，25ms 会带来 5 分钟纯睡眠） */
+export const CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_DELAY_MS = 10;
 
 /** clean-clean 预计算任务最多保留的候选对数 */
 export const CLUSTER_MERGE_PRECOMPUTE_PAIR_LIMIT = 500;

@@ -1546,10 +1546,46 @@ export async function executeClusterMerge(
     ? recentClusters.filter((cluster) => liveClusterIds.has(cluster.id))
     : recentClusters;
   const selectionStartedAt = Date.now();
-  const liveSelection = buildClusterMergeCandidateSelection(
-    recentClusters,
-    liveClusterIds ? { liveClusterIds } : undefined,
-  );
+
+  // live 扫描的向量通道：给 dirty 聚类注入向量近邻，绕过词汇排名截断；
+  // embedding 不可用时保持纯词汇扫描行为
+  let vectorNeighbors: Map<string, Array<{ id: string; sim: number }>> | undefined;
+  if (aiProvider?.embedTexts && recentClusters.length > 1) {
+    try {
+      const vectors = await aiProvider.embedTexts(
+        recentClusters.map((cluster) => buildEmbeddingText(cluster.title, cluster.summary)),
+      );
+      const matrix = vectors ? buildNormalizedVectorMatrix(recentClusters, vectors) : null;
+      if (matrix) {
+        vectorNeighbors = new Map();
+        for (let i = 0; i < recentClusters.length; i += 1) {
+          for (let j = i + 1; j < recentClusters.length; j += 1) {
+            const sim = dotAt(matrix.flat, matrix.dim, i, j);
+            if (sim < CLUSTER_MERGE_VECTOR_GRAY_SIM) continue;
+            const left = recentClusters[i]!;
+            const right = recentClusters[j]!;
+            const leftList = vectorNeighbors.get(left.id) ?? [];
+            const rightList = vectorNeighbors.get(right.id) ?? [];
+            leftList.push({ id: right.id, sim });
+            rightList.push({ id: left.id, sim });
+            vectorNeighbors.set(left.id, leftList);
+            vectorNeighbors.set(right.id, rightList);
+          }
+        }
+        for (const [id, list] of vectorNeighbors) {
+          list.sort((a, b) => b.sim - a.sim);
+          vectorNeighbors.set(id, list.slice(0, 8));
+        }
+      }
+    } catch {
+      vectorNeighbors = undefined;
+    }
+  }
+
+  const liveSelection = buildClusterMergeCandidateSelection(recentClusters, {
+    liveClusterIds: liveClusterIds ?? undefined,
+    vectorNeighbors,
+  });
   const precomputedSelection = mergePrecomputedCleanPairs({
     liveCandidates: liveSelection.candidates,
     liveAllowedPairs: liveSelection.allowedPairs,

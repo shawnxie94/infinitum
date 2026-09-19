@@ -3,6 +3,7 @@ import { PromptConfigType } from "@prisma/client";
 
 import {
   DEFAULT_CLUSTER_MERGE_PROMPT,
+  DEFAULT_ENTITY_ALIAS_CHECK_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
@@ -494,6 +495,7 @@ const ALL_PROMPT_TYPES = [
   PromptConfigType.cluster_merge,
   PromptConfigType.daily_report,
   PromptConfigType.daily_report_review,
+  PromptConfigType.entity_alias_check,
 ] as const;
 
 const REMOVED_PROMPT_CONFIG_TYPES = [
@@ -528,6 +530,10 @@ function resolveSystemPromptByType(type: PromptConfigType, fileConfig: RuntimeCo
       return fileConfig.prompts.dailyReport;
     case PromptConfigType.daily_report_review:
       return fileConfig.prompts.dailyReportReview;
+    case PromptConfigType.entity_alias_check:
+      // 实体别名判定的默认提示词不进运行时配置：默认行为由常量定义，
+      // admin 可在提示词配置里覆盖。
+      return DEFAULT_ENTITY_ALIAS_CHECK_PROMPT;
   }
 }
 

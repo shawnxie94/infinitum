@@ -1345,7 +1345,11 @@ export function filterClusterMergeSourcesByAllowedEdges(
 
 export function buildClusterMergeCandidateSelection(
   clusters: ClusterMergeCandidate[],
-  options?: { liveClusterIds?: Iterable<string> },
+  options?: {
+    liveClusterIds?: Iterable<string>;
+    /** 向量近邻（调用方按 sim 准入线过滤后注入）：强制并入 dirty 聚类的邻居扫描，绕过词汇排名截断 */
+    vectorNeighbors?: ReadonlyMap<string, ReadonlyArray<{ id: string; sim: number }>>;
+  },
 ) {
   const selectedIds = new Set<string>();
   const bestScores = new Map<string, number>();
@@ -1412,7 +1416,26 @@ export function buildClusterMergeCandidateSelection(
     const left = leftMeta.cluster;
     const relatedPairs: Array<{ right: ClusterMergeCandidate; score: number }> = [];
 
-    for (const rightMeta of selectClusterMergeLiveNeighbors(leftMeta, metas)) {
+    const scannedNeighbors = selectClusterMergeLiveNeighbors(leftMeta, metas);
+    const forcedVector = options?.vectorNeighbors?.get(left.id);
+    const vectorSimById = new Map<string, number>();
+    let neighbors = scannedNeighbors;
+    if (forcedVector && forcedVector.length > 0) {
+      const scannedIds = new Set(scannedNeighbors.map((meta) => meta.cluster.id));
+      const forced = forcedVector
+        .map(({ id, sim }) => ({ meta: metas.find((meta) => meta.cluster.id === id), sim }))
+        .filter((entry): entry is { meta: ClusterMergeNeighborMeta; sim: number } =>
+          Boolean(entry.meta) && !scannedIds.has(entry.meta!.cluster.id))
+        .map(({ meta, sim }) => {
+          vectorSimById.set(meta.cluster.id, sim);
+          return meta;
+        });
+      if (forced.length > 0) {
+        neighbors = [...scannedNeighbors, ...forced];
+      }
+    }
+
+    for (const rightMeta of neighbors) {
       const right = rightMeta.cluster;
 
       const result = scoreClusterMergePair(left, right);
@@ -1424,7 +1447,14 @@ export function buildClusterMergeCandidateSelection(
       }
 
       if (result.score < CLUSTER_MERGE_AI_PAIR_GRAY_SCORE) {
-        diagnostics.belowGrayScore += 1;
+        // 向量强制并入的邻居：sim 已达准入线，规则分不足时以 sim*100 作优先级分提名
+        const vectorSim = vectorSimById.get(right.id);
+        if (vectorSim !== undefined) {
+          diagnostics.relatedPairs += 1;
+          relatedPairs.push({ right, score: Math.max(result.score, Math.round(vectorSim * 100)) });
+        } else {
+          diagnostics.belowGrayScore += 1;
+        }
         continue;
       }
 

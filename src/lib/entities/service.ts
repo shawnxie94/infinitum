@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 
+import { CLUSTER_LOOKBACK_MS } from "@/config/constants";
 import { prisma } from "@/lib/db";
+import { resetMentionResolverCache } from "@/lib/entities/mention-resolution";
+import type { AiProvider } from "@/lib/ai/provider";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { invalidateEventBriefingCache } from "@/lib/events/cache";
@@ -222,6 +225,8 @@ function getSimilarityReasonLabel(reason: EntitySimilarityReason) {
       return "关键词包含关系，谨慎合并";
     case "edit_distance":
       return "拼写距离接近";
+    case "auto_alias_vote":
+      return "人工确认合并中的主体别名候选";
     default:
       return "实体表达接近";
   }
@@ -1137,16 +1142,53 @@ async function buildEntitySuggestionCandidateRecords(now: Date): Promise<{
   };
 }
 
-export async function precomputeEntitySuggestionCandidates(now = new Date()): Promise<EntitySuggestionPrecomputeResult> {
+export async function precomputeEntitySuggestionCandidates(
+  now = new Date(),
+  options?: { additionalRecords?: EntitySuggestionCandidateRecord[] },
+): Promise<EntitySuggestionPrecomputeResult> {
   const startedAt = Date.now();
   const { entities, scannedPairs, records } = await buildEntitySuggestionCandidateRecords(now);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.entitySuggestionCandidate.deleteMany({});
+  // 非破坏性重建：相似度草稿 + 外部来源草稿（如自动别名闭环的中置信候选）按 pairKey
+  // upsert；只清除过期与被 admin 否决的候选，未被再产出的历史建议保留至过期。
+  const additionalRecords = (options?.additionalRecords ?? []).filter(
+    (draft) => !records.some((record) => record.pairKey === draft.pairKey),
+  );
+  const allRecords = [...records, ...additionalRecords];
+  const suppressedPairs = await loadSuppressedEntitySuggestionPairs();
 
-    for (let start = 0; start < records.length; start += ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE) {
-      await tx.entitySuggestionCandidate.createMany({
-        data: records.slice(start, start + ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE),
+  await prisma.$transaction(async (tx) => {
+    for (let start = 0; start < allRecords.length; start += ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE) {
+      for (const record of allRecords.slice(start, start + ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE)) {
+        await tx.entitySuggestionCandidate.upsert({
+          where: { pairKey: record.pairKey },
+          create: { ...record },
+          update: {
+            sourceEntityId: record.sourceEntityId,
+            targetEntityId: record.targetEntityId,
+            sourceEntityNormalized: record.sourceEntityNormalized,
+            targetEntityNormalized: record.targetEntityNormalized,
+            confidence: record.confidence,
+            affectedItemCount: record.affectedItemCount,
+            sharedItemCount: record.sharedItemCount,
+            reason: record.reason,
+            status: "active",
+            expiresAt: record.expiresAt,
+          },
+        });
+      }
+    }
+
+    await tx.entitySuggestionCandidate.deleteMany({ where: { expiresAt: { lte: now } } });
+    if (suppressedPairs.size > 0) {
+      await tx.entitySuggestionCandidate.deleteMany({
+        where: {
+          status: "active",
+          OR: [...suppressedPairs].map((suppressedKey) => {
+            const [sourceEntityNormalized, targetEntityNormalized] = suppressedKey.split("\u0000");
+            return { sourceEntityNormalized: sourceEntityNormalized!, targetEntityNormalized: targetEntityNormalized! };
+          }),
+        },
       });
     }
   });
@@ -1154,9 +1196,236 @@ export async function precomputeEntitySuggestionCandidates(now = new Date()): Pr
   return {
     entityCount: entities.length,
     scannedPairs,
-    candidateCount: records.length,
-    storedCandidates: records.length,
+    candidateCount: allRecords.length,
+    storedCandidates: allRecords.length,
     durationMs: Date.now() - startedAt,
+  };
+}
+
+export type AutoAliasNormalizationResult = {
+  candidatePairs: number;
+  adjudicatedPairs: number;
+  autoMergedAliases: number;
+  mediumSuggestions: number;
+};
+
+type AliasEvidencePair = {
+  key: string;
+  mentionA: string;
+  mentionB: string;
+  evidence: string[];
+  votes: number;
+};
+
+function appendAliasEvidence(
+  pairs: Map<string, AliasEvidencePair>,
+  mentionA: string,
+  mentionB: string,
+  context: string,
+) {
+  const normalizedA = normalizeEntityName(mentionA)?.normalized;
+  const normalizedB = normalizeEntityName(mentionB)?.normalized;
+  if (!normalizedA || !normalizedB || normalizedA === normalizedB) return;
+
+  const [minKey, maxKey] = [normalizedA, normalizedB].sort();
+  const key = `${minKey}\u0000${maxKey}`;
+  const existing = pairs.get(key);
+  if (existing) {
+    existing.votes += 1;
+    if (context && existing.evidence.length < 3) existing.evidence.push(context);
+    return;
+  }
+
+  pairs.set(key, { key, mentionA, mentionB, evidence: context ? [context] : [], votes: 1 });
+}
+
+/**
+ * LLM 仲裁的自动别名闭环（无人值守）：
+ * 1. 挖掘候选：同一多 item 聚类内的主体变体（合并判定已锚定同事件）+ approved 反馈标签的主体差异对；
+ * 2. 过滤：两侧都存在不同 Entity 行、未互为别名、未被 admin 否决，按共现票数取前 N；
+ * 3. LLM 仲裁：assessEntityAliasPairs 判定是否同一现实主体；
+ * 4. 分级写路径：high → 直接写 entity_aliases（createdBy=auto-llm，可撤销）；
+ *    medium → 生成治理建议候选；low/不同主体 → 放弃。
+ * 只写别名不搬 item_entities——错误别名的影响半径限于评分层，由 LLM 终审兜底。
+ */
+export async function autoNormalizeEntityAliases(
+  now: Date,
+  aiProvider: AiProvider | undefined,
+  options?: { maxPairsPerRound?: number },
+): Promise<{ result: AutoAliasNormalizationResult; mediumRecords: EntitySuggestionCandidateRecord[] }> {
+  const maxPairs = options?.maxPairsPerRound ?? 30;
+  const empty = {
+    result: { candidatePairs: 0, adjudicatedPairs: 0, autoMergedAliases: 0, mediumSuggestions: 0 },
+    mediumRecords: [] as EntitySuggestionCandidateRecord[],
+  };
+
+  if (!aiProvider?.assessEntityAliasPairs) {
+    return empty;
+  }
+
+  const windowSince = new Date(now.getTime() - CLUSTER_LOOKBACK_MS);
+  const pairs = new Map<string, AliasEvidencePair>();
+
+  // 源 1：同聚类主体变体（itemCount ≥ 2 的多 item 聚类，事件归属已被合并判定锚定）
+  const windowClusters = await prisma.contentCluster.findMany({
+    where: { status: "active", latestPublishedAt: { gte: windowSince }, itemCount: { gte: 2 } },
+    select: { id: true },
+    take: 1000,
+  });
+  if (windowClusters.length > 0) {
+    const items = await prisma.item.findMany({
+      where: {
+        clusterId: { in: windowClusters.map((cluster) => cluster.id) },
+        eventSubject: { not: null },
+        status: "processed",
+        moderationStatus: { in: ["allowed", "restored"] },
+      },
+      select: { clusterId: true, eventSubject: true, originalTitle: true },
+    });
+    const subjectsByCluster = new Map<string, Set<string>>();
+    const titleBySubject = new Map<string, string>();
+    for (const item of items) {
+      if (!item.clusterId || !item.eventSubject) continue;
+      const normalized = normalizeEntityName(item.eventSubject)?.normalized;
+      if (!normalized) continue;
+      const set = subjectsByCluster.get(item.clusterId) ?? new Set<string>();
+      set.add(normalized);
+      subjectsByCluster.set(item.clusterId, set);
+      if (!titleBySubject.has(normalized) && item.originalTitle) {
+        titleBySubject.set(normalized, item.originalTitle);
+      }
+    }
+    for (const subjects of subjectsByCluster.values()) {
+      const list = [...subjects];
+      for (let i = 0; i < list.length; i += 1) {
+        for (let j = i + 1; j < list.length; j += 1) {
+          appendAliasEvidence(
+            pairs,
+            list[i]!,
+            list[j]!,
+            titleBySubject.get(list[j]!) ?? titleBySubject.get(list[i]!) ?? "",
+          );
+        }
+      }
+    }
+  }
+
+  // 源 2：approved 反馈标签的主体差异对
+  const approvedLabels = await prisma.clusterPairLabel.findMany({
+    where: { verdict: "approved" },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: { subjectA: true, subjectB: true, titleA: true },
+  });
+  for (const label of approvedLabels) {
+    if (label.subjectA && label.subjectB) {
+      appendAliasEvidence(pairs, label.subjectA, label.subjectB, label.titleA ?? "");
+    }
+  }
+
+  // 过滤：两侧实体都存在且不同、未互为别名、未被 admin 否决；按票数排序取前 N
+  const suppressed = await loadSuppressedEntitySuggestionPairs();
+  const allKeys = [...new Set([...pairs.values()].flatMap((pair) => pair.key.split("\u0000")))];
+  const entityRows = allKeys.length > 0
+    ? await prisma.entity.findMany({
+        where: { normalized: { in: allKeys } },
+        include: {
+          aliases: { select: { aliasName: true, aliasNormalized: true } },
+          _count: { select: { items: true, aliases: true } },
+        },
+      })
+    : [];
+  const entityByNormalized = new Map(entityRows.map((row) => [row.normalized, row]));
+
+  const candidates = [...pairs.values()]
+    .map((pair) => {
+      const [minKey, maxKey] = pair.key.split("\u0000");
+      const left = entityByNormalized.get(minKey!);
+      const right = entityByNormalized.get(maxKey!);
+      if (!left || !right || left.id === right.id) return null;
+      const alreadyAliased =
+        left.aliases.some((alias) => alias.aliasNormalized === right.normalized) ||
+        right.aliases.some((alias) => alias.aliasNormalized === left.normalized);
+      if (alreadyAliased) return null;
+      if (
+        suppressed.has(buildSuppressedPairKey(left.normalized, right.normalized)) ||
+        suppressed.has(buildSuppressedPairKey(right.normalized, left.normalized))
+      ) {
+        return null;
+      }
+      return { left, right, votes: pair.votes, evidence: pair.evidence };
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+    .sort((a, b) => b.votes - a.votes || a.left.normalized.localeCompare(b.left.normalized))
+    .slice(0, maxPairs);
+
+  if (candidates.length === 0) {
+    return empty;
+  }
+
+  const decisions = await aiProvider.assessEntityAliasPairs({
+    pairs: candidates.map(({ left, right, evidence }) => ({
+      aName: left.name,
+      bName: right.name,
+      evidence,
+    })),
+  });
+
+  let autoMergedAliases = 0;
+  const mediumRecords: EntitySuggestionCandidateRecord[] = [];
+  for (let index = 0; index < decisions.length; index += 1) {
+    const decision = decisions[index]!;
+    const candidate = candidates[index]!;
+    if (!decision.isSameEntity) continue;
+
+    const [targetEntity, sourceEntity] = [candidate.left, candidate.right].sort(compareCanonicalPreference);
+    if (decision.confidence === "high") {
+      try {
+        await prisma.entityAlias.create({
+          data: {
+            entityId: targetEntity.id,
+            aliasName: sourceEntity.name,
+            aliasNormalized: sourceEntity.normalized,
+            createdBy: "auto-llm",
+          },
+        });
+        autoMergedAliases += 1;
+      } catch (error) {
+        // 并发轮次可能已写入同一别名；唯一冲突视为成功
+        if ((error as { code?: string }).code !== "P2002") throw error;
+      }
+      continue;
+    }
+
+    if (decision.confidence === "medium") {
+      mediumRecords.push({
+        pairKey: buildSuggestionId(sourceEntity, targetEntity),
+        sourceEntityId: sourceEntity.id,
+        targetEntityId: targetEntity.id,
+        sourceEntityNormalized: sourceEntity.normalized,
+        targetEntityNormalized: targetEntity.normalized,
+        confidence: getSuggestionConfidence(0.85),
+        affectedItemCount: sourceEntity._count.items,
+        sharedItemCount: 0,
+        reason: "auto_alias_vote",
+        status: "active",
+        expiresAt: new Date(now.getTime() + ENTITY_SUGGESTION_CANDIDATE_TTL_MS),
+      });
+    }
+  }
+
+  if (autoMergedAliases > 0) {
+    resetMentionResolverCache();
+  }
+
+  return {
+    result: {
+      candidatePairs: pairs.size,
+      adjudicatedPairs: decisions.length,
+      autoMergedAliases,
+      mediumSuggestions: mediumRecords.length,
+    },
+    mediumRecords,
   };
 }
 
@@ -1266,6 +1535,7 @@ export async function autoMergeHighConfidenceEntitySuggestions(input?: {
     ],
     take: limit,
     select: {
+      pairKey: true,
       sourceEntityId: true,
       targetEntityId: true,
     },
@@ -1285,10 +1555,20 @@ export async function autoMergeHighConfidenceEntitySuggestions(input?: {
       },
       select: {
         id: true,
+        normalized: true,
       },
     });
 
     if (existingEntities.length !== 2) {
+      skippedCount += 1;
+      continue;
+    }
+
+    // 非破坏性重建后候选行会活到过期：pairKey 与规范格式（sourceId:targetId）
+    // 不一致的行来自旧算法版本，视为陈旧数据跳过
+    const source = existingEntities.find((entity) => entity.id === plan.sourceEntityId);
+    const target = existingEntities.find((entity) => entity.id === plan.targetEntityId);
+    if (!source || !target || plan.pairKey !== `${source.id}:${target.id}`) {
       skippedCount += 1;
       continue;
     }
@@ -1572,6 +1852,8 @@ export async function mergeEntities(input: {
     await refreshClusterFeedStatsSafely(affectedClusterIds, "merge entities");
   }
   invalidateFeedCache();
+  // 新别名立即可被合并预筛的 Mention 规范化解析，不必等进程内缓存淘汰
+  resetMentionResolverCache();
 
   return {
     mergedCount: sourceEntityIds.length,

@@ -70,9 +70,8 @@ async function seedFixtures() {
 }
 
 afterEach(async () => {
-  await prisma.clusterPairLabel.deleteMany({
-    where: { OR: [{ leftId: { in: [IDS.clusterA, IDS.clusterB, IDS.item] } }, { rightId: { in: [IDS.clusterA, IDS.clusterB] } }] },
-  });
+  // 本文件独占 pair 标签夹具，无条件清空避免跨文件顺序性污染
+  await prisma.clusterPairLabel.deleteMany({});
   await prisma.item.deleteMany({ where: { id: IDS.item } });
   await prisma.contentCluster.deleteMany({ where: { id: { in: [IDS.clusterA, IDS.clusterB] } } });
   await prisma.source.deleteMany({ where: { id: IDS.source } });

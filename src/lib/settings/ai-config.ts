@@ -3,6 +3,7 @@ import {
   DEFAULT_CLUSTER_MERGE_USER_PROMPT_TEMPLATE,
   DEFAULT_CLUSTER_SUMMARY_USER_PROMPT_TEMPLATE,
   DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+  DEFAULT_ENTITY_ALIAS_CHECK_USER_PROMPT_TEMPLATE,
   DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
 } from "@/config/prompts";
 import type { PromptConfigType } from "@/lib/settings/types";
@@ -17,6 +18,7 @@ export const PROMPT_TYPE_OPTIONS: Array<{
   { value: "cluster_merge", label: "聚合合并" },
   { value: "daily_report", label: "AI 日报" },
   { value: "daily_report_review", label: "AI 日报审核" },
+  { value: "entity_alias_check", label: "实体别名判定" },
 ];
 
 export function getPromptTypeLabel(type: PromptConfigType): string {
@@ -37,6 +39,8 @@ export function getDefaultPromptConfigName(type: PromptConfigType): string {
       return "默认 AI 日报模板";
     case "daily_report_review":
       return "默认 AI 日报审核提示词";
+    case "entity_alias_check":
+      return "默认实体别名判定提示词";
   }
 }
 
@@ -54,6 +58,8 @@ export function getDefaultPromptTemplate(type: PromptConfigType): string {
       return "";
     case "daily_report_review":
       return DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE;
+    case "entity_alias_check":
+      return DEFAULT_ENTITY_ALIAS_CHECK_USER_PROMPT_TEMPLATE;
   }
 }
 
@@ -97,6 +103,12 @@ export function getDefaultPromptSampling(type: PromptConfigType): {
       return {
         temperature: 0,
         maxTokens: 2048,
+        topP: null,
+      };
+    case "entity_alias_check":
+      return {
+        temperature: 0,
+        maxTokens: 2000,
         topP: null,
       };
   }

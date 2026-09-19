@@ -547,8 +547,9 @@ describe("/api/admin/settings/entities", () => {
 
     const result = await autoMergeHighConfidenceEntitySuggestions();
 
+    // 非破坏性重建后旧格式候选行保留至过期，但 pairKey 校验使其被跳过、不再自动合并
     expect(result).toMatchObject({
-      scannedCount: 0,
+      scannedCount: 1,
       mergedCount: 0,
       failedCount: 0,
     });
@@ -608,8 +609,8 @@ describe("/api/admin/settings/entities", () => {
       where: { id: taskRun.id },
     })).resolves.toMatchObject({
       status: "succeeded",
-      progressCurrent: 2,
-      progressTotal: 2,
+      progressCurrent: 3,
+      progressTotal: 3,
     });
   });
 

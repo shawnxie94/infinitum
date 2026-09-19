@@ -8,6 +8,8 @@ import {
   DEFAULT_DAILY_REPORT_PROMPT,
   DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+  DEFAULT_ENTITY_ALIAS_CHECK_PROMPT,
+  DEFAULT_ENTITY_ALIAS_CHECK_USER_PROMPT_TEMPLATE,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
 } from "@/config/prompts";
@@ -68,6 +70,13 @@ export const AI_TASK_CONTRACTS: Record<PromptConfigType, AiTaskContract> = {
     systemPrompt: DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
     defaultUserInstruction: DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
   },
+  entity_alias_check: {
+    type: "entity_alias_check",
+    contractVersion: AI_TASK_CONTRACT_VERSION,
+    contractHash: "",
+    systemPrompt: DEFAULT_ENTITY_ALIAS_CHECK_PROMPT,
+    defaultUserInstruction: DEFAULT_ENTITY_ALIAS_CHECK_USER_PROMPT_TEMPLATE,
+  },
 };
 
 for (const contract of Object.values(AI_TASK_CONTRACTS)) {
@@ -114,6 +123,10 @@ const LEGACY_DEFAULT_USER_INSTRUCTIONS: Record<PromptConfigType, string[]> = {
   daily_report_review: [
     `请审核以下日报 Review 输入：\n{{reviewContextJson}}\n\n如果没有明确的语义问题，返回 {"verdict":"pass","violations":[],"summary":"通过"}；如果存在问题，只返回可由输入证据支持的 violations。不要返回日报正文。`,
     "请审核系统提供的日报草稿与候选池证据，重点关注候选覆盖、主题独立性、事实一致性、重复内容和凑数风险。只报告有明确输入证据支持的问题。",
+  ],
+  entity_alias_check: [
+    `候选实体对 JSON：{{pairsJson}}`,
+    "请基于名称与证据保守判断两个实体名称是否指同一现实世界主体；无法确定时判定为不同实体。",
   ],
 };
 

@@ -16,6 +16,7 @@ describe("AI task contracts", () => {
       "cluster_merge",
       "daily_report",
       "daily_report_review",
+      "entity_alias_check",
     ]);
 
     for (const contract of Object.values(AI_TASK_CONTRACTS)) {

@@ -123,6 +123,16 @@ export type ClusterMergeDecision = {
   reasonText: string | null;
 };
 
+export type EntityAliasCheckConfidence = "high" | "medium" | "low";
+
+export type EntityAliasCheckDecision = {
+  aName: string;
+  bName: string;
+  isSameEntity: boolean;
+  confidence: EntityAliasCheckConfidence;
+  canonicalName: string | null;
+};
+
 export type AiProvider = {
   understandItem(
     inputText: string,
@@ -136,6 +146,10 @@ export type AiProvider = {
   /** 语义向量批量接口；未启用或调用失败时返回 null，调用方降级为纯规则排序。 */
   embedTexts?(texts: string[]): Promise<number[][] | null>;
   assessClusterMergePairs(clustersJson: string): Promise<ClusterMergeDecision[]>;
+  /** 实体别名判定：批量判断两个实体名称是否指同一现实世界主体；未配置时调用方跳过仲裁 */
+  assessEntityAliasPairs?(input: {
+    pairs: Array<{ aName: string; bName: string; evidence: string[] }>;
+  }): Promise<EntityAliasCheckDecision[]>;
   assessDailyReportCandidates(input: {
     candidates: DailyReportPlanningCandidate[];
     template: NormalizedDailyReportTemplate;
@@ -1193,6 +1207,47 @@ function normalizeClusterMergeReasonCode(value: unknown): ClusterMergeReasonCode
     : null;
 }
 
+function parseEntityAliasDecisions(
+  rawContent: string,
+  pairs: Array<{ aName: string; bName: string; evidence: string[] }>,
+): EntityAliasCheckDecision[] {
+  const normalized = normalizeModelResponseText(rawContent);
+  let parsed: { decisions?: unknown };
+
+  try {
+    parsed = JSON.parse(normalized) as { decisions?: unknown };
+  } catch (error) {
+    throw new InvalidJsonModelResponseError(
+      `Invalid entity alias decision JSON: ${getJsonParseErrorMessage(error)}`,
+    );
+  }
+
+  const decisions = parsed.decisions as unknown[];
+  if (!Array.isArray(decisions) || decisions.length !== pairs.length) {
+    throw new InvalidJsonModelResponseError("实体别名判定 decisions 数量与输入候选对不一致。");
+  }
+
+  return pairs.map((pair, index) => {
+    const raw = decisions[index] as Record<string, unknown> | undefined;
+    const isSameEntity = raw?.isSameEntity === true;
+    const rawConfidence = raw?.confidence;
+    const confidence: EntityAliasCheckConfidence =
+      rawConfidence === "high" || rawConfidence === "medium" ? rawConfidence : "low";
+    const canonicalName =
+      isSameEntity && typeof raw?.canonicalName === "string" && raw.canonicalName.trim()
+        ? raw.canonicalName.trim()
+        : null;
+
+    return {
+      aName: pair.aName,
+      bName: pair.bName,
+      isSameEntity,
+      confidence,
+      canonicalName,
+    };
+  });
+}
+
 function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeInputMetadata) {
   const normalized = normalizeModelResponseText(rawContent);
   let parsed: { decisions?: unknown };
@@ -1473,6 +1528,9 @@ export function createAiProvider(
     "cluster_merge",
     promptOverrides?.clusterMerge,
   );
+  // 实体别名判定刻意不接 selectedPromptConfigs 覆盖：判定语义由默认提示词固化，
+  // admin 改提示词配置不影响该通道（需要时再接覆盖管线）。
+  const entityAliasCheckConfig = resolvePromptConfig("entity_alias_check", undefined);
   const dailyReportConfig = resolvePromptConfig(
     "daily_report",
     promptOverrides?.dailyReport,
@@ -1875,8 +1933,26 @@ export function createAiProvider(
         throw error;
       });
     },
-    async assessClusterMergePairs(clustersJson) {
-      const metadata = parseClusterMergeInputMetadata(clustersJson);
+    async assessEntityAliasPairs(input) {
+      if (input.pairs.length === 0) {
+        return [];
+      }
+
+      const pairsJson = JSON.stringify({
+        pairs: input.pairs.map((pair) => ({ a: pair.aName, b: pair.bName, evidence: pair.evidence })),
+      });
+      const userContent = buildAiUserContent(entityAliasCheckConfig.userInstruction, { pairsJson });
+
+      return (
+        (await completeJsonWithParseRetry(
+          entityAliasCheckConfig,
+          userContent,
+          (output) => parseEntityAliasDecisions(output, input.pairs),
+          { usageKey: "entity_alias_check" },
+        )) ?? []
+      );
+    },
+    async assessClusterMergePairs(clustersJson) {      const metadata = parseClusterMergeInputMetadata(clustersJson);
       const userContent = buildAiUserContent(clusterMergeConfig.userInstruction, {
         ...JSON.parse(clustersJson) as Record<string, unknown>,
       });

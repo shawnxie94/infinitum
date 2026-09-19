@@ -3,7 +3,8 @@ export type EntitySimilarityReason =
   | "singular_match"
   | "punctuation_match"
   | "token_overlap"
-  | "edit_distance";
+  | "edit_distance"
+  | "auto_alias_vote";
 
 export type EntitySimilarityResult = {
   confidence: number;

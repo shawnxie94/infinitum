@@ -27,13 +27,16 @@ vi.mock("@/lib/clusters/service", async (importOriginal) => {
   };
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.clearAllMocks();
   vi.resetModules();
+  // 反馈回写会把 review 动作落成 pair 标签，避免跨文件污染评估测试
+  await prisma.clusterPairLabel.deleteMany();
 });
 
 describe("/api/admin/clusters", () => {
   beforeEach(async () => {
+    await prisma.clusterPairLabel.deleteMany();
     await prisma.clusterDecision.deleteMany();
     await prisma.clusterConstraint.deleteMany();
     await prisma.item.deleteMany();
