@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/db";
 import { executePrecomputeTask } from "@/lib/precompute/service";
-import {
-  autoMergeHighConfidenceEntitySuggestions,
-  precomputeEntitySuggestionCandidates,
-} from "@/lib/entities/service";
+import { precomputeEntitySuggestionCandidates } from "@/lib/entities/service";
 
 const requireAdmin = vi.fn();
 
@@ -448,116 +445,6 @@ describe("/api/admin/settings/entities", () => {
       },
       affectedItemCount: 4,
     });
-  });
-
-  it("auto-merges high-confidence existing entity suggestions for admins", async () => {
-    await createSourceAndItems();
-    const canonical = await prisma.entity.create({
-      data: {
-        name: "OpenAI",
-        normalized: "openai",
-      },
-    });
-    const variant = await prisma.entity.create({
-      data: {
-        name: "Open AI",
-        normalized: "open ai",
-      },
-    });
-    await prisma.itemEntity.createMany({
-      data: [
-        {
-          itemId: "admin-entity-a",
-          entityId: canonical.id,
-        },
-        {
-          itemId: "admin-entity-b",
-          entityId: variant.id,
-        },
-      ],
-    });
-
-    const { POST } = await import("@/app/api/admin/settings/entities/suggestions/route");
-    const response = await POST(new Request("http://localhost/api/admin/settings/entities/suggestions", {
-      method: "POST",
-      body: JSON.stringify({
-        action: "auto_merge_high_confidence",
-      }),
-    }));
-    const json = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(json).toMatchObject({
-      scannedCount: 1,
-      mergedCount: 1,
-      failedCount: 0,
-    });
-    await expect(prisma.entity.findMany({
-      include: {
-        aliases: true,
-        items: true,
-      },
-    })).resolves.toEqual([
-      expect.objectContaining({
-        id: canonical.id,
-        normalized: "openai",
-        aliases: [
-          expect.objectContaining({
-            aliasNormalized: "open ai",
-            createdBy: "system:auto-merge",
-          }),
-        ],
-        items: expect.arrayContaining([
-          expect.objectContaining({ itemId: "admin-entity-a" }),
-          expect.objectContaining({ itemId: "admin-entity-b" }),
-        ]),
-      }),
-    ]);
-  });
-
-  it("refreshes candidates before auto-merge so stale high-confidence pairs are ignored", async () => {
-    await createSourceAndItems();
-    const left = await prisma.entity.create({
-      data: {
-        name: "ChatGPT / Gemini",
-        normalized: "chatgpt / gemini",
-      },
-    });
-    const right = await prisma.entity.create({
-      data: {
-        name: "Gemini / ChatGPT",
-        normalized: "gemini / chatgpt",
-      },
-    });
-    await prisma.entitySuggestionCandidate.create({
-      data: {
-        pairKey: "legacy-chatgpt-gemini",
-        sourceEntityId: left.id,
-        targetEntityId: right.id,
-        sourceEntityNormalized: left.normalized,
-        targetEntityNormalized: right.normalized,
-        confidence: 0.99,
-        affectedItemCount: 4,
-        sharedItemCount: 0,
-        reason: "punctuation_match",
-        status: "active",
-        expiresAt: new Date("2030-01-01T00:00:00.000Z"),
-      },
-    });
-
-    const result = await autoMergeHighConfidenceEntitySuggestions();
-
-    // 非破坏性重建后旧格式候选行保留至过期，但 pairKey 校验使其被跳过、不再自动合并
-    expect(result).toMatchObject({
-      scannedCount: 1,
-      mergedCount: 0,
-      failedCount: 0,
-    });
-    await expect(prisma.entity.findMany({
-      where: {
-        id: { in: [left.id, right.id] },
-      },
-    })).resolves.toHaveLength(2);
   });
 
   it("runs generic precompute tasks and stores entity governance candidates", async () => {

@@ -79,17 +79,6 @@ function createFetchMock() {
     const url = String(input);
 
     if (url === "/api/admin/settings/entities/suggestions" && init?.method === "POST") {
-      const body = init.body ? JSON.parse(String(init.body)) : {};
-      if (body.action === "auto_merge_high_confidence") {
-        return new Response(JSON.stringify({
-          scannedCount: 1,
-          mergedCount: 1,
-          affectedClusterCount: 0,
-          skippedCount: 0,
-          failedCount: 0,
-        }));
-      }
-
       return new Response(JSON.stringify({ ok: true }));
     }
 
@@ -318,31 +307,6 @@ describe("EntitySettingsPanel", () => {
           sourceEntityId: "entity-agents",
           targetEntityId: "entity-agent",
           decision: "ignored",
-        }),
-      });
-    });
-  });
-
-  it("auto-merges high-confidence governance suggestions", async () => {
-    const user = userEvent.setup();
-    const fetchMock = createFetchMock();
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderWithProviders(<EntitySettingsPanel />);
-
-    await screen.findByRole("button", { name: "治理建议" });
-    await user.click(screen.getByRole("button", { name: "治理建议" }));
-    const suggestionDialog = await screen.findByRole("dialog", { name: "治理建议" });
-    await user.click(within(suggestionDialog).getByRole("button", { name: "自动合并高置信" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          action: "auto_merge_high_confidence",
         }),
       });
     });

@@ -140,15 +140,6 @@ type EntitySuggestionDecisionPayload = {
   ok: boolean;
 };
 
-type EntitySuggestionAutoMergePayload = {
-  error?: string;
-  scannedCount: number;
-  mergedCount: number;
-  affectedClusterCount: number;
-  skippedCount: number;
-  failedCount: number;
-};
-
 type EntitySuggestionPrecomputePayload = {
   error?: string;
   entityCount: number;
@@ -606,20 +597,6 @@ export async function dismissAdminEntitySuggestion(input: {
     "POST",
     input,
     "实体治理建议处理失败。",
-  );
-}
-
-export async function autoMergeHighConfidenceAdminEntitySuggestions(input?: {
-  limit?: number;
-}) {
-  return requestAdminSettingsJson<EntitySuggestionAutoMergePayload>(
-    "/api/admin/settings/entities/suggestions",
-    "POST",
-    {
-      action: "auto_merge_high_confidence",
-      limit: input?.limit,
-    },
-    "高置信实体自动合并失败。",
   );
 }
 

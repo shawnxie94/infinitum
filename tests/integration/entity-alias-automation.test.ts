@@ -143,7 +143,7 @@ describe("autoNormalizeEntityAliases", () => {
 
   it("routes medium confidence to governance suggestions via non-destructive precompute", async () => {
     await seedClusterWithSubjects("alias-auto-1", ["智谱", "Z.ai"]);
-    await seedEntityPair();
+    const { zhipu, zai } = await seedEntityPair();
 
     const provider = fakeProvider(() => ({
       aName: "智谱",
@@ -154,7 +154,12 @@ describe("autoNormalizeEntityAliases", () => {
     }));
     const { mediumRecords } = await autoNormalizeEntityAliases(NOW, provider);
     expect(mediumRecords).toHaveLength(1);
-    expect(await prisma.entityAlias.count()).toBe(0);
+    // 只断言本测试的实体对没有写别名：并行套件共享 DB，全局计数会看到其他文件的行
+    expect(
+      await prisma.entityAlias.count({
+        where: { entityId: { in: [zhipu.id, zai.id] } },
+      }),
+    ).toBe(0);
 
     const precompute = await precomputeEntitySuggestionCandidates(NOW, {
       additionalRecords: mediumRecords,

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 
 import {
   addAdminEntityAlias,
-  autoMergeHighConfidenceAdminEntitySuggestions,
   deleteAdminEntityAlias,
   dismissAdminEntitySuggestion,
   type AdminEntity,
@@ -78,7 +77,6 @@ type EntitySuggestionPanelProps = {
   onPageSizeChange: (pageSize: number) => void;
   onOpenMergeChoice: (suggestion: AdminEntitySuggestion) => void;
   onOpenDismissChoice: (suggestion: AdminEntitySuggestion) => void;
-  onAutoMergeHighConfidence: () => void;
   onRefresh: () => void;
 };
 
@@ -99,7 +97,6 @@ function EntitySuggestionModal({
   onPageSizeChange,
   onOpenMergeChoice,
   onOpenDismissChoice,
-  onAutoMergeHighConfidence,
   onRefresh,
 }: EntitySuggestionPanelProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -114,19 +111,13 @@ function EntitySuggestionModal({
       bodyClassName="space-y-4 p-4 max-h-[76vh] overflow-y-auto"
       footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
       footer={
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Button className="gap-2" onClick={onAutoMergeHighConfidence} variant="primary" disabled={isBusy}>
-            <IconMerge className="h-4 w-4" />
-            自动合并高置信
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
+            刷新建议
           </Button>
-          <div className="flex items-center justify-end gap-2">
-            <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
-              刷新建议
-            </Button>
-            <Button onClick={onClose} variant="secondary" disabled={isBusy}>
-              关闭
-            </Button>
-          </div>
+          <Button onClick={onClose} variant="secondary" disabled={isBusy}>
+            关闭
+          </Button>
         </div>
       }
     >
@@ -880,14 +871,6 @@ export function EntitySettingsPanel({
     await loadSuggestions();
   }
 
-  async function handleAutoMergeHighConfidenceSuggestions() {
-    const result = await autoMergeHighConfidenceAdminEntitySuggestions();
-    const failedText = result.failedCount > 0 ? `，${result.failedCount} 条失败` : "";
-    const skippedText = result.skippedCount > 0 ? `，${result.skippedCount} 条已跳过` : "";
-    showToast(`已自动合并 ${result.mergedCount} 个高置信实体${skippedText}${failedText}。`);
-    await reloadAfterEntityMutation();
-  }
-
   async function handleRefreshSuggestions() {
     const result = await precomputeAdminEntitySuggestions();
     showToast(`已刷新 ${result.storedCandidates} 条治理建议。`);
@@ -1087,7 +1070,6 @@ export function EntitySettingsPanel({
         }}
         onOpenMergeChoice={setMergeChoiceSuggestion}
         onOpenDismissChoice={setDismissChoiceSuggestion}
-        onAutoMergeHighConfidence={() => runModalAction(handleAutoMergeHighConfidenceSuggestions)}
         onRefresh={() => runModalAction(handleRefreshSuggestions)}
       />
 

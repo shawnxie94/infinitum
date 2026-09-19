@@ -31,7 +31,6 @@ const MAX_ENTITY_PAGE_SIZE = 100;
 const DEFAULT_ENTITY_SUGGESTION_LIMIT = 30;
 const MAX_ENTITY_SUGGESTION_LIMIT = 100;
 const AUTO_CANONICAL_CONFIDENCE_THRESHOLD = 0.98;
-const DEFAULT_AUTO_MERGE_SUGGESTION_LIMIT = 100;
 const SUGGESTION_CONFIDENCE_THRESHOLD = 0.82;
 const ENTITY_SUGGESTION_CANDIDATE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE = 500;
@@ -84,14 +83,6 @@ export type AdminEntitySuggestionList = {
 };
 
 export type AdminEntitySuggestionSort = "confidence_desc" | "affected_desc";
-
-export type AdminEntityAutoMergeResult = {
-  scannedCount: number;
-  mergedCount: number;
-  affectedClusterCount: number;
-  skippedCount: number;
-  failedCount: number;
-};
 
 export type EntitySuggestionPrecomputeResult = {
   entityCount: number;
@@ -1507,91 +1498,6 @@ export async function listAdminEntitySuggestions(input?: {
     totalCount,
     page,
     pageSize,
-  };
-}
-
-export async function autoMergeHighConfidenceEntitySuggestions(input?: {
-  limit?: number | null;
-}): Promise<AdminEntityAutoMergeResult> {
-  const limit = normalizeSuggestionLimit(input?.limit ?? DEFAULT_AUTO_MERGE_SUGGESTION_LIMIT);
-  // The candidate table can outlive the algorithm version that produced it.
-  // Refresh before any automatic write so stale high-confidence rows cannot
-  // bypass the current relationship and subset guards.
-  await precomputeEntitySuggestionCandidates();
-  const plans = await prisma.entitySuggestionCandidate.findMany({
-    where: {
-      status: "active",
-      reason: {
-        in: ["compact_match", "punctuation_match"],
-      },
-      confidence: {
-        gte: AUTO_CANONICAL_CONFIDENCE_THRESHOLD,
-      },
-    },
-    orderBy: [
-      { confidence: "desc" },
-      { affectedItemCount: "desc" },
-      { sourceEntityNormalized: "asc" },
-    ],
-    take: limit,
-    select: {
-      pairKey: true,
-      sourceEntityId: true,
-      targetEntityId: true,
-    },
-  });
-
-  let mergedCount = 0;
-  let affectedClusterCount = 0;
-  let skippedCount = 0;
-  let failedCount = 0;
-
-  for (const plan of plans) {
-    const existingEntities = await prisma.entity.findMany({
-      where: {
-        id: {
-          in: [plan.sourceEntityId, plan.targetEntityId],
-        },
-      },
-      select: {
-        id: true,
-        normalized: true,
-      },
-    });
-
-    if (existingEntities.length !== 2) {
-      skippedCount += 1;
-      continue;
-    }
-
-    // 非破坏性重建后候选行会活到过期：pairKey 与规范格式（sourceId:targetId）
-    // 不一致的行来自旧算法版本，视为陈旧数据跳过
-    const source = existingEntities.find((entity) => entity.id === plan.sourceEntityId);
-    const target = existingEntities.find((entity) => entity.id === plan.targetEntityId);
-    if (!source || !target || plan.pairKey !== `${source.id}:${target.id}`) {
-      skippedCount += 1;
-      continue;
-    }
-
-    try {
-      const result = await mergeEntities({
-        targetEntityId: plan.targetEntityId,
-        sourceEntityIds: [plan.sourceEntityId],
-        createdBy: "system:auto-merge",
-      });
-      mergedCount += result.mergedCount;
-      affectedClusterCount += result.affectedClusterCount;
-    } catch {
-      failedCount += 1;
-    }
-  }
-
-  return {
-    scannedCount: plans.length,
-    mergedCount,
-    affectedClusterCount,
-    skippedCount,
-    failedCount,
   };
 }
 

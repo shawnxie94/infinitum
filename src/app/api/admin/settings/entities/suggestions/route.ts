@@ -3,7 +3,6 @@ import { z } from "zod";
 import { adminErrorResponse } from "@/lib/admin/http";
 import { requireAdmin } from "@/lib/admin/session";
 import {
-  autoMergeHighConfidenceEntitySuggestions,
   dismissEntitySuggestion,
   listAdminEntitySuggestions,
   precomputeEntitySuggestionCandidates,
@@ -25,10 +24,6 @@ const entitySuggestionDecisionSchema = z.object({
 
 const entitySuggestionPostSchema = z.union([
   entitySuggestionDecisionSchema,
-  z.object({
-    action: z.literal("auto_merge_high_confidence"),
-    limit: z.number().int().positive().optional(),
-  }),
   z.object({
     action: z.literal("precompute"),
   }),
@@ -61,11 +56,7 @@ export async function POST(request: Request) {
       return Response.json(await dismissEntitySuggestion(body));
     }
 
-    if (body.action === "precompute") {
-      return Response.json(await precomputeEntitySuggestionCandidates());
-    }
-
-    return Response.json(await autoMergeHighConfidenceEntitySuggestions({ limit: body.limit }));
+    return Response.json(await precomputeEntitySuggestionCandidates());
   } catch (error) {
     return adminErrorResponse(error);
   }
