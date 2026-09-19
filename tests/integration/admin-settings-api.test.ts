@@ -162,6 +162,7 @@ describe("/api/admin/settings", () => {
 
     expect(response.status).toBe(201);
     expect(createModelApiConfig).toHaveBeenCalledWith({
+      type: "chat",
       name: "默认模型配置",
       baseUrl: "https://example.com/v1",
       apiKey: "sk-test",
@@ -169,6 +170,9 @@ describe("/api/admin/settings", () => {
       modelName: "gpt-4.1-mini",
       ingestionItemConcurrency: 4,
       customHeaders: {},
+      dimensions: null,
+      batchSize: null,
+      timeoutMs: null,
       isEnabled: true,
       isDefault: true,
     });

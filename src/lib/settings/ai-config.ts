@@ -18,7 +18,6 @@ export const PROMPT_TYPE_OPTIONS: Array<{
   { value: "cluster_merge", label: "聚合合并" },
   { value: "daily_report", label: "AI 日报" },
   { value: "daily_report_review", label: "AI 日报审核" },
-  { value: "entity_alias_check", label: "实体别名判定" },
 ];
 
 export function getPromptTypeLabel(type: PromptConfigType): string {

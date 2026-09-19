@@ -839,12 +839,18 @@ model SourceGroup {
 
 model ModelApiConfig {
   id                       String         @id @default(cuid())
+  // "chat" = 普通对话模型；"embedding" = 向量模型（embedding 通道唯一生效来源）
+  type                     String         @default("chat")
   name                     String
   baseUrl                  String
   apiKey                   String         @default("")
   modelName                String
   ingestionItemConcurrency Int            @default(3)
   customHeaders            String         @default("")
+  // 以下三项仅 type = "embedding" 时有意义，NULL 表示使用默认值
+  dimensions               Int?
+  batchSize                Int?
+  timeoutMs                Int?
   isEnabled                Boolean        @default(true)
   isDefault                Boolean        @default(false)
   createdAt                DateTime       @default(now())
@@ -913,21 +919,6 @@ model PageView {
   @@index([path, date, visitorId])
   @@index([path, visitorId])
   @@map("page_views")
-}
-
-model EmbeddingConfig {
-  id         String   @id @default(cuid())
-  enabled    Boolean  @default(false)
-  baseUrl    String   @default("")
-  apiKey     String?
-  modelName  String   @default("")
-  dimensions Int?
-  batchSize  Int      @default(32)
-  timeoutMs  Int      @default(15000)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@map("embedding_configs")
 }
 
 model EmbeddingCache {

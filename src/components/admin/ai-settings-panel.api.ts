@@ -6,6 +6,7 @@ import type {
 } from "@/lib/settings/types";
 
 export type ModelApiConfigPayload = {
+  type: "chat" | "embedding";
   name: string;
   baseUrl: string;
   apiKey: string;
@@ -13,6 +14,9 @@ export type ModelApiConfigPayload = {
   modelName: string;
   ingestionItemConcurrency: number;
   customHeaders: Record<string, string>;
+  dimensions: number | null;
+  batchSize: number | null;
+  timeoutMs: number | null;
   isEnabled: boolean;
   isDefault: boolean;
 };

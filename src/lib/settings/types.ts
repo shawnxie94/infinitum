@@ -10,8 +10,32 @@ export const PROMPT_CONFIG_TYPES = [
 
 export type PromptConfigType = typeof PROMPT_CONFIG_TYPES[number];
 
+// 后台提示词配置可编辑的类型；entity_alias_check 是内部机制提示词（契约常量固化），不对后台开放
+export const ADMIN_PROMPT_CONFIG_TYPES = [
+  "item_understanding",
+  "cluster_summary",
+  "cluster_match",
+  "cluster_merge",
+  "daily_report",
+  "daily_report_review",
+] as const;
+
+// model_api_configs 表行（prisma 生成类型之外的关键字段视图）
+export type ModelApiConfigRow = {
+  type: string;
+  baseUrl: string;
+  apiKey: string;
+  modelName: string;
+  dimensions: number | null;
+  batchSize: number | null;
+  timeoutMs: number | null;
+  isEnabled: boolean;
+  isDefault: boolean;
+};
+
 export type AdminModelApiConfig = {
   id: string;
+  type: "chat" | "embedding";
   name: string;
   baseUrl: string;
   modelName: string;
@@ -19,6 +43,9 @@ export type AdminModelApiConfig = {
   customHeaders?: Record<string, string>;
   apiKeyMasked: string;
   hasApiKey: boolean;
+  dimensions: number | null;
+  batchSize: number | null;
+  timeoutMs: number | null;
   isEnabled: boolean;
   isDefault: boolean;
   createdAt: string;
@@ -132,19 +159,6 @@ export type AdminSettingsSnapshot = {
     maxPerRun: number;
     minChars: number;
     maxChars: number;
-    createdAt: string;
-    updatedAt: string;
-  };
-  embedding: {
-    id: string;
-    enabled: boolean;
-    baseUrl: string;
-    apiKeyMasked: string;
-    hasApiKey: boolean;
-    modelName: string;
-    dimensions: number | null;
-    batchSize: number;
-    timeoutMs: number;
     createdAt: string;
     updatedAt: string;
   };

@@ -9,11 +9,6 @@ import {
   serializeRuntimeContentExtractionConfig,
 } from "@/lib/settings/content-extraction-service";
 import {
-  ensureEmbeddingConfig,
-  serializeAdminEmbeddingConfig,
-  serializeRuntimeEmbeddingConfig,
-} from "@/lib/settings/embedding-config-service";
-import {
   ensureBriefingPreferenceConfig,
   ensureEventBriefingConfig,
   serializeAdminBriefingPreferenceConfig,
@@ -30,8 +25,35 @@ import {
   serializeSelectedPromptConfig,
   toSourceConfig,
 } from "@/lib/settings/core";
-import type { AdminSettingsSnapshot } from "@/lib/settings/types";
+import type { AdminSettingsSnapshot, ModelApiConfigRow } from "@/lib/settings/types";
 import { ensureDefaultDailyReportSchedule, ensureDefaultIngestionSchedule, ensureDefaultItemCleanupSchedule, toTaskScheduleSnapshot } from "@/lib/tasks/service";
+
+// 向量模型从模型 API 配置解析：启用中的向量模型行即全局生效（默认标记优先，其次最新创建）
+function serializeRuntimeEmbeddingFromModelConfig(
+  config: ModelApiConfigRow | null,
+): RuntimeConfig["embedding"] {
+  if (!config) {
+    return {
+      enabled: false,
+      baseUrl: "",
+      apiKey: null,
+      modelName: "",
+      dimensions: null,
+      batchSize: 32,
+      timeoutMs: 15_000,
+    };
+  }
+
+  return {
+    enabled: true,
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey || null,
+    modelName: config.modelName,
+    dimensions: config.dimensions,
+    batchSize: config.batchSize ?? 32,
+    timeoutMs: config.timeoutMs ?? 15_000,
+  };
+}
 
 export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
   // Runtime reads are the reliable startup path for the standalone Docker
@@ -40,7 +62,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
   // templates will remain stale when the instrumentation hook is unavailable.
   await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: true });
 
-  const [sources, blacklist, defaultModelConfig, promptConfigs, taskSchedule, contentExtractionConfig, embeddingConfig] = await Promise.all([
+  const [sources, blacklist, defaultModelConfig, embeddingModelConfig, promptConfigs, taskSchedule, contentExtractionConfig] = await Promise.all([
     prisma.source.findMany({
       where: { enabled: true },
       orderBy: { name: "asc" },
@@ -50,10 +72,18 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
     }),
     prisma.modelApiConfig.findFirst({
       where: {
+        type: "chat",
         isEnabled: true,
         isDefault: true,
       },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.modelApiConfig.findFirst({
+      where: {
+        type: "embedding",
+        isEnabled: true,
+      },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
     }),
     prisma.promptConfig.findMany({
       where: {
@@ -66,7 +96,6 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
     }),
     ensureDefaultIngestionSchedule(),
     ensureContentExtractionConfig(),
-    ensureEmbeddingConfig(),
   ]);
 
   if (!defaultModelConfig) {
@@ -95,7 +124,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
       processingStartAt: taskSchedule.processingStartAt,
     },
     contentExtraction: serializeRuntimeContentExtractionConfig(contentExtractionConfig),
-    embedding: serializeRuntimeEmbeddingConfig(embeddingConfig),
+    embedding: serializeRuntimeEmbeddingFromModelConfig(embeddingModelConfig),
     modelApi: serializeRuntimeModelApi(defaultModelConfig),
     prompts: {
       itemUnderstanding: resolvePromptSystemPrompt(itemUnderstandingConfig),
@@ -136,7 +165,6 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
     dailyReportSchedule,
     cleanupSchedule,
     contentExtractionConfig,
-    embeddingConfig,
     eventBriefingConfig,
     briefingPreferenceConfig,
     headerLinks,
@@ -168,13 +196,12 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
     ensureDefaultDailyReportSchedule(),
     ensureDefaultItemCleanupSchedule(),
     ensureContentExtractionConfig(),
-    ensureEmbeddingConfig(),
     ensureEventBriefingConfig(),
     ensureBriefingPreferenceConfig(),
     listAdminHeaderLinks(),
   ]);
 
-  const defaultModelConfig = modelApiConfigs.find((config) => config.isDefault);
+  const defaultModelConfig = modelApiConfigs.find((config) => config.isDefault && config.type === "chat");
   const latestItemsBySource = sources.length > 0
     ? await prisma.item.groupBy({
       by: ["sourceId"],
@@ -188,14 +215,15 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
 
   return {
     modelApiConfigs: modelApiConfigs.map(serializeAdminModelApiConfig),
-    promptConfigs: promptConfigs.map((config) => serializeAdminPromptConfig(config, defaultModelConfig)),
+    promptConfigs: promptConfigs
+      .filter((config) => config.type !== "entity_alias_check")
+      .map((config) => serializeAdminPromptConfig(config, defaultModelConfig)),
     headerLinks,
     eventBriefing: {
       config: serializeAdminEventBriefingConfig(eventBriefingConfig),
       preference: serializeAdminBriefingPreferenceConfig(briefingPreferenceConfig),
     },
     contentExtraction: serializeAdminContentExtractionConfig(contentExtractionConfig),
-    embedding: serializeAdminEmbeddingConfig(embeddingConfig),
     blacklistKeywords: blacklist.map((entry) => entry.keyword),
     taskSchedule: toTaskScheduleSnapshot(taskSchedule) as AdminSettingsSnapshot["taskSchedule"],
     dailyReportSchedule: toTaskScheduleSnapshot(dailyReportSchedule) as AdminSettingsSnapshot["dailyReportSchedule"],

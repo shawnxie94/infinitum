@@ -7,11 +7,11 @@ import {
   getPromptConfig,
   updatePromptConfig,
 } from "@/lib/settings/service";
-import { PROMPT_CONFIG_TYPES } from "@/lib/settings/types";
+import { ADMIN_PROMPT_CONFIG_TYPES } from "@/lib/settings/types";
 
 const promptConfigSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(PROMPT_CONFIG_TYPES),
+  type: z.enum(ADMIN_PROMPT_CONFIG_TYPES),
   prompt: z.string().optional(),
   userPrompt: z.string().nullable().optional(),
   // Accepted during the compatibility window but never used as the runtime

@@ -46,6 +46,7 @@ export async function createModelApiConfig(input: SaveModelApiConfigInput) {
     if (input.isDefault) {
       await tx.modelApiConfig.updateMany({
         where: {
+          type: "chat",
           isDefault: true,
         },
         data: {
@@ -53,15 +54,31 @@ export async function createModelApiConfig(input: SaveModelApiConfigInput) {
         },
       });
     }
+    // 启用中的向量模型全局唯一：新启用一条时自动禁用其余向量模型
+    if (input.type === "embedding" && input.isEnabled) {
+      await tx.modelApiConfig.updateMany({
+        where: {
+          type: "embedding",
+          isEnabled: true,
+        },
+        data: {
+          isEnabled: false,
+        },
+      });
+    }
 
     const config = await tx.modelApiConfig.create({
       data: {
+        type: input.type,
         name: normalizeText(input.name),
         baseUrl: normalizeText(input.baseUrl),
         apiKey: input.apiKey.trim(),
         modelName: normalizeText(input.modelName),
-        ingestionItemConcurrency: input.ingestionItemConcurrency,
+        ingestionItemConcurrency: input.type === "embedding" ? 3 : input.ingestionItemConcurrency,
         customHeaders: JSON.stringify(normalizeCustomHeaders(input.customHeaders)),
+        dimensions: input.type === "embedding" ? input.dimensions : null,
+        batchSize: input.type === "embedding" ? input.batchSize : null,
+        timeoutMs: input.type === "embedding" ? input.timeoutMs : null,
         isEnabled: input.isEnabled,
         isDefault: input.isDefault,
       },
@@ -98,6 +115,7 @@ export async function updateModelApiConfig(id: string, input: SaveModelApiConfig
     if (input.isDefault) {
       await tx.modelApiConfig.updateMany({
         where: {
+          type: "chat",
           id: { not: id },
           isDefault: true,
         },
@@ -106,16 +124,32 @@ export async function updateModelApiConfig(id: string, input: SaveModelApiConfig
         },
       });
     }
+    if (input.type === "embedding" && input.isEnabled) {
+      await tx.modelApiConfig.updateMany({
+        where: {
+          type: "embedding",
+          id: { not: id },
+          isEnabled: true,
+        },
+        data: {
+          isEnabled: false,
+        },
+      });
+    }
 
     const config = await tx.modelApiConfig.update({
       where: { id },
       data: {
+        type: input.type,
         name: normalizeText(input.name),
         baseUrl: normalizeText(input.baseUrl),
         apiKey: nextApiKey,
         modelName: normalizeText(input.modelName),
-        ingestionItemConcurrency: input.ingestionItemConcurrency,
+        ingestionItemConcurrency: input.type === "embedding" ? 3 : input.ingestionItemConcurrency,
         customHeaders: JSON.stringify(normalizeCustomHeaders(input.customHeaders)),
+        dimensions: input.type === "embedding" ? input.dimensions : null,
+        batchSize: input.type === "embedding" ? input.batchSize : null,
+        timeoutMs: input.type === "embedding" ? input.timeoutMs : null,
         isEnabled: input.isEnabled,
         isDefault: input.isDefault,
       },
@@ -233,6 +267,10 @@ export async function testModelApiConfig(
     throw new Error("模型配置不存在。");
   }
 
+  if (config.type === "embedding") {
+    return testEmbeddingModelApiConfig(config);
+  }
+
   const prompt = normalizeText(payload?.prompt) || "请回复：OK";
   const maxTokens = payload?.maxTokens && payload.maxTokens > 0 ? payload.maxTokens : 200;
 
@@ -292,6 +330,85 @@ export async function testModelApiConfig(
       success: true,
       message: "调用成功",
       content,
+      rawResponse,
+      statusCode: response.status,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "调用失败",
+      content: "",
+      rawResponse: "",
+      statusCode: 500,
+    };
+  }
+}
+
+async function testEmbeddingModelApiConfig(config: {
+  baseUrl: string;
+  apiKey: string;
+  modelName: string;
+  customHeaders: string;
+}) {
+  if (!config.apiKey) {
+    return {
+      success: false,
+      message: "当前模型配置没有 API Key。",
+      content: "",
+      rawResponse: "",
+      statusCode: 400,
+    };
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${config.apiKey}`,
+    "Content-Type": "application/json",
+    ...parseCustomHeaders(config.customHeaders),
+  };
+
+  try {
+    const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/embeddings`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: config.modelName,
+        input: ["向量模型连通性测试"],
+      }),
+    });
+    const rawResponse = await response.text();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        message: `调用失败: ${response.status}`,
+        content: rawResponse,
+        rawResponse,
+        statusCode: response.status,
+      };
+    }
+
+    let payload: { data?: Array<{ embedding?: number[] }> } | null = null;
+    try {
+      payload = JSON.parse(rawResponse) as { data?: Array<{ embedding?: number[] }> };
+    } catch {
+      // 保留原始文本作为回退。
+    }
+
+    const dims = payload?.data?.[0]?.embedding?.length ?? 0;
+    if (!dims) {
+      return {
+        success: false,
+        message: "响应中没有向量数据，请确认模型名称是 embedding 模型。",
+        content: rawResponse,
+        rawResponse,
+        statusCode: response.status,
+      };
+    }
+
+    return {
+      success: true,
+      message: `调用成功，向量维度 ${dims}`,
+      content: `向量维度 ${dims}`,
       rawResponse,
       statusCode: response.status,
     };

@@ -76,6 +76,7 @@ type AiSettingsPanelProps = {
 type HeaderEntry = { key: string; value: string };
 
 type ModelFormState = {
+  modelType: "chat" | "embedding";
   providerId: ModelApiProviderId;
   name: string;
   baseUrl: string;
@@ -84,6 +85,9 @@ type ModelFormState = {
   modelName: string;
   ingestionItemConcurrency: string;
   customHeaders: HeaderEntry[];
+  dimensions: string;
+  batchSize: string;
+  timeoutMs: string;
   isEnabled: boolean;
   isDefault: boolean;
 };
@@ -167,6 +171,7 @@ function toNullableNumber(value: string) {
 
 function buildEmptyModelForm(): ModelFormState {
   return {
+    modelType: "chat",
     providerId: "custom",
     name: "",
     baseUrl: "https://api.openai.com/v1",
@@ -175,6 +180,9 @@ function buildEmptyModelForm(): ModelFormState {
     modelName: "gpt-4.1-mini",
     ingestionItemConcurrency: "3",
     customHeaders: [],
+    dimensions: "",
+    batchSize: "32",
+    timeoutMs: "15000",
     isEnabled: true,
     isDefault: false,
   };
@@ -343,6 +351,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
 
   const promptModelOptions = useMemo(() => {
     return modelConfigs
+      .filter((config) => config.type !== "embedding")
       .map((config) => ({
         value: config.id,
         label:
@@ -353,7 +362,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
   }, [modelConfigs]);
 
   const defaultModelConfigName = useMemo(() => {
-    return modelConfigs.find((config) => config.isDefault)?.name ?? "默认模型";
+    return modelConfigs.find((config) => config.isDefault && config.type !== "embedding")?.name ?? "默认模型";
   }, [modelConfigs]);
 
   const promptSelectOptions = useMemo(
@@ -385,6 +394,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
     setEditingModelConfig(config);
     setEditingModelApiKeyRaw("");
     setModelForm({
+      modelType: config.type,
       providerId: inferModelApiProvider(config.baseUrl),
       name: config.name,
       baseUrl: config.baseUrl,
@@ -396,6 +406,9 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
         key,
         value,
       })),
+      dimensions: config.dimensions === null ? "" : String(config.dimensions),
+      batchSize: config.batchSize === null ? "" : String(config.batchSize),
+      timeoutMs: config.timeoutMs === null ? "" : String(config.timeoutMs),
       isEnabled: config.isEnabled,
       isDefault: config.isDefault,
     });
@@ -453,8 +466,11 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
 
   const handleSaveModelConfig = async () => {
     const ingestionItemConcurrency = toNullableNumber(modelForm.ingestionItemConcurrency);
+    const dimensions = toNullableNumber(modelForm.dimensions);
+    const batchSize = toNullableNumber(modelForm.batchSize);
+    const timeoutMs = toNullableNumber(modelForm.timeoutMs);
 
-    if (Number.isNaN(ingestionItemConcurrency)) {
+    if (Number.isNaN(ingestionItemConcurrency) || Number.isNaN(dimensions) || Number.isNaN(batchSize) || Number.isNaN(timeoutMs)) {
       showToast("请输入合法的数值字段。", "error");
       return;
     }
@@ -464,6 +480,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
       const customHeaders = buildCustomHeadersPayload(modelForm.customHeaders);
 
       const payload = {
+        type: modelForm.modelType,
         name: modelForm.name,
         baseUrl: modelForm.baseUrl,
         apiKey:
@@ -472,10 +489,13 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             : modelForm.apiKey,
         apiKeyMode: modelForm.apiKeyMode,
         modelName: modelForm.modelName,
-        ingestionItemConcurrency: Number(ingestionItemConcurrency),
+        ingestionItemConcurrency: Number(ingestionItemConcurrency ?? 3),
         customHeaders,
+        dimensions,
+        batchSize,
+        timeoutMs,
         isEnabled: modelForm.isEnabled,
-        isDefault: modelForm.isDefault,
+        isDefault: modelForm.modelType === "embedding" ? false : modelForm.isDefault,
       };
 
       const result = editingModelConfig
@@ -487,11 +507,18 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
           ? current.map((config) => (config.id === result.config.id ? result.config : config))
           : [result.config, ...current];
 
-        return next.map((config) =>
-          result.config.isDefault
-            ? { ...config, isDefault: config.id === result.config.id }
-            : config,
-        );
+        return next
+          .map((config) => {
+            // 启用中的向量模型全局唯一：同步本地列表状态
+            if (result.config.type === "embedding" && result.config.isEnabled) {
+              return config.type === "embedding" && config.id !== result.config.id
+                ? { ...config, isEnabled: false }
+                : config;
+            }
+            return result.config.isDefault
+              ? { ...config, isDefault: config.id === result.config.id }
+              : config;
+          });
       });
       setPromptConfigs((current) =>
         current.map((config) =>
@@ -721,6 +748,9 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                       <div className="flex-1">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-[var(--text-1)]">{config.name}</h3>
+                          <StatusTag tone={config.type === "embedding" ? "warning" : "neutral"}>
+                            {config.type === "embedding" ? "向量模型" : "普通模型"}
+                          </StatusTag>
                           {config.isDefault ? <StatusTag tone="info">默认</StatusTag> : null}
                           <StatusTag tone={config.isEnabled ? "success" : "neutral"}>
                             {config.isEnabled ? "启用" : "禁用"}
@@ -736,10 +766,23 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                             <span className="font-medium">模型名称：</span>
                             <code className={codeClassName}>{config.modelName}</code>
                           </div>
-                          <div>
-                            <span className="font-medium">抓取并发：</span>
-                            <span>{config.ingestionItemConcurrency}</span>
-                          </div>
+                          {config.type === "embedding" ? (
+                            <>
+                              <div>
+                                <span className="font-medium">向量维度：</span>
+                                <span>{config.dimensions ?? "模型默认"}</span>
+                              </div>
+                              <div>
+                                <span className="font-medium">批量大小：</span>
+                                <span>{config.batchSize ?? 32}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div>
+                              <span className="font-medium">抓取并发：</span>
+                              <span>{config.ingestionItemConcurrency}</span>
+                            </div>
+                          )}
                           <div>
                             <span className="font-medium">API密钥：</span>
                             <code className={codeClassName}>{config.apiKeyMasked || "未配置"}</code>
@@ -823,13 +866,28 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             </div>
           }
         >
+          <FormBlock label="模型类型" required>
+            <SelectField
+              aria-label="模型类型"
+              value={modelForm.modelType}
+              onChange={(value) =>
+                setModelForm((current) => ({ ...current, modelType: value as "chat" | "embedding" }))
+              }
+              options={[
+                { value: "chat", label: "普通模型（对话 / 抽取 / 归组）" },
+                { value: "embedding", label: "向量模型（语义召回 / 别名仲裁）" },
+              ]}
+              className="w-full"
+            />
+          </FormBlock>
+
           <FormBlock label="配置名称" required>
             <TextInput
               value={modelForm.name}
               onChange={(event) =>
                 setModelForm((current) => ({ ...current, name: event.target.value }))
               }
-              placeholder="默认模型配置"
+              placeholder={modelForm.modelType === "embedding" ? "向量模型配置" : "默认模型配置"}
             />
           </FormBlock>
 
@@ -1015,25 +1073,70 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             {modelOptionsError ? <p className="mt-2 text-xs text-[var(--danger-ink)]">{modelOptionsError}</p> : null}
           </FormBlock>
 
-          <FormBlock label="抓取并发数" required>
-            <TextInput
-              aria-label="抓取并发数"
-              type="number"
-              min="1"
-              max="10"
-              value={modelForm.ingestionItemConcurrency}
-              onChange={(event) =>
-                setModelForm((current) => ({
-                  ...current,
-                  ingestionItemConcurrency: event.target.value,
-                }))
-              }
-              placeholder="1 - 10"
-            />
-            <p className="text-xs text-[var(--text-3)]">
-              当前配置被设为默认模型时，将使用这里的并发数作为抓取分析并发。
-            </p>
-          </FormBlock>
+          {modelForm.modelType === "chat" ? (
+            <FormBlock label="抓取并发数" required>
+              <TextInput
+                aria-label="抓取并发数"
+                type="number"
+                min="1"
+                max="10"
+                value={modelForm.ingestionItemConcurrency}
+                onChange={(event) =>
+                  setModelForm((current) => ({
+                    ...current,
+                    ingestionItemConcurrency: event.target.value,
+                  }))
+                }
+                placeholder="1 - 10"
+              />
+              <p className="text-xs text-[var(--text-3)]">
+                当前配置被设为默认模型时，将使用这里的并发数作为抓取分析并发。
+              </p>
+            </FormBlock>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <FormBlock label="向量维度">
+                <TextInput
+                  aria-label="向量维度"
+                  type="number"
+                  min="16"
+                  max="4096"
+                  value={modelForm.dimensions}
+                  onChange={(event) =>
+                    setModelForm((current) => ({ ...current, dimensions: event.target.value }))
+                  }
+                  placeholder="模型默认"
+                />
+              </FormBlock>
+              <FormBlock label="批量大小">
+                <TextInput
+                  aria-label="批量大小"
+                  type="number"
+                  min="1"
+                  max="128"
+                  value={modelForm.batchSize}
+                  onChange={(event) =>
+                    setModelForm((current) => ({ ...current, batchSize: event.target.value }))
+                  }
+                  placeholder="32"
+                />
+              </FormBlock>
+              <FormBlock label="请求超时（毫秒）">
+                <TextInput
+                  aria-label="请求超时（毫秒）"
+                  type="number"
+                  min="3000"
+                  max="60000"
+                  step="500"
+                  value={modelForm.timeoutMs}
+                  onChange={(event) =>
+                    setModelForm((current) => ({ ...current, timeoutMs: event.target.value }))
+                  }
+                  placeholder="15000"
+                />
+              </FormBlock>
+            </div>
+          )}
 
           <div className="space-y-2">
             <span className={labelClassName}>自定义请求头</span>
@@ -1111,17 +1214,19 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
               />
               <span className="text-sm text-[var(--text-2)]">启用此配置</span>
             </label>
-            <label className="flex flex-wrap items-center gap-2">
-              <input
-                className={checkboxInputClassName}
-                checked={modelForm.isDefault}
-                type="checkbox"
-                onChange={(event) =>
-                  setModelForm((current) => ({ ...current, isDefault: event.target.checked }))
-                }
-              />
-              <span className="text-sm text-[var(--text-2)]">设为默认配置</span>
-            </label>
+            {modelForm.modelType === "chat" ? (
+              <label className="flex flex-wrap items-center gap-2">
+                <input
+                  className={checkboxInputClassName}
+                  checked={modelForm.isDefault}
+                  type="checkbox"
+                  onChange={(event) =>
+                    setModelForm((current) => ({ ...current, isDefault: event.target.checked }))
+                  }
+                />
+                <span className="text-sm text-[var(--text-2)]">设为默认配置</span>
+              </label>
+            ) : null}
           </div>
         </ModalShell>
 

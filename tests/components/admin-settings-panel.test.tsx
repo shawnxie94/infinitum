@@ -30,6 +30,7 @@ function buildInitialSettings(): AdminSettingsSnapshot {
     modelApiConfigs: [
       {
         id: "model-1",
+        type: "chat",
         name: "默认模型配置",
         baseUrl: "https://example.com/v1",
         modelName: "gpt-4.1-mini",
@@ -39,6 +40,9 @@ function buildInitialSettings(): AdminSettingsSnapshot {
         },
         apiKeyMasked: "••••••••••••",
         hasApiKey: true,
+        dimensions: null,
+        batchSize: null,
+        timeoutMs: null,
         isEnabled: true,
         isDefault: true,
         createdAt: "2026-04-20T10:00:00.000Z",
@@ -102,19 +106,6 @@ function buildInitialSettings(): AdminSettingsSnapshot {
       maxPerRun: 20,
       minChars: 500,
       maxChars: 32000,
-      createdAt: "2026-04-20T10:00:00.000Z",
-      updatedAt: "2026-04-20T10:00:00.000Z",
-    },
-    embedding: {
-      id: "embedding-1",
-      enabled: false,
-      baseUrl: "",
-      apiKeyMasked: "",
-      hasApiKey: false,
-      modelName: "",
-      dimensions: null,
-      batchSize: 32,
-      timeoutMs: 15000,
       createdAt: "2026-04-20T10:00:00.000Z",
       updatedAt: "2026-04-20T10:00:00.000Z",
     },
@@ -484,6 +475,7 @@ describe("AdminSettingsPanel", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          type: "chat",
           name: "新的模型配置",
           baseUrl: "https://api.openai.com/v1",
           apiKey: "sk-test-9876",
@@ -493,6 +485,9 @@ describe("AdminSettingsPanel", () => {
           customHeaders: {
             "User-Agent": "KimiCLI/1.44",
           },
+          dimensions: null,
+          batchSize: 32,
+          timeoutMs: 15000,
           isEnabled: true,
           isDefault: false,
         }),
@@ -545,6 +540,7 @@ describe("AdminSettingsPanel", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          type: "chat",
           name: "OrcaRouter",
           baseUrl: "https://api.orcarouter.ai/v1",
           apiKey: "sk-orca-test",
@@ -552,6 +548,82 @@ describe("AdminSettingsPanel", () => {
           modelName: "orcarouter/auto",
           ingestionItemConcurrency: 3,
           customHeaders: {},
+          dimensions: null,
+          batchSize: 32,
+          timeoutMs: 15000,
+          isEnabled: true,
+          isDefault: false,
+        }),
+      });
+    });
+  });
+
+  it("creates an embedding model config with tuning fields and no default flag", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          config: {
+            id: "model-embed",
+            type: "embedding",
+            name: "语义向量",
+            baseUrl: "http://sarvismac-mini:3000/v1",
+            modelName: "BAAI/bge-m3",
+            ingestionItemConcurrency: 3,
+            customHeaders: {},
+            apiKeyMasked: "••••••••••••",
+            hasApiKey: true,
+            dimensions: null,
+            batchSize: 64,
+            timeoutMs: 15000,
+            isEnabled: true,
+            isDefault: false,
+            createdAt: "2026-04-20T11:00:00.000Z",
+            updatedAt: "2026-04-20T11:00:00.000Z",
+          },
+        }),
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
+
+    await user.click(screen.getByRole("button", { name: /\+ 创建配置/i }));
+    await user.selectOptions(screen.getByLabelText("模型类型"), "embedding");
+    await user.clear(screen.getByLabelText(/配置名称/));
+    await user.type(screen.getByLabelText(/配置名称/), "语义向量");
+    await user.clear(screen.getByLabelText(/API地址/));
+    await user.type(screen.getByLabelText(/API地址/), "http://sarvismac-mini:3000/v1");
+    await user.clear(screen.getByLabelText(/API密钥/));
+    await user.type(screen.getByLabelText(/API密钥/), "sk-embed");
+    await user.clear(screen.getByLabelText(/批量大小/));
+    await user.type(screen.getByLabelText(/批量大小/), "64");
+
+    // 向量模型不出现默认开关与抓取并发字段
+    expect(screen.queryByText("设为默认配置")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/抓取并发数/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "创建" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/model-api-configs", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "embedding",
+          name: "语义向量",
+          baseUrl: "http://sarvismac-mini:3000/v1",
+          apiKey: "sk-embed",
+          apiKeyMode: "replace",
+          modelName: "gpt-4.1-mini",
+          ingestionItemConcurrency: 3,
+          customHeaders: {},
+          dimensions: null,
+          batchSize: 64,
+          timeoutMs: 15000,
           isEnabled: true,
           isDefault: false,
         }),
@@ -651,6 +723,7 @@ describe("AdminSettingsPanel", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
+          type: "chat",
           name: "默认模型配置",
           baseUrl: "https://example.com/v1",
           apiKey: "",
@@ -660,6 +733,9 @@ describe("AdminSettingsPanel", () => {
           customHeaders: {
             "User-Agent": "KimiCLI/1.44",
           },
+          dimensions: null,
+          batchSize: null,
+          timeoutMs: null,
           isEnabled: true,
           isDefault: true,
         }),

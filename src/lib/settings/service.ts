@@ -16,13 +16,6 @@ export type {
   SaveContentExtractionConfigInput,
 } from "@/lib/settings/content-extraction-service";
 export {
-  ensureEmbeddingConfig,
-  updateEmbeddingConfig,
-} from "@/lib/settings/embedding-config-service";
-export type {
-  SaveEmbeddingConfigInput,
-} from "@/lib/settings/embedding-config-service";
-export {
   ensureBriefingPreferenceConfig,
   ensureEventBriefingConfig,
   updateBriefingPreferenceConfig,

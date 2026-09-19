@@ -91,7 +91,10 @@ function parseOptionalBoolean(value: string | null): boolean | null {
   return null;
 }
 
+export type ModelApiConfigType = "chat" | "embedding";
+
 export type SaveModelApiConfigInput = {
+  type: ModelApiConfigType;
   name: string;
   baseUrl: string;
   apiKey: string;
@@ -99,6 +102,9 @@ export type SaveModelApiConfigInput = {
   modelName: string;
   ingestionItemConcurrency: number;
   customHeaders?: Record<string, string>;
+  dimensions: number | null;
+  batchSize: number | null;
+  timeoutMs: number | null;
   isEnabled: boolean;
   isDefault: boolean;
 };
@@ -252,12 +258,16 @@ export function parseCustomHeaders(raw?: string | null): Record<string, string> 
 
 export function serializeAdminModelApiConfig(config: {
   id: string;
+  type: string;
   name: string;
   baseUrl: string;
   modelName: string;
   ingestionItemConcurrency: number;
   customHeaders: string;
   apiKey: string;
+  dimensions: number | null;
+  batchSize: number | null;
+  timeoutMs: number | null;
   isEnabled: boolean;
   isDefault: boolean;
   createdAt: Date;
@@ -265,6 +275,7 @@ export function serializeAdminModelApiConfig(config: {
 }): AdminModelApiConfig {
   return {
     id: config.id,
+    type: config.type === "embedding" ? "embedding" : "chat",
     name: config.name,
     baseUrl: config.baseUrl,
     modelName: config.modelName,
@@ -272,6 +283,9 @@ export function serializeAdminModelApiConfig(config: {
     customHeaders: parseCustomHeaders(config.customHeaders),
     apiKeyMasked: maskApiKey(config.apiKey),
     hasApiKey: Boolean(config.apiKey),
+    dimensions: config.dimensions,
+    batchSize: config.batchSize,
+    timeoutMs: config.timeoutMs,
     isEnabled: config.isEnabled,
     isDefault: config.isDefault,
     createdAt: toIsoString(config.createdAt),
@@ -403,6 +417,20 @@ function validateIngestionConcurrency(value: number) {
   }
 }
 
+function validateEmbeddingTuning(input: SaveModelApiConfigInput) {
+  if (input.dimensions !== null) {
+    if (!Number.isInteger(input.dimensions) || input.dimensions < 16 || input.dimensions > 4096) {
+      throw new Error("向量维度需为 16-4096 的整数，留空使用模型默认维度。");
+    }
+  }
+  if (input.batchSize !== null && (!Number.isInteger(input.batchSize) || input.batchSize < 1 || input.batchSize > 128)) {
+    throw new Error("批量大小需为 1-128 的整数。");
+  }
+  if (input.timeoutMs !== null && (!Number.isInteger(input.timeoutMs) || input.timeoutMs < 3000 || input.timeoutMs > 60000)) {
+    throw new Error("请求超时需为 3000-60000 毫秒的整数。");
+  }
+}
+
 export function validateModelApiInput(
   input: SaveModelApiConfigInput,
   options?: {
@@ -410,6 +438,9 @@ export function validateModelApiInput(
     currentHasApiKey?: boolean;
   },
 ) {
+  if (input.type === "embedding" && input.isDefault) {
+    throw new Error("向量模型不支持设为默认模型；启用中的向量模型即全局生效。");
+  }
   if (!normalizeText(input.name)) {
     throw new Error("请填写配置名称。");
   }
@@ -419,7 +450,12 @@ export function validateModelApiInput(
   if (!normalizeText(input.modelName)) {
     throw new Error("请填写模型名称。");
   }
-  validateIngestionConcurrency(input.ingestionItemConcurrency);
+  if (input.type === "chat") {
+    validateIngestionConcurrency(input.ingestionItemConcurrency);
+  }
+  if (input.type === "embedding") {
+    validateEmbeddingTuning(input);
+  }
   if (!options?.isUpdate && !normalizeText(input.apiKey)) {
     throw new Error("请填写 API Key。");
   }
@@ -458,6 +494,10 @@ export async function validatePromptConfigInput(
     if (!modelConfig) {
       throw new Error("关联的模型配置不存在。");
     }
+
+    if (modelConfig.type === "embedding") {
+      throw new Error("提示词不能关联向量模型配置。");
+    }
   }
 
   if (input.isDefault) {
@@ -495,7 +535,6 @@ const ALL_PROMPT_TYPES = [
   PromptConfigType.cluster_merge,
   PromptConfigType.daily_report,
   PromptConfigType.daily_report_review,
-  PromptConfigType.entity_alias_check,
 ] as const;
 
 const REMOVED_PROMPT_CONFIG_TYPES = [
@@ -504,6 +543,8 @@ const REMOVED_PROMPT_CONFIG_TYPES = [
   "item_summary",
   "item_analysis",
   "item_aggregation",
+  // 实体别名判定是内部机制提示词：运行时由契约常量固化，admin 覆盖不生效，不再暴露
+  "entity_alias_check",
 ] as const;
 
 const LEGACY_ITEM_UNDERSTANDING_TAG_MARKER = '"tags":';

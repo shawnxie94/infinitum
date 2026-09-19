@@ -818,6 +818,11 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("background_task_runs", "pipelineCheckpointJson", "TEXT");
   addColumnIfMissing("prompt_configs", "templateMigrationAuditJson", "TEXT");
   addColumnIfMissing("daily_reports", "currentRevisionId", "TEXT");
+  // 向量模型并入模型 API 配置：type 区分普通/向量，三项向量参数仅 embedding 行使用
+  addColumnIfMissing("model_api_configs", "type", "TEXT NOT NULL DEFAULT 'chat'");
+  addColumnIfMissing("model_api_configs", "dimensions", "INTEGER");
+  addColumnIfMissing("model_api_configs", "batchSize", "INTEGER");
+  addColumnIfMissing("model_api_configs", "timeoutMs", "INTEGER");
   runSqlite([dbPath], {
     input: 'CREATE INDEX IF NOT EXISTS "daily_reports_currentRevisionId_idx" ON "daily_reports"("currentRevisionId");\n',
   });

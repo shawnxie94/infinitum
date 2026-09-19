@@ -7,7 +7,6 @@ import {
   DEFAULT_DAILY_REPORT_PROMPT,
   DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
-  DEFAULT_ENTITY_ALIAS_CHECK_PROMPT,
   DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE,
   DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
@@ -79,10 +78,7 @@ describe("admin settings service", () => {
     expect(settings.modelApiConfigs[0]?.apiKeyMasked).toBe("");
     expect(settings.modelApiConfigs[0]?.ingestionItemConcurrency).toBe(3);
     expect(settings.taskSchedule.aggregationSplitMaxEvents).toBe(20);
-    expect(settings.promptConfigs).toHaveLength(7);
-    expect(settings.promptConfigs.find((config) => config.type === "entity_alias_check")?.systemPrompt).toBe(
-      DEFAULT_ENTITY_ALIAS_CHECK_PROMPT,
-    );
+    expect(settings.promptConfigs).toHaveLength(6);
     expect(settings.promptConfigs.find((config) => config.type === "daily_report_review")?.isEnabled).toBe(false);
     expect(settings.promptConfigs.find((config) => config.type === "daily_report_review")?.prompt).toBe(
       DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
@@ -487,6 +483,10 @@ describe("admin settings service", () => {
 
   it("uses enabled default configs to build the runtime mapping", async () => {
     const modelConfig = await createModelApiConfig({
+      type: "chat",
+      dimensions: null,
+      batchSize: null,
+      timeoutMs: null,
       name: "默认模型配置",
       baseUrl: "https://example.com/v1",
       apiKey: "sk-live",
@@ -549,6 +549,10 @@ describe("admin settings service", () => {
 
   it("prevents deleting the default model config", async () => {
     const modelConfig = await createModelApiConfig({
+      type: "chat",
+      dimensions: null,
+      batchSize: null,
+      timeoutMs: null,
       name: "默认模型配置",
       baseUrl: "https://example.com/v1",
       apiKey: "sk-live",
@@ -563,6 +567,10 @@ describe("admin settings service", () => {
 
   it("prevents deleting the default prompt config", async () => {
     const modelConfig = await createModelApiConfig({
+      type: "chat",
+      dimensions: null,
+      batchSize: null,
+      timeoutMs: null,
       name: "默认模型配置",
       baseUrl: "https://example.com/v1",
       apiKey: "sk-live",
