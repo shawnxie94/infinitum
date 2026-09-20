@@ -511,8 +511,9 @@ describe("ContentReviewPanel", () => {
     await user.click(screen.getByRole("button", { name: "聚合待定（1）" }));
     const reviewDialog = await screen.findByRole("dialog", { name: "聚合待定" });
     expect(within(reviewDialog).getByText("AI 融资补充")).toBeInTheDocument();
-    expect(within(reviewDialog).getByText("置信分")).toBeInTheDocument();
-    expect(within(reviewDialog).getByText("62")).toBeInTheDocument();
+    expect(within(reviewDialog).getByText("判断依据")).toBeInTheDocument();
+    expect(within(reviewDialog).getByText("主体一致但对象证据不足")).toBeInTheDocument();
+    expect(within(reviewDialog).queryByText("置信分")).not.toBeInTheDocument();
     expect(within(reviewDialog).queryByText("另一组摘要")).not.toBeInTheDocument();
     expect(within(reviewDialog).queryByText("本地 86")).not.toBeInTheDocument();
     expect(within(reviewDialog).queryByText("置信 62")).not.toBeInTheDocument();
