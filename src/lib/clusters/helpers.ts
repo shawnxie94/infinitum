@@ -539,12 +539,63 @@ const CLUSTER_PRESENTATION_REASONING_MARKERS = [
   "最终输出",
 ];
 
+const CLUSTER_TITLE_MAX_LENGTH = 80;
+const CLUSTER_SUMMARY_MAX_LENGTH = 400;
+
+// 超长按句子边界截断（保留至少约 60 字符的合理句读），无合适句读时硬切。
+function truncateAtSentenceBoundary(text: string, maxLength: number) {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  const window = text.slice(0, maxLength);
+  const sentenceEnd = Math.max(
+    window.lastIndexOf("。"),
+    window.lastIndexOf("！"),
+    window.lastIndexOf("？"),
+    window.lastIndexOf("；"),
+    window.lastIndexOf("…"),
+  );
+
+  return sentenceEnd >= 60 ? window.slice(0, sentenceEnd + 1) : window;
+}
+
+// 截断可能落在 ** 或 * 强调标记内部，移除未闭合的标记避免渲染出持续加粗/斜体。
+function balanceEmphasisMarkers(text: string) {
+  let result = text;
+  const doubleCount = (result.match(/\*\*/g) || []).length;
+
+  if (doubleCount % 2 === 1) {
+    const lastOpen = result.lastIndexOf("**");
+    result = result.slice(0, lastOpen) + result.slice(lastOpen + 2);
+  }
+
+  const singlePattern = /(?<!\*)\*(?!\*)/g;
+  const singleCount = (result.match(singlePattern) || []).length;
+
+  if (singleCount % 2 === 1) {
+    let match: RegExpExecArray | null;
+    let lastSingle = -1;
+    singlePattern.lastIndex = 0;
+
+    while ((match = singlePattern.exec(result)) !== null) {
+      lastSingle = match.index;
+    }
+
+    if (lastSingle >= 0) {
+      result = result.slice(0, lastSingle) + result.slice(lastSingle + 1);
+    }
+  }
+
+  return result;
+}
+
 function isAcceptableClusterPresentation(value: { title: string; summary: string }) {
   const title = value.title.trim();
   const summary = value.summary.trim();
   const normalizedSummary = summary.toLowerCase();
 
-  if (!title || !summary || title.length > 80 || summary.length > 400) {
+  if (!title || !summary) {
     return false;
   }
 
@@ -572,7 +623,15 @@ function parseClusterPresentationOutput(
       summary: parsed.summary?.trim() || fallback.summary,
     };
 
-    return isAcceptableClusterPresentation(presentation) ? presentation : null;
+    if (!isAcceptableClusterPresentation(presentation)) {
+      return null;
+    }
+
+    // 长度超标不再整条拒绝：句子边界截断后采用，避免模型输出偏长时丢弃可用摘要。
+    return {
+      title: presentation.title.slice(0, CLUSTER_TITLE_MAX_LENGTH),
+      summary: balanceEmphasisMarkers(truncateAtSentenceBoundary(presentation.summary, CLUSTER_SUMMARY_MAX_LENGTH)),
+    };
   } catch {
     return null;
   }
