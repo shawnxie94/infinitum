@@ -130,6 +130,7 @@ describe("runIngestion", () => {
       { key: "cluster_match", label: "聚合匹配", actual: 0, estimated: 0 },
       { key: "cluster_summary", label: "聚合摘要", actual: 1, estimated: 1 },
       { key: "cluster_merge", label: "聚合合并", actual: 0, estimated: 0 },
+      { key: "entity_alias_check", label: "实体别名判定", actual: 0, estimated: 0 },
       { key: "daily_report", label: "AI 日报", actual: 0, estimated: 0 },
       { key: "daily_report_assess", label: "评估", actual: 0, estimated: 0 },
       { key: "daily_report_plan", label: "规划", actual: 0, estimated: 0 },

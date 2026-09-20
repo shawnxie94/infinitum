@@ -7,6 +7,7 @@ import {
   precomputeEntitySuggestionCandidates,
 } from "@/lib/entities/service";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
+import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 import { enqueueTaskRun, updateTaskRun } from "@/lib/tasks/service";
 
 type PrecomputeStageResult = {
@@ -76,10 +77,14 @@ export async function executePrecomputeTask(taskRun: { id: string }) {
   // 配置缺失时降级：合并预筛退纯规则、别名阶段跳过仲裁，任务不阻断
   const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
   const embedTexts = runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null;
+  const aiUsage = createTaskAiUsageTracker();
   const aiProvider: AiProvider | undefined = runtimeConfig
-    ? createAiProvider(runtimeConfig.modelApi, undefined, undefined, {
-        embedding: runtimeConfig.embedding,
-      })
+    ? aiUsage.wrapProvider(
+        createAiProvider(runtimeConfig.modelApi, undefined, undefined, {
+          embedding: runtimeConfig.embedding,
+          onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+        }),
+      )
     : undefined;
 
   let aliasMediumRecords: AliasMediumRecords = [];
@@ -127,6 +132,7 @@ export async function executePrecomputeTask(taskRun: { id: string }) {
   const progressLabel = stages.map((stage) => stage.summary).join("；");
   const errorSummary = failedStages.map((stage) => `${stage.label}: ${stage.error}`).join("；") || null;
 
+  const aiUsageSnapshot = aiUsage.snapshot();
   await updateTaskRun(taskRun.id, {
     status,
     progressCurrent: 3,
@@ -134,6 +140,9 @@ export async function executePrecomputeTask(taskRun: { id: string }) {
     progressLabel,
     errorSummary,
     finishedAt: new Date(),
+    aiCallCountActual: aiUsageSnapshot.actual,
+    aiCallCountEstimated: aiUsageSnapshot.estimated,
+    aiCallBreakdown: aiUsageSnapshot.breakdown,
   });
 
   if (status === "failed") {

@@ -17,6 +17,7 @@ const AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
   cluster_match: "聚合匹配",
   cluster_summary: "聚合摘要",
   cluster_merge: "聚合合并",
+  entity_alias_check: "实体别名判定",
   daily_report: "AI 日报",
   daily_report_assess: "评估",
   daily_report_plan: "规划",
@@ -30,7 +31,8 @@ function getContractTypeForUsageKey(key: TaskAiCallBreakdownKey) {
     key === "item_understanding" ? "item_understanding" as const :
       key === "cluster_summary" ? "cluster_summary" as const :
         key === "cluster_match" ? "cluster_match" as const :
-          key === "cluster_merge" ? "cluster_merge" as const : "daily_report" as const;
+          key === "cluster_merge" ? "cluster_merge" as const :
+            key === "entity_alias_check" ? "entity_alias_check" as const : "daily_report" as const;
 }
 
 type TaskAiUsageBreakdownState = Record<TaskAiCallBreakdownKey, { actual: number; estimated: number }>;
@@ -48,6 +50,7 @@ function createEmptyBreakdownState(): TaskAiUsageBreakdownState {
     cluster_match: { actual: 0, estimated: 0 },
     cluster_summary: { actual: 0, estimated: 0 },
     cluster_merge: { actual: 0, estimated: 0 },
+    entity_alias_check: { actual: 0, estimated: 0 },
     daily_report: { actual: 0, estimated: 0 },
     daily_report_assess: { actual: 0, estimated: 0 },
     daily_report_plan: { actual: 0, estimated: 0 },
@@ -63,6 +66,7 @@ function createEmptyTokenState(): TaskAiUsageTokenState {
     cluster_match: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, tokenUsageSource: null },
     cluster_summary: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, tokenUsageSource: null },
     cluster_merge: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, tokenUsageSource: null },
+    entity_alias_check: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, tokenUsageSource: null },
     daily_report: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, tokenUsageSource: null },
     daily_report_assess: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, tokenUsageSource: null },
     daily_report_plan: { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0, tokenUsageSource: null },
@@ -213,6 +217,16 @@ export function createTaskAiUsageTracker(
           syncEstimateFloor();
           return aiProvider.assessClusterMergePairs(clustersJson);
         },
+        ...(aiProvider.assessEntityAliasPairs
+          ? {
+              async assessEntityAliasPairs(input: Parameters<NonNullable<AiProvider["assessEntityAliasPairs"]>>[0]) {
+                incrementActual("entity_alias_check");
+                incrementEstimated("entity_alias_check");
+                syncEstimateFloor();
+                return aiProvider.assessEntityAliasPairs!(input);
+              },
+            }
+          : {}),
         async assessDailyReportCandidates(input) {
           incrementActual("daily_report_assess");
           incrementEstimated("daily_report_assess");

@@ -155,6 +155,7 @@ export type TaskAiCallBreakdownKey =
   | "cluster_match"
   | "cluster_summary"
   | "cluster_merge"
+  | "entity_alias_check"
   /** Legacy aggregate key retained for historical task snapshots. */
   | "daily_report"
   | "daily_report_assess"

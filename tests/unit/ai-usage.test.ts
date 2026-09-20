@@ -85,4 +85,70 @@ describe("task AI usage provider wrapper", () => {
     });
     expect(untouched).not.toHaveProperty("totalTokens");
   });
+
+  it("wraps and tracks the entity alias check method when the provider has it", async () => {
+    const assessEntityAliasPairs = vi.fn().mockResolvedValue([
+      { aName: "智谱", bName: "Z.ai", isSameEntity: true, confidence: "high", canonicalName: "智谱" },
+    ]);
+    const tracker = createTaskAiUsageTracker();
+    const provider = tracker.wrapProvider({
+      understandItem: vi.fn(),
+      summarizeCluster: vi.fn(),
+      matchClusterCandidate: vi.fn(),
+      assessClusterMergePairs: vi.fn(),
+      assessEntityAliasPairs,
+    } as unknown as AiProvider);
+
+    const input = { pairs: [{ aName: "智谱", bName: "Z.ai", evidence: ["同聚类主体变体"] }] };
+    await expect(provider.assessEntityAliasPairs!(input)).resolves.toHaveLength(1);
+    expect(assessEntityAliasPairs).toHaveBeenCalledWith(input);
+    expect(tracker.snapshot().breakdown).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "entity_alias_check", actual: 1, estimated: 1, label: "实体别名判定" }),
+    ]));
+  });
+
+  it("keeps assessEntityAliasPairs undefined when the provider lacks it", () => {
+    const tracker = createTaskAiUsageTracker();
+    const provider = tracker.wrapProvider({
+      understandItem: vi.fn(),
+      summarizeCluster: vi.fn(),
+      matchClusterCandidate: vi.fn(),
+      assessClusterMergePairs: vi.fn(),
+    } as unknown as AiProvider);
+
+    expect(provider.assessEntityAliasPairs).toBeUndefined();
+    expect(tracker.snapshot().breakdown).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "entity_alias_check", actual: 0, estimated: 0 }),
+    ]));
+  });
+
+  it("accumulates entity alias check tokens via addUsageByKey", () => {
+    const tracker = createTaskAiUsageTracker();
+
+    tracker.addUsageByKey("entity_alias_check", {
+      promptTokens: 600,
+      completionTokens: 100,
+      totalTokens: 700,
+      cachedTokens: 0,
+      tokenUsageSource: "provider",
+    });
+    // 未知 key 不入账
+    tracker.addUsageByKey("unknown_key", {
+      promptTokens: 1,
+      completionTokens: 1,
+      totalTokens: 2,
+      cachedTokens: 0,
+    });
+
+    const breakdown = tracker.snapshot().breakdown;
+    const alias = breakdown.find((entry) => entry.key === "entity_alias_check");
+    expect(alias).toMatchObject({
+      promptTokens: 600,
+      completionTokens: 100,
+      totalTokens: 700,
+      tokenUsageSource: "provider",
+    });
+    expect(alias!.contractVersion).toBeDefined();
+    expect(tracker.snapshot().actual).toBe(0);
+  });
 });

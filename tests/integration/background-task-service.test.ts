@@ -567,6 +567,12 @@ describe("background task persistence", () => {
         estimated: 0,
       },
       {
+        key: "entity_alias_check",
+        label: "实体别名判定",
+        actual: 0,
+        estimated: 0,
+      },
+      {
         key: "daily_report",
         label: "AI 日报",
         actual: 0,
