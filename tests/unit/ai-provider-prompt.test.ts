@@ -230,7 +230,7 @@ describe("ai provider quality rubric integration", () => {
 
   it("locks the entity alias check to temperature 0 with a bounded token budget", async () => {
     const create = mockModelResponse({
-      decisions: [{ a: "A", b: "B", isSameEntity: false, confidence: "high", canonicalName: null }],
+      decisions: [{ isSameEntity: false, confidence: "high", canonicalName: null }],
     });
     const provider = createAiProvider(
       modelApiConfig,

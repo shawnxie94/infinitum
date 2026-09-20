@@ -245,6 +245,40 @@ function resolveSuggestionDirection(left: EntityCandidate, right: EntityCandidat
   return { sourceEntity, targetEntity };
 }
 
+type AutoAliasDirection = {
+  sourceEntity: EntityCandidate;
+  targetEntity: EntityCandidate;
+  canonicalNameMatched: boolean;
+};
+
+function resolveAutoAliasDirection(
+  left: EntityCandidate,
+  right: EntityCandidate,
+  canonicalName: string | null,
+): AutoAliasDirection {
+  const fallback = resolveSuggestionDirection(left, right);
+  const canonicalText = canonicalName?.trim() ?? "";
+  if (!canonicalText) {
+    return { ...fallback, canonicalNameMatched: true };
+  }
+
+  const normalizedCanonical = normalizeEntityName(canonicalText)?.normalized;
+  if (!normalizedCanonical) {
+    return { ...fallback, canonicalNameMatched: false };
+  }
+
+  const targetEntity = [left, right].find((entity) => entity.normalized === normalizedCanonical);
+  if (!targetEntity) {
+    return { ...fallback, canonicalNameMatched: false };
+  }
+
+  return {
+    targetEntity,
+    sourceEntity: targetEntity.id === left.id ? right : left,
+    canonicalNameMatched: true,
+  };
+}
+
 function getComparableEntityTexts(entity: EntityCandidate) {
   return [
     entity.name,
@@ -1235,8 +1269,8 @@ function appendAliasEvidence(
  * 1. 挖掘候选：同一多 item 聚类内的主体变体（合并判定已锚定同事件）+ approved 反馈标签的主体差异对；
  * 2. 过滤：两侧都存在不同 Entity 行、未互为别名、未被 admin 否决，按共现票数取前 N；
  * 3. LLM 仲裁：assessEntityAliasPairs 判定是否同一现实主体；
- * 4. 分级写路径：high → 直接写 entity_aliases（createdBy=auto-llm，可撤销）；
- *    medium → 生成治理建议候选；low/不同主体 → 放弃。
+ * 4. 分级写路径：high 且 canonicalName 命中 A/B → 直接写 entity_aliases（createdBy=auto-llm，可撤销）；
+ *    medium 或 canonicalName 不属于 A/B → 生成治理建议候选；low/不同主体 → 放弃。
  * 只写别名不搬 item_entities——错误别名的影响半径限于评分层，由 LLM 终审兜底。
  */
 export async function autoNormalizeEntityAliases(
@@ -1369,8 +1403,13 @@ export async function autoNormalizeEntityAliases(
     const candidate = candidates[index]!;
     if (!decision.isSameEntity) continue;
 
-    const [targetEntity, sourceEntity] = [candidate.left, candidate.right].sort(compareCanonicalPreference);
-    if (decision.confidence === "high") {
+    const { targetEntity, sourceEntity, canonicalNameMatched } = resolveAutoAliasDirection(
+      candidate.left,
+      candidate.right,
+      decision.canonicalName,
+    );
+    const shouldAutoAlias = decision.confidence === "high" && canonicalNameMatched;
+    if (shouldAutoAlias) {
       try {
         await prisma.entityAlias.create({
           data: {
@@ -1388,7 +1427,9 @@ export async function autoNormalizeEntityAliases(
       continue;
     }
 
-    if (decision.confidence === "medium") {
+    // 高置信度但 canonicalName 不属于 A/B 时，禁止自动创建第三个实体或
+    // 擅自改名；降级为现有治理建议路径，交给人工选择 target。
+    if (decision.confidence === "medium" || (decision.confidence === "high" && !canonicalNameMatched)) {
       mediumRecords.push({
         pairKey: buildSuggestionId(sourceEntity, targetEntity),
         sourceEntityId: sourceEntity.id,

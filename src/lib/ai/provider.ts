@@ -499,7 +499,6 @@ const DAILY_REPORT_MODEL_CANDIDATE_KEYS = [
 ] as const;
 
 const DAILY_REPORT_WRITE_CANDIDATE_KEYS = [
-  "id",
   "title",
   "summary",
   "sourceName",
@@ -564,9 +563,9 @@ const DAILY_REPORT_PLAN_FIELD_GUIDE = [
 ].join("\n");
 
 const DAILY_REPORT_WRITE_FIELD_GUIDE = [
-  "selectedTopics[]：每个元素对应一个最终日报条目；topicId 是内部主题编号，blockKey 是唯一栏目键，candidateIds 是只读的主题候选编号，representativeCandidateId 是代码选出的代表候选。WRITE 不得改变这些映射。",
+  "selectedTopics[]：每个元素对应一个最终日报条目；topicId 是内部主题编号，blockKey 是唯一栏目键。WRITE 只负责基于主题候选事实写作，不输出来源映射字段。",
   "selectedTopics[].requiredNotes：当前栏目对该主题要求输出的必填要点；每个 label 必须在 item.notes 中原样出现一次，并填写基于候选事实的非空 text。正文中已经出现相关事实时，也不能省略对应 notes。",
-  "selectedTopics[].candidates：只包含写作所需事实；id 是只读候选编号，title 是标题，summary 是已有摘要，sourceName 是代表来源。",
+  "selectedTopics[].candidates：只包含写作所需事实；title 是标题，summary 是已有摘要，sourceName 是代表来源。",
   "selectedTopics[].candidates[].publishedAt/publishedAtKnown：源站时间及其可靠性；eventType/eventSubject/eventAction/eventObject/eventDate：已有结构化事件线索；isFollowUp/newItemCountOnDate/newSourceCountOnDate：后续进展信号。",
   "selectedTopics[].candidates[].evidenceItems：有限来源证据，包含标题、来源、摘要片段和发布时间；只用于核对事实，不逐条复述。",
   "候选字段只用于基于事实写作；不要把内部编号、来源名、时间或事件线索扩写成输入之外的事实。",
@@ -1827,7 +1826,6 @@ export function createAiProvider(
         title: metadata.title,
         sourceName: metadata.sourceName ?? "未知来源",
         translateTitle: metadata.translateTitle,
-        maxEvents: aggregationSplitMaxEvents,
         inputText,
       });
       const result = await completeJsonWithParseRetry(
@@ -1979,7 +1977,12 @@ export function createAiProvider(
           "WRITE",
           "严格按照 selectedTopics 和对应 Block 写作，只返回完整日报内容 JSON。输出对象本身就是日报内容，顶层直接包含 headline 和 blocks，不得包在 draft、result、data 或 output 字段中。不得重新选题、合并主题、换栏目、增加栏目或补造事实。每个 section block 必须包含与输入一致的 blockKey 和模板 title；每个 section item 必须包含 topicId、title、body 和 notes，不要输出 sourceIds 或 candidateIds；每个计划主题必须且只能对应一个 item；当模板中该栏目 item.bodyRequired=false 时 body 必须为空字符串或省略，不能输出正文，否则 body 必须非空；每个 notes 元素只能是 {label,text}，不要输出 required 或 instruction；notes 中必须包含模板配置的全部 required=true note，label 必须逐字匹配、text 必须非空；每个 text block 必须包含 type、title、body。",
           { template: buildDailyReportWritingTemplate(input.template, selectedBlockKeys), input: {
-            selectedTopics: input.selectedTopics.map((topic) => ({ ...topic, requiredNotes: getRequiredNotesForBlock(input.template, topic.blockKey), candidates: topic.candidates.map(compactDailyReportWritingCandidate) })),
+            selectedTopics: input.selectedTopics.map((topic) => ({
+              topicId: topic.topicId,
+              blockKey: topic.blockKey,
+              requiredNotes: getRequiredNotesForBlock(input.template, topic.blockKey),
+              candidates: topic.candidates.map(compactDailyReportWritingCandidate),
+            })),
             ...(input.reviewFeedback ? { reviewFeedback: input.reviewFeedback } : {}),
           } },
           `${DAILY_REPORT_WRITE_FIELD_GUIDE}\n${DAILY_REPORT_REVIEW_FEEDBACK_GUIDE}`,

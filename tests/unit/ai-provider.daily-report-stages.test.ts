@@ -176,7 +176,10 @@ describe("daily report staged provider", () => {
     expect(writeUserPrompt).not.toContain("历史主题判断策略");
     expect(writeUserPrompt).not.toContain("historyTopicRules");
     expect(writeUserPrompt).not.toContain('"sourceIds":');
+    expect(writeUserPrompt).not.toContain('"candidateIds":');
+    expect(writeUserPrompt).not.toContain('"representativeCandidateId":');
     expect(writeUserPrompt).not.toContain('"candidateScore"');
+    expect(writeUserPrompt).not.toContain('"id":1');
     const writeRetryCall = create.mock.calls[3]?.[0];
     expect(writeRetryCall?.messages).toHaveLength(5);
     expect(writeRetryCall?.messages?.[0]?.role).toBe("system");

@@ -240,7 +240,7 @@ export const DEFAULT_ENTITY_ALIAS_CHECK_PROMPT = `你是实体规范化助手。
 4. 判定为同一实体时给出推荐的规范名称（canonicalName）：选更通用、更正式的写法；判定不同时 canonicalName 返回 null。
 5. 无法确定时 isSameEntity 返回 false 且 confidence 返回 low；宁可漏合，不可错合。
 
-严格输出单个 JSON 对象：{"decisions": [{"a": "名称A", "b": "名称B", "isSameEntity": true, "confidence": "high|medium|low", "canonicalName": "规范名称|null"}]}
+严格输出单个 JSON 对象：{"decisions": [{"isSameEntity": true, "confidence": "high|medium|low", "canonicalName": "规范名称|null"}]}
 输入中的每个 pair 必须恰好输出一条 decision，顺序与输入一致。`;
 
 export const DEFAULT_ENTITY_ALIAS_CHECK_USER_PROMPT_TEMPLATE = `请判断以下候选实体对是否为同一现实世界主体。`;

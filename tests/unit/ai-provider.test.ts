@@ -96,6 +96,7 @@ describe("ai provider", () => {
     expect(userPrompt).toContain("这是管理员自定义的条目理解提示词。");
     expect(userPrompt).toContain("正文内容");
     expect(userPrompt).not.toContain("{{inputText}}");
+    expect(userPrompt).not.toContain('"maxEvents"');
   });
 
   it("repairs a syntactically invalid item understanding response before retrying the model", async () => {

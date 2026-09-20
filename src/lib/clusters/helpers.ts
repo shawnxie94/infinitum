@@ -484,7 +484,6 @@ export function buildClusterMatchInput(
   options: { eventSignature?: AiEventSignature | null },
 ): string {
   return [
-    `标题：${getDisplayTitle(item.originalTitle, item.translatedTitle)}`,
     ...buildEventSignatureLines(options.eventSignature),
     buildItemSummary(item) ? `摘要：${buildItemSummary(item)}` : null,
     `来源：${item.source.name}`,

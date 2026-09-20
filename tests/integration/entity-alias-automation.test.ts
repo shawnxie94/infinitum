@@ -141,6 +141,44 @@ describe("autoNormalizeEntityAliases", () => {
     expect(resolverAfter("Z.ai")).toBe("智谱");
   });
 
+  it("uses canonicalName to choose the existing target entity", async () => {
+    await seedClusterWithSubjects("alias-auto-1", ["智谱", "Z.ai"]);
+    const { zhipu, zai } = await seedEntityPair();
+
+    const provider = fakeProvider(() => ({
+      aName: "智谱",
+      bName: "Z.ai",
+      isSameEntity: true,
+      confidence: "high",
+      canonicalName: "Z.ai",
+    }));
+    const { result } = await autoNormalizeEntityAliases(NOW, provider);
+
+    expect(result.autoMergedAliases).toBe(1);
+    await expect(prisma.entityAlias.findFirstOrThrow({
+      where: { aliasNormalized: "智谱" },
+    })).resolves.toMatchObject({ entityId: zai.id });
+    expect(await prisma.entityAlias.findFirst({ where: { entityId: zhipu.id, aliasNormalized: "z.ai" } })).toBeNull();
+  });
+
+  it("does not auto-alias when canonicalName is outside the adjudicated pair", async () => {
+    await seedClusterWithSubjects("alias-auto-1", ["智谱", "Z.ai"]);
+    const { zhipu, zai } = await seedEntityPair();
+
+    const provider = fakeProvider(() => ({
+      aName: "智谱",
+      bName: "Z.ai",
+      isSameEntity: true,
+      confidence: "high",
+      canonicalName: "全新规范名称",
+    }));
+    const { result, mediumRecords } = await autoNormalizeEntityAliases(NOW, provider);
+
+    expect(result.autoMergedAliases).toBe(0);
+    expect(mediumRecords).toHaveLength(1);
+    expect(await prisma.entityAlias.count({ where: { entityId: { in: [zhipu.id, zai.id] } } })).toBe(0);
+  });
+
   it("routes medium confidence to governance suggestions via non-destructive precompute", async () => {
     await seedClusterWithSubjects("alias-auto-1", ["智谱", "Z.ai"]);
     const { zhipu, zai } = await seedEntityPair();
