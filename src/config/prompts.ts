@@ -199,6 +199,12 @@ export const PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手�
 只输出 JSON：{"decisions":[{"leftClusterId":"clusterId1","rightClusterId":"clusterId2","verdict":"approved","confidence":0.95,"reasonCode":"same_event","reasonText":"主体、对象和时间一致"}]}
 每个输入 Pair 都必须在 decisions 中出现一次。不要输出 approvedPairs、mergeGroups 或额外解释。`;
 
+/** The d43b004-era default used a shorter reasonCode description. */
+export const PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT_LEGACY_REASON_CODE = PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT.replace(
+  "reasonCode 只能是 same_event、insufficient_evidence、different_event、object_conflict、action_conflict、date_conflict、subject_conflict 之一；approved 只能使用 same_event，ambiguous 使用 insufficient_evidence，declined 使用其余合适的原因",
+  "reasonCode 使用简短英文枚举风格字符串",
+);
+
 /** Exact legacy default used only by the idempotent runtime migration. */
 export const LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。
 

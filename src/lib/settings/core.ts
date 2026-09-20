@@ -8,6 +8,7 @@ import {
   LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
+  PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT_LEGACY_REASON_CODE,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
@@ -662,7 +663,6 @@ async function ensureModelAndPromptConfigsSeeded(options: RuntimeConfigSeedOptio
   await upgradeLegacyItemUnderstandingPrompt();
   await upgradePreviousDefaultItemUnderstandingPrompt();
   await upgradeLegacyClusterMergePrompt();
-  await upgradePreviousDefaultClusterMergePrompt();
   await upgradePreviousDefaultDailyReportReviewPrompt();
   await upgradePromptUserInstructions();
   if (options.migrateDailyReportTemplates !== false) {
@@ -841,37 +841,48 @@ async function upgradePreviousDefaultItemUnderstandingPrompt() {
   });
 }
 
+const LEGACY_CLUSTER_MERGE_PROMPT_VARIANTS = [
+  LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
+  PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
+  PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT_LEGACY_REASON_CODE,
+] as const;
+
+function isLegacyClusterMergePrompt(systemPrompt: string | null) {
+  if (!systemPrompt || systemPrompt.includes('"verdicts"')) {
+    return false;
+  }
+
+  if (LEGACY_CLUSTER_MERGE_PROMPT_VARIANTS.includes(systemPrompt as (typeof LEGACY_CLUSTER_MERGE_PROMPT_VARIANTS)[number])) {
+    return true;
+  }
+
+  return (
+    systemPrompt.includes('"decisions"') &&
+    systemPrompt.includes('"leftClusterId"') &&
+    systemPrompt.includes('"rightClusterId"') &&
+    systemPrompt.includes("每个输入 Pair")
+  );
+}
+
 async function upgradeLegacyClusterMergePrompt() {
   const configs = await prisma.promptConfig.findMany({
     where: {
       type: PromptConfigType.cluster_merge,
       isDefault: true,
-      systemPrompt: LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
     },
-    select: { id: true },
+    select: { id: true, systemPrompt: true },
   });
 
-  if (configs.length === 0) {
-    return;
+  for (const config of configs) {
+    if (!isLegacyClusterMergePrompt(config.systemPrompt)) {
+      continue;
+    }
+
+    await prisma.promptConfig.update({
+      where: { id: config.id },
+      data: { systemPrompt: DEFAULT_CLUSTER_MERGE_PROMPT },
+    });
   }
-
-  await prisma.promptConfig.updateMany({
-    where: { id: { in: configs.map((config) => config.id) } },
-    data: { systemPrompt: DEFAULT_CLUSTER_MERGE_PROMPT },
-  });
-}
-
-async function upgradePreviousDefaultClusterMergePrompt() {
-  await prisma.promptConfig.updateMany({
-    where: {
-      type: PromptConfigType.cluster_merge,
-      isDefault: true,
-      systemPrompt: PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
-    },
-    data: {
-      systemPrompt: DEFAULT_CLUSTER_MERGE_PROMPT,
-    },
-  });
 }
 
 async function upgradePreviousDefaultDailyReportReviewPrompt() {
