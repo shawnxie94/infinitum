@@ -42,11 +42,8 @@ export function parseClusterSummaryOutput(rawContent: string): string {
     throw new InvalidJsonModelResponseError("聚合摘要 JSON 顶层必须是对象。");
   }
 
-  const unknownFields = Object.keys(parsed).filter((key) => key !== "title" && key !== "summary");
-  if (unknownFields.length > 0) {
-    throw new InvalidJsonModelResponseError(`聚合摘要 JSON 包含未知字段：${unknownFields.join(", ")}`);
-  }
-
+  // 未知字段（如模型附带的 keyPoints）直接忽略，只取合同内的 title/summary；
+  // 字段为空才触发上层 JSON 重试。
   const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
   const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
 
@@ -173,29 +170,41 @@ export function parseClusterMergeDecisions(rawContent: string, metadata: Cluster
     );
   }
 
+  // verdicts 缺失或不是数组属于整体协议失败，交由上层 JSON 重试。
   const verdicts = parsed.verdicts;
-  if (!Array.isArray(verdicts) || verdicts.length !== metadata.pairs.length) {
-    const actualCount = Array.isArray(verdicts) ? verdicts.length : 0;
-    throw new InvalidJsonModelResponseError(
-      `聚合合并 verdicts 数量必须与输入 Pair 数量一致（期望 ${metadata.pairs.length}，实际 ${actualCount}）。`,
-    );
+  if (!Array.isArray(verdicts)) {
+    throw new InvalidJsonModelResponseError("聚合合并 verdicts 必须是数组。");
   }
 
-  return metadata.pairs.map((pair, index) => {
+  if (metadata.pairs.length === 0) {
+    return [];
+  }
+
+  // 数量不齐或个别判定非法时逐 pair 抢救：只保留合法判定，缺失/非法对不做账本
+  // 记录、交由下一轮重新评估，不阻断其余 pair 的合并。
+  const decisions = [];
+  for (let index = 0; index < Math.min(metadata.pairs.length, verdicts.length); index += 1) {
+    const pair = metadata.pairs[index]!;
     const verdict = verdicts[index];
     if (verdict !== "approved" && verdict !== "declined" && verdict !== "ambiguous") {
-      throw new InvalidJsonModelResponseError("聚合合并 verdicts 包含非法判定。");
+      continue;
     }
 
-    return {
+    decisions.push({
       leftClusterId: pair.leftClusterId,
       rightClusterId: pair.rightClusterId,
       verdict,
       confidence: null,
       reasonCode: null,
       reasonText: null,
-    };
-  });
+    });
+  }
+
+  if (decisions.length === 0 && metadata.pairs.length > 0) {
+    throw new InvalidJsonModelResponseError("聚合合并 verdicts 不含任何合法判定。");
+  }
+
+  return decisions;
 }
 
 export function parseClusterMatchCandidateId(rawContent: string, candidateIds: string[]): string | null {

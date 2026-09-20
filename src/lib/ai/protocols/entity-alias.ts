@@ -19,12 +19,15 @@ export function parseEntityAliasDecisions(
     );
   }
 
-  const decisions = parsed.decisions as unknown[];
-  if (!Array.isArray(decisions) || decisions.length !== pairs.length) {
-    throw new InvalidJsonModelResponseError("实体别名判定 decisions 数量与输入候选对不一致。");
+  // decisions 缺失或不是数组属于整体协议失败，交由上层 JSON 重试；数量不齐只保留
+  // 可对齐的前缀（调用方按下标 zip 且以 decisions.length 为界），缺失对保守跳过本轮。
+  const decisions = parsed.decisions;
+  if (!Array.isArray(decisions)) {
+    throw new InvalidJsonModelResponseError("实体别名判定 decisions 必须是数组。");
   }
 
-  return pairs.map((pair, index) => {
+  const alignedPairs = pairs.slice(0, decisions.length);
+  return alignedPairs.map((pair, index) => {
     const raw = decisions[index] as Record<string, unknown> | undefined;
     const isSameEntity = raw?.isSameEntity === true;
     const rawConfidence = raw?.confidence;

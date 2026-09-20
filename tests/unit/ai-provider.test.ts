@@ -462,7 +462,7 @@ describe("ai provider", () => {
     }]);
   });
 
-  it("rejects merge decisions that are not present in the local pair input", async () => {
+  it("salvages the aligned prefix when model returns more verdicts than pairs", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
@@ -488,7 +488,7 @@ describe("ai provider", () => {
       },
     );
 
-    await expect(provider.assessClusterMergePairs(JSON.stringify({
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
           left: { id: "cluster-a", title: "A", summary: "A", itemCount: 3 },
@@ -496,10 +496,14 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }))).rejects.toThrow("期望 1，实际 2");
+    }));
+
+    expect(decisions).toEqual([
+      { leftClusterId: "cluster-a", rightClusterId: "cluster-b", verdict: "approved", confidence: null, reasonCode: null, reasonText: null },
+    ]);
   });
 
-  it("rejects an empty merge decision list when input pairs exist", async () => {
+  it("retries when the model returns no usable merge verdicts for existing pairs", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
@@ -533,7 +537,139 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }))).rejects.toThrow("verdicts 数量");
+    }))).rejects.toThrow("不含任何合法判定");
+  });
+
+  it("salvages valid verdicts and drops invalid ones instead of failing the round", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ verdicts: ["approved", "approve", "declined"] }),
+          },
+        },
+      ],
+    });
+    const provider = createAiProvider(
+      {
+        apiKey: "sk-test",
+        baseURL: "https://example.com/v1",
+        model: "test-model",
+      },
+      undefined,
+      {
+        chat: {
+          completions: {
+            create,
+          },
+        },
+      },
+    );
+
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
+      pairs: [
+        {
+          left: { id: "cluster-a", title: "A", summary: "A", itemCount: 3 },
+          right: { id: "cluster-b", title: "B", summary: "B", itemCount: 2 },
+          score: 95,
+        },
+        {
+          left: { id: "cluster-c", title: "C", summary: "C", itemCount: 2 },
+          right: { id: "cluster-d", title: "D", summary: "D", itemCount: 1 },
+          score: 90,
+        },
+        {
+          left: { id: "cluster-e", title: "E", summary: "E", itemCount: 2 },
+          right: { id: "cluster-f", title: "F", summary: "F", itemCount: 1 },
+          score: 88,
+        },
+      ],
+    }));
+
+    expect(decisions.map((decision) => [decision.leftClusterId, decision.verdict])).toEqual([
+      ["cluster-a", "approved"],
+      ["cluster-e", "declined"],
+    ]);
+  });
+
+  it("salvages aligned alias decisions when model returns fewer decisions than pairs", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              decisions: [
+                { isSameEntity: true, confidence: "high", canonicalName: "OpenAI" },
+              ],
+            }),
+          },
+        },
+      ],
+    });
+    const provider = createAiProvider(
+      {
+        apiKey: "sk-test",
+        baseURL: "https://example.com/v1",
+        model: "test-model",
+      },
+      undefined,
+      {
+        chat: {
+          completions: {
+            create,
+          },
+        },
+      },
+    );
+
+    const decisions = await provider.assessEntityAliasPairs!({
+      pairs: [
+        { aName: "OpenAI", bName: "OpenAI Inc.", evidence: [] },
+        { aName: "Anthropic", bName: "Anthropic PBC", evidence: [] },
+      ],
+    });
+
+    expect(decisions).toEqual([
+      { isSameEntity: true, confidence: "high", canonicalName: "OpenAI" },
+    ]);
+  });
+
+  it("ignores unknown fields in cluster summary output instead of failing", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              title: "Nothing 发布 Phone（4b）",
+              summary: "Nothing 发布 Phone（4b），定价 329 欧元起，扩展移动产品线。",
+              keyPoints: ["附赠要点"],
+            }),
+          },
+        },
+      ],
+    });
+    const provider = createAiProvider(
+      {
+        apiKey: "sk-test",
+        baseURL: "https://example.com/v1",
+        model: "test-model",
+      },
+      undefined,
+      {
+        chat: {
+          completions: {
+            create,
+          },
+        },
+      },
+    );
+
+    const summary = await provider.summarizeCluster("候选内容种子", { title: "Nothing 发布 Phone（4b）" });
+
+    expect(JSON.parse(summary)).toEqual({
+      title: "Nothing 发布 Phone（4b）",
+      summary: "Nothing 发布 Phone（4b），定价 329 欧元起，扩展移动产品线。",
+    });
   });
 
   it("retries cluster merge once when the first response is invalid json", async () => {

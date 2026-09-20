@@ -212,7 +212,7 @@ describe("ai provider quality rubric integration", () => {
     expect(systemPrompt).not.toContain("reasonText");
   });
 
-  it("rejects cluster merge verdicts whose count does not match input pairs", async () => {
+  it("salvages aligned prefix when merge verdict count is less than input pairs", async () => {
     const create = mockModelResponse({ verdicts: ["approved"] });
     const provider = createAiProvider(
       modelApiConfig,
@@ -220,12 +220,23 @@ describe("ai provider quality rubric integration", () => {
       { chat: { completions: { create } } },
     );
 
-    await expect(provider.assessClusterMergePairs(JSON.stringify({
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         { left: { id: "left-1" }, right: { id: "right-1" }, score: 90 },
         { left: { id: "left-2" }, right: { id: "right-2" }, score: 70 },
       ],
-    }))).rejects.toThrow("期望 2，实际 1");
+    }));
+
+    expect(decisions).toEqual([
+      {
+        leftClusterId: "left-1",
+        rightClusterId: "right-1",
+        verdict: "approved",
+        confidence: null,
+        reasonCode: null,
+        reasonText: null,
+      },
+    ]);
   });
 
   it("locks the entity alias check to temperature 0 with a bounded token budget", async () => {
