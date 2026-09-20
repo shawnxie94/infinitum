@@ -416,7 +416,7 @@ export function resolveTemplateJsonForSave(input: SavePromptConfigInput) {
           && Array.isArray((parsed as { dimensions?: unknown }).dimensions)
           ? (parsed as { dimensions: unknown[] }).dimensions
           : [];
-        pointsTotal = dimensions.reduce((total, dimension) => {
+        pointsTotal = dimensions.reduce<number>((total, dimension) => {
           const points = (dimension as { points?: unknown } | null)?.points;
           return total + (typeof points === "number" && Number.isInteger(points) ? points : 0);
         }, 0);

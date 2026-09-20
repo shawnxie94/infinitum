@@ -103,13 +103,26 @@ export async function selectAiCandidatesWithEmbeddingRecall(input: {
     return ruleQualified;
   }
 
-  const itemVector = vectors[0]!;
+  // 查询向量（item 自身）缺失时无法计算相似度，退回规则切片
+  const itemVector = vectors[0];
+  if (!itemVector) {
+    return ruleQualified;
+  }
+
+  // 候选向量缺失的条目不参与向量排序（仅失去向量加成，规则融合不受影响）
   const vecOrder = vetoPassed
-    .map((entry, index) => ({
-      id: entry.candidate.id,
-      sim: cosineSimilarity(itemVector, vectors[index + 1]!),
-      latestPublishedAt: entry.candidate.latestPublishedAt.getTime(),
-    }))
+    .map((entry, index) => {
+      const vector = vectors[index + 1];
+      if (!vector) {
+        return null;
+      }
+      return {
+        id: entry.candidate.id,
+        sim: cosineSimilarity(itemVector, vector),
+        latestPublishedAt: entry.candidate.latestPublishedAt.getTime(),
+      };
+    })
+    .filter((entry): entry is { id: string; sim: number; latestPublishedAt: number } => entry !== null)
     .sort(
       (left, right) =>
         right.sim - left.sim ||

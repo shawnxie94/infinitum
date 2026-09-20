@@ -1883,13 +1883,15 @@ async function upsertCleanPairCandidates(input: {
 
 function buildNormalizedVectorMatrix(
   clusters: ClusterMergeCandidate[],
-  vectors: number[][],
+  vectors: Array<number[] | null>,
 ): { flat: Float32Array; dim: number } | null {
   if (vectors.length !== clusters.length || vectors.length === 0) {
     return null;
   }
 
-  const dim = vectors[0]!.length;
+  // 缺失向量（嵌入失败的文本）按零向量处理：点积恒 0，相似度恒 0，
+  // 效果等价于「无向量邻居」，不影响其余聚类的向量预筛。
+  const dim = vectors.find((vector): vector is number[] => vector !== null && vector.length > 0)?.length ?? 0;
   if (dim === 0) {
     return null;
   }
@@ -1897,8 +1899,8 @@ function buildNormalizedVectorMatrix(
   const flat = new Float32Array(clusters.length * dim);
   for (let i = 0; i < clusters.length; i += 1) {
     const vector = vectors[i]!;
-    if (vector.length !== dim) {
-      return null;
+    if (vector === null || vector.length !== dim) {
+      continue;
     }
 
     let norm = 0;

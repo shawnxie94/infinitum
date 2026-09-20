@@ -20,11 +20,23 @@ type EmbeddingsResponse = {
 
 export type EmbeddingApiClient = {
   embeddings: {
-    create: (payload: Record<string, unknown>) => Promise<EmbeddingsResponse>;
+    create: (
+      payload: Record<string, unknown>,
+      options?: { maxRetries?: number },
+    ) => Promise<EmbeddingsResponse>;
   };
 };
 
-export type EmbedTextsFn = (texts: string[]) => Promise<number[][] | null>;
+// 向量数组与输入文本一一对应；个别文本嵌入失败时对应位为 null，
+// 调用方（矩阵构建 / RRF 召回）需容忍缺失。整体 null 仅表示通道不可用。
+export type EmbedTextsFn = (texts: string[]) => Promise<Array<number[] | null> | null>;
+
+// 进程内负缓存：嵌入失败的文本哈希，同进程后续调用直接跳过（重试由下一轮任务完成）
+const failedEmbeddingHashes = new Set<string>();
+
+export function resetEmbeddingFailureCache() {
+  failedEmbeddingHashes.clear();
+}
 
 export function isEmbeddingConfigReady(
   config: EmbeddingRuntimeConfig | null | undefined,
@@ -138,10 +150,40 @@ export function createEmbedTexts(
       apiKey: config.apiKey!,
       baseURL: config.baseUrl,
       timeout: timeoutMs,
-      maxRetries: 2,
+      // 批次级失败由 createEmbedTexts 内部隔离降级，SDK 不做批级重试（避免挂起文本 ×3 放大时延）
+      maxRetries: 0,
     }) as unknown as EmbeddingApiClient);
 
-  return async (texts: string[]): Promise<number[][] | null> => {
+  const embedBatch = async (input: string[]): Promise<number[][] | null> => {
+    const response = await client.embeddings.create(
+      {
+        model: modelName,
+        input,
+        ...(config.dimensions && config.dimensions > 0 ? { dimensions: config.dimensions } : {}),
+      },
+      { maxRetries: 0 },
+    );
+    const data = response.data ?? [];
+    if (data.length !== input.length) {
+      return null;
+    }
+
+    // Responses may be unordered; index field is the contract when present.
+    const ordered: Array<number[] | null> = input.map(() => null);
+    data.forEach((row, position) => {
+      const target = typeof row.index === "number" ? row.index : position;
+      if (!row.embedding || target < 0 || target >= ordered.length) {
+        return;
+      }
+      ordered[target] = row.embedding;
+    });
+    if (ordered.some((vector) => vector === null)) {
+      return null;
+    }
+    return ordered as number[][];
+  };
+
+  return async (texts: string[]): Promise<Array<number[] | null> | null> => {
     if (texts.length === 0) {
       return [];
     }
@@ -150,58 +192,69 @@ export function createEmbedTexts(
       const hashes = texts.map((text) => buildEmbeddingCacheHash(modelName, text));
       const cached = await loadCachedVectors(hashes);
       const vectors: Array<number[] | null> = hashes.map((hash) => cached.get(hash) ?? null);
-      const misses = vectors
-        .map((vector, index) => ({ vector, index }))
-        .filter((entry) => entry.vector === null)
-        .map((entry) => entry.index);
+      const misses = hashes
+        .map((hash, index) => ({ hash, index }))
+        .filter((entry) => vectors[entry.index] === null && !failedEmbeddingHashes.has(entry.hash));
 
+      let failureCount = 0;
       for (let start = 0; start < misses.length; start += batchSize) {
         const slice = misses.slice(start, start + batchSize);
-        const payload: Record<string, unknown> = {
-          model: modelName,
-          input: slice.map((index) => texts[index]),
-        };
-        if (config.dimensions && config.dimensions > 0) {
-          payload.dimensions = config.dimensions;
+        let batchVectors: number[][] | null = null;
+        try {
+          batchVectors = await embedBatch(slice.map((entry) => texts[entry.index]!));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[embeddings] 批次异常: ${message.slice(0, 120)}`);
         }
 
-        const response = await client.embeddings.create(payload);
-        const data = response.data ?? [];
-        if (data.length !== slice.length) {
-          return null;
-        }
-
-        // Responses may be unordered; index field is the contract when present.
-        const ordered: Array<number[] | null> = slice.map(() => null);
-        data.forEach((row, position) => {
-          const target = typeof row.index === "number" ? row.index : position;
-          if (!row.embedding || target < 0 || target >= ordered.length) {
-            return;
+        if (batchVectors) {
+          for (let i = 0; i < slice.length; i += 1) {
+            const { hash, index } = slice[i]!;
+            vectors[index] = batchVectors[i]!;
+            await storeCachedVector({
+              model: modelName,
+              contentHash: hash,
+              text: texts[index]!,
+              vector: batchVectors[i]!,
+            });
           }
-          ordered[target] = row.embedding;
-        });
-        if (ordered.some((vector) => vector === null)) {
-          return null;
+          continue;
         }
 
-        for (let i = 0; i < slice.length; i += 1) {
-          const index = slice[i]!;
-          const vector = ordered[i]!;
-          vectors[index] = vector;
-          await storeCachedVector({
-            model: modelName,
-            contentHash: hashes[index]!,
-            text: texts[index]!,
-            vector,
-          });
+        // 批次失败（供应商 5xx / 挂起超时 / 响应不齐）：隔离降级为单条，
+        // 好文本照常入缓存，坏文本跳过并记入负缓存，不拖垮整轮。
+        console.warn(
+          `[embeddings] 批次失败（${slice.length} 条），隔离为单条重试: hash=${slice[0]!.hash.slice(0, 12)}..`,
+        );
+        for (const entry of slice) {
+          let single: number[][] | null = null;
+          try {
+            single = await embedBatch([texts[entry.index]!]);
+          } catch {
+            single = null;
+          }
+          if (single?.[0]) {
+            vectors[entry.index] = single[0];
+            await storeCachedVector({
+              model: modelName,
+              contentHash: entry.hash,
+              text: texts[entry.index]!,
+              vector: single[0],
+            });
+          } else {
+            failureCount += 1;
+            failedEmbeddingHashes.add(entry.hash);
+            console.warn(
+              `[embeddings] 单条嵌入失败，跳过（进程内负缓存）: hash=${entry.hash.slice(0, 12)} text="${texts[entry.index]!.slice(0, 60)}"`,
+            );
+          }
         }
       }
 
-      if (vectors.some((vector) => vector === null)) {
-        return null;
+      if (failureCount > 0) {
+        console.warn(`[embeddings] 本轮 ${failureCount} 条文本嵌入失败已跳过`);
       }
-
-      return vectors as number[][];
+      return vectors;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[embeddings] 调用失败，降级为纯规则排序: ${message.slice(0, 200)}`);

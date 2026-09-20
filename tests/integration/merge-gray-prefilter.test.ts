@@ -236,6 +236,35 @@ describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
     expect(result.vectorAdmittedPairs).toBe(0);
   });
 
+  it("tolerates null vectors without disabling the vector channel", async () => {
+    await seedClusterWithItem(BLIND_PAIR[0]);
+    await seedClusterWithItem(BLIND_PAIR[1]);
+    await ensureBlindPairIsRuleInvisible();
+
+    // 一侧聚类嵌入缺失（null）：该对不产生向量提名，但通道保持开启
+    // （判别串用「萨姆」：仅 blind-b 标题包含；「奥尔特曼」两个聚类文本都含）
+    const missingResult = await precomputeClusterMergeCleanPairs(NOW, {
+      embedTexts: async (texts) =>
+        texts.map((text) => (text.includes("萨姆") ? null : [1, 0])),
+    });
+    expect(missingResult.vectorEnabled).toBe(true);
+    expect(missingResult.vectorAdmittedPairs).toBe(0);
+    const missingStored = await prisma.clusterMergeCleanPairCandidate.findFirst({
+      where: { leftClusterId: "blind-a", rightClusterId: "blind-b" },
+    });
+    expect(missingStored).toBeNull();
+
+    // 缺失在无关聚类上时，其余配对的向量预筛照常工作
+    const result = await precomputeClusterMergeCleanPairs(NOW, {
+      embedTexts: fakeEmbedTexts({
+        "OpenAI": [1, 0],
+        "奥尔特曼": [1, 0],
+      }),
+    });
+    expect(result.vectorEnabled).toBe(true);
+    expect(result.vectorAdmittedPairs).toBe(1);
+  });
+
   it("nominates object-conflict pairs at very high similarity (extraction noise)", async () => {
     await seedClusterWithItem(CONFLICT_PAIR[0]);
     await seedClusterWithItem(CONFLICT_PAIR[1]);

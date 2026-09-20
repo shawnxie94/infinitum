@@ -150,8 +150,8 @@ export type AiProvider = {
     inputText: string,
     metadata: { title: string; candidates: Array<{ id: string; title: string; summary: string }> },
   ): Promise<string | null>;
-  /** 语义向量批量接口；未启用或调用失败时返回 null，调用方降级为纯规则排序。 */
-  embedTexts?(texts: string[]): Promise<number[][] | null>;
+  /** 语义向量批量接口；未启用或调用失败时返回 null，调用方降级为纯规则排序。个别文本嵌入失败时对应位为 null。 */
+  embedTexts?(texts: string[]): Promise<Array<number[] | null> | null>;
   assessClusterMergePairs(clustersJson: string): Promise<ClusterMergeDecision[]>;
   /** 实体别名判定：批量判断两个实体名称是否指同一现实世界主体；未配置时调用方跳过仲裁 */
   assessEntityAliasPairs?(input: {
