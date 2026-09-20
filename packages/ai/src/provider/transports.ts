@@ -7,8 +7,6 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText } from "ai";
 
 import type {
-  CompletionRequest,
-  CompletionResult,
   ModelApiConfig,
   ModelTransport,
   UsageSnapshot,

@@ -7,7 +7,6 @@ import { InvalidJsonModelResponse } from "./transports";
 import type {
   ChatMessage,
   CompletionRequest,
-  CompletionResult,
   JsonCompleteRequest,
   ModelApiConfig,
   ModelGatewayOptions,
@@ -136,7 +135,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     attemptType: UsageSnapshot["attemptType"],
   ): Promise<{ text: string; usage: UsageSnapshot } | null> {
     if (!config.apiKey) return null;
-    const result: CompletionResult = await transport(request, config);
+    const result = await transport(request, config);
     const usage: UsageSnapshot = { ...result.usage, attemptType };
     options.onUsage?.(usage, request.usageKey);
     if (request.requireCompleteJson && result.finishReason === "length") {

@@ -2,6 +2,7 @@
  * 任务 workflow 编排类型：主仓业务体通过注入接入 Mastra（依赖倒置，
  * packages/ai 不 import 主仓模块——D9 所有权边界）。
  */
+/* eslint-disable @typescript-eslint/no-explicit-any -- Mastra Workflow 占位泛型，P1a 定型后收敛 */
 import type { Workflow } from "@mastra/core/workflows";
 
 /** BackgroundTaskRun 行的最小投影（body 启动时由 sink 重新读取，保证拿到最新检查点）。 */
