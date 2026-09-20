@@ -1503,7 +1503,7 @@ async function loadRecentMergeClusters(lookbackSince: Date, affectedClusterIds?:
     },
     orderBy,
   });
-  const existingIds = new Set(recentClusters.map((cluster) => cluster.id));
+  const existingIds = new Set(affectedClusters.map((cluster) => cluster.id));
 
   return [
     ...affectedClusters,
