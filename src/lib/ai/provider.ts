@@ -133,8 +133,6 @@ export type ClusterMergeDecision = {
 export type EntityAliasCheckConfidence = "high" | "medium" | "low";
 
 export type EntityAliasCheckDecision = {
-  aName: string;
-  bName: string;
   isSameEntity: boolean;
   confidence: EntityAliasCheckConfidence;
   canonicalName: string | null;
@@ -645,18 +643,47 @@ function compactDailyReportWritingCandidate(article: unknown) {
   return candidate;
 }
 
-function stripDailyReportSourceIdsForModel(draft: DailyReportModelDraft | DailyReportDraft): DailyReportModelDraft {
+function compactDailyReportRepairDraft(draft: DailyReportModelDraft | DailyReportDraft) {
   return {
-    ...draft,
-    blocks: draft.blocks.map((block) => block.type === "section"
-      ? {
-          ...block,
-          items: block.items.map((item) => Object.fromEntries(
-            Object.entries(item).filter(([key]) => key !== "sourceIds"),
-          )),
-        }
-      : block),
-  } as DailyReportModelDraft;
+    blocks: draft.blocks.flatMap((block) => block.type === "section"
+      ? [{
+          blockKey: block.blockKey,
+          items: block.items.map((item) => ({
+            topicId: item.topicId,
+            notes: item.notes ?? [],
+          })),
+        }]
+      : []),
+  };
+}
+
+function compactDailyReportRecentTopic(topic: RecentDailyReportTopic) {
+  return Object.fromEntries(
+    Object.entries(topic).filter(([key]) => key !== "sourceNumber"),
+  );
+}
+
+function compactClusterMergeInputForModel(clustersJson: string) {
+  const parsed = JSON.parse(clustersJson) as Record<string, unknown>;
+  const pairs = Array.isArray(parsed.pairs)
+    ? parsed.pairs.map((pair) => {
+        if (!pair || typeof pair !== "object" || Array.isArray(pair)) return pair;
+        const inputPair = pair as Record<string, unknown>;
+        const stripClusterId = (cluster: unknown) => {
+          if (!cluster || typeof cluster !== "object" || Array.isArray(cluster)) return cluster;
+          const withoutId = { ...(cluster as Record<string, unknown>) };
+          delete withoutId.id;
+          return withoutId;
+        };
+        return {
+          ...inputPair,
+          ...(Object.hasOwn(inputPair, "left") ? { left: stripClusterId(inputPair.left) } : {}),
+          ...(Object.hasOwn(inputPair, "right") ? { right: stripClusterId(inputPair.right) } : {}),
+        };
+      })
+    : parsed.pairs;
+
+  return { ...parsed, pairs };
 }
 
 function getFallbackEnrichment(
@@ -1164,8 +1191,6 @@ function parseEntityAliasDecisions(
         : null;
 
     return {
-      aName: pair.aName,
-      bName: pair.bName,
       isSameEntity,
       confidence,
       canonicalName,
@@ -1870,7 +1895,7 @@ export function createAiProvider(
       const userContent = buildAiUserContent(clusterMatchConfig.userInstruction, {
         title: metadata.title,
         inputText,
-        candidatesJson: JSON.stringify(metadata.candidates),
+        candidates: metadata.candidates,
       });
 
       return completeJsonWithParseRetry(
@@ -1893,10 +1918,9 @@ export function createAiProvider(
         return [];
       }
 
-      const pairsJson = JSON.stringify({
+      const userContent = buildAiUserContent(entityAliasCheckConfig.userInstruction, {
         pairs: input.pairs.map((pair) => ({ a: pair.aName, b: pair.bName, evidence: pair.evidence })),
       });
-      const userContent = buildAiUserContent(entityAliasCheckConfig.userInstruction, { pairsJson });
 
       return (
         (await completeJsonWithParseRetry(
@@ -1908,9 +1932,10 @@ export function createAiProvider(
       );
     },
     async assessClusterMergePairs(clustersJson) {      const metadata = parseClusterMergeInputMetadata(clustersJson);
-      const userContent = buildAiUserContent(clusterMergeConfig.userInstruction, {
-        ...JSON.parse(clustersJson) as Record<string, unknown>,
-      });
+      const userContent = buildAiUserContent(
+        clusterMergeConfig.userInstruction,
+        compactClusterMergeInputForModel(clustersJson),
+      );
 
       const decisions = await completeJsonWithParseRetry(
         clusterMergeConfig,
@@ -1933,7 +1958,7 @@ export function createAiProvider(
             template: buildDailyReportAssessmentTemplate(input.template, input.recentTopicLookbackDays),
             input: {
               candidates: input.candidates.map(compactDailyReportModelCandidate),
-              recentTopics: input.recentTopics,
+              recentTopics: input.recentTopics.map(compactDailyReportRecentTopic),
             },
           },
           `${DAILY_REPORT_CANDIDATE_FIELD_GUIDE}\n${DAILY_REPORT_ASSESSMENT_FIELD_GUIDE}`,
@@ -1955,7 +1980,7 @@ export function createAiProvider(
             template: buildDailyReportPlanningTemplate(input.template, input.recentTopicLookbackDays),
             input: {
               candidateBriefs: input.candidateBriefs,
-              recentTopics: input.recentTopics ?? [],
+              recentTopics: (input.recentTopics ?? []).map(compactDailyReportRecentTopic),
               ...(input.reviewFeedback ? { reviewFeedback: input.reviewFeedback } : {}),
             },
           },
@@ -2030,7 +2055,7 @@ export function createAiProvider(
           {
             template: buildDailyReportWritingTemplate(input.template, input.selectedTopics.map((topic) => topic.blockKey)),
             input: {
-              draft: stripDailyReportSourceIdsForModel(input.draft),
+              draft: compactDailyReportRepairDraft(input.draft),
               violations: input.violations,
               missingNotes: input.violations
                 .filter((violation) => violation.topicId && violation.noteLabel)

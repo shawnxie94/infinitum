@@ -230,7 +230,7 @@ describe("ai provider quality rubric integration", () => {
 
   it("locks the entity alias check to temperature 0 with a bounded token budget", async () => {
     const create = mockModelResponse({
-      decisions: [{ isSameEntity: false, confidence: "high", canonicalName: null }],
+      decisions: [{ a: "A", b: "B", isSameEntity: false, confidence: "high", canonicalName: null }],
     });
     const provider = createAiProvider(
       modelApiConfig,
@@ -242,8 +242,14 @@ describe("ai provider quality rubric integration", () => {
       pairs: [{ aName: "A", bName: "B", evidence: [] }],
     });
 
-    expect(decisions).toHaveLength(1);
-    const request = create.mock.calls[0]?.[0] as { temperature?: number; max_tokens?: number };
+    expect(decisions).toEqual([{
+      isSameEntity: false,
+      confidence: "high",
+      canonicalName: null,
+    }]);
+    const request = create.mock.calls[0]?.[0] as { temperature?: number; max_tokens?: number; messages?: Array<{ content?: string }> };
+    expect(request.messages?.[1]?.content).toContain('"pairs":[{"a":"A","b":"B","evidence":[]}]');
+    expect(request.messages?.[1]?.content).not.toContain('"pairsJson"');
     expect(request.temperature).toBe(0);
     expect(request.max_tokens).toBe(2000);
   });

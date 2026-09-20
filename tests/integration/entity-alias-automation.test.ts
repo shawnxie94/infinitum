@@ -121,8 +121,6 @@ describe("autoNormalizeEntityAliases", () => {
     expect(resolverBefore("Z.ai")).toBe("Z.ai");
 
     const provider = fakeProvider(() => ({
-      aName: "智谱",
-      bName: "Z.ai",
       isSameEntity: true,
       confidence: "high",
       canonicalName: "智谱",
@@ -146,8 +144,6 @@ describe("autoNormalizeEntityAliases", () => {
     const { zhipu, zai } = await seedEntityPair();
 
     const provider = fakeProvider(() => ({
-      aName: "智谱",
-      bName: "Z.ai",
       isSameEntity: true,
       confidence: "high",
       canonicalName: "Z.ai",
@@ -166,8 +162,6 @@ describe("autoNormalizeEntityAliases", () => {
     const { zhipu, zai } = await seedEntityPair();
 
     const provider = fakeProvider(() => ({
-      aName: "智谱",
-      bName: "Z.ai",
       isSameEntity: true,
       confidence: "high",
       canonicalName: "全新规范名称",
@@ -184,8 +178,6 @@ describe("autoNormalizeEntityAliases", () => {
     const { zhipu, zai } = await seedEntityPair();
 
     const provider = fakeProvider(() => ({
-      aName: "智谱",
-      bName: "Z.ai",
       isSameEntity: true,
       confidence: "medium",
       canonicalName: "智谱",

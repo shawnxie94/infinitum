@@ -133,6 +133,7 @@ describe("daily report staged provider", () => {
     expect(assessUserPrompt).toContain("matchedRecentTopicTitle");
     expect(assessUserPrompt).toContain("historyTopicRules");
     expect(assessUserPrompt).toContain('"recentTopicLookbackDays":10');
+    expect(assessUserPrompt).not.toContain('"sourceNumber"');
     expect(assessUserPrompt).not.toContain('"required"');
     expect(assessUserPrompt).not.toContain('"minItems"');
     expect(assessUserPrompt).not.toContain('"maxItems"');
@@ -249,6 +250,7 @@ describe("daily report staged provider", () => {
     expect(userPrompt).toContain("noteLabel");
     expect(userPrompt).toContain("missingNotes");
     expect(userPrompt).not.toContain('"sourceIds"');
+    expect(userPrompt).not.toContain('"body":"原正文"');
   });
 
   it("carries Review guidance into PLAN and WRITE retry prompts", async () => {

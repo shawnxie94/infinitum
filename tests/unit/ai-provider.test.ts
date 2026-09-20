@@ -368,6 +368,8 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("候选聚合 Pair");
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("score 是本地规则");
     expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain("\"pairs\"");
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).not.toContain("cluster-a");
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).not.toContain("cluster-b");
   });
 
   it("parses explicit cluster merge verdicts including ambiguous pairs", async () => {
@@ -735,6 +737,8 @@ describe("ai provider", () => {
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).not.toContain("归组判定专用提示词");
     expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain("归组判定专用提示词");
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain('"candidates":[{"id":"cluster-1"');
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).not.toContain('"candidatesJson"');
   });
 
   it("uses a strict event-only cluster match prompt by default", async () => {
