@@ -607,6 +607,12 @@ describe("AdminSettingsPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "创建" }));
 
+    // 启用中的向量模型在卡片上按普通模式样式标注默认
+    await waitFor(() => {
+      expect(screen.getByText("语义向量")).toBeInTheDocument();
+    });
+    expect(screen.getByText("默认")).toBeInTheDocument();
+
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/model-api-configs", {
         method: "POST",

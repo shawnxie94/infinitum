@@ -774,7 +774,10 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                       <div className="flex-1">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-[var(--text-1)]">{config.name}</h3>
-                          {config.isDefault ? <StatusTag tone="info">默认</StatusTag> : null}
+                          {/* 向量模型无 isDefault：启用中的那条即全局生效，按普通模式样式标注默认 */}
+                          {(config.isDefault || (config.type === "embedding" && config.isEnabled)) ? (
+                            <StatusTag tone="info">默认</StatusTag>
+                          ) : null}
                           <StatusTag tone={config.isEnabled ? "success" : "neutral"}>
                             {config.isEnabled ? "启用" : "禁用"}
                           </StatusTag>
