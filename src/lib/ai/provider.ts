@@ -1188,7 +1188,10 @@ function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeIn
 
   const verdicts = parsed.verdicts;
   if (!Array.isArray(verdicts) || verdicts.length !== metadata.pairs.length) {
-    throw new InvalidJsonModelResponseError("聚合合并 verdicts 数量必须与输入 Pair 数量一致。");
+    const actualCount = Array.isArray(verdicts) ? verdicts.length : 0;
+    throw new InvalidJsonModelResponseError(
+      `聚合合并 verdicts 数量必须与输入 Pair 数量一致（期望 ${metadata.pairs.length}，实际 ${actualCount}）。`,
+    );
   }
 
   return metadata.pairs.map((pair, index) => {

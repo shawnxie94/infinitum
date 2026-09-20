@@ -225,7 +225,7 @@ describe("ai provider quality rubric integration", () => {
         { left: { id: "left-1" }, right: { id: "right-1" }, score: 90 },
         { left: { id: "left-2" }, right: { id: "right-2" }, score: 70 },
       ],
-    }))).rejects.toThrow("verdicts 数量");
+    }))).rejects.toThrow("期望 2，实际 1");
   });
 
   it("locks the entity alias check to temperature 0 with a bounded token budget", async () => {

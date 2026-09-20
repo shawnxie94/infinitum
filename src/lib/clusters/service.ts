@@ -1401,6 +1401,7 @@ async function recordClusterMergeDecisions(input: {
   allowedPairs: ClusterMergeCandidateEdge[];
   decisions: ClusterMergeDecision[];
   verdictOnMissing: "declined" | "failed";
+  failureReason?: string | null;
   now: Date;
 }) {
   const recordedDecisions: Array<Awaited<ReturnType<typeof recordClusterDecision>>> = [];
@@ -1431,7 +1432,7 @@ async function recordClusterMergeDecisions(input: {
         localScore: edge.score,
         confidence: aiDecision?.confidence,
         reasonCode: aiDecision?.reasonCode ?? null,
-        reasonText: aiDecision?.reasonText,
+        reasonText: aiDecision?.reasonText ?? (verdict === "failed" ? input.failureReason ?? null : null),
         now: input.now,
       }),
     );
@@ -1707,13 +1708,16 @@ export async function executeClusterMerge(
     mergeDecisions = await aiProvider.assessClusterMergePairs(clustersJson);
     const itemCounts = new Map(allCandidates.map((candidate) => [candidate.id, candidate.itemCount]));
     mergeGroups = buildClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
-  } catch {
+  } catch (error) {
     timings.aiMergeMs = Date.now() - aiMergeStartedAt;
+    const failureReason = error instanceof Error ? error.message : "Unknown cluster merge AI error";
+    console.error(`[Cluster Merge] AI decision failed: ${failureReason}`);
     const failedDecisions = await recordClusterMergeDecisions({
       candidatesById,
       allowedPairs,
       decisions: [],
       verdictOnMissing: "failed",
+      failureReason,
       now,
     });
 

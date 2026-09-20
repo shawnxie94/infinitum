@@ -493,7 +493,7 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }))).rejects.toThrow("verdicts 数量");
+    }))).rejects.toThrow("期望 1，实际 2");
   });
 
   it("rejects an empty merge decision list when input pairs exist", async () => {

@@ -1811,6 +1811,15 @@ describe("cluster assignment", () => {
 
     const failedPass = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));
     await expect(
+      prisma.clusterDecision.findFirst({
+        where: { verdict: "failed" },
+        orderBy: { createdAt: "desc" },
+      }),
+    ).resolves.toMatchObject({
+      verdict: "failed",
+      reasonText: "upstream timeout",
+    });
+    await expect(
       prisma.contentCluster.findMany({
         where: { id: { in: ["failure-left-cluster", "failure-right-cluster"] } },
         select: { mergeInputHash: true },
