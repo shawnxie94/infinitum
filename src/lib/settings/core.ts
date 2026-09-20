@@ -270,6 +270,11 @@ export function serializeAdminModelApiConfig(config: {
   timeoutMs: number | null;
   isEnabled: boolean;
   isDefault: boolean;
+  authMethod?: string | null;
+  oauthAccountId?: string | null;
+  oauthScope?: string | null;
+  credentialGeneration?: number | null;
+  needsReauth?: boolean | null;
   createdAt: Date;
   updatedAt: Date;
 }): AdminModelApiConfig {
@@ -288,6 +293,11 @@ export function serializeAdminModelApiConfig(config: {
     timeoutMs: config.timeoutMs,
     isEnabled: config.isEnabled,
     isDefault: config.isDefault,
+    authMethod: config.authMethod === "pkce" ? "pkce" : "api-key",
+    oauthAccountId: config.oauthAccountId ?? "",
+    oauthScope: config.oauthScope ?? "",
+    credentialGeneration: config.credentialGeneration ?? 1,
+    needsReauth: Boolean(config.needsReauth),
     createdAt: toIsoString(config.createdAt),
     updatedAt: toIsoString(config.updatedAt),
   };

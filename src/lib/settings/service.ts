@@ -35,6 +35,14 @@ export {
   updateModelApiConfig,
 } from "@/lib/settings/model-api-service";
 export {
+  cancelOrcaRouterConnect,
+  completeOrcaRouterConnect,
+  listOrcaRouterModels,
+  markOrcaRouterNeedsReauth,
+  saveOrcaRouterApiKey,
+  startOrcaRouterConnect,
+} from "@/lib/settings/orcarouter-service";
+export {
   createPromptConfig,
   deletePromptConfig,
   getPromptConfig,

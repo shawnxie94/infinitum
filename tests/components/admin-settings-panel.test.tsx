@@ -45,6 +45,11 @@ function buildInitialSettings(): AdminSettingsSnapshot {
         timeoutMs: null,
         isEnabled: true,
         isDefault: true,
+        authMethod: "api-key" as const,
+        oauthAccountId: "",
+        oauthScope: "",
+        credentialGeneration: 1,
+        needsReauth: false,
         createdAt: "2026-04-20T10:00:00.000Z",
         updatedAt: "2026-04-20T10:00:00.000Z",
       },
@@ -528,9 +533,14 @@ describe("AdminSettingsPanel", () => {
     await user.selectOptions(screen.getByLabelText("服务商"), "orcarouter");
     expect(screen.queryByLabelText(/API地址/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/配置名称/)).toHaveValue("OrcaRouter");
-    expect(screen.getByLabelText(/模型名称/)).toHaveValue("orcarouter/auto");
-    await user.clear(screen.getByLabelText(/API密钥/));
-    await user.type(screen.getByLabelText(/API密钥/), "sk-orca-test");
+
+    // OrcaRouter exposes both authentication choices side by side, and the
+    // model is chosen from a selector rather than typed as a free string.
+    expect(screen.getByLabelText("OrcaRouter API Key")).toHaveAttribute("type", "password");
+    expect(screen.getByRole("button", { name: /Connect with OrcaRouter/ })).toBeInTheDocument();
+    expect(screen.getByLabelText(/模型名称/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("OrcaRouter API Key"), "sk-orca-test");
     await user.click(screen.getByRole("button", { name: "创建" }));
 
     await waitFor(() => {

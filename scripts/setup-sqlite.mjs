@@ -817,6 +817,12 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("task_schedules", "dailyReportRecentTopicLookbackDays", "INTEGER NOT NULL DEFAULT 7");
   addColumnIfMissing("background_task_runs", "pipelineCheckpointJson", "TEXT");
   addColumnIfMissing("prompt_configs", "templateMigrationAuditJson", "TEXT");
+  // OrcaRouter credential lifecycle columns.
+  addColumnIfMissing("model_api_configs", "authMethod", "TEXT NOT NULL DEFAULT 'api-key'");
+  addColumnIfMissing("model_api_configs", "oauthAccountId", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing("model_api_configs", "oauthScope", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing("model_api_configs", "credentialGeneration", "INTEGER NOT NULL DEFAULT 1");
+  addColumnIfMissing("model_api_configs", "needsReauth", "BOOLEAN NOT NULL DEFAULT false");
   addColumnIfMissing("daily_reports", "currentRevisionId", "TEXT");
   // 向量模型并入模型 API 配置：type 区分普通/向量，三项向量参数仅 embedding 行使用
   addColumnIfMissing("model_api_configs", "type", "TEXT NOT NULL DEFAULT 'chat'");

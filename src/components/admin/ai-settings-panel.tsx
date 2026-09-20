@@ -16,6 +16,8 @@ import {
 } from "@/components/admin/ai-settings-panel.api";
 import { DailyReportTemplateEditor } from "@/components/admin/daily-report-template-editor";
 import { DailyReportTemplatePreview } from "@/components/admin/daily-report-template-preview";
+import { OrcaRouterAuthPanel } from "@/components/admin/orcarouter-auth-panel";
+import { OrcaRouterModelField } from "@/components/admin/orcarouter-model-field";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -329,6 +331,8 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
   const [modelOptionsLoading, setModelOptionsLoading] = useState(false);
   const [modelOptionsError, setModelOptionsError] = useState("");
   const [modelNameManual, setModelNameManual] = useState(false);
+  /** Required input modality for the OrcaRouter entry point: text-only or multimodal. */
+  const [orcaInputModality, setOrcaInputModality] = useState("text");
   const [showModelTestModal, setShowModelTestModal] = useState(false);
   const [testingModelConfig, setTestingModelConfig] = useState<AdminModelApiConfig | null>(null);
   const [testPrompt, setTestPrompt] = useState("请回复：OK");
@@ -427,6 +431,26 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
       setEditingModelApiKeyRaw(detail.apiKeyRaw || "");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "读取模型配置详情失败", "error");
+    }
+  };
+
+  /**
+   * Re-reads the config after a connect so the panel reflects the credential
+   * that was just persisted (account id, granted scope, auth method).
+   */
+  const refreshModelConfigs = async () => {
+    const configId = editingModelConfig?.id;
+    if (configId) {
+      try {
+        const detail = await getModelApiConfig(configId);
+        setEditingModelConfig(detail);
+        setEditingModelApiKeyRaw(detail.apiKeyRaw || "");
+        setModelConfigs((current) =>
+          current.map((item) => (item.id === detail.id ? { ...item, ...detail } : item)),
+        );
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "刷新模型配置失败", "error");
+      }
     }
   };
 
@@ -928,6 +952,41 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             </FormBlock>
           ) : null}
 
+          {modelForm.providerId === "orcarouter" ? (
+            <FormBlock label="认证方式" required>
+              <OrcaRouterAuthPanel
+                configId={editingModelConfig?.id ?? null}
+                authMethod={editingModelConfig?.authMethod === "pkce" ? "pkce" : "api-key"}
+                needsReauth={Boolean(editingModelConfig?.needsReauth)}
+                hasApiKey={Boolean(editingModelConfig?.hasApiKey)}
+                oauthAccountId={editingModelConfig?.oauthAccountId ?? ""}
+                oauthScope={editingModelConfig?.oauthScope ?? ""}
+                apiKeyValue={modelForm.apiKey}
+                onApiKeyChange={(value) =>
+                  setModelForm((current) => ({
+                    ...current,
+                    apiKey: value,
+                    apiKeyMode: editingModelConfig ? "replace" : current.apiKeyMode,
+                  }))
+                }
+                onConnected={(accountId, scope) => {
+                  setEditingModelConfig((current) =>
+                    current
+                      ? {
+                          ...current,
+                          authMethod: "pkce",
+                          needsReauth: false,
+                          hasApiKey: true,
+                          oauthAccountId: accountId ?? "",
+                          oauthScope: scope ?? "",
+                        }
+                      : current,
+                  );
+                  void refreshModelConfigs();
+                }}
+              />
+            </FormBlock>
+          ) : (
           <FormBlock label="API密钥" required>
             <div className="flex flex-wrap items-center gap-2">
               <TextInput
@@ -1020,7 +1079,21 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
               ) : null}
             </div>
           </FormBlock>
+          )}
 
+          {modelForm.providerId === "orcarouter" ? (
+            <FormBlock label="模型名称" required>
+              <OrcaRouterModelField
+                configId={editingModelConfig?.id ?? null}
+                value={modelForm.modelName}
+                onChange={(modelId) =>
+                  setModelForm((current) => ({ ...current, modelName: modelId }))
+                }
+                inputModality={orcaInputModality}
+                onInputModalityChange={setOrcaInputModality}
+              />
+            </FormBlock>
+          ) : (
           <FormBlock label="模型名称" required>
             <div className="space-y-2">
               <div className="flex items-start gap-2">
@@ -1080,6 +1153,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             </div>
             {modelOptionsError ? <p className="mt-2 text-xs text-[var(--danger-ink)]">{modelOptionsError}</p> : null}
           </FormBlock>
+          )}
 
           {modelForm.modelType === "chat" ? (
             <FormBlock label="抓取并发数" required>
