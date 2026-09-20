@@ -26,7 +26,6 @@ export type QualityRubricDimension = {
 export type QualityRubric = {
   kind: "quality_rubric";
   dimensions: QualityRubricDimension[];
-  notes: string[];
 };
 
 export const QUALITY_RUBRIC_KIND = "quality_rubric";
@@ -39,9 +38,10 @@ export const QUALITY_RUBRIC_LIMITS = {
   minLevels: 2,
   maxLevels: 4,
   maxLevelDescriptionLength: 100,
-  maxNotes: 3,
-  maxNoteLength: 80,
 } as const;
+
+/** 渲染模板末尾的固定护栏句：质量语义边界，不随配置变化。 */
+export const QUALITY_RUBRIC_FIXED_NOTE = "只评文章本身质量，题材是否属于 AI 领域不影响分数。";
 
 export const DEFAULT_QUALITY_RUBRIC: QualityRubric = {
   kind: QUALITY_RUBRIC_KIND,
@@ -97,7 +97,6 @@ export const DEFAULT_QUALITY_RUBRIC: QualityRubric = {
       ],
     },
   ],
-  notes: ["只评文章本身质量，题材是否属于 AI 领域不影响分数。"],
 };
 
 function clampInt(value: number) {
@@ -117,7 +116,7 @@ export function validateQualityRubric(rubric: QualityRubric): string | null {
   if (!rubric || rubric.kind !== QUALITY_RUBRIC_KIND) {
     return "评分规则格式无效。";
   }
-  const { dimensions, notes } = rubric;
+  const { dimensions } = rubric;
   if (!Array.isArray(dimensions) || dimensions.length < QUALITY_RUBRIC_LIMITS.minDimensions) {
     return "评分规则至少需要一个评分维度。";
   }
@@ -185,18 +184,6 @@ export function validateQualityRubric(rubric: QualityRubric): string | null {
     return `全部分维度的分值合计必须为 100，当前为 ${pointsTotal}。`;
   }
 
-  if (!Array.isArray(notes) || notes.length > QUALITY_RUBRIC_LIMITS.maxNotes) {
-    return `总体说明不能超过 ${QUALITY_RUBRIC_LIMITS.maxNotes} 条。`;
-  }
-  for (const note of notes) {
-    if (!normalizeText(note)) {
-      return "总体说明存在空条目。";
-    }
-    if (normalizeText(note).length > QUALITY_RUBRIC_LIMITS.maxNoteLength) {
-      return `总体说明条目超过 ${QUALITY_RUBRIC_LIMITS.maxNoteLength} 字。`;
-    }
-  }
-
   return null;
 }
 
@@ -215,8 +202,28 @@ export function normalizeQualityRubric(rubric: QualityRubric): QualityRubric {
         }))
         .sort((left, right) => right.score - left.score),
     })),
-    notes: (rubric.notes ?? []).map((note) => normalizeText(note)).filter(Boolean),
   };
+}
+
+function coerceRubricDimensions(rawDimensions: unknown): QualityRubricDimension[] {
+  if (!Array.isArray(rawDimensions)) {
+    return [];
+  }
+  return rawDimensions.map((dimension) => ({
+    name: normalizeText((dimension as { name?: unknown } | null)?.name),
+    points: isFiniteNumber((dimension as { points?: unknown } | null)?.points)
+      ? (dimension as { points: number }).points
+      : Number.NaN,
+    description: normalizeText((dimension as { description?: unknown } | null)?.description),
+    levels: Array.isArray((dimension as { levels?: unknown } | null)?.levels)
+      ? (dimension as { levels: unknown[] }).levels.map((level) => ({
+          score: isFiniteNumber((level as { score?: unknown } | null)?.score)
+            ? (level as { score: number }).score
+            : Number.NaN,
+          description: normalizeText((level as { description?: unknown } | null)?.description),
+        }))
+      : [],
+  }));
 }
 
 /** 供保存路径与运行时共用；解析失败返回 null，由调用方决定回退或报错。 */
@@ -237,27 +244,45 @@ export function parseQualityRubricJson(value: string | null | undefined): Qualit
   }
 
   const raw = parsed as Partial<QualityRubric>;
-  if (raw.kind !== QUALITY_RUBRIC_KIND || !Array.isArray(raw.dimensions)) {
+  if (raw.kind !== QUALITY_RUBRIC_KIND) {
     return null;
   }
 
   const rubric = normalizeQualityRubric({
     kind: QUALITY_RUBRIC_KIND,
-    dimensions: raw.dimensions.map((dimension) => ({
-      name: normalizeText(dimension?.name),
-      points: isFiniteNumber(dimension?.points) ? dimension.points : Number.NaN,
-      description: normalizeText(dimension?.description),
-      levels: Array.isArray(dimension?.levels)
-        ? dimension.levels.map((level) => ({
-            score: isFiniteNumber(level?.score) ? level.score : Number.NaN,
-            description: normalizeText(level?.description),
-          }))
-        : [],
-    })),
-    notes: Array.isArray(raw.notes) ? raw.notes.map((note) => normalizeText(note)) : [],
+    dimensions: coerceRubricDimensions(raw.dimensions),
   });
 
   return validateQualityRubric(rubric) === null ? rubric : null;
+}
+
+/**
+ * 编辑态宽松解析：只做形状规整，不做语义校验——管理员编辑中途的
+ * 过渡态（合计≠100、档位未排好）必须能原样回显，否则每次编辑都会
+ * 被严格解析打回默认规则。解析失败（非法 JSON 等）才回退内置默认。
+ */
+export function parseQualityRubricDraft(value: string | null | undefined): QualityRubric {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) {
+    return structuredClone(DEFAULT_QUALITY_RUBRIC);
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return structuredClone(DEFAULT_QUALITY_RUBRIC);
+    }
+    const raw = parsed as Partial<QualityRubric>;
+    if (raw.kind !== QUALITY_RUBRIC_KIND) {
+      return structuredClone(DEFAULT_QUALITY_RUBRIC);
+    }
+    return normalizeQualityRubric({
+      kind: QUALITY_RUBRIC_KIND,
+      dimensions: coerceRubricDimensions(raw.dimensions),
+    });
+  } catch {
+    return structuredClone(DEFAULT_QUALITY_RUBRIC);
+  }
 }
 
 export function stringifyQualityRubric(rubric: QualityRubric): string {
@@ -265,8 +290,8 @@ export function stringifyQualityRubric(rubric: QualityRubric): string {
 }
 
 /**
- * 渲染为追加进系统提示词的评分标准块。前端“拼接预览”与后端运行时
- * 共用本函数，保证所见即所得。
+ * 渲染为追加进系统提示词的评分标准块。admin「提示词预览」与后端运行时
+ * 共用本函数，保证预览与实际拼接一致。
  */
 export function renderQualityRubricPrompt(rubric: QualityRubric): string {
   const lines: string[] = [
@@ -282,9 +307,7 @@ export function renderQualityRubricPrompt(rubric: QualityRubric): string {
   lines.push(
     "qualityScore 为全部分维度选中档位分之和；qualityRationale 用一句中文说明主要维度的档位选择理由。",
   );
-  for (const note of rubric.notes) {
-    lines.push(note);
-  }
+  lines.push(QUALITY_RUBRIC_FIXED_NOTE);
   return lines.join("\n");
 }
 

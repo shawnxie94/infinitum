@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_QUALITY_RUBRIC,
   normalizeQualityRubric,
+  parseQualityRubricDraft,
   parseQualityRubricJson,
   renderQualityRubricPrompt,
   resolveRubricQualityScore,
@@ -36,7 +37,6 @@ function buildRubric(overrides: Partial<QualityRubric["dimensions"][number]> = {
         ],
       },
     ],
-    notes: ["只评文章本身质量。"],
   };
 }
 
@@ -110,7 +110,7 @@ describe("quality rubric validation", () => {
 });
 
 describe("quality rubric prompt rendering", () => {
-  it("renders dimensions, level anchors and notes", () => {
+  it("renders dimensions, level anchors and the fixed guardrail note", () => {
     const text = renderQualityRubricPrompt(DEFAULT_QUALITY_RUBRIC);
     expect(text).toContain("满分 100");
     expect(text).toContain("事实密度（满分 30 分");
@@ -118,6 +118,34 @@ describe("quality rubric prompt rendering", () => {
     expect(text).toContain("一手性");
     expect(text).toContain("只评文章本身质量，题材是否属于 AI 领域不影响分数。");
     expect(text).toContain("qualityScore 为全部分维度选中档位分之和");
+  });
+});
+
+describe("quality rubric draft parsing (editor lenient mode)", () => {
+  it("preserves in-progress invalid states instead of falling back to the default", () => {
+    const draft = buildRubric({ points: 70 });
+    // 合计 110 ≠ 100 的编辑过渡态必须原样回显，否则编辑器每次改动都被打回默认。
+    const parsed = parseQualityRubricDraft(stringifyQualityRubric(draft));
+    expect(parsed.dimensions).toHaveLength(2);
+    expect(parsed.dimensions[0].points).toBe(70);
+    expect(validateQualityRubric(parsed)).not.toBeNull();
+  });
+
+  it("falls back to the default rubric on malformed JSON", () => {
+    const parsed = parseQualityRubricDraft("not json");
+    expect(parsed.dimensions).toEqual(DEFAULT_QUALITY_RUBRIC.dimensions);
+    expect(parseQualityRubricDraft("").dimensions).toEqual(DEFAULT_QUALITY_RUBRIC.dimensions);
+  });
+
+  it("normalizes level order in drafts without validating", () => {
+    const rubric = buildRubric();
+    rubric.dimensions[0].levels = [
+      { score: 0, description: "a" },
+      { score: 60, description: "c" },
+      { score: 30, description: "b" },
+    ];
+    const parsed = parseQualityRubricDraft(stringifyQualityRubric(rubric));
+    expect(parsed.dimensions[0].levels.map((level) => level.score)).toEqual([60, 30, 0]);
   });
 });
 

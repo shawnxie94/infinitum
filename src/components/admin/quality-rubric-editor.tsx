@@ -5,15 +5,12 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { IconTrash } from "@/components/ui/icons";
 import { IconButton } from "@/components/ui/icon-button";
-import { SectionToggleButton } from "@/components/ui/section-toggle-button";
-import { TextArea } from "@/components/ui/text-area";
 import { TextInput } from "@/components/ui/text-input";
 import {
   DEFAULT_QUALITY_RUBRIC,
   QUALITY_RUBRIC_LIMITS,
   normalizeQualityRubric,
-  parseQualityRubricJson,
-  renderQualityRubricPrompt,
+  parseQualityRubricDraft,
   stringifyQualityRubric,
   type QualityRubric,
 } from "@/lib/ai/quality-rubric";
@@ -26,10 +23,6 @@ type QualityRubricEditorProps = {
 };
 
 const labelClassName = "block text-sm text-[var(--text-2)]";
-
-function resolveRubricFromJson(value: string): QualityRubric {
-  return parseQualityRubricJson(value) ?? structuredClone(DEFAULT_QUALITY_RUBRIC);
-}
 
 /** 新增维度时按满分比例预填档位骨架，用户只需要改判据描述。 */
 function buildPrefillLevels(points: number) {
@@ -46,14 +39,15 @@ function buildPrefillLevels(points: number) {
 
 export function QualityRubricEditor({ value, onChange, onError }: QualityRubricEditorProps) {
   const [expandedDimensionIndexes, setExpandedDimensionIndexes] = useState<Set<number>>(() => new Set([0]));
-  const [showPreview, setShowPreview] = useState(false);
 
-  const rubric = useMemo(() => resolveRubricFromJson(value), [value]);
+  // 编辑态用宽松解析：过渡态（合计≠100、档位未排好）原样回显，
+  // 语义校验只发生在保存时，否则每次编辑都会被打回默认规则。
+  const rubric = useMemo(() => parseQualityRubricDraft(value), [value]);
   const pointsTotal = rubric.dimensions.reduce((total, dimension) => total + (dimension.points || 0), 0);
   const pointsValid = pointsTotal === 100;
 
   const updateRubric = (mutator: (draft: QualityRubric) => void) => {
-    const draft = structuredClone(resolveRubricFromJson(value));
+    const draft = structuredClone(parseQualityRubricDraft(value));
     mutator(draft);
     const normalized = normalizeQualityRubric(draft);
     onChange({ templateJson: stringifyQualityRubric(normalized) });
@@ -154,7 +148,7 @@ export function QualityRubricEditor({ value, onChange, onError }: QualityRubricE
 
             {expanded ? (
               <div className="space-y-3 border-t border-[color:var(--line)] p-3">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_6rem]">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <label className="block space-y-2">
                     <span className={labelClassName}>名称</span>
                     <TextInput
@@ -273,38 +267,6 @@ export function QualityRubricEditor({ value, onChange, onError }: QualityRubricE
           </div>
         );
       })}
-
-      <label className="block space-y-2">
-        <span className={labelClassName}>总体说明（每行一条）</span>
-        <TextArea
-          aria-label="评分总体说明"
-          rows={2}
-          value={rubric.notes.join("\n")}
-          onChange={(event) =>
-            updateRubric((draft) => {
-              draft.notes = event.target.value
-                .split("\n")
-                .map((line) => line.trim())
-                .filter(Boolean);
-            })
-          }
-        />
-      </label>
-
-      <div>
-        <SectionToggleButton
-          label="拼接预览"
-          expanded={showPreview}
-          onToggle={() => setShowPreview((current) => !current)}
-          expandedIndicator="收起"
-          collapsedIndicator="展开"
-        />
-        {showPreview ? (
-          <pre className="mt-2 w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-3 text-xs font-mono text-[var(--text-1)]">
-            {renderQualityRubricPrompt(rubric)}
-          </pre>
-        ) : null}
-      </div>
     </div>
   );
 }
