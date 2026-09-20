@@ -1760,17 +1760,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
              <DailyReportTemplatePreview templateJson={showPromptPreview.templateJson} />
             ) : null}
 
-           {showPromptPreview.type === "item_understanding" ? (
-             <div>
-                <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">
-                  评分规则（拼入系统提示词）
-                </label>
-                <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
-                  {renderQualityRubricPrompt(resolveConfigQualityRubric(showPromptPreview))}
-                </pre>
-              </div>
-            ) : null}
-
            {showPromptPreview.type !== "daily_report" ? (
              <div>
                 <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">
@@ -1778,6 +1767,17 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                 </label>
                 <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
                   {showPromptPreview.userPrompt || "（空）"}
+                </pre>
+              </div>
+            ) : null}
+
+           {showPromptPreview.type === "item_understanding" ? (
+             <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">
+                  评分规则
+                </label>
+                <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
+                  {renderQualityRubricPrompt(resolveConfigQualityRubric(showPromptPreview))}
                 </pre>
               </div>
             ) : null}
