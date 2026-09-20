@@ -1,11 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { refreshAllClusterFeedStats, refreshClusterFeedStats } from "@/lib/clusters/feed-stats";
 import { resolveFeedFilters } from "@/lib/feed/range";
 import { listFeedItems } from "@/lib/feed/repository";
-import { replaceItemEntities } from "@/lib/entities/service";
 
 describe("/api/feed", () => {
   beforeEach(async () => {

@@ -94,21 +94,14 @@ function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdo
   }
 
   const maybeSnapshot = value as Record<string, unknown>;
+  const rawKey = maybeSnapshot.key;
 
-  if (
-    maybeSnapshot.key !== "item_understanding" &&
-    maybeSnapshot.key !== "cluster_match" &&
-    maybeSnapshot.key !== "cluster_summary" &&
-    maybeSnapshot.key !== "cluster_merge" &&
-    maybeSnapshot.key !== "daily_report" &&
-    maybeSnapshot.key !== "daily_report_assess" &&
-    maybeSnapshot.key !== "daily_report_plan" &&
-    maybeSnapshot.key !== "daily_report_write" &&
-    maybeSnapshot.key !== "daily_report_repair" &&
-    maybeSnapshot.key !== "daily_report_review"
-  ) {
+  // 允许键以标签表为单一源（其类型绑定 TaskAiCallBreakdownKey），避免新增用量 key 时白名单漂移。
+  if (typeof rawKey !== "string" || !(rawKey in TASK_AI_CALL_BREAKDOWN_LABELS)) {
     return null;
   }
+
+  const key = rawKey as TaskAiCallBreakdownKey;
 
   const promptTokens = normalizeTokenField(maybeSnapshot.promptTokens);
   const completionTokens = normalizeTokenField(maybeSnapshot.completionTokens);
@@ -120,8 +113,8 @@ function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdo
     ? maybeSnapshot.tokenUsageSource
     : undefined;
   return {
-    key: maybeSnapshot.key,
-    label: TASK_AI_CALL_BREAKDOWN_LABELS[maybeSnapshot.key],
+    key,
+    label: TASK_AI_CALL_BREAKDOWN_LABELS[key],
     actual:
       typeof maybeSnapshot.actual === "number" && Number.isFinite(maybeSnapshot.actual)
         ? maybeSnapshot.actual

@@ -483,6 +483,15 @@ describe("background task persistence", () => {
           actual: 0,
           estimated: 2,
         },
+        {
+          key: "entity_alias_check",
+          label: "实体别名判定",
+          actual: 3,
+          estimated: 6,
+          promptTokens: 120,
+          completionTokens: 40,
+          totalTokens: 160,
+        },
       ],
       stageTimings: [
         {
@@ -569,8 +578,12 @@ describe("background task persistence", () => {
       {
         key: "entity_alias_check",
         label: "实体别名判定",
-        actual: 0,
-        estimated: 0,
+        actual: 3,
+        estimated: 6,
+        promptTokens: 120,
+        completionTokens: 40,
+        totalTokens: 160,
+        cachedTokens: 0,
       },
       {
         key: "daily_report",

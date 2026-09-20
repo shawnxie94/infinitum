@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { invalidateFeedCache } from "@/lib/feed/cache";
@@ -316,4 +318,98 @@ export async function deleteSource(id: string) {
   });
   await refreshClusterFeedStatsSafely(affectedClusterIds, "delete source");
   invalidateFeedCache();
+}
+
+export type AdminSourceGroupFilter =
+  | { kind: "all" }
+  | { kind: "group"; groupId: string }
+  | { kind: "ungrouped" };
+
+export type AdminSourceListItem = {
+  id: string;
+  name: string;
+  rssUrl: string;
+  siteUrl: string;
+  enabled: boolean;
+  aiParsingEnabled: boolean;
+  aggregationEnabled: boolean;
+  aggregationDetectionEnabled: boolean;
+  groupId: string | null;
+  groupName: string | null;
+  lastItemCreatedAt: string | null;
+};
+
+export type AdminSourceListResult = {
+  sources: AdminSourceListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listSourcesForAdmin(params: {
+  page: number;
+  pageSize: number;
+  search: string;
+  enabled: boolean | null;
+  group: AdminSourceGroupFilter;
+}): Promise<AdminSourceListResult> {
+  const where: Prisma.SourceWhereInput = {};
+
+  if (params.enabled !== null) {
+    where.enabled = params.enabled;
+  }
+
+  if (params.group.kind === "ungrouped") {
+    where.groupId = null;
+  } else if (params.group.kind === "group") {
+    where.groupId = params.group.groupId;
+  }
+
+  if (params.search) {
+    where.OR = [
+      { name: { contains: params.search } },
+      { rssUrl: { contains: params.search } },
+    ];
+  }
+
+  const [sources, total] = await Promise.all([
+    prisma.source.findMany({
+      where,
+      include: { group: true },
+      orderBy: [{ name: "asc" }],
+      take: params.pageSize,
+      skip: (params.page - 1) * params.pageSize,
+    }),
+    prisma.source.count({ where }),
+  ]);
+
+  const latestItemsBySource = await prisma.item.groupBy({
+    by: ["sourceId"],
+    where: { sourceId: { in: sources.map((source) => source.id) } },
+    _max: { createdAt: true },
+  });
+  const latestItemCreatedAtBySourceId = new Map(
+    latestItemsBySource.map((entry) => [entry.sourceId, entry._max.createdAt]),
+  );
+
+  return {
+    sources: sources.map((source) => ({
+      id: source.id,
+      name: source.name,
+      rssUrl: source.rssUrl,
+      siteUrl: source.siteUrl,
+      enabled: source.enabled,
+      aiParsingEnabled: source.aiParsingEnabled,
+      aggregationEnabled: source.aggregationEnabled,
+      aggregationDetectionEnabled: source.aggregationDetectionEnabled,
+      groupId: source.groupId,
+      groupName: source.group?.name ?? null,
+      lastItemCreatedAt: latestItemCreatedAtBySourceId.get(source.id)?.toISOString() ?? null,
+    })),
+    total,
+    page: params.page,
+    pageSize: params.pageSize,
+    totalPages: Math.max(1, Math.ceil(total / params.pageSize)),
+  };
 }

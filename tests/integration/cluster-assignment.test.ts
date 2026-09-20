@@ -1285,7 +1285,7 @@ describe("cluster assignment", () => {
         },
       ],
     });
-    const splitResult = await splitClusterIntoSingletons("split-block-cluster");
+    await splitClusterIntoSingletons("split-block-cluster");
     const mergeClustersAi = vi.fn().mockResolvedValue([]);
     const aiProvider = {
       assessClusterMergePairs: mergeClustersAi,

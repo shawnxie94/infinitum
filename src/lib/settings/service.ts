@@ -56,9 +56,15 @@ export {
   deleteSource,
   deleteSourceGroup,
   importSourcesFromOpml,
+  listSourcesForAdmin,
   renameSourceGroup,
   reorderSourceGroups,
   replaceBlacklistKeywords,
   resolveSourceMetadata,
   updateSource,
+} from "@/lib/settings/source-service";
+export type {
+  AdminSourceGroupFilter,
+  AdminSourceListItem,
+  AdminSourceListResult,
 } from "@/lib/settings/source-service";
