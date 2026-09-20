@@ -4,7 +4,21 @@ export const ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE = "系统固定输出约束：
 
 const LEGACY_ITEM_UNDERSTANDING_OUTPUT_FORMAT = `{"summary":"...","translatedTitle":"...","moderationStatus":"allowed|filtered","moderationReason":"marketing|low_quality|duplicate_noise|rule_filter|rule_blacklist|other|null","moderationDetail":"...","qualityScore":0,"qualityRationale":"...","eventSignature":{"eventType":"release|launch|update|funding|acquisition|partnership|policy|research|security|other|null","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"},"aggregation":{"isAggregation":true|false,"mainEvent":{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null"}|null,"events":[{"eventType":"...","eventSubject":"...","eventAction":"...","eventObject":"...","eventDate":"YYYY-MM-DD|null","title":"...","oneLiner":"...","qualityScore":0,"sourceUrl":"https://...|null"}]}}`;
 
+// 评分字段契约（v4）：qualityBreakdown 逐维度子分数由代码校验吸附后求和。
+// 单独提取成常量，供 PREVIOUS_DEFAULT 派生上一版文本。
+const QUALITY_SCORE_RULE = `4. qualityScore 为 0-100 整数，qualityBreakdown 为按系统评分标准逐维度给出的子分数数组（name 使用评分标准中的维度名，score 为该维度选中档位的分值）；qualityRationale 用一句中文说明主要维度的档位选择理由。`;
+
+// 上一版规则 4（v3）：单字段总分，无维度子分数。
+const QUALITY_SCORE_RULE_PREVIOUS = `4. qualityScore 为 0-100 整数；qualityRationale 用一句中文说明事实密度、独特性、完整度、可信度或时效性。`;
+
 const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES = `非聚合内容示例（所有字段都必须保留）：
+{"summary":"示例摘要","translatedTitle":"","moderationStatus":"allowed","moderationReason":null,"moderationDetail":"示例说明","qualityScore":80,"qualityBreakdown":[{"name":"维度名","score":20}],"qualityRationale":"示例理由","eventSignature":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"aggregation":{"isAggregation":false,"mainEvent":null,"events":[]}}
+
+聚合内容仅将 aggregation 改为以下结构：
+{"isAggregation":true,"mainEvent":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"events":[{"eventType":"other","eventSubject":"子事件主体","eventAction":"子事件动作","eventObject":"子事件对象","eventDate":null,"title":"子事件标题","oneLiner":"子事件摘要","qualityScore":80,"sourceUrl":null}]}`;
+
+// 上一版（v3）JSON 示例：无 qualityBreakdown 字段。
+const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES_PREVIOUS = `非聚合内容示例（所有字段都必须保留）：
 {"summary":"示例摘要","translatedTitle":"","moderationStatus":"allowed","moderationReason":null,"moderationDetail":"示例说明","qualityScore":80,"qualityRationale":"示例理由","eventSignature":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"aggregation":{"isAggregation":false,"mainEvent":null,"events":[]}}
 
 聚合内容仅将 aggregation 改为以下结构：
@@ -26,7 +40,7 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 1. summary：100 到 200 字中文摘要，覆盖主体、动作、关键结果、背景和影响；只写正文，可使用有限 Markdown 行内强调，不要链接、标题、列表或编造内容。
 2. translatedTitle：仅当“是否需要翻译标题”为“是”时填写忠实简洁的中文标题，否则返回空字符串。
 3. moderationStatus 默认 allowed；仅当正文主体明显属于营销宣传、低质灌水或噪声重复时返回 filtered。页眉、页脚、侧栏、底部推荐位、插入式广告等页面附加内容不代表正文主体，不要仅因这些内容将条目标记为 filtered；moderationReason 只能使用固定枚举或 null。
-4. qualityScore 为 0-100 整数；qualityRationale 用一句中文说明事实密度、独特性、完整度、可信度或时效性。
+${QUALITY_SCORE_RULE}
 ${ARGUMENT_RULE_CANONICAL}
 6. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
 7. 非聚合内容必须返回 mainEvent:null、events:[]。
@@ -40,10 +54,15 @@ ${ARGUMENT_RULE_CANONICAL}
 // The default wording before the canonical-argument rule (v3) was introduced.
 // Used to idempotently upgrade untouched default rows in already-initialized
 // databases; custom prompts never match because equality is required.
-export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT.replace(
-  ARGUMENT_RULE_CANONICAL,
-  ARGUMENT_RULE_PERMISSIVE,
-);
+export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT
+  .replace(QUALITY_SCORE_RULE, QUALITY_SCORE_RULE_PREVIOUS)
+  .replace(ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES, ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES_PREVIOUS);
+
+// v4 之前的存量默认文本（v3 与更早的 v2 措辞）都要能被幂等升级到当前默认。
+export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS = [
+  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT.replace(ARGUMENT_RULE_CANONICAL, ARGUMENT_RULE_PERMISSIVE),
+];
 
 export const LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT
   .replace(

@@ -16,6 +16,7 @@ import {
 } from "@/components/admin/ai-settings-panel.api";
 import { DailyReportTemplateEditor } from "@/components/admin/daily-report-template-editor";
 import { DailyReportTemplatePreview } from "@/components/admin/daily-report-template-preview";
+import { QualityRubricEditor } from "@/components/admin/quality-rubric-editor";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -57,6 +58,12 @@ import {
   parseDailyReportTemplateJson,
   stringifyDailyReportTemplate,
 } from "@/lib/daily-report/template";
+import {
+  DEFAULT_QUALITY_RUBRIC,
+  parseQualityRubricJson,
+  renderQualityRubricPrompt,
+  stringifyQualityRubric,
+} from "@/lib/ai/quality-rubric";
 import type {
   AdminModelApiConfig,
   AdminPromptConfig,
@@ -216,8 +223,19 @@ function maskHeaderValue(value: string) {
   return value ? "••••••••" : "空值";
 }
 
-function buildEmptyPromptForm(type: PromptConfigType): PromptFormState {
-  const templateJson = type === "daily_report" ? DEFAULT_DAILY_REPORT_TEMPLATE_JSON : "";
+// 与 provider 侧采样契约一致：判定类任务温度固定为 0，界面只读展示。
+const TEMPERATURE_LOCKED_FORM_TYPES: ReadonlySet<PromptConfigType> = new Set([
+  "item_understanding",
+  "cluster_match",
+  "cluster_merge",
+  "daily_report_review",
+]);
+
+function buildEmptyPromptForm(type: PromptConfigType): PromptFormState {  const templateJson = type === "daily_report"
+    ? DEFAULT_DAILY_REPORT_TEMPLATE_JSON
+    : type === "item_understanding"
+      ? stringifyQualityRubric(DEFAULT_QUALITY_RUBRIC)
+      : "";
 
   return {
     name: "",
@@ -265,6 +283,22 @@ function DailyReportTemplateCardSummary({ config }: { config: AdminPromptConfig 
       ) : (
         <span className="ml-1 text-sm text-[var(--text-2)]">{summary.summary}</span>
       )}
+    </div>
+  );
+}
+
+function resolveConfigQualityRubric(config: Pick<AdminPromptConfig, "templateJson">) {
+  return parseQualityRubricJson(config.templateJson) ?? DEFAULT_QUALITY_RUBRIC;
+}
+
+function QualityRubricCardSummary({ config }: { config: AdminPromptConfig }) {
+  const rubric = resolveConfigQualityRubric(config);
+  const levelCount = rubric.dimensions.reduce((total, dimension) => total + dimension.levels.length, 0);
+
+  return (
+    <div>
+      <span className="font-medium">评分规则：</span>
+      <span>{rubric.dimensions.length} 个维度 · {levelCount} 个档位 · 满分 100</span>
     </div>
   );
 }
@@ -610,7 +644,10 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
       type: config.type,
       prompt: config.userPrompt ?? config.prompt,
       systemPrompt: config.systemPrompt ?? "",
-      templateJson: config.templateJson ?? "",
+      // 旧配置行没有评分规则 JSON 时回显内置默认，保存即固化。
+      templateJson: config.type === "item_understanding"
+        ? config.templateJson || stringifyQualityRubric(DEFAULT_QUALITY_RUBRIC)
+        : config.templateJson ?? "",
       temperature: config.temperature == null ? "" : String(config.temperature),
       maxTokens: config.maxTokens == null ? "" : String(config.maxTokens),
       topP: config.topP == null ? "" : String(config.topP),
@@ -631,7 +668,9 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
       type: config.type,
       prompt: config.userPrompt ?? config.prompt,
       systemPrompt: config.systemPrompt ?? "",
-      templateJson: config.templateJson ?? "",
+      templateJson: config.type === "item_understanding"
+        ? config.templateJson || stringifyQualityRubric(DEFAULT_QUALITY_RUBRIC)
+        : config.templateJson ?? "",
       temperature: config.temperature == null ? "" : String(config.temperature),
       maxTokens: config.maxTokens == null ? "" : String(config.maxTokens),
       topP: config.topP == null ? "" : String(config.topP),
@@ -672,6 +711,15 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
         templateJson = stringifyDailyReportTemplate(template);
       }
 
+      if (promptForm.type === "item_understanding") {
+        const rubric = parseQualityRubricJson(promptForm.templateJson);
+        if (!rubric) {
+          showToast("评分规则无效：请检查维度分值合计是否为 100、档位是否从高到低。", "error");
+          return;
+        }
+        templateJson = stringifyQualityRubric(rubric);
+      }
+
       const payload = {
         name: promptForm.name,
         type: promptForm.type,
@@ -702,7 +750,14 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
         );
       });
       setShowPromptModal(false);
-      showToast(editingPromptConfig ? "提示词配置已更新。" : "提示词配置已创建。", "success");
+      showToast(
+        editingPromptConfig
+          ? promptForm.type === "item_understanding"
+            ? "提示词配置已更新，评分规则仅对此后新分析的条目生效。"
+            : "提示词配置已更新。"
+          : "提示词配置已创建。",
+        "success",
+      );
     } catch (error) {
       showToast(error instanceof Error ? error.message : "保存失败", "error");
     } finally {
@@ -1396,6 +1451,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                           </div>
                         ) : null}
                         {config.type === "daily_report" ? <DailyReportTemplateCardSummary config={config} /> : null}
+                        {config.type === "item_understanding" ? <QualityRubricCardSummary config={config} /> : null}
                         {config.type !== "daily_report" && config.userPrompt ? (
                           <div>
                             <span className="font-medium">用户提示词：</span>
@@ -1537,6 +1593,23 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
           </FormBlock>
         ) : null}
 
+        {promptForm.type === "item_understanding" ? (
+          <div className="space-y-2">
+            <span className={labelClassName}>评分规则</span>
+            <QualityRubricEditor
+              key={`${promptModalMode}-${editingPromptConfig?.id ?? "new"}`}
+              value={promptForm.templateJson}
+              onChange={(next) =>
+                setPromptForm((current) => ({
+                  ...current,
+                  templateJson: next.templateJson,
+                }))
+              }
+              onError={(message) => showToast(message, "error")}
+            />
+          </div>
+        ) : null}
+
         <FormBlock label="关联模型API配置（可选）">
           <SelectField
             value={promptForm.modelApiConfigId}
@@ -1562,11 +1635,12 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
           {showPromptAdvanced ? (
             <div className="space-y-4 border-t border-[color:var(--line)] p-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <FormBlock label="温度">
+                <FormBlock label={TEMPERATURE_LOCKED_FORM_TYPES.has(promptForm.type) ? "温度（判定任务固定为 0）" : "温度"}>
                   <TextInput
                     type="number"
                     step="0.1"
-                    value={promptForm.temperature}
+                    value={TEMPERATURE_LOCKED_FORM_TYPES.has(promptForm.type) ? "0" : promptForm.temperature}
+                    disabled={TEMPERATURE_LOCKED_FORM_TYPES.has(promptForm.type)}
                     onChange={(event) =>
                       setPromptForm((current) => ({
                         ...current,
@@ -1684,6 +1758,17 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
 
            {showPromptPreview.type === "daily_report" ? (
              <DailyReportTemplatePreview templateJson={showPromptPreview.templateJson} />
+            ) : null}
+
+           {showPromptPreview.type === "item_understanding" ? (
+             <div>
+                <label className="mb-2 block text-sm font-medium text-[var(--text-2)]">
+                  评分规则（拼入系统提示词）
+                </label>
+                <pre className="w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-lg border border-[color:var(--line)] bg-[var(--bg-muted)] p-4 text-sm font-mono text-[var(--text-1)]">
+                  {renderQualityRubricPrompt(resolveConfigQualityRubric(showPromptPreview))}
+                </pre>
+              </div>
             ) : null}
 
            {showPromptPreview.type !== "daily_report" ? (

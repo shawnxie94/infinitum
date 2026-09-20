@@ -15,7 +15,12 @@ import {
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
 } from "@/config/prompts";
+import {
+  DEFAULT_QUALITY_RUBRIC,
+  stringifyQualityRubric,
+} from "@/lib/ai/quality-rubric";
 import { prisma } from "@/lib/db";
 import {
   DEFAULT_DAILY_REPORT_TEMPLATE,
@@ -479,6 +484,77 @@ describe("admin settings service", () => {
     expect(runtimeConfig.selectedPromptConfigs?.dailyReport.systemPrompt).toContain('"title":"开场"');
     expect(runtimeConfig.prompts.dailyReport).toContain('"核心动态"');
     expect(runtimeConfig.prompts.dailyReport).not.toContain("旧系统提示词不应生效");
+  });
+
+  it("persists a validated quality rubric when saving item understanding prompt configs", async () => {
+    const rubricJson = stringifyQualityRubric(DEFAULT_QUALITY_RUBRIC);
+    const config = await createPromptConfig({
+      name: "带评分规则的条目理解",
+      type: "item_understanding",
+      systemPrompt: null,
+      templateJson: rubricJson,
+      prompt: "可以补充关注偏好。",
+      temperature: 0,
+      maxTokens: 8000,
+      topP: null,
+      modelApiConfigId: null,
+      isEnabled: true,
+      isDefault: true,
+    });
+    expect(config.templateJson).toBe(rubricJson);
+
+    // 空模板表示使用内置默认规则：落库为 null。
+    const cleared = await settingsService.updatePromptConfig(config.id, {
+      name: config.name,
+      type: "item_understanding",
+      systemPrompt: null,
+      templateJson: "",
+      prompt: "可以补充关注偏好。",
+      temperature: 0,
+      maxTokens: 8000,
+      topP: null,
+      modelApiConfigId: null,
+      isEnabled: true,
+      isDefault: true,
+    });
+    expect(cleared.templateJson).toBeNull();
+
+    // 非法规则直接拒绝保存。
+    await expect(createPromptConfig({
+      name: "坏评分规则",
+      type: "item_understanding",
+      systemPrompt: null,
+      templateJson: "{\"kind\":\"quality_rubric\",\"dimensions\":[],\"notes\":[]}",
+      prompt: "",
+      temperature: null,
+      maxTokens: null,
+      topP: null,
+      modelApiConfigId: null,
+      isEnabled: true,
+      isDefault: false,
+    })).rejects.toThrow("评分规则无效");
+  });
+
+  it("upgrades legacy v2 item understanding default wording to the current default", async () => {
+    expect(PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS.length).toBeGreaterThanOrEqual(2);
+    await prisma.promptConfig.create({
+      data: {
+        id: "prompt-v2-default",
+        name: "v2 默认条目理解提示词",
+        type: "item_understanding",
+        prompt: "正文：{{inputText}}",
+        systemPrompt: PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS[1],
+        isEnabled: true,
+        isDefault: true,
+      },
+    });
+
+    await ensureRuntimeConfigSeeded();
+
+    const upgraded = await prisma.promptConfig.findUniqueOrThrow({
+      where: { id: "prompt-v2-default" },
+    });
+    expect(upgraded.systemPrompt).toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
   });
 
   it("uses enabled default configs to build the runtime mapping", async () => {

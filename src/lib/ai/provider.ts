@@ -15,6 +15,13 @@ import {
   getAiTaskContract,
   normalizeAiUserInstruction,
 } from "@/lib/ai/contracts";
+import {
+  DEFAULT_QUALITY_RUBRIC,
+  parseQualityRubricJson,
+  renderQualityRubricPrompt,
+  resolveRubricQualityScore,
+  type QualityRubric,
+} from "@/lib/ai/quality-rubric";
 import type { RuntimeConfig } from "@/config/runtime";
 import type { PromptConfigType } from "@/lib/settings/types";
 import { createEmbedTexts } from "@/lib/ai/embeddings";
@@ -258,6 +265,8 @@ type PromptRuntimeConfig = {
   /** User-configurable business instruction. Legacy promptTemplate is accepted only for compatibility. */
   userInstruction?: string;
   promptTemplate?: string;
+  /** 结构化配置载荷（item_understanding 存评分规则 JSON），由 settings 序列化层透传。 */
+  templateJson?: string | null;
   temperature?: number | null;
   maxTokens?: number | null;
   topP?: number | null;
@@ -713,6 +722,7 @@ function parseItemUnderstandingOutput(
   fallback: ItemUnderstandingResult,
   translateTitle: boolean,
   maxEvents: number,
+  qualityRubric: QualityRubric | null = null,
 ): ItemUnderstandingResult {
   const normalized = normalizeModelResponseText(rawContent);
   let parsed: Record<string, unknown>;
@@ -756,6 +766,7 @@ function parseItemUnderstandingOutput(
     parsed as Parameters<typeof buildEnrichmentFromParsed>[0],
     fallback,
     translateTitle,
+    qualityRubric,
   );
   const rawAggregation = parsed.aggregation && typeof parsed.aggregation === "object"
     ? parsed.aggregation as Record<string, unknown>
@@ -982,6 +993,7 @@ function buildEnrichmentFromParsed(
     moderationReason?: string | null;
     moderationDetail?: string | null;
     qualityScore?: number | string | null;
+    qualityBreakdown?: unknown;
     qualityRationale?: string | null;
     eventType?: string | null;
     eventSubject?: string | null;
@@ -998,13 +1010,20 @@ function buildEnrichmentFromParsed(
   },
   fallback: AiEnrichment,
   translateTitle: boolean,
+  qualityRubric: QualityRubric | null = null,
 ): AiEnrichment {
+  // 总分以代码计算为准：qualityBreakdown 逐维度校验通过时做档位吸附求和；
+  // 子分缺失或非法时回退到模型输出的单字段 qualityScore（兼容旧提示词与
+  // 自定义提示词）；两者都不可用才是 fallback。
+  const rubricScore = resolveRubricQualityScore(qualityRubric, parsed.qualityBreakdown);
   return {
     translatedTitle: translateTitle ? parsed.translatedTitle?.trim() || fallback.translatedTitle : null,
     moderationStatus: normalizeModerationStatus(parsed.moderationStatus),
     moderationReason: normalizeModerationReason(parsed.moderationReason),
     moderationDetail: parsed.moderationDetail?.trim() || fallback.moderationDetail,
-    qualityScore: normalizeScore(parsed.qualityScore, fallback.qualityScore),
+    qualityScore: rubricScore.matched
+      ? rubricScore.score
+      : normalizeScore(parsed.qualityScore, fallback.qualityScore),
     qualityRationale: parsed.qualityRationale?.trim() || fallback.qualityRationale,
     eventSignature: buildEventSignatureFromParsed(parsed, fallback.eventSignature),
   };
@@ -1343,6 +1362,7 @@ function resolvePromptConfig(
         : normalizeAiUserInstruction(
             runtimeOverride.userInstruction ?? runtimeOverride.promptTemplate ?? contract.defaultUserInstruction,
           ),
+      templateJson: runtimeOverride.templateJson ?? null,
       temperature: runtimeOverride.temperature,
       maxTokens: runtimeOverride.maxTokens,
       topP: runtimeOverride.topP,
@@ -1354,6 +1374,30 @@ function resolvePromptConfig(
     systemPrompt: contract.systemPrompt,
     userInstruction: type === "daily_report" ? "" : contract.defaultUserInstruction,
   };
+}
+
+/**
+ * 判定/抽取类任务的采样温度由代码固定为 0：这类任务的输出直接进入排序、
+ * 归组等确定性管线，温度稳定性是契约的一部分，不允许被行配置漂移破坏
+ * （行值清空为 null 时不发送字段会落到 API 默认 ~1.0）。生成类任务
+ * （cluster_summary、daily_report）仍允许配置。
+ */
+const TEMPERATURE_LOCKED_PROMPT_TYPES: ReadonlySet<PromptConfigType> = new Set<PromptConfigType>([
+  "item_understanding",
+  "cluster_match",
+  "cluster_merge",
+  "daily_report_review",
+  "entity_alias_check",
+]);
+
+function applySamplingContract(
+  type: PromptConfigType,
+  config: PromptRuntimeConfig,
+): PromptRuntimeConfig {
+  if (!TEMPERATURE_LOCKED_PROMPT_TYPES.has(type)) {
+    return config;
+  }
+  return { ...config, temperature: 0 };
 }
 
 async function completeText(
@@ -1505,39 +1549,50 @@ export function createAiProvider(
     "item_understanding",
     promptOverrides?.itemUnderstanding,
   );
-  const itemUnderstandingConfig = promptOverrides?.itemUnderstanding
-    ? {
-        ...resolvedItemUnderstandingConfig,
-        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.replaceAll("{{maxEvents}}", String(aggregationSplitMaxEvents)).trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
-      }
-    : {
-        ...resolvedItemUnderstandingConfig,
-        systemPrompt: `${resolvedItemUnderstandingConfig.systemPrompt.replaceAll("{{maxEvents}}", String(aggregationSplitMaxEvents)).trim()}\n\n${ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE}`,
-        temperature: 0,
-        maxTokens: 8000,
-      };
+  // 评分规则始终存在：未配置或配置无效时回退到内置默认，保证评分标准
+  // 全局一致，而不是回落到无锚点的单字段打分。
+  const itemUnderstandingQualityRubric = parseQualityRubricJson(resolvedItemUnderstandingConfig.templateJson)
+    ?? DEFAULT_QUALITY_RUBRIC;
+  const itemUnderstandingSystemPrompt = [
+    resolvedItemUnderstandingConfig.systemPrompt
+      .replaceAll("{{maxEvents}}", String(aggregationSplitMaxEvents))
+      .trim(),
+    renderQualityRubricPrompt(itemUnderstandingQualityRubric),
+    ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE,
+  ].filter(Boolean).join("\n\n");
+  const itemUnderstandingConfig = applySamplingContract("item_understanding", promptOverrides?.itemUnderstanding
+    ? { ...resolvedItemUnderstandingConfig, systemPrompt: itemUnderstandingSystemPrompt }
+    // 无配置行时补齐代码默认采样预算；temperature 由 sampling 契约固定。
+    : { ...resolvedItemUnderstandingConfig, systemPrompt: itemUnderstandingSystemPrompt, maxTokens: 8000 });
   const clusterSummaryConfig = resolvePromptConfig(
     "cluster_summary",
     promptOverrides?.clusterSummary,
   );
-  const clusterMatchConfig = resolvePromptConfig(
+  const clusterMatchConfig = applySamplingContract(
     "cluster_match",
-    promptOverrides?.clusterMatch,
+    resolvePromptConfig("cluster_match", promptOverrides?.clusterMatch),
   );
-  const clusterMergeConfig = resolvePromptConfig(
+  const clusterMergeConfig = applySamplingContract(
     "cluster_merge",
-    promptOverrides?.clusterMerge,
+    resolvePromptConfig("cluster_merge", promptOverrides?.clusterMerge),
   );
   // 实体别名判定刻意不接 selectedPromptConfigs 覆盖：判定语义由默认提示词固化，
   // admin 改提示词配置不影响该通道（需要时再接覆盖管线）。
-  const entityAliasCheckConfig = resolvePromptConfig("entity_alias_check", undefined);
+  const entityAliasCheckConfig = applySamplingContract("entity_alias_check", {
+    ...resolvePromptConfig("entity_alias_check", undefined),
+    // 无配置行时不发送 maxTokens 会落到模型上限；对齐废弃 sampling 常量的预算。
+    maxTokens: 2000,
+  });
   const dailyReportConfig = resolvePromptConfig(
     "daily_report",
     promptOverrides?.dailyReport,
   );
-  const dailyReportReviewConfig = resolvePromptConfig(
+  const dailyReportReviewConfig = applySamplingContract(
     "daily_report_review",
-    promptOverrides?.dailyReportReview ?? undefined,
+    resolvePromptConfig(
+      "daily_report_review",
+      promptOverrides?.dailyReportReview ?? undefined,
+    ),
   );
 
   const getExecutionConfig = (promptConfig: PromptRuntimeConfig) => promptConfig.modelApi ?? config;
@@ -1883,6 +1938,7 @@ export function createAiProvider(
           fallback,
           metadata.translateTitle,
           aggregationSplitMaxEvents,
+          itemUnderstandingQualityRubric,
         ),
         { usageKey: "item_understanding" },
       );

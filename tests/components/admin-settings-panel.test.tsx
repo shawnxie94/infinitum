@@ -18,6 +18,10 @@ vi.mock("next/navigation", () => ({
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
 import { ToastProvider } from "@/components/ui/toast";
 import {
+  DEFAULT_QUALITY_RUBRIC,
+  stringifyQualityRubric,
+} from "@/lib/ai/quality-rubric";
+import {
   parseDailyReportTemplateJson,
 } from "@/lib/daily-report/template";
 import type { AdminSettingsSnapshot } from "@/lib/settings/types";
@@ -891,7 +895,8 @@ describe("AdminSettingsPanel", () => {
           type: "item_understanding",
           prompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
           userPrompt: "标题：{{title}}\n来源：{{sourceName}}\n正文：{{inputText}}",
-          templateJson: null,
+          // 条目理解表单预填内置默认评分规则，创建时随配置一起提交。
+          templateJson: stringifyQualityRubric(DEFAULT_QUALITY_RUBRIC),
           temperature: null,
           maxTokens: null,
           topP: null,

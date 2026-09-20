@@ -8,12 +8,16 @@ import {
   LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   LEGACY_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
-  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
+  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
 } from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
 import type { RuntimeConfig } from "@/config/runtime";
+import {
+  parseQualityRubricJson,
+  stringifyQualityRubric,
+} from "@/lib/ai/quality-rubric";
 import {
   getAiTaskContract,
   isLegacyDefaultAiUserInstruction,
@@ -395,6 +399,43 @@ export function resolvePromptSystemPrompt(config: {
 }
 
 export function resolveTemplateJsonForSave(input: SavePromptConfigInput) {
+  if (input.type === PromptConfigType.item_understanding) {
+    // item_understanding 的 templateJson 存结构化评分规则；留空表示使用
+    // 内置默认规则，非空时必须能解析为合法规则，否则拒绝保存。
+    const rubricJson = normalizeText(input.templateJson ?? "");
+    if (!rubricJson) {
+      return null;
+    }
+
+    const rubric = parseQualityRubricJson(rubricJson);
+    if (!rubric) {
+      let pointsTotal: number | null = null;
+      try {
+        const parsed: unknown = JSON.parse(rubricJson);
+        const dimensions = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          && Array.isArray((parsed as { dimensions?: unknown }).dimensions)
+          ? (parsed as { dimensions: unknown[] }).dimensions
+          : [];
+        pointsTotal = dimensions.reduce((total, dimension) => {
+          const points = (dimension as { points?: unknown } | null)?.points;
+          return total + (typeof points === "number" && Number.isInteger(points) ? points : 0);
+        }, 0);
+      } catch {
+        // JSON 语法错误时无法统计分值合计，保留通用提示即可。
+      }
+      throw new Error(
+        pointsTotal == null
+          ? "评分规则无效：不是合法的 JSON，或缺少评分维度配置。"
+          : `评分规则无效：请检查维度与档位配置（维度分值合计需为 100，当前合计 ${pointsTotal}）。`,
+      );
+    }
+
+    return {
+      templateJson: stringifyQualityRubric(rubric),
+      systemPrompt: null,
+    };
+  }
+
   if (input.type !== PromptConfigType.daily_report) {
     return null;
   }
@@ -787,11 +828,12 @@ async function upgradePreviousDefaultItemUnderstandingPrompt() {
   // Environments initialized before the wording change keep the previous
   // default text in prompt_configs. Upgrade only untouched default rows
   // (exact match), so administrator-edited prompts are never overwritten.
+  // v4 之前存在 v3/v2 两种存量措辞，一并升级。
   await prisma.promptConfig.updateMany({
     where: {
       type: PromptConfigType.item_understanding,
       isDefault: true,
-      systemPrompt: PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+      systemPrompt: { in: PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS },
     },
     data: {
       systemPrompt: DEFAULT_ITEM_UNDERSTANDING_PROMPT,
