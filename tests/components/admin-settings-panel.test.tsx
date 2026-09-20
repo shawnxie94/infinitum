@@ -589,8 +589,8 @@ describe("AdminSettingsPanel", () => {
 
     renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
 
+    await user.click(screen.getByRole("button", { name: "向量" }));
     await user.click(screen.getByRole("button", { name: /\+ 创建配置/i }));
-    await user.selectOptions(screen.getByLabelText("模型类型"), "embedding");
     await user.clear(screen.getByLabelText(/配置名称/));
     await user.type(screen.getByLabelText(/配置名称/), "语义向量");
     await user.clear(screen.getByLabelText(/API地址/));
@@ -600,9 +600,10 @@ describe("AdminSettingsPanel", () => {
     await user.clear(screen.getByLabelText(/批量大小/));
     await user.type(screen.getByLabelText(/批量大小/), "64");
 
-    // 向量模型不出现默认开关与抓取并发字段
+    // 向量 tab 下弹窗不出现默认开关与抓取并发字段，也不再有类型选择
     expect(screen.queryByText("设为默认配置")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/抓取并发数/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("模型类型")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "创建" }));
 

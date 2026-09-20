@@ -169,9 +169,9 @@ function toNullableNumber(value: string) {
   return Number.isFinite(numeric) ? numeric : Number.NaN;
 }
 
-function buildEmptyModelForm(): ModelFormState {
+function buildEmptyModelForm(modelType: "chat" | "embedding"): ModelFormState {
   return {
-    modelType: "chat",
+    modelType,
     providerId: "custom",
     name: "",
     baseUrl: "https://api.openai.com/v1",
@@ -320,9 +320,10 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
   const [selectedPromptType, setSelectedPromptType] = useState<PromptConfigType>(initialPromptType);
 
   const [showModelModal, setShowModelModal] = useState(false);
+  const [modelListTab, setModelListTab] = useState<"chat" | "embedding">("chat");
   const [editingModelConfig, setEditingModelConfig] = useState<AdminModelApiConfig | null>(null);
   const [editingModelApiKeyRaw, setEditingModelApiKeyRaw] = useState("");
-  const [modelForm, setModelForm] = useState<ModelFormState>(buildEmptyModelForm);
+  const [modelForm, setModelForm] = useState<ModelFormState>(() => buildEmptyModelForm("chat"));
   const [modelSaving, setModelSaving] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelOptionsLoading, setModelOptionsLoading] = useState(false);
@@ -348,6 +349,10 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
   const filteredPromptConfigs = useMemo(() => {
     return promptConfigs.filter((config) => config.type === selectedPromptType);
   }, [promptConfigs, selectedPromptType]);
+
+  const filteredModelConfigs = useMemo(() => {
+    return modelConfigs.filter((config) => config.type === modelListTab);
+  }, [modelConfigs, modelListTab]);
 
   const promptModelOptions = useMemo(() => {
     return modelConfigs
@@ -383,7 +388,7 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
   const openCreateModelModal = () => {
     setEditingModelConfig(null);
     setEditingModelApiKeyRaw("");
-    setModelForm(buildEmptyModelForm());
+    setModelForm(buildEmptyModelForm(modelListTab));
     setModelOptions([]);
     setModelOptionsError("");
     setModelNameManual(false);
@@ -728,7 +733,28 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             </Button>
           </div>
 
-          {modelConfigs.length === 0 ? (
+          <div className="mb-6 overflow-x-auto pb-1">
+            <div className="flex min-w-max gap-2">
+              <SelectableButton
+                onClick={() => setModelListTab("chat")}
+                active={modelListTab === "chat"}
+                className="shrink-0 whitespace-nowrap"
+                variant="pill"
+              >
+                普通
+              </SelectableButton>
+              <SelectableButton
+                onClick={() => setModelListTab("embedding")}
+                active={modelListTab === "embedding"}
+                className="shrink-0 whitespace-nowrap"
+                variant="pill"
+              >
+                向量
+              </SelectableButton>
+            </div>
+          </div>
+
+          {filteredModelConfigs.length === 0 ? (
             <EmptyState
               action={
                 <Button onClick={openCreateModelModal} variant="primary">
@@ -736,11 +762,11 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                 </Button>
               }
             >
-              暂无模型配置
+              {modelListTab === "embedding" ? "暂无向量模型配置" : "暂无普通模型配置"}
             </EmptyState>
           ) : (
             <div className="space-y-4">
-              {[...modelConfigs]
+              {[...filteredModelConfigs]
                 .sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
                 .map((config) => (
                   <div key={config.id} className={itemCardClassName}>
@@ -748,9 +774,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                       <div className="flex-1">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-[var(--text-1)]">{config.name}</h3>
-                          <StatusTag tone={config.type === "embedding" ? "warning" : "neutral"}>
-                            {config.type === "embedding" ? "向量模型" : "普通模型"}
-                          </StatusTag>
                           {config.isDefault ? <StatusTag tone="info">默认</StatusTag> : null}
                           <StatusTag tone={config.isEnabled ? "success" : "neutral"}>
                             {config.isEnabled ? "启用" : "禁用"}
@@ -866,21 +889,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             </div>
           }
         >
-          <FormBlock label="模型类型" required>
-            <SelectField
-              aria-label="模型类型"
-              value={modelForm.modelType}
-              onChange={(value) =>
-                setModelForm((current) => ({ ...current, modelType: value as "chat" | "embedding" }))
-              }
-              options={[
-                { value: "chat", label: "普通模型（对话 / 抽取 / 归组）" },
-                { value: "embedding", label: "向量模型（语义召回 / 别名仲裁）" },
-              ]}
-              className="w-full"
-            />
-          </FormBlock>
-
           <FormBlock label="配置名称" required>
             <TextInput
               value={modelForm.name}
