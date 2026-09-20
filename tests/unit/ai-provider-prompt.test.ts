@@ -169,6 +169,65 @@ describe("ai provider quality rubric integration", () => {
     expect(request.max_tokens).toBe(8000);
   });
 
+  it("parses compact cluster merge verdicts by input pair order", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ verdicts: ["approved", "ambiguous"] }) } }],
+    });
+    const provider = createAiProvider(
+      modelApiConfig,
+      undefined,
+      { chat: { completions: { create } } },
+    );
+
+    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
+      pairs: [
+        { left: { id: "left-1" }, right: { id: "right-1" }, score: 90 },
+        { left: { id: "left-2" }, right: { id: "right-2" }, score: 70 },
+      ],
+    }));
+
+    expect(decisions).toEqual([
+      {
+        leftClusterId: "left-1",
+        rightClusterId: "right-1",
+        verdict: "approved",
+        confidence: null,
+        reasonCode: null,
+        reasonText: null,
+      },
+      {
+        leftClusterId: "left-2",
+        rightClusterId: "right-2",
+        verdict: "ambiguous",
+        confidence: null,
+        reasonCode: null,
+        reasonText: null,
+      },
+    ]);
+    const request = create.mock.calls[0]?.[0] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    const systemPrompt = request.messages?.find((message) => message.role === "system")?.content ?? "";
+    expect(systemPrompt).toContain('"verdicts"');
+    expect(systemPrompt).not.toContain("reasonText");
+  });
+
+  it("rejects cluster merge verdicts whose count does not match input pairs", async () => {
+    const create = mockModelResponse({ verdicts: ["approved"] });
+    const provider = createAiProvider(
+      modelApiConfig,
+      undefined,
+      { chat: { completions: { create } } },
+    );
+
+    await expect(provider.assessClusterMergePairs(JSON.stringify({
+      pairs: [
+        { left: { id: "left-1" }, right: { id: "right-1" }, score: 90 },
+        { left: { id: "left-2" }, right: { id: "right-2" }, score: 70 },
+      ],
+    }))).rejects.toThrow("verdicts 数量");
+  });
+
   it("locks the entity alias check to temperature 0 with a bounded token budget", async () => {
     const create = mockModelResponse({
       decisions: [{ a: "A", b: "B", isSameEntity: false, confidence: "high", canonicalName: null }],

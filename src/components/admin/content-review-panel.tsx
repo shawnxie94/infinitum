@@ -754,8 +754,7 @@ function ClusterReviewModal({
                   <th className="w-[12%] whitespace-nowrap px-3 py-2 text-left">判定</th>
                   <th className="w-[24%] px-3 py-2 text-left">左聚合</th>
                   <th className="w-[24%] px-3 py-2 text-left">右聚合</th>
-                  <th className="w-[12%] whitespace-nowrap px-3 py-2 text-left">置信分</th>
-                  <th className="w-[18%] px-3 py-2 text-left">原因</th>
+                  <th className="w-[24%] px-3 py-2 text-left">判断依据</th>
                   <th className="w-[10%] whitespace-nowrap px-3 py-2 text-right">操作</th>
                 </tr>
               </thead>
@@ -797,9 +796,6 @@ function ClusterReviewModal({
                         <div className="mt-1 text-xs text-[var(--text-3)]">
                           {candidate.rightCluster.itemCount} 条 · {formatDate(candidate.rightCluster.latestPublishedAt)}
                         </div>
-                      </td>
-                      <td className="px-3 py-3 text-[var(--text-2)]">
-                        {candidate.confidence != null ? candidate.confidence : "-"}
                       </td>
                       <td className="px-3 py-3 text-xs leading-5 text-[var(--text-2)]">
                         {reason}

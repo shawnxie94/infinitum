@@ -1030,16 +1030,8 @@ function buildEnrichmentFromParsed(
 }
 
 type ClusterMergeInputMetadata = {
-  allowedPairKeys: Set<string>;
+  pairs: Array<{ leftClusterId: string; rightClusterId: string }>;
 };
-
-function buildClusterMergePairKey(leftId: string, rightId: string) {
-  return [leftId, rightId].sort().join("\u0000");
-}
-
-function getClusterIdFromUnknown(value: unknown) {
-  return value && typeof value === "object" && "id" in value && typeof value.id === "string" ? value.id : null;
-}
 
 function buildClusterMergeGroupsFromApprovedEdges(
   approvedEdges: Array<[string, string]>,
@@ -1117,113 +1109,28 @@ export function buildClusterMergeGroupsFromDecisions(
 
 function parseClusterMergeInputMetadata(clustersJson: string): ClusterMergeInputMetadata {
   const parsed = JSON.parse(clustersJson) as unknown;
-  const allowedPairKeys = new Set<string>();
+  const pairs: Array<{ leftClusterId: string; rightClusterId: string }> = [];
 
-  const addCluster = (entry: unknown) => {
-    if (!entry || typeof entry !== "object" || !("id" in entry) || typeof entry.id !== "string") {
-      return null;
-    }
-
-    return entry.id;
-  };
-
-  const addPair = (leftId: unknown, rightId: unknown) => {
-    if (typeof leftId === "string" && typeof rightId === "string" && leftId !== rightId) {
-      allowedPairKeys.add(buildClusterMergePairKey(leftId, rightId));
-    }
-  };
-
-  if (Array.isArray(parsed)) {
-    for (const entry of parsed) {
-      addCluster(entry);
-    }
-    return { allowedPairKeys };
+  if (!parsed || typeof parsed !== "object" || !("pairs" in parsed) || !Array.isArray(parsed.pairs)) {
+    return { pairs };
   }
 
-  if (parsed && typeof parsed === "object") {
-    if ("clusters" in parsed && Array.isArray(parsed.clusters)) {
-      for (const entry of parsed.clusters) {
-        addCluster(entry);
-      }
+  for (const pair of parsed.pairs) {
+    if (!pair || typeof pair !== "object") {
+      continue;
     }
 
-    if ("allowedPairs" in parsed && Array.isArray(parsed.allowedPairs)) {
-      for (const pair of parsed.allowedPairs) {
-        if (pair && typeof pair === "object") {
-          addPair("leftId" in pair ? pair.leftId : null, "rightId" in pair ? pair.rightId : null);
-        }
-      }
-    }
+    const left = "left" in pair ? pair.left : null;
+    const right = "right" in pair ? pair.right : null;
+    const leftId = left && typeof left === "object" && "id" in left && typeof left.id === "string" ? left.id : null;
+    const rightId = right && typeof right === "object" && "id" in right && typeof right.id === "string" ? right.id : null;
 
-    if ("pairs" in parsed && Array.isArray(parsed.pairs)) {
-      for (const pair of parsed.pairs) {
-        if (!pair || typeof pair !== "object") {
-          continue;
-        }
-
-        const leftId = "left" in pair ? addCluster(pair.left) : null;
-        const rightId = "right" in pair ? addCluster(pair.right) : null;
-        addPair(leftId, rightId);
-      }
+    if (leftId && rightId && leftId !== rightId) {
+      pairs.push({ leftClusterId: leftId, rightClusterId: rightId });
     }
   }
 
-  return { allowedPairKeys };
-}
-
-function normalizeClusterMergeConfidence(value: unknown) {
-  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
-
-  if (!Number.isFinite(numeric)) {
-    return null;
-  }
-
-  const percentage = numeric >= 0 && numeric <= 1 ? numeric * 100 : numeric;
-  return Math.max(0, Math.min(100, Math.round(percentage)));
-}
-
-function normalizeClusterMergeDecision(
-  rawDecision: unknown,
-  metadata: ClusterMergeInputMetadata,
-): ClusterMergeDecision | null {
-  if (!rawDecision || typeof rawDecision !== "object" || Array.isArray(rawDecision)) {
-    return null;
-  }
-
-  const decision = rawDecision as Record<string, unknown>;
-  const leftId = decision.leftClusterId ?? decision.leftId ?? decision.sourceId ?? getClusterIdFromUnknown(decision.left);
-  const rightId = decision.rightClusterId ?? decision.rightId ?? decision.targetId ?? getClusterIdFromUnknown(decision.right);
-  const verdict = decision.verdict;
-  const reasonCode = normalizeClusterMergeReasonCode(decision.reasonCode);
-
-  if (
-    typeof leftId !== "string" ||
-    typeof rightId !== "string" ||
-    leftId === rightId ||
-    !metadata.allowedPairKeys.has(buildClusterMergePairKey(leftId, rightId)) ||
-    (verdict !== "approved" && verdict !== "declined" && verdict !== "ambiguous")
-  ) {
-    return null;
-  }
-
-  return {
-    leftClusterId: leftId,
-    rightClusterId: rightId,
-    verdict,
-    confidence: normalizeClusterMergeConfidence(decision.confidence),
-    reasonCode,
-    reasonText: typeof decision.reasonText === "string" ? decision.reasonText.trim() || null : null,
-  };
-}
-
-function normalizeClusterMergeReasonCode(value: unknown): ClusterMergeReasonCode | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const normalized = value.trim();
-  return (CLUSTER_MERGE_REASON_CODES as readonly string[]).includes(normalized)
-    ? normalized as ClusterMergeReasonCode
-    : null;
+  return { pairs };
 }
 
 function parseEntityAliasDecisions(
@@ -1269,45 +1176,36 @@ function parseEntityAliasDecisions(
 
 function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeInputMetadata) {
   const normalized = normalizeModelResponseText(rawContent);
-  let parsed: { decisions?: unknown };
+  let parsed: { verdicts?: unknown };
 
   try {
-    parsed = JSON.parse(normalized) as { decisions?: unknown };
+    parsed = JSON.parse(normalized) as { verdicts?: unknown };
   } catch (error) {
     throw new InvalidJsonModelResponseError(
-      `Invalid cluster merge decision JSON: ${getJsonParseErrorMessage(error)}`,
+      `Invalid cluster merge verdict JSON: ${getJsonParseErrorMessage(error)}`,
     );
   }
 
-  const decisions: ClusterMergeDecision[] = [];
-  const seenPairKeys = new Set<string>();
-
-  if (!Array.isArray(parsed.decisions)) {
-    throw new InvalidJsonModelResponseError(
-      'Cluster merge decision JSON must contain a "decisions" array.',
-    );
+  const verdicts = parsed.verdicts;
+  if (!Array.isArray(verdicts) || verdicts.length !== metadata.pairs.length) {
+    throw new InvalidJsonModelResponseError("聚合合并 verdicts 数量必须与输入 Pair 数量一致。");
   }
 
-  for (const rawDecision of parsed.decisions) {
-    const decision = normalizeClusterMergeDecision(rawDecision, metadata);
-    if (!decision) {
-      throw new InvalidJsonModelResponseError("聚合合并 decisions 包含无效或不在输入 Pair 中的决定。");
+  return metadata.pairs.map((pair, index) => {
+    const verdict = verdicts[index];
+    if (verdict !== "approved" && verdict !== "declined" && verdict !== "ambiguous") {
+      throw new InvalidJsonModelResponseError("聚合合并 verdicts 包含非法判定。");
     }
 
-    const pairKey = buildClusterMergePairKey(decision.leftClusterId, decision.rightClusterId);
-    if (seenPairKeys.has(pairKey)) {
-      throw new InvalidJsonModelResponseError("聚合合并 decisions 不能重复判断同一个 Pair。");
-    }
-
-    seenPairKeys.add(pairKey);
-    decisions.push(decision);
-  }
-
-  if (seenPairKeys.size !== metadata.allowedPairKeys.size) {
-    throw new InvalidJsonModelResponseError("聚合合并 decisions 必须逐一覆盖输入中的每个 Pair。");
-  }
-
-  return decisions;
+    return {
+      leftClusterId: pair.leftClusterId,
+      rightClusterId: pair.rightClusterId,
+      verdict,
+      confidence: null,
+      reasonCode: null,
+      reasonText: null,
+    };
+  });
 }
 
 function parseClusterMatchCandidateId(rawContent: string, candidateIds: string[]): string | null {

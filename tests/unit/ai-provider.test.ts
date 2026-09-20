@@ -309,26 +309,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({
-              decisions: [
-                {
-                  leftClusterId: "cluster-a",
-                  rightClusterId: "cluster-b",
-                  verdict: "approved",
-                  confidence: 0.95,
-                  reasonCode: "same_event",
-                  reasonText: "主体、对象和时间一致",
-                },
-                {
-                  leftClusterId: "cluster-b",
-                  rightClusterId: "cluster-c",
-                  verdict: "approved",
-                  confidence: 0.8,
-                  reasonCode: "same_event",
-                  reasonText: "主体和对象一致",
-                },
-              ],
-            }),
+            content: JSON.stringify({ verdicts: ["approved", "approved"] }),
           },
         },
       ],
@@ -369,15 +350,17 @@ describe("ai provider", () => {
         leftClusterId: "cluster-a",
         rightClusterId: "cluster-b",
         verdict: "approved",
-        confidence: 95,
-        reasonCode: "same_event",
+        confidence: null,
+        reasonCode: null,
+        reasonText: null,
       }),
       expect.objectContaining({
         leftClusterId: "cluster-b",
         rightClusterId: "cluster-c",
         verdict: "approved",
-        confidence: 80,
-        reasonCode: "same_event",
+        confidence: null,
+        reasonCode: null,
+        reasonText: null,
       }),
     ]);
     expect(create).toHaveBeenCalledTimes(1);
@@ -390,26 +373,7 @@ describe("ai provider", () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
         message: {
-          content: JSON.stringify({
-            decisions: [
-              {
-                leftClusterId: "cluster-a",
-                rightClusterId: "cluster-b",
-                verdict: "approved",
-                confidence: 0.95,
-                reasonCode: "same_event",
-                reasonText: "主体、对象和时间一致",
-              },
-              {
-                leftClusterId: "cluster-a",
-                rightClusterId: "cluster-c",
-                verdict: "ambiguous",
-                confidence: 0.62,
-                reasonCode: "insufficient_evidence",
-                reasonText: "主体相关但对象证据不足",
-              },
-            ],
-          }),
+            content: JSON.stringify({ verdicts: ["approved", "ambiguous"] }),
         },
       }],
     });
@@ -447,38 +411,29 @@ describe("ai provider", () => {
         leftClusterId: "cluster-a",
         rightClusterId: "cluster-b",
         verdict: "approved",
-        confidence: 95,
-        reasonCode: "same_event",
-        reasonText: "主体、对象和时间一致",
+        confidence: null,
+        reasonCode: null,
+        reasonText: null,
       },
       {
         leftClusterId: "cluster-a",
         rightClusterId: "cluster-c",
         verdict: "ambiguous",
-        confidence: 62,
-        reasonCode: "insufficient_evidence",
-        reasonText: "主体相关但对象证据不足",
+        confidence: null,
+        reasonCode: null,
+        reasonText: null,
       },
     ]);
 
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("逐一判断");
-    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"decisions"');
+    expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"verdicts"');
   });
 
-  it("normalizes an unknown merge reason code instead of persisting free-form text", async () => {
+  it("leaves compact merge audit fields empty", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
         message: {
-          content: JSON.stringify({
-            decisions: [{
-              leftClusterId: "cluster-a",
-              rightClusterId: "cluster-b",
-              verdict: "declined",
-              confidence: 0.9,
-              reasonCode: "model_invented_reason",
-              reasonText: "对象不一致",
-            }],
-          }),
+          content: JSON.stringify({ verdicts: ["declined"] }),
         },
       }],
     });
@@ -498,9 +453,9 @@ describe("ai provider", () => {
       leftClusterId: "cluster-a",
       rightClusterId: "cluster-b",
       verdict: "declined",
-      confidence: 90,
+      confidence: null,
       reasonCode: null,
-      reasonText: "对象不一致",
+      reasonText: null,
     }]);
   });
 
@@ -509,22 +464,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({
-              decisions: [
-                {
-                  leftClusterId: "cluster-a",
-                  rightClusterId: "cluster-b",
-                  verdict: "approved",
-                  reasonCode: "same_event",
-                },
-                {
-                  leftClusterId: "cluster-a",
-                  rightClusterId: "cluster-c",
-                  verdict: "approved",
-                  reasonCode: "same_event",
-                },
-              ],
-            }),
+            content: JSON.stringify({ verdicts: ["approved", "approved"] }),
           },
         },
       ],
@@ -553,7 +493,7 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }))).rejects.toThrow("不在输入 Pair");
+    }))).rejects.toThrow("verdicts 数量");
   });
 
   it("rejects an empty merge decision list when input pairs exist", async () => {
@@ -561,7 +501,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({ decisions: [] }),
+            content: JSON.stringify({ verdicts: [] }),
           },
         },
       ],
@@ -590,7 +530,7 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }))).rejects.toThrow("逐一覆盖");
+    }))).rejects.toThrow("verdicts 数量");
   });
 
   it("retries cluster merge once when the first response is invalid json", async () => {
@@ -600,7 +540,7 @@ describe("ai provider", () => {
         choices: [
           {
             message: {
-              content: "{\"decisions\":[{\"leftClusterId\":\"cluster-a\",\"rightClusterId\":\"cluster-b\"}",
+              content: "{\"verdicts\":[\"approved\"",
             },
           },
         ],
@@ -609,14 +549,7 @@ describe("ai provider", () => {
         choices: [
           {
             message: {
-              content: JSON.stringify({
-                decisions: [{
-                  leftClusterId: "cluster-a",
-                  rightClusterId: "cluster-b",
-                  verdict: "approved",
-                  reasonCode: "same_event",
-                }],
-              }),
+              content: JSON.stringify({ verdicts: ["approved"] }),
             },
           },
         ],
