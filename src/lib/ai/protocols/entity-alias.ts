@@ -1,5 +1,5 @@
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
-import { getJsonParseErrorMessage } from "@/lib/ai/provider-client";
+import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
 import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import type { EntityAliasCheckConfidence, EntityAliasCheckDecision } from "@/lib/ai/provider-types";
 

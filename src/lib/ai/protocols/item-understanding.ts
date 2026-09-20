@@ -4,7 +4,7 @@ import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { resolveRubricQualityScore, type QualityRubric } from "@/lib/ai/quality-rubric";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import { normalizeOptionalText } from "@/lib/utils/text";
-import { getJsonParseErrorMessage } from "@/lib/ai/provider-client";
+import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
 import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import type {
   AiEnrichment,

@@ -285,6 +285,10 @@ export class InvalidJsonModelResponseError extends Error {
   }
 }
 
+export function getJsonParseErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown JSON parse error";
+}
+
 export function isInvalidJsonModelResponseError(error: unknown): error is InvalidJsonModelResponseError {
   return error instanceof InvalidJsonModelResponseError;
 }

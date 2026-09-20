@@ -13,7 +13,7 @@ import type {
   DailyReportTemplateSectionBlock,
   NormalizedDailyReportTemplate,
 } from "@/lib/daily-report/template";
-import { getJsonParseErrorMessage } from "@/lib/ai/provider-client";
+import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
 import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 
 export const DAILY_REPORT_JSON_SYNTAX_RULE =

@@ -2,7 +2,8 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { DEFAULT_POLL_INTERVAL_MS, DEFAULT_TASK_STALE_MS } from "@/config/constants";
 import { prisma } from "@/lib/db";
-import { executeTaskRun as defaultExecuteTaskRun } from "@/lib/tasks/handlers";
+import { restartActiveAiWorkflowRuns } from "@/lib/ai-orchestration/runtime";
+import { dispatchTaskRun } from "@/lib/tasks/routing";
 import { computeNextRunAt } from "@/lib/tasks/scheduler";
 import {
   DEFAULT_DAILY_REPORT_TASK_LABEL,
@@ -314,7 +315,8 @@ export async function runWorkerCycle(options?: {
   const claimedTaskRun = await claimNextQueuedTaskRun();
 
   if (claimedTaskRun) {
-    await (options?.executeTaskRun ?? defaultExecuteTaskRun)(claimedTaskRun);
+    // D10 路由：workflow kind → Mastra workflow；plain kind → handler 直调。
+    await (options?.executeTaskRun ?? dispatchTaskRun)(claimedTaskRun);
   }
 
   return {
@@ -329,8 +331,12 @@ export async function startWorkerLoop(options?: {
   pollIntervalMs?: number;
   executeTaskRun?: (taskRun: BackgroundTaskRun) => Promise<void>;
 }) {
+  // Worker 进程 = 内嵌 Mastra 实例薄壳（D11）。顺序敏感：先做队列侧 stale
+  // 回收（把崩溃进程遗留的 running 行置 failed），再 restartAllActiveWorkflowRuns
+  // 重新拉起 workflow（业务体把行翻回 running 并按检查点续跑），避免回收误伤刚续跑的行。
   // On worker startup, any persisted running task belongs to a process that no longer exists.
   await recoverStaleTaskRuns(new Date(), { recoverInterruptedRuns: true });
+  await restartActiveAiWorkflowRuns();
 
   while (true) {
     await runWorkerCycle({
