@@ -46,12 +46,40 @@ export function isEmbeddingConfigReady(
   );
 }
 
-export function buildEmbeddingCacheHash(modelName: string, text: string): string {
-  return createHash("sha256").update(`${modelName}\n${text}`).digest("hex");
+export function buildEmbeddingCacheHash(
+  modelName: string,
+  text: string,
+  dimensions?: number | null,
+): string {
+  const dimensionKey = dimensions && dimensions > 0 ? String(Math.floor(dimensions)) : "default";
+  return createHash("sha256").update(`${modelName}\n${dimensionKey}\n${text}`).digest("hex");
 }
 
-export function buildEmbeddingText(title: string, summary: string | null | undefined): string {
-  return `${title}\n${(summary ?? "").trim()}`;
+export function buildEmbeddingText(
+  title: string,
+  summary: string | null | undefined,
+  event?: {
+    eventType?: string | null;
+    eventSubject?: string | null;
+    eventAction?: string | null;
+    eventObject?: string | null;
+    eventDate?: string | null;
+  },
+): string {
+  if (!event) {
+    return `${title}\n${(summary ?? "").trim()}`;
+  }
+
+  const lines = [
+    `标题：${title.trim()}`,
+    event.eventType ? `事件类型：${event.eventType}` : null,
+    event.eventSubject ? `主体：${event.eventSubject}` : null,
+    event.eventAction ? `动作：${event.eventAction}` : null,
+    event.eventObject ? `对象：${event.eventObject}` : null,
+    event.eventDate ? `日期：${event.eventDate}` : null,
+    summary?.trim() ? `摘要：${summary.trim()}` : null,
+  ];
+  return lines.filter(Boolean).join("\n");
 }
 
 export function cosineSimilarity(left: number[], right: number[]): number {
@@ -189,7 +217,8 @@ export function createEmbedTexts(
     }
 
     try {
-      const hashes = texts.map((text) => buildEmbeddingCacheHash(modelName, text));
+      const dimensions = config.dimensions && config.dimensions > 0 ? Math.floor(config.dimensions) : null;
+      const hashes = texts.map((text) => buildEmbeddingCacheHash(modelName, text, dimensions));
       const cached = await loadCachedVectors(hashes);
       const vectors: Array<number[] | null> = hashes.map((hash) => cached.get(hash) ?? null);
       const misses = hashes

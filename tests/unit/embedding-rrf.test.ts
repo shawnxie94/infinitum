@@ -89,6 +89,16 @@ describe("buildEmbeddingText", () => {
     expect(buildEmbeddingText("标题", " 摘要 ")).toBe("标题\n摘要");
     expect(buildEmbeddingText("标题", null)).toBe("标题\n");
   });
+
+  it("includes event identity fields when provided", () => {
+    expect(buildEmbeddingText("标题", "摘要", {
+      eventType: "release",
+      eventSubject: "主体",
+      eventAction: "发布",
+      eventObject: "产品",
+      eventDate: "2026-09-20",
+    })).toContain("主体：主体");
+  });
 });
 
 describe("resolveMergePairAdmission", () => {

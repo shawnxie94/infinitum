@@ -7,6 +7,7 @@ import {
 import { createAiProvider, type AiCallUsage, type AiEventSignature, type AiProvider, type ItemUnderstandingResult } from "@/lib/ai/provider";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
+import { createClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import {
   persistAggregationChildItems,
   reassignAggregationChildParentIfLinked,
@@ -1205,18 +1206,25 @@ async function reparseAggregationCandidate(
       })),
     });
 
+    const assignmentCoordinator = createClusterAssignmentCoordinator();
+    const failedChildIds: string[] = [];
     for (const childId of childItemIds) {
       try {
         const assignment = await assignItemToCluster(childId, {
           aiProvider: options.aiProvider,
+          coordinator: assignmentCoordinator,
           aggregationEnabled: true,
         });
         if (assignment.clusterId) {
           affectedClusterIds.add(assignment.clusterId);
         }
       } catch (assignError) {
+        failedChildIds.push(childId);
         console.error(`[Item Reparse] cluster assignment failed for ${childId}:`, assignError);
       }
+    }
+    if (failedChildIds.length > 0) {
+      throw new Error(`Aggregation child cluster assignment failed: ${failedChildIds.join(",")}`);
     }
 
     const mainEvent = serializeParsedEventSignature(parsedAggregation.mainEvent);

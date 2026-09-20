@@ -14,6 +14,7 @@
 - `below-gray-truth-2026-09-19.csv` — B0 真值集（107 对 AI 辅助标注，reviewVerdict 列待人工抽检）
 - `label-cases.md` — 238 unique pair 抽样标注记录（AI 辅助标注，人工抽样建议；逐条覆盖 approved 12 + strong-declined 36 + failed 抽查）
 - `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 行 / 238 unique pair，含 2 重复 failed pair）
+- `production-declined-2026-09-20.csv` — 生产快照中双方仍存活的 200 条最新 declined pair，作为困难负例；不作为 approved 正例
 
 ## 复跑
 
@@ -38,7 +39,7 @@ npm run eval:snapshot-gate -- --snapshot <快照db> --freeze docs/eval/baseline-
 # 向量落盘缓存（默认系统临时目录），重跑不重复调用
 INFINITUM_EMBED_URL=http://<gateway>/v1 INFINITUM_EMBED_MODEL=BAAI/bge-m3 INFINITUM_EMBED_KEY=<key> \
   npm run eval:embedding-recall -- --db <快照db> \
-  --csv "docs/eval/eval-sample-30d.csv,docs/eval/embedding-mined-pairs.csv" \
+  --csv "docs/eval/eval-sample-30d.csv,docs/eval/embedding-mined-pairs.csv,docs/eval/production-declined-2026-09-20.csv" \
   --out docs/eval/embedding-recall-result.json
 
 # 扩充标注集：从快照挖掘「高相似但未合并」的候选对（输出 pending，AI 辅助标注 + 人工抽检）

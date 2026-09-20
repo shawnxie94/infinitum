@@ -68,6 +68,23 @@ describe("createEmbedTexts cache behaviour", () => {
     expect(second![2]).toEqual([0.5, 1, 0]);
   });
 
+  it("does not reuse a vector cache entry across dimensions", async () => {
+    const { client, callCount } = fakeClient(() => [[1, 0, 0]]);
+    const baseConfig = {
+      enabled: true,
+      baseUrl: "http://localhost:3000/v1",
+      apiKey: "test-key",
+      modelName: MODEL,
+      batchSize: 8,
+      timeoutMs: 5000,
+    };
+
+    await createEmbedTexts({ ...baseConfig, dimensions: 3 }, { client })(["同一文本"]);
+    await createEmbedTexts({ ...baseConfig, dimensions: 4 }, { client })(["同一文本"]);
+
+    expect(callCount()).toBe(2);
+  });
+
   it("isolates a failing text inside a batch and caches the healthy ones", async () => {
     const calls: string[][] = [];
     const client = {

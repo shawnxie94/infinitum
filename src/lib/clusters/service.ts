@@ -291,6 +291,7 @@ async function findClusterForItem(
         embedTexts,
         itemTitle: getDisplayTitle(item.originalTitle, item.translatedTitle),
         itemSummary: buildItemSummary(item),
+        itemEvent: options.eventSignature ?? undefined,
         ruleRanked,
         ruleQualified: rankedCandidates,
         rrfK: CLUSTER_EMBEDDING_RRF_K,

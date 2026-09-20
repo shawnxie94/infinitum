@@ -23,16 +23,16 @@
  * Usage:
  *   npx tsx scripts/eval-embedding-recall.ts --db <snapshot> [--days 30] \
  *     [--embed-url http://sarvismac-mini:3000/v1 --embed-model BAAI/bge-m3 --embed-key-env NAME] \
- *     [--pool-size 50] [--max-per-stratum 200] [--out result.json]
+ *     [--dimensions 1024] [--pool-size 50] [--max-per-stratum 200] [--out result.json]
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- standalone eval tool: DB rows are untyped */
 import fs from "node:fs";
-import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
 import { scoreClusterMergeCandidatePair } from "@/lib/clusters/helpers";
 import { fuseOrdersByRrf } from "@/lib/clusters/embedding-recall";
+import { buildEmbeddingCacheHash, buildEmbeddingText } from "@/lib/ai/embeddings";
 
 // node:sqlite ships in Node 22+/25+; @types/node@20 has no declarations for it.
 // @ts-expect-error node:sqlite has no type declarations in @types/node@20
@@ -52,6 +52,7 @@ function parseArgs(argv: string[]) {
     embedUrl: string;
     embedModel: string;
     embedKeyEnv: string;
+    dimensions: number | null;
     cache: string;
     out: string;
     csv: string;
@@ -63,6 +64,9 @@ function parseArgs(argv: string[]) {
     embedUrl: process.env.INFINITUM_EMBED_URL ?? "",
     embedModel: process.env.INFINITUM_EMBED_MODEL ?? "",
     embedKeyEnv: "INFINITUM_EMBED_KEY",
+    dimensions: process.env.INFINITUM_EMBED_DIMENSIONS
+      ? Number(process.env.INFINITUM_EMBED_DIMENSIONS)
+      : null,
     cache: path.join(os.tmpdir(), "infinitum-eval-embedding-cache.json"),
     out: "",
     csv: "docs/eval/eval-sample-30d.csv",
@@ -76,6 +80,7 @@ function parseArgs(argv: string[]) {
     else if (arg === "--embed-url") args.embedUrl = argv[++i] ?? "";
     else if (arg === "--embed-model") args.embedModel = argv[++i] ?? "";
     else if (arg === "--embed-key-env") args.embedKeyEnv = argv[++i] ?? "";
+    else if (arg === "--dimensions") args.dimensions = Number(argv[++i] ?? "");
     else if (arg === "--cache") args.cache = argv[++i] ?? "";
     else if (arg === "--out") args.out = argv[++i] ?? "";
     else if (arg === "--csv") args.csv = argv[++i] ?? "";
@@ -118,10 +123,6 @@ function toMergeCandidate(row: SqlRow): MergeCandidate {
   };
 }
 
-function buildEmbeddingText(title: string, summary: string): string {
-  return `${title}\n${(summary ?? "").trim()}`;
-}
-
 function cosineSimilarity(left: number[], right: number[]): number {
   let dot = 0;
   let leftNorm = 0;
@@ -157,16 +158,20 @@ function mulberry32(seed: number) {
 }
 
 // ---- embedding client with disk cache ----
-type EmbeddingCacheFile = { model: string; vectors: Record<string, number[]> };
+type EmbeddingCacheFile = {
+  model: string;
+  dimensions: number | null;
+  vectors: Record<string, number[]>;
+};
 
-function loadCache(file: string, model: string): EmbeddingCacheFile {
+function loadCache(file: string, model: string, dimensions: number | null): EmbeddingCacheFile {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as EmbeddingCacheFile;
-    if (parsed.model === model && parsed.vectors) return parsed;
+    if (parsed.model === model && (parsed.dimensions ?? null) === dimensions && parsed.vectors) return parsed;
   } catch {
-    // missing/corrupt cache → fresh
+    // missing/corrupt cache or legacy cache format → fresh
   }
-  return { model, vectors: {} };
+  return { model, dimensions, vectors: {} };
 }
 
 async function embedTexts(
@@ -174,7 +179,7 @@ async function embedTexts(
   texts: string[],
   cache: EmbeddingCacheFile,
 ): Promise<number[][]> {
-  const hashOf = (text: string) => createHash("sha256").update(`${config.model}\n${text}`).digest("hex");
+  const hashOf = (text: string) => buildEmbeddingCacheHash(config.model, text, config.dimensions);
   const vectors: Array<number[] | null> = texts.map((text) => cache.vectors[hashOf(text)] ?? null);
   const misses = vectors.map((v, i) => ({ v, i })).filter((entry) => entry.v === null).map((entry) => entry.i);
 
@@ -422,16 +427,18 @@ async function main() {
   } catch {
     console.log("[eval] cluster_pair_labels 表不存在（旧快照），跳过 human-feedback 分层");
   }
+  const limitedHumanPositives = humanPositives.slice(0, args.maxPerStratum);
+  const limitedHumanNegatives = humanNegatives.slice(0, args.maxPerStratum);
   console.log(
-    `[eval] strata: gray-positives=${positives.length}, declined-negatives=${negatives.length}, csv-approved=${humanPositives.length}, csv-declined=${humanNegatives.length}, feedback-approved=${feedbackPositives.length}, feedback-declined=${feedbackNegatives.length}`,
+    `[eval] strata: gray-positives=${positives.length}, declined-negatives=${negatives.length}, csv-approved=${limitedHumanPositives.length}, csv-declined=${limitedHumanNegatives.length}, feedback-approved=${feedbackPositives.length}, feedback-declined=${feedbackNegatives.length}`,
   );
 
-  const cache = loadCache(args.cache, args.embedModel);
+  const cache = loadCache(args.cache, args.embedModel, args.dimensions);
   let apiCalls = 0;
   const embed = async (texts: string[]) => {
     const before = Object.keys(cache.vectors).length;
     const vectors = await embedTexts(
-      { url: args.embedUrl, model: args.embedModel, key: embedKey },
+      { url: args.embedUrl, model: args.embedModel, key: embedKey, dimensions: args.dimensions },
       texts,
       cache,
     );
@@ -444,10 +451,39 @@ async function main() {
     return vectors;
   };
 
+  const buildPairEmbeddingTexts = (pair: PairSpec): string[] => {
+    const rng = mulberry32(fnv1a(pair.key));
+    const pool: MergeCandidate[] = [pair.b];
+    const excluded = new Set([pair.a.id, pair.b.id]);
+    const shuffled = [...distractors];
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rng() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+    }
+    for (const candidate of shuffled) {
+      if (pool.length >= args.poolSize) break;
+      if (excluded.has(candidate.id)) continue;
+      excluded.add(candidate.id);
+      pool.push(candidate);
+    }
+    if (pool.length < 2) return [];
+
+    const ruleScored = pool
+      .map((candidate) => ({ candidate, result: scoreClusterMergeCandidatePair(pair.a, candidate) }))
+      .filter((entry) => entry.result.rejectedReason !== "object_conflict");
+    return [
+      buildEmbeddingText(pair.a.title, pair.a.summary, pair.a),
+      ...ruleScored.map((entry) => buildEmbeddingText(entry.candidate.title, entry.candidate.summary, entry.candidate)),
+    ];
+  };
+
   const evaluateStratum = async (
     name: string,
     pairs: PairSpec[],
   ): Promise<StratumMetrics> => {
+    const uniqueTexts = [...new Set(pairs.flatMap(buildPairEmbeddingTexts))];
+    const precomputedVectors = await embed(uniqueTexts);
+    const vectorByText = new Map(uniqueTexts.map((text, index) => [text, precomputedVectors[index]! ]));
     const metrics: StratumMetrics = {
       pairs: 0,
       ruleRecallAt5: 0,
@@ -516,12 +552,12 @@ async function main() {
 
       // 向量排序口径：仅实体冲突否决，不受规则最低分/no_event_anchor 限制
       const texts = [
-        buildEmbeddingText(pair.a.title, pair.a.summary),
+        buildEmbeddingText(pair.a.title, pair.a.summary, pair.a),
         ...ruleScored
           .filter((entry) => !entry.conflictVeto)
-          .map((entry) => buildEmbeddingText(entry.candidate.title, entry.candidate.summary)),
+          .map((entry) => buildEmbeddingText(entry.candidate.title, entry.candidate.summary, entry.candidate)),
       ];
-      const vectors = await embed(texts);
+      const vectors = texts.map((text) => vectorByText.get(text) ?? null) as number[][];
       const itemVector = vectors[0]!;
       const vecEligible = ruleScored.filter((entry) => !entry.conflictVeto);
       const vecOrder = vecEligible
@@ -617,8 +653,8 @@ async function main() {
   const results: Record<string, StratumMetrics> = {};
   if (positives.length > 0) results["gray-positives"] = await evaluateStratum("gray-positives", positives);
   if (negatives.length > 0) results["declined-negatives"] = await evaluateStratum("declined-negatives", negatives);
-  if (humanPositives.length > 0) results["csv-approved"] = await evaluateStratum("csv-approved", humanPositives);
-  if (humanNegatives.length > 0) results["csv-declined"] = await evaluateStratum("csv-declined", humanNegatives);
+  if (limitedHumanPositives.length > 0) results["csv-approved"] = await evaluateStratum("csv-approved", limitedHumanPositives);
+  if (limitedHumanNegatives.length > 0) results["csv-declined"] = await evaluateStratum("csv-declined", limitedHumanNegatives);
   if (feedbackPositives.length > 0) results["feedback-approved"] = await evaluateStratum("feedback-approved", feedbackPositives);
   if (feedbackNegatives.length > 0) results["feedback-declined"] = await evaluateStratum("feedback-declined", feedbackNegatives);
 
@@ -630,7 +666,16 @@ async function main() {
     fs.writeFileSync(
       args.out,
       JSON.stringify(
-        { generatedAt: new Date().toISOString(), db: args.db, embedModel: args.embedModel, poolSize: args.poolSize, results },
+        {
+          generatedAt: new Date().toISOString(),
+          db: args.db,
+          embedModel: args.embedModel,
+          dimensions: args.dimensions,
+          embeddingTextVersion: "production-buildEmbeddingText-v2",
+          embeddingCacheHashVersion: "production-buildEmbeddingCacheHash-v2",
+          poolSize: args.poolSize,
+          results,
+        },
         null,
         2,
       ),

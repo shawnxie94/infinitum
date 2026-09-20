@@ -1,4 +1,4 @@
-import type { ClusterConstraintKind, ClusterConstraintScope } from "@prisma/client";
+import type { ClusterConstraintKind, ClusterConstraintScope, Prisma } from "@prisma/client";
 
 import { buildClusterMergeEdgeKey } from "@/lib/clusters/helpers";
 import { prisma } from "@/lib/db";
@@ -7,7 +7,8 @@ export function buildClusterConstraintPairKey(leftId: string, rightId: string) {
   return buildClusterMergeEdgeKey(leftId, rightId);
 }
 
-async function upsertClusterConstraint(input: {
+async function upsertClusterConstraint(
+  input: {
   kind: ClusterConstraintKind;
   scope: ClusterConstraintScope;
   leftId: string;
@@ -15,11 +16,13 @@ async function upsertClusterConstraint(input: {
   reason?: string | null;
   createdBy?: string;
   expiresAt?: Date | null;
-}) {
+  },
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+) {
   const [leftId, rightId] = [input.leftId, input.rightId].sort();
   const pairKey = buildClusterConstraintPairKey(leftId, rightId);
 
-  return prisma.clusterConstraint.upsert({
+  return db.clusterConstraint.upsert({
     where: {
       kind_scope_pairKey: {
         kind: input.kind,
@@ -152,9 +155,30 @@ export async function createCannotLinksBetweenItemSets(input: {
   rightItemIds: string[];
   reason: string;
 }) {
+  const pairs = new Set<string>();
   for (const leftItemId of input.leftItemIds) {
     for (const rightItemId of input.rightItemIds) {
-      await createCannotLinkForItems(leftItemId, rightItemId, input.reason);
+      if (leftItemId !== rightItemId) {
+        pairs.add(buildClusterConstraintPairKey(leftItemId, rightItemId));
+      }
     }
   }
+
+  if (pairs.size === 0) {
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const pairKey of pairs) {
+      const [leftId, rightId] = pairKey.split("\u0000");
+      await upsertClusterConstraint({
+        kind: "cannot_link",
+        scope: "item_item",
+        leftId: leftId!,
+        rightId: rightId!,
+        reason: input.reason,
+        createdBy: "manual",
+      }, tx);
+    }
+  });
 }

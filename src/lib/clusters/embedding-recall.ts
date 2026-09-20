@@ -81,12 +81,19 @@ export async function selectAiCandidatesWithEmbeddingRecall(input: {
   embedTexts: EmbedTextsFn;
   itemTitle: string;
   itemSummary: string;
+  itemEvent?: {
+    eventType?: string | null;
+    eventSubject?: string | null;
+    eventAction?: string | null;
+    eventObject?: string | null;
+    eventDate?: string | null;
+  };
   ruleRanked: ScoredClusterCandidate[];
   ruleQualified: ScoredClusterCandidate[];
   rrfK: number;
   limit: number;
 }): Promise<ScoredClusterCandidate[]> {
-  const { embedTexts, itemTitle, itemSummary, ruleRanked, ruleQualified, rrfK, limit } = input;
+  const { embedTexts, itemTitle, itemSummary, itemEvent, ruleRanked, ruleQualified, rrfK, limit } = input;
   const vetoPassed = ruleRanked.filter((entry) => entry.dateCompatible && !entry.hardConflict);
 
   if (vetoPassed.length === 0) {
@@ -94,8 +101,14 @@ export async function selectAiCandidatesWithEmbeddingRecall(input: {
   }
 
   const texts = [
-    buildEmbeddingText(itemTitle, itemSummary),
-    ...vetoPassed.map((entry) => buildEmbeddingText(entry.candidate.title, entry.candidate.summary)),
+    buildEmbeddingText(itemTitle, itemSummary, itemEvent),
+    ...vetoPassed.map((entry) => buildEmbeddingText(entry.candidate.title, entry.candidate.summary, {
+      eventType: entry.candidate.eventType,
+      eventSubject: entry.candidate.eventSubject,
+      eventAction: entry.candidate.eventAction,
+      eventObject: entry.candidate.eventObject,
+      eventDate: entry.candidate.eventDate,
+    })),
   ];
   const vectors = await embedTexts(texts);
 
