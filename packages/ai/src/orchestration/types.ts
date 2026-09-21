@@ -22,6 +22,8 @@ export type TaskBody = (taskRun: TaskRunSnapshot) => Promise<void>;
 export type WorkflowTaskSink = {
   getTaskRun(taskRunId: string): Promise<TaskRunSnapshot | null>;
   isCancellationRequested(taskRunId: string): Promise<boolean>;
+  /** D6 终态兜底：业务体未写自身终态即崩溃时，把 BackgroundTaskRun 落到 failed。 */
+  markFailed?(taskRunId: string, message: string): Promise<void>;
 };
 
 export type TaskWorkflow = Workflow<any, any, any, any, any, any, any>;

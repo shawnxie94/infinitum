@@ -17,6 +17,19 @@ await build({
   target: "node20",
   format: "cjs",
   packages: "bundle",
-  external: ["@prisma/client", "jsdom"],
+  // @prisma/client：生成客户端运行时外置；jsdom：rss 解析动态依赖外置；
+  // Mastra/LibSQL 栈含原生模块（.node）与运行时 peer（zod），必须外置由
+  // 镜像 worker-deps 层安装，避免 esbuild 打包破坏原生二进制与双实例分叉。
+  external: [
+    "@prisma/client",
+    "jsdom",
+    "@mastra/*",
+    "@libsql/*",
+    "ai",
+    "ai/*",
+    "@ai-sdk/*",
+    "zod",
+    "zod/*",
+  ],
   logLevel: "info",
 });

@@ -28,7 +28,16 @@ export function createTaskRunWorkflow(input: {
       if (!row) {
         return { status: "missing" };
       }
-      await input.body(row);
+      try {
+        await input.body(row);
+      } catch (error) {
+        // 业务体崩溃（未写自身终态）：D6 终态兜底，再把错误抛给 Mastra 记 run 失败
+        await input.sink.markFailed?.(
+          inputData.taskRunId,
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
       const after = await input.sink.getTaskRun(inputData.taskRunId);
       return { status: after?.status ?? "unknown" };
     },

@@ -15,7 +15,12 @@ ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 # memory budget. Runtime stages do not inherit this builder-only setting.
 ENV NODE_OPTIONS=--max-old-space-size=1024
 
+# lockfile 由本地 npm 11 生成（含 workspace 图谱），node:20-alpine 自带 npm 10 校验不过
+RUN npm i -g npm@11.19.0
+
 COPY package.json package-lock.json ./
+# npm workspaces（spec P0）：workspace 清单须先于 npm ci 落位
+COPY packages/ai/package.json ./packages/ai/
 RUN npm ci
 
 COPY . .
@@ -28,8 +33,9 @@ RUN npm run prisma:generate \
 FROM base AS worker-deps
 
 COPY package-lock.json package.json ./
+RUN npm i -g npm@11.19.0
 
-RUN node -e "const fs=require('fs'); const lock=require('./package-lock.json'); fs.writeFileSync('package.json', JSON.stringify({name:'infinitum-worker-runtime', private:true, dependencies:{jsdom:lock.packages['node_modules/jsdom'].version}}, null, 2));" \
+RUN node -e "const fs=require('fs'); const lock=require('./package-lock.json'); const v=(k)=>lock.packages['node_modules/'+k].version; fs.writeFileSync('package.json', JSON.stringify({name:'infinitum-worker-runtime', private:true, dependencies:{jsdom:v('jsdom'),'@mastra/core':v('@mastra/core'),'@mastra/libsql':v('@mastra/libsql'),'@libsql/client':v('@libsql/client'),'ai':v('ai'),'@ai-sdk/openai-compatible':v('@ai-sdk/openai-compatible'),'zod':v('zod')}}, null, 2));" \
   && rm -f package-lock.json \
   && npm install --omit=dev --no-package-lock --no-audit --silent \
   && npm cache clean --force \
@@ -78,6 +84,11 @@ COPY --from=builder /app/scripts/docker-entrypoint.sh ./scripts/docker-entrypoin
 COPY --from=builder /app/scripts/setup-sqlite.mjs ./scripts/setup-sqlite.mjs
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+# Mastra/LibSQL 栈（含原生模块）：app 进程内嵌 runtime（D11），防 tracing 漏拷
+COPY --from=builder /app/node_modules/@mastra ./node_modules/@mastra
+COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
+COPY --from=builder /app/node_modules/ai ./node_modules/ai
+COPY --from=builder /app/node_modules/@ai-sdk ./node_modules/@ai-sdk
 
 RUN mkdir -p /app/data
 

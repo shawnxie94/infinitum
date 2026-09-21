@@ -102,15 +102,30 @@ export function createAiSdkTransport(options?: { fetch?: typeof fetch }): ModelT
 
     const model = provider.chatModel(config.model);
     try {
+      // AI SDK v7：system 角色消息不再允许出现在 messages/prompt 里，
+      // 系统提示（含阶段上下文的 system 轮）必须走 instructions 参数。
+      const instructions = request.messages
+        .filter((m) => m.role === "system")
+        .map((m) => m.content)
+        .join("\n\n");
+      const rest = request.messages.filter((m) => m.role !== "system");
       const result = await generateText({
         model,
-        messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
+        instructions: instructions || undefined,
+        ...(rest.length === 1 && rest[0].role === "user"
+          ? { prompt: rest[0].content }
+          : {
+              messages: rest.map((m) => ({
+                role: m.role as "user" | "assistant",
+                content: m.content,
+              })),
+            }),
         temperature: request.temperature ?? undefined,
         maxOutputTokens: request.maxTokens ?? undefined,
         topP: request.topP ?? undefined,
         abortSignal: request.signal,
         providerOptions: {
-          "openai-compatible": { strictJsonSchema: false },
+          openaiCompatible: { strictJsonSchema: false },
         },
       });
 

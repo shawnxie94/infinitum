@@ -24,19 +24,22 @@ const WORKFLOW_KINDS: Record<WorkflowKind, TaskBody> = {
 
 const sink: WorkflowTaskSink = {
   async getTaskRun(taskRunId) {
-    const row: BackgroundTaskRun | null = await prisma.backgroundTaskRun.findUnique({
+    // 返回完整行：执行体及其下游（timeline/进度等）会消费 startedAt 等投影外字段
+    const row = await prisma.backgroundTaskRun.findUnique({
       where: { id: taskRunId },
     });
-    if (!row) return null;
-    // 执行体实际消费的字段投影（id/entityId/triggerType/pipelineCheckpointJson）
-    return {
-      id: row.id,
-      kind: row.kind,
-      entityId: row.entityId,
-      triggerType: row.triggerType,
-      pipelineCheckpointJson: row.pipelineCheckpointJson,
-      status: row.status,
-    };
+    return (row as unknown as BackgroundTaskRun) ?? null;
+  },
+  async markFailed(taskRunId, message) {
+    // D6 终态兜底：业务体在写入自身终态前崩溃时，避免 BackgroundTaskRun 卡 running
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId, status: { in: ["queued", "running"] } },
+      data: {
+        status: "failed",
+        finishedAt: new Date(),
+        errorSummary: message.slice(0, 500),
+      },
+    });
   },
   async isCancellationRequested(taskRunId) {
     const row = await prisma.backgroundTaskRun.findUnique({
