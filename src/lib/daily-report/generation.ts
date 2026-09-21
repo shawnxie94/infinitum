@@ -1684,10 +1684,16 @@ export const DAILY_REPORT_WORKFLOW_STAGES = [
 
 export type DailyReportWorkflowStage = typeof DAILY_REPORT_WORKFLOW_STAGES[number];
 
-/** Execute one durable Mastra-owned stage and leave the task running until the final persist step. */
+export type DailyReportWorkflowProjection = {
+  onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
+  onProgress?: (label: string) => Promise<void>;
+};
+
+/** Execute one business stage; task lifecycle/checkpoint projection stays in the Mastra glue port. */
 export async function executeDailyReportWorkflowStage(
   taskRun: BackgroundTaskRun,
   stage: DailyReportWorkflowStage,
+  projection: DailyReportWorkflowProjection = {},
 ): Promise<void> {
   if (stage === "persist_publish") {
     await executeDailyReportTask(taskRun, { reuseCompletedReview: true });
@@ -1701,12 +1707,7 @@ export async function executeDailyReportWorkflowStage(
     ? parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson)
     : null;
 
-  await updateTaskRun(taskRun.id, {
-    status: "running",
-    progressCurrent: 0,
-    progressTotal: 1,
-    progressLabel: `日报阶段：${stage}`,
-  });
+  await projection.onProgress?.(`日报阶段：${stage}`);
 
   try {
     await generateDailyReport({
@@ -1716,19 +1717,16 @@ export async function executeDailyReportWorkflowStage(
       resumeCheckpoint: resumeCheckpoint?.resumeEligible ? resumeCheckpoint : null,
       stopAfterStage: stage,
       onStageUpdate: async (activeStage) => {
-        await updateTaskRun(taskRun.id, { progressLabel: `日报阶段：${activeStage}` });
+        await projection.onProgress?.(`日报阶段：${activeStage}`);
       },
       onCheckpoint: async (checkpoint) => {
-        await updateTaskRun(taskRun.id, { pipelineCheckpoint: checkpoint });
+        await projection.onCheckpoint?.(checkpoint);
       },
     });
   } catch (error) {
     if (!(error instanceof DailyReportStagePauseError)) throw error;
-    await updateTaskRun(taskRun.id, {
-      status: "running",
-      progressLabel: `日报阶段已完成：${stage}`,
-      ...(error.checkpoint ? { pipelineCheckpoint: error.checkpoint } : {}),
-    });
+    await projection.onProgress?.(`日报阶段已完成：${stage}`);
+    if (error.checkpoint) await projection.onCheckpoint?.(error.checkpoint);
   }
 }
 

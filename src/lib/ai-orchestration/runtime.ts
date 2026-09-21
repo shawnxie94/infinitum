@@ -78,6 +78,18 @@ const sink: WorkflowTaskSink = {
       },
     });
   },
+  async projectCheckpoint(taskRunId, checkpoint) {
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId, status: { in: ["queued", "running"] } },
+      data: { pipelineCheckpointJson: JSON.stringify(checkpoint) },
+    });
+  },
+  async projectProgress(taskRunId, label) {
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId, status: { in: ["queued", "running"] } },
+      data: { progressLabel: label },
+    });
+  },
   async projectLifecycle(event: TaskLifecycleEvent) {
     if (event.event === "start") {
       await prisma.backgroundTaskRun.updateMany({
@@ -113,7 +125,14 @@ export function getAiRuntime(): AiRuntime {
               description: `Infinitum ${kind} (Mastra staged workflow)`,
               stages: DAILY_REPORT_WORKFLOW_STAGES.map((stage) => ({
                 id: stage,
-                body: async (row) => executeDailyReportWorkflowStage(row as unknown as BackgroundTaskRun, stage),
+                body: async (row) => executeDailyReportWorkflowStage(
+                  row as unknown as BackgroundTaskRun,
+                  stage,
+                  {
+                    onCheckpoint: async (checkpoint) => sink.projectCheckpoint?.(row.id, checkpoint),
+                    onProgress: async (label) => sink.projectProgress?.(row.id, label),
+                  },
+                ),
               })),
               sink,
             })

@@ -66,6 +66,9 @@ export type WorkflowTaskSink = {
   projectLifecycle?(event: TaskLifecycleEvent): Promise<void>;
   /** 每个 Mastra step 的持久化生命周期与 checkpoint 投影。 */
   projectStep?(event: TaskStepLifecycleEvent): Promise<void>;
+  /** Domain stage 产生的 checkpoint/progress 只通过 glue port 投影回任务行。 */
+  projectCheckpoint?(taskRunId: string, checkpoint: unknown): Promise<void>;
+  projectProgress?(taskRunId: string, label: string): Promise<void>;
 };
 
 export type TaskWorkflow = Workflow<any, any, any, any, any, any, any>;
