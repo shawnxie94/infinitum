@@ -146,6 +146,7 @@ export function createAiProvider(
       windowMs: MODEL_API_CIRCUIT_BREAKER_WINDOW_MS,
       openMs: MODEL_API_CIRCUIT_BREAKER_OPEN_MS,
     },
+    onAttempt: (event) => options?.onAttempt?.(event),
     onUsage: (usage, usageKey) => {
       options?.onUsage?.(
         {

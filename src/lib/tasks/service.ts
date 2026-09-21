@@ -419,13 +419,16 @@ export async function enqueueTaskRun(input: EnqueueTaskRunInput) {
 }
 
 export async function claimNextQueuedTaskRun() {
-  const nextQueuedTaskRun = await findNextQueuedTaskRun();
+  const blockedKinds: string[] = [];
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const nextQueuedTaskRun = await findNextQueuedTaskRun(blockedKinds);
+    if (!nextQueuedTaskRun) return null;
 
-  if (!nextQueuedTaskRun) {
-    return null;
+    const claimed = await claimTaskRun(nextQueuedTaskRun.id);
+    if (claimed) return claimed;
+    if (!blockedKinds.includes(nextQueuedTaskRun.kind)) blockedKinds.push(nextQueuedTaskRun.kind);
   }
-
-  return claimTaskRun(nextQueuedTaskRun.id);
+  return null;
 }
 
 export async function listRecentTaskRuns(input: { limit: number }) {

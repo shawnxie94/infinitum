@@ -100,6 +100,10 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     attemptType: UsageSnapshot["attemptType"],
   ): Promise<{ text: string; usage: UsageSnapshot } | null> {
     if (!config.apiKey) return null;
+    options.onAttempt?.({
+      usageKey: request.usageKey,
+      attemptType: !attemptType || attemptType === "stage_context" ? "initial" : attemptType,
+    });
     const result = await transport(request, config);
     const usage: UsageSnapshot = { ...result.usage, attemptType };
     options.onUsage?.(usage, request.usageKey);
@@ -134,7 +138,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       }
       const opened = recordFailure(config);
       if (!opened) throw error;
-      return completeTextOnce(options.defaultModelApi, request, attemptType);
+      return completeTextOnce(options.defaultModelApi, request, "transient_retry");
     }
   }
 

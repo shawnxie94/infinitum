@@ -16,6 +16,7 @@ import {
   DEFAULT_DAILY_REPORT_SCHEDULE_KEY,
   DEFAULT_INGESTION_SCHEDULE_KEY,
   DEFAULT_ITEM_CLEANUP_SCHEDULE_KEY,
+  type BackgroundTaskRunKind,
   type EnqueueTaskRunInput,
 } from "@/lib/tasks/types";
 
@@ -122,31 +123,43 @@ export async function createTaskRun(input: EnqueueTaskRunInput) {
   });
 }
 
-export async function findNextQueuedTaskRun() {
+export async function findNextQueuedTaskRun(excludedKinds: string[] = []) {
   return prisma.backgroundTaskRun.findFirst({
-    where: { status: "queued" },
+    where: {
+      status: "queued",
+      ...(excludedKinds.length > 0 ? { kind: { notIn: excludedKinds as BackgroundTaskRunKind[] } } : {}),
+    },
     orderBy: { createdAt: "asc" },
   });
 }
 
 export async function claimTaskRun(id: string) {
-  const claimed = await prisma.backgroundTaskRun.updateMany({
-    where: {
-      id,
-      status: "queued",
-    },
-    data: {
-      status: "running",
-      startedAt: new Date(),
-    },
-  });
+  return prisma.$transaction(async (tx) => {
+    const candidate = await tx.backgroundTaskRun.findUnique({
+      where: { id },
+      select: { id: true, kind: true, status: true },
+    });
+    if (!candidate || candidate.status !== "queued") return null;
 
-  if (claimed.count !== 1) {
-    return null;
-  }
+    // P8-D single-flight: the database is the arbitration source across app
+    // and worker processes. The conditional update below closes the claim race;
+    // callers may retry another queued row when this returns null.
+    const activeSameKind = await tx.backgroundTaskRun.count({
+      where: {
+        kind: candidate.kind,
+        status: "running",
+        id: { not: id },
+      },
+    });
+    if (activeSameKind > 0) return null;
 
-  return prisma.backgroundTaskRun.findUniqueOrThrow({
-    where: { id },
+    const claimed = await tx.backgroundTaskRun.updateMany({
+      where: { id, status: "queued" },
+      data: { status: "running", startedAt: new Date() },
+    });
+    if (claimed.count !== 1) return null;
+
+    return tx.backgroundTaskRun.findUniqueOrThrow({ where: { id } });
   });
 }
 

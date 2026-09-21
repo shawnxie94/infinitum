@@ -2,6 +2,7 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { isWorkflowKind, triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
 import { executeTaskRun } from "@/lib/tasks/handlers";
+import { getTaskDefinition } from "@/lib/tasks/definitions";
 
 /**
  * D10 执行归属路由表（spec Revision 2）：同一 task kind 只有一条执行路径。
@@ -10,7 +11,8 @@ import { executeTaskRun } from "@/lib/tasks/handlers";
  * 回滚 = 把对应 kind 移出 workflow 集合（拨路由不回滚代码）。
  */
 export async function dispatchTaskRun(taskRun: BackgroundTaskRun): Promise<void> {
-  if (isWorkflowKind(taskRun.kind)) {
+  const definition = getTaskDefinition(taskRun.kind);
+  if (definition.mode === "workflow" && isWorkflowKind(taskRun.kind)) {
     await triggerTaskWorkflow(taskRun.kind, taskRun.id);
     return;
   }

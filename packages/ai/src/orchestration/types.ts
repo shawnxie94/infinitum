@@ -5,6 +5,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Mastra Workflow 占位泛型，P1a 定型后收敛 */
 import type { Workflow } from "@mastra/core/workflows";
 
+import type { TaskExecutionContext, TaskLifecycleEvent } from "./lifecycle";
+
 /** BackgroundTaskRun 行的最小投影（body 启动时由 sink 重新读取，保证拿到最新检查点）。 */
 export type TaskRunSnapshot = {
   id: string;
@@ -17,13 +19,18 @@ export type TaskRunSnapshot = {
 };
 
 /** 业务执行体：原 executeTaskRun handler 语义（自己负责 BackgroundTaskRun 状态簿记、取消轮询、检查点）。 */
-export type TaskBody = (taskRun: TaskRunSnapshot) => Promise<void>;
+export type TaskBody = (taskRun: TaskRunSnapshot, context?: TaskExecutionContext) => Promise<void>;
 
 export type WorkflowTaskSink = {
   getTaskRun(taskRunId: string): Promise<TaskRunSnapshot | null>;
   isCancellationRequested(taskRunId: string): Promise<boolean>;
+  markStarted?(taskRunId: string, runId?: string): Promise<void>;
+  markSucceeded?(taskRunId: string, runId?: string): Promise<void>;
+  markCancelled?(taskRunId: string, message?: string): Promise<void>;
   /** D6 终态兜底：业务体未写自身终态即崩溃时，把 BackgroundTaskRun 落到 failed。 */
-  markFailed?(taskRunId: string, message: string): Promise<void>;
+  markFailed?(taskRunId: string, message: string, failureKind?: string): Promise<void>;
+  /** 通用生命周期投影；业务层仍可追加自己的 timeline/usage 指标。 */
+  projectLifecycle?(event: TaskLifecycleEvent): Promise<void>;
 };
 
 export type TaskWorkflow = Workflow<any, any, any, any, any, any, any>;

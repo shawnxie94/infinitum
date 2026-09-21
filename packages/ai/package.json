@@ -9,9 +9,15 @@
     "./provider/gateway": "./src/provider/gateway.ts",
     "./provider/transports": "./src/provider/transports.ts",
     "./provider/types": "./src/provider/types.ts",
+    "./provider/usage": "./src/provider/usage.ts",
     "./orchestration/workflow-factory": "./src/orchestration/workflow-factory.ts",
     "./orchestration/runtime": "./src/orchestration/runtime.ts",
-    "./orchestration/types": "./src/orchestration/types.ts"
+    "./orchestration/types": "./src/orchestration/types.ts",
+    "./orchestration/errors": "./src/orchestration/errors.ts",
+    "./orchestration/lifecycle": "./src/orchestration/lifecycle.ts",
+    "./orchestration/task-definition": "./src/orchestration/task-definition.ts",
+    "./orchestration/stage-loop": "./src/orchestration/stage-loop.ts",
+    "./orchestration/single-flight": "./src/orchestration/single-flight.ts"
   },
   "scripts": {
     "build": "tsc --noEmit -p tsconfig.json",

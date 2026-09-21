@@ -3,6 +3,7 @@ import {
   type DailyReportStageContext,
   type DailyReportStageValidationFeedback,
 } from "@/lib/ai/provider";
+import { runStageLoop, StageLoopError } from "@infinitum/ai/orchestration/stage-loop";
 import type { DailyReportViolation } from "@/lib/daily-report/types";
 
 type StageViolation = DailyReportViolation;
@@ -49,7 +50,6 @@ export type DailyReportStageLoopOptions<T> = {
   ) => Promise<T>;
   validate: (value: T) => StageViolation[] | Promise<StageViolation[]>;
   isRepairable?: (violations: StageViolation[]) => boolean;
-  /** Stop the generic full-result repair path so the caller can apply a scoped repair. */
   stopOnValidation?: (violations: StageViolation[]) => boolean;
   onContextUpdate?: (context: DailyReportStageContext) => Promise<void> | void;
 };
@@ -110,121 +110,37 @@ function createStageContext(stage: DailyReportStage, inputHash?: string): DailyR
 }
 
 export async function runDailyReportStageLoop<T>(options: DailyReportStageLoopOptions<T>): Promise<DailyReportStageLoopResult<T>> {
-  const maxRepairRounds = options.maxRepairRounds ?? 2;
-  const maxCleanRetries = options.maxCleanRetries ?? 1;
-  const isRepairable = options.isRepairable ?? defaultIsRepairable;
-  let cleanRetryCount = 0;
-  let lastContext = createStageContext(options.stage, options.inputHash);
-  let lastViolations: StageViolation[] = [];
-  let lastError: unknown = null;
-  stageLoop: while (cleanRetryCount <= maxCleanRetries) {
-    const context = cleanRetryCount === 0
-      ? lastContext
-      : createStageContext(options.stage, options.inputHash);
-    context.cleanRetryAttempt = cleanRetryCount;
-    lastContext = context;
-
-    let feedback: DailyReportStageValidationFeedback | undefined;
-    for (let repairRound = 0; repairRound <= maxRepairRounds; repairRound += 1) {
-      try {
-        const value = await options.run(context, feedback);
-        // The provider records this counter when it appends feedback to the
-        // transcript. Keep the generic loop contract correct for test doubles
-        // and alternate providers that do not mutate the context themselves.
-        if (context.repairRound < repairRound) {
-          context.repairRound = repairRound;
-        }
-        const violations = await options.validate(value);
-        lastViolations = violations;
-        context.lastViolations = violations;
-        await options.onContextUpdate?.(context);
-
-        if (violations.length === 0) {
-          return {
-            value,
-            context,
-            repairRounds: context.repairRound,
-            cleanRetryCount,
-            violations: [],
-          };
-        }
-
-        if (options.stopOnValidation?.(violations)) {
-          lastError = new Error(`${options.stage.toUpperCase()} 校验需要执行局部修复。`);
-          throw new DailyReportStageLoopError(
-            options.stage,
-            context,
-            violations,
-            cleanRetryCount,
-            lastError,
-          );
-        }
-
-        if (repairRound >= maxRepairRounds || !isRepairable(violations)) {
-          lastError = new Error(`${options.stage.toUpperCase()} 校验失败：${violations.map((violation) => violation.message).slice(0, 5).join("；")}`);
-          break;
-        }
-
-        feedback = buildValidationFeedback(options.stage, violations);
-        await options.onContextUpdate?.(context);
-      } catch (error) {
-        if (error instanceof DailyReportStageLoopError) {
-          throw error;
-        }
-        lastError = error;
-        lastViolations = [errorToViolation(options.stage, error)];
-        context.lastViolations = lastViolations;
+  try {
+    return await runStageLoop<T, StageViolation, DailyReportStageContext>({
+      stage: options.stage,
+      inputHash: options.inputHash,
+      maxRepairRounds: options.maxRepairRounds,
+      maxCleanRetries: options.maxCleanRetries,
+      createContext: (stage, inputHash) => createStageContext(stage as DailyReportStage, inputHash),
+      run: (context, feedback) => options.run(context, feedback as DailyReportStageValidationFeedback | undefined),
+      validate: options.validate,
+      buildFeedback: (stage, violations) => buildValidationFeedback(stage as DailyReportStage, violations),
+      errorToViolation: (stage, error) => errorToViolation(stage as DailyReportStage, error),
+      isRepairable: options.isRepairable ?? defaultIsRepairable,
+      stopOnValidation: options.stopOnValidation,
+      isRepairableError: (error, context) => {
         context.contextOverflow = /context\s*(length|window|limit)|maximum\s+context|too\s+many\s+tokens|token\s+limit|上下文.{0,8}(超|限制)|令牌.{0,8}(超|限制)/iu.test(
           error instanceof Error ? error.message : String(error),
         );
-        await options.onContextUpdate?.(context);
-
-        // A malformed JSON response already has its assistant message in the
-        // stage transcript. Feed that parse error back through the same
-        // conversation; transport failures and context overflow must use the
-        // clean-retry path because there is no trustworthy assistant output to
-        // repair in the current conversation.
-        if (
-          isInvalidJsonModelResponseError(error)
-          && !context.contextOverflow
-          && repairRound < maxRepairRounds
-          && isRepairable(lastViolations)
-        ) {
-          feedback = buildValidationFeedback(options.stage, lastViolations);
-          continue;
-        }
-        if (cleanRetryCount >= maxCleanRetries) {
-          throw new DailyReportStageLoopError(
-            options.stage,
-            context,
-            lastViolations,
-            cleanRetryCount,
-            lastError,
-          );
-        }
-        cleanRetryCount += 1;
-        continue stageLoop;
-      }
-    }
-
-    if (cleanRetryCount >= maxCleanRetries) {
+        return isInvalidJsonModelResponseError(error) && !context.contextOverflow;
+      },
+      onContextUpdate: options.onContextUpdate,
+    });
+  } catch (error) {
+    if (error instanceof StageLoopError) {
       throw new DailyReportStageLoopError(
-        options.stage,
-        lastContext,
-        lastViolations,
-        cleanRetryCount,
-        lastError,
+        error.stage as DailyReportStage,
+        error.context,
+        error.violations as StageViolation[],
+        error.cleanRetryCount,
+        error.cause,
       );
     }
-
-    cleanRetryCount += 1;
+    throw error;
   }
-
-  throw new DailyReportStageLoopError(
-    options.stage,
-    lastContext,
-    lastViolations,
-    cleanRetryCount,
-    lastError,
-  );
 }

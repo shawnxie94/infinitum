@@ -8,6 +8,7 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
+import { runTaskWithLifecycle } from "./lifecycle";
 import type { TaskBody, TaskRunSnapshot, WorkflowTaskSink } from "./types";
 
 const inputSchema = z.object({ taskRunId: z.string() });
@@ -23,23 +24,19 @@ export function createTaskRunWorkflow(input: {
     id: `${input.id}-execute`,
     inputSchema,
     outputSchema,
-    execute: async ({ inputData }) => {
+    execute: async ({ inputData, abortSignal }) => {
       const row = await input.sink.getTaskRun(inputData.taskRunId);
       if (!row) {
         return { status: "missing" };
       }
-      try {
-        await input.body(row);
-      } catch (error) {
-        // 业务体崩溃（未写自身终态）：D6 终态兜底，再把错误抛给 Mastra 记 run 失败
-        await input.sink.markFailed?.(
-          inputData.taskRunId,
-          error instanceof Error ? error.message : String(error),
-        );
-        throw error;
-      }
-      const after = await input.sink.getTaskRun(inputData.taskRunId);
-      return { status: after?.status ?? "unknown" };
+      const result = await runTaskWithLifecycle({
+        row,
+        body: input.body,
+        sink: input.sink,
+        signal: abortSignal,
+        cancelPollMs: 1_000,
+      });
+      return { status: result.status };
     },
   });
 

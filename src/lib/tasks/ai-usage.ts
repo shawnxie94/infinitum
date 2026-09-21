@@ -10,6 +10,8 @@ export type TaskAiUsageSnapshot = {
   actual: number;
   estimated: number;
   breakdown: TaskAiCallBreakdownSnapshot[];
+  /** 网关层 attempt 审计；不改变现有业务调用计数口径。 */
+  attempts?: Record<string, number>;
 };
 
 const AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
@@ -114,6 +116,7 @@ export function createTaskAiUsageTracker(
     actual: 0,
     estimated: Math.max(0, initialEstimated),
     breakdown: [],
+    attempts: {},
   };
   const breakdownState = createEmptyBreakdownState();
   const tokenState = createEmptyTokenState();
@@ -162,7 +165,15 @@ export function createTaskAiUsageTracker(
         actual: state.actual,
         estimated: state.estimated,
         breakdown: state.breakdown.map((entry) => ({ ...entry })),
+        attempts: { ...(state.attempts ?? {}) },
       };
+    },
+    recordAttempt(event: {
+      usageKey?: string;
+      attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair";
+    }) {
+      const key = `${event.usageKey ?? "unknown"}:${event.attemptType}`;
+      state.attempts![key] = (state.attempts![key] ?? 0) + 1;
     },
     setEstimated(value: number, key: TaskAiCallBreakdownKey = "item_understanding") {
       breakdownState[key].estimated = Math.max(0, value);

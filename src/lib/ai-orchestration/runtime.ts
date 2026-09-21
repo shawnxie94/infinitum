@@ -6,6 +6,7 @@ import { executeItemProcessingRecoveryTask } from "@/lib/items/processing-recove
 import { executeDailyReportTask } from "@/lib/daily-report/generation";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
 import { createTaskRunWorkflow, type TaskBody, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
+import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
 
 /**
  * 主仓侧编排接线（spec P1b-P4/D11）：
@@ -30,16 +31,51 @@ const sink: WorkflowTaskSink = {
     });
     return (row as unknown as BackgroundTaskRun) ?? null;
   },
-  async markFailed(taskRunId, message) {
+  async markStarted(taskRunId) {
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId, status: "queued" },
+      data: { status: "running", startedAt: new Date() },
+    });
+  },
+  async markSucceeded(taskRunId) {
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId, status: { in: ["queued", "running"] } },
+      data: { status: "succeeded", finishedAt: new Date() },
+    });
+  },
+  async markCancelled(taskRunId, message) {
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId, status: { in: ["queued", "running"] } },
+      data: {
+        status: "cancelled",
+        finishedAt: new Date(),
+        errorSummary: (message ?? "任务已取消").slice(0, 500),
+      },
+    });
+  },
+  async markFailed(taskRunId, message, failureKind) {
     // D6 终态兜底：业务体在写入自身终态前崩溃时，避免 BackgroundTaskRun 卡 running
     await prisma.backgroundTaskRun.updateMany({
       where: { id: taskRunId, status: { in: ["queued", "running"] } },
       data: {
         status: "failed",
         finishedAt: new Date(),
-        errorSummary: message.slice(0, 500),
+        errorSummary: `${failureKind ? `[${failureKind}] ` : ""}${message}`.slice(0, 500),
       },
     });
+  },
+  async projectLifecycle(event: TaskLifecycleEvent) {
+    if (event.event === "start") {
+      await prisma.backgroundTaskRun.updateMany({
+        where: { id: event.taskRunId, status: "running", progressLabel: null },
+        data: { progressLabel: "编排运行中" },
+      });
+    } else if (event.event === "error" && event.errorMessage) {
+      await prisma.backgroundTaskRun.updateMany({
+        where: { id: event.taskRunId, errorSummary: null },
+        data: { errorSummary: `[${event.failureKind ?? "unknown"}] ${event.errorMessage}`.slice(0, 500) },
+      });
+    }
   },
   async isCancellationRequested(taskRunId) {
     const row = await prisma.backgroundTaskRun.findUnique({

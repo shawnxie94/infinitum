@@ -250,6 +250,11 @@ export type AiProviderOptions = {
   aggregationSplitMaxEvents?: number;
   /** 每次底层模型调用返回时回调实际（或估算）的 token 用量，用于任务上下文消耗统计。 */
   onUsage?: (usage: AiCallUsage, usageKey?: string) => void;
+  /** 通用编排层 attempt 分类；不替代业务调用计数。 */
+  onAttempt?: (event: {
+    usageKey?: string;
+    attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair";
+  }) => void;
   /** Embedding 召回配置；缺省或未启用时 provider 不具备 embedTexts 能力。 */
   embedding?: RuntimeConfig["embedding"] | null;
 };

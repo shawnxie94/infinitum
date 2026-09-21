@@ -72,6 +72,8 @@ export type ModelGatewayOptions = {
   jsonParseRetryCount?: number;
   /** usage 上报（逐次调用）。 */
   onUsage?: (usage: UsageSnapshot, usageKey?: string) => void;
+  /** 通用 attempt 分类；不携带 token，供产品层审计 retry/fallback 次数。 */
+  onAttempt?: (event: { usageKey?: string; attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair" }) => void;
 };
 
 type JsonParseRetryPromptBuilder = (userContent: string, error: Error) => string;

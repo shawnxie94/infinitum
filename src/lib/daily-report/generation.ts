@@ -245,6 +245,7 @@ export async function generateDailyReportInternal(input: {
   const aiUsage = createTaskAiUsageTracker(0, "daily_report_assess");
   const baseProvider = createAiProvider(runtimeConfig.modelApi, runtimeConfig.selectedPromptConfigs, undefined, {
     onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+    onAttempt: (event) => aiUsage.recordAttempt(event),
   });
   const provider = aiUsage.wrapProvider(baseProvider);
   let content: DailyReportContent;
