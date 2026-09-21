@@ -62,6 +62,44 @@ export type TaskWorkflowStage = {
 };
 
 /**
+ * Compatibility contract for domain services that still own a coupled
+ * multi-phase transaction. The boundary names are metadata only: the service
+ * body is deliberately invoked once, so adapting it to a staged workflow
+ * cannot repeat AI/DB side effects. Callers must not present these boundaries
+ * as independently resumable until the service supplies stage-local state.
+ */
+export type MonolithicStageAdapter = {
+  boundaries: readonly string[];
+  body: TaskBody;
+};
+
+export function createMonolithicStageAdapter(input: {
+  id: string;
+  description?: string;
+  adapter: MonolithicStageAdapter;
+  sink: WorkflowTaskSink;
+}) {
+  if (input.adapter.boundaries.length === 0) {
+    throw new Error(`${input.id} needs at least one declared boundary.`);
+  }
+  const uniqueBoundaries = new Set(input.adapter.boundaries);
+  if (uniqueBoundaries.size !== input.adapter.boundaries.length) {
+    throw new Error(`${input.id} has duplicate declared boundaries.`);
+  }
+
+  const boundaryDescription = `declared boundaries: ${input.adapter.boundaries.join(", ")}`;
+  return createStagedTaskRunWorkflow({
+    id: input.id,
+    description: [input.description, boundaryDescription].filter(Boolean).join("; "),
+    // One Mastra step is intentional. The legacy service is not safely
+    // split yet; the contract keeps its existing phase names visible without
+    // pretending that a retry can resume between them.
+    stages: [{ id: "execute", body: input.adapter.body }],
+    sink: input.sink,
+  });
+}
+
+/**
  * Multi-step variant used by P10. Each business stage persists its own Mastra
  * snapshot while BackgroundTaskRun remains running until the final stage.
  */

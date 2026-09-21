@@ -3,8 +3,15 @@ import type { BackgroundTaskRun } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
 import { HANDLER_TASK_DEFINITIONS, TASK_BODIES } from "@/lib/tasks/domain-bodies";
+import { getTaskDefinition } from "@/lib/tasks/definitions";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
-import { createStagedTaskRunWorkflow, createTaskRunWorkflow, type TaskBody, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
+import {
+  createMonolithicStageAdapter,
+  createStagedTaskRunWorkflow,
+  createTaskRunWorkflow,
+  type TaskBody,
+  type WorkflowTaskSink,
+} from "@infinitum/ai/orchestration/workflow-factory";
 import { createDomainTaskRunWorkflow } from "@infinitum/ai/orchestration/task-definition";
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
 import type { TaskStepLifecycleEvent } from "@infinitum/ai/orchestration/types";
@@ -117,9 +124,11 @@ let runtimeSingleton: AiRuntime | null = null;
 export function getAiRuntime(): AiRuntime {
   if (!runtimeSingleton) {
     const workflows = Object.fromEntries(
-      Object.entries(WORKFLOW_KINDS).map(([kind, body]) => [
-        kind,
-        kind === "daily_report_generate"
+      Object.entries(WORKFLOW_KINDS).map(([kind, body]) => {
+        const definition = getTaskDefinition(kind as WorkflowKind);
+        return [
+          kind,
+          kind === "daily_report_generate"
           ? createStagedTaskRunWorkflow({
               id: kind,
               description: `Infinitum ${kind} (Mastra staged workflow)`,
@@ -136,7 +145,17 @@ export function getAiRuntime(): AiRuntime {
               })),
               sink,
             })
-          : HANDLER_TASK_DEFINITIONS[kind as keyof typeof HANDLER_TASK_DEFINITIONS]
+          : definition.stageExecution === "monolithic_boundary_adapter"
+            ? createMonolithicStageAdapter({
+                id: kind,
+                description: `Infinitum ${kind} (Mastra boundary adapter; service remains monolithic)`,
+                adapter: {
+                  boundaries: definition.stages,
+                  body,
+                },
+                sink,
+              })
+            : HANDLER_TASK_DEFINITIONS[kind as keyof typeof HANDLER_TASK_DEFINITIONS]
             ? createDomainTaskRunWorkflow({
                 definition: HANDLER_TASK_DEFINITIONS[kind as keyof typeof HANDLER_TASK_DEFINITIONS],
                 sink,
@@ -147,7 +166,8 @@ export function getAiRuntime(): AiRuntime {
                 body,
                 sink,
               }),
-      ]),
+        ];
+      }),
     );
     runtimeSingleton = createAiRuntime({ workflows });
   }

@@ -4,9 +4,11 @@ import { createMemorySingleFlight } from "../../packages/ai/src/orchestration/si
 import { runTaskWithLifecycle } from "../../packages/ai/src/orchestration/lifecycle";
 import { TaskCancellationError } from "../../packages/ai/src/orchestration/errors";
 import { createDomainTask } from "../../packages/ai/src/orchestration/task-definition";
+import { createMonolithicStageAdapter } from "../../packages/ai/src/orchestration/workflow-factory";
 import { createUsageInterceptor } from "../../packages/ai/src/provider/usage";
 import type { TaskRunSnapshot, WorkflowTaskSink } from "../../packages/ai/src/orchestration/types";
 import { TASK_DEFINITIONS } from "../../src/lib/tasks/definitions";
+import { getAiRuntime } from "../../src/lib/ai-orchestration/runtime";
 import { DAILY_REPORT_WORKFLOW_STAGES } from "../../src/lib/daily-report/generation";
 import { HANDLER_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
 
@@ -110,6 +112,33 @@ describe("framework capability evolution", () => {
     })).toThrow(/Duplicate/);
   });
 
+  it("routes ingestion and recovery through Mastra workflows", () => {
+    const runtime = getAiRuntime();
+
+    expect(runtime.mastra.getWorkflow("ingestion")).toBeDefined();
+    expect(runtime.mastra.getWorkflow("item_processing_recovery")).toBeDefined();
+  });
+
+  it("adapts coupled services to one Mastra staged entry without repeating effects", async () => {
+    const { sink } = createSink();
+    let executions = 0;
+    const workflow = createMonolithicStageAdapter({
+      id: "coupled-task",
+      adapter: {
+        boundaries: ["phase_one", "phase_two"],
+        body: async () => {
+          executions += 1;
+        },
+      },
+      sink,
+    });
+
+    const run = await workflow.createRun();
+    await run.start({ inputData: { taskRunId: row.id } });
+
+    expect(executions).toBe(1);
+  });
+
   it("keeps every BackgroundTaskRun kind covered by one declarative host definition", () => {
     expect(TASK_DEFINITIONS).toHaveLength(11);
     expect(TASK_DEFINITIONS.filter((definition) => definition.mode === "workflow").map((definition) => definition.kind)).toEqual([
@@ -117,6 +146,9 @@ describe("framework capability evolution", () => {
       "ingestion",
       "item_processing_recovery",
     ]);
+    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stageExecution).toBe("staged");
+    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "ingestion")?.stageExecution).toBe("monolithic_boundary_adapter");
+    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "item_processing_recovery")?.stageExecution).toBe("monolithic_boundary_adapter");
     expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(11);
     expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stages).toEqual([
       ...DAILY_REPORT_WORKFLOW_STAGES,
