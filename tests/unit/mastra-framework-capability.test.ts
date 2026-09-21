@@ -9,7 +9,10 @@ import { createUsageInterceptor } from "../../packages/ai/src/provider/usage";
 import type { TaskRunSnapshot, WorkflowTaskSink } from "../../packages/ai/src/orchestration/types";
 import { TASK_DEFINITIONS } from "../../src/lib/tasks/definitions";
 import { getAiRuntime } from "../../src/lib/ai-orchestration/runtime";
-import { DAILY_REPORT_WORKFLOW_STAGES } from "../../src/lib/daily-report/generation";
+import {
+  buildDailyReportStageIdentity,
+  DAILY_REPORT_WORKFLOW_STAGES,
+} from "../../src/lib/daily-report/generation";
 import { HANDLER_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
 
 const row: TaskRunSnapshot = {
@@ -110,6 +113,19 @@ describe("framework capability evolution", () => {
         { id: "one", execute: async (input) => input },
       ],
     })).toThrow(/Duplicate/);
+  });
+
+  it("projects the existing Mastra stage identity into daily-report AI attribution", () => {
+    expect(buildDailyReportStageIdentity("task-1", {
+      stepId: "daily_report_generate-assess",
+      workflowId: "daily_report_generate",
+      runId: "workflow-run-1",
+    })).toEqual({
+      stepId: "daily_report_generate-assess",
+      workflowId: "daily_report_generate",
+      workflowRunId: "workflow-run-1",
+      taskRunId: "task-1",
+    });
   });
 
   it("routes ingestion and recovery through Mastra workflows", () => {

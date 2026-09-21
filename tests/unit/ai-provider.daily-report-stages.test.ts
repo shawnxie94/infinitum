@@ -253,6 +253,35 @@ describe("daily report staged provider", () => {
     expect(userPrompt).not.toContain('"body":"原正文"');
   });
 
+  it("attributes stage-context calls to the supplied Mastra step", async () => {
+    const create = vi.fn().mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ assessments: [] }) } }],
+      usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
+    });
+    const onUsage = vi.fn();
+    const stage = {
+      stepId: "daily_report_generate-assess",
+      workflowId: "daily_report_generate",
+      workflowRunId: "workflow-run-1",
+      taskRunId: "task-1",
+    };
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },
+      undefined,
+      { chat: { completions: { create } } },
+      { onUsage, step: stage },
+    );
+
+    await provider.assessDailyReportCandidates({
+      candidates: [],
+      template: normalizeDailyReportTemplateConfig(DEFAULT_DAILY_REPORT_TEMPLATE),
+      recentTopics: [],
+      stageContext: createDailyReportStageContext("assess", "assess-input"),
+    });
+
+    expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({ step: stage }), "daily_report_assess");
+  });
+
   it("carries Review guidance into PLAN and WRITE retry prompts", async () => {
     const create = vi.fn()
       .mockResolvedValueOnce({

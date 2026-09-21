@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
 import type { BackgroundTaskRun } from "@prisma/client";
+import type { StepExecutionIdentity } from "@infinitum/ai/provider/types";
+import type { TaskExecutionContext } from "@infinitum/ai/orchestration/lifecycle";
 
 import { createAiProvider, type DailyReportStageContext } from "@/lib/ai/provider";
 import { prisma } from "@/lib/db";
@@ -43,6 +45,7 @@ export async function generateDailyReportInternal(input: {
   date: string;
   taskRunId?: string | null;
   force?: boolean;
+  stageIdentity?: StepExecutionIdentity;
   onCandidatesLoaded?: (candidateCount: number) => Promise<void>;
   onStageUpdate?: (stage: DailyReportPipelineStage) => Promise<void>;
   onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
@@ -247,6 +250,7 @@ export async function generateDailyReportInternal(input: {
   // so the background task run records accurate `aiCallCountActual` / breakdown.
   const aiUsage = createTaskAiUsageTracker(0, "daily_report_assess");
   const baseProvider = createAiProvider(runtimeConfig.modelApi, runtimeConfig.selectedPromptConfigs, undefined, {
+    step: input.stageIdentity,
     onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
     onAttempt: (event) => aiUsage.recordAttempt(event),
   });
@@ -1318,6 +1322,7 @@ export async function generateDailyReport(input: {
   date: string;
   taskRunId?: string | null;
   force?: boolean;
+  stageIdentity?: StepExecutionIdentity;
   onCandidatesLoaded?: (candidateCount: number) => Promise<void>;
   onStageUpdate?: (stage: DailyReportPipelineStage) => Promise<void>;
   onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
@@ -1669,6 +1674,22 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun, options
   }
 }
 
+/**
+ * Bind AI calls to the Mastra step that is already executing the business stage.
+ * This only projects existing step metadata; it never creates a second step.
+ */
+export function buildDailyReportStageIdentity(
+  taskRunId: string,
+  context: Pick<TaskExecutionContext, "stepId" | "workflowId" | "runId">,
+): StepExecutionIdentity {
+  return {
+    stepId: context.stepId,
+    workflowId: context.workflowId,
+    workflowRunId: context.runId,
+    taskRunId,
+  };
+}
+
 export const DAILY_REPORT_WORKFLOW_STAGES = [
   "prepare",
   "assess",
@@ -1694,6 +1715,7 @@ export async function executeDailyReportWorkflowStage(
   taskRun: BackgroundTaskRun,
   stage: DailyReportWorkflowStage,
   projection: DailyReportWorkflowProjection = {},
+  stageIdentity?: StepExecutionIdentity,
 ): Promise<void> {
   const date = taskRun.entityId && /^\\d{4}-\\d{2}-\\d{2}$/.test(taskRun.entityId)
     ? taskRun.entityId
@@ -1709,6 +1731,7 @@ export async function executeDailyReportWorkflowStage(
       date,
       taskRunId: taskRun.id,
       force: taskRun.triggerType !== "scheduled",
+      stageIdentity,
       resumeCheckpoint: resumeCheckpoint?.resumeEligible ? resumeCheckpoint : null,
       stopAfterStage: stage === "persist_publish" ? undefined : stage,
       reuseCompletedReview: stage === "persist_publish",

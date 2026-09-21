@@ -197,7 +197,12 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           context.messages.reduce((total, message) => total + message.content.length, 0) / 4,
         );
         const result = await completeTextWithCircuitBreaker(
-          { messages, requireCompleteJson: true, usageKey: request.usageKey },
+          {
+            messages,
+            requireCompleteJson: true,
+            usageKey: request.usageKey,
+            step: request.step,
+          },
           config,
           "stage_context",
           request.step,

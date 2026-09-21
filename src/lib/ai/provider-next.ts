@@ -233,6 +233,7 @@ export function createAiProvider(
       modelApi: (promptConfig.modelApi ?? undefined) as JsonCompleteRequest["modelApi"],
       usageKey,
       schema,
+      step: options?.step,
     };
   }
 

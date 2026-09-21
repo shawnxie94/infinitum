@@ -1,4 +1,5 @@
 import type { RuntimeConfig } from "@/config/runtime";
+import type { StepExecutionIdentity } from "@infinitum/ai/provider/types";
 import type {
   DailyReportCandidateAssessment,
   DailyReportModelDraft,
@@ -250,6 +251,8 @@ export type AiProviderOptions = {
   aggregationSplitMaxEvents?: number;
   /** 每次底层模型调用返回时回调实际（或估算）的 token 用量，用于任务上下文消耗统计。 */
   onUsage?: (usage: AiCallUsage, usageKey?: string) => void;
+  /** 当前 Mastra 持久 stage 的身份；不会创建额外 step，只用于调用归因。 */
+  step?: StepExecutionIdentity;
   /** 通用编排层 attempt 分类；不替代业务调用计数。 */
   onAttempt?: (event: {
     usageKey?: string;
@@ -272,7 +275,7 @@ export type AiCallUsage = {
   tokenUsageSource?: "provider" | "estimated" | "mixed";
   model?: string;
   attemptType?: "initial" | "transient_retry" | "json_retry";
-  step?: { stepId: string; workflowId?: string; workflowRunId?: string; taskRunId?: string };
+  step?: StepExecutionIdentity;
 };
 
 export type CompletionOptions = {

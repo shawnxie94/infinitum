@@ -1,7 +1,7 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
+import { buildDailyReportStageIdentity, DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
 import { HANDLER_TASK_DEFINITIONS, TASK_BODIES } from "@/lib/tasks/domain-bodies";
 import { getTaskDefinition } from "@/lib/tasks/definitions";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
@@ -134,13 +134,14 @@ export function getAiRuntime(): AiRuntime {
               description: `Infinitum ${kind} (Mastra staged workflow)`,
               stages: DAILY_REPORT_WORKFLOW_STAGES.map((stage) => ({
                 id: stage,
-                body: async (row) => executeDailyReportWorkflowStage(
+                body: async (row, context) => executeDailyReportWorkflowStage(
                   row as unknown as BackgroundTaskRun,
                   stage,
                   {
                     onCheckpoint: async (checkpoint) => sink.projectCheckpoint?.(row.id, checkpoint),
                     onProgress: async (label) => sink.projectProgress?.(row.id, label),
                   },
+                  buildDailyReportStageIdentity(row.id, context),
                 ),
               })),
               sink,
