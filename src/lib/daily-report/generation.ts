@@ -1695,11 +1695,6 @@ export async function executeDailyReportWorkflowStage(
   stage: DailyReportWorkflowStage,
   projection: DailyReportWorkflowProjection = {},
 ): Promise<void> {
-  if (stage === "persist_publish") {
-    await executeDailyReportTask(taskRun, { reuseCompletedReview: true });
-    return;
-  }
-
   const date = taskRun.entityId && /^\\d{4}-\\d{2}-\\d{2}$/.test(taskRun.entityId)
     ? taskRun.entityId
     : getTodayDailyReportDate();
@@ -1715,7 +1710,8 @@ export async function executeDailyReportWorkflowStage(
       taskRunId: taskRun.id,
       force: taskRun.triggerType !== "scheduled",
       resumeCheckpoint: resumeCheckpoint?.resumeEligible ? resumeCheckpoint : null,
-      stopAfterStage: stage,
+      stopAfterStage: stage === "persist_publish" ? undefined : stage,
+      reuseCompletedReview: stage === "persist_publish",
       onStageUpdate: async (activeStage) => {
         await projection.onProgress?.(`日报阶段：${activeStage}`);
       },
