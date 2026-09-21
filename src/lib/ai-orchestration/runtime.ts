@@ -2,9 +2,10 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
-import { TASK_BODIES } from "@/lib/tasks/domain-bodies";
+import { HANDLER_TASK_DEFINITIONS, TASK_BODIES } from "@/lib/tasks/domain-bodies";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
 import { createStagedTaskRunWorkflow, createTaskRunWorkflow, type TaskBody, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
+import { createDomainTaskRunWorkflow } from "@infinitum/ai/orchestration/task-definition";
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
 
 /**
@@ -99,12 +100,17 @@ export function getAiRuntime(): AiRuntime {
               })),
               sink,
             })
-          : createTaskRunWorkflow({
-              id: kind,
-              description: `Infinitum ${kind} (Mastra migration)`,
-              body,
-              sink,
-            }),
+          : HANDLER_TASK_DEFINITIONS[kind as keyof typeof HANDLER_TASK_DEFINITIONS]
+            ? createDomainTaskRunWorkflow({
+                definition: HANDLER_TASK_DEFINITIONS[kind as keyof typeof HANDLER_TASK_DEFINITIONS],
+                sink,
+              })
+            : createTaskRunWorkflow({
+                id: kind,
+                description: `Infinitum ${kind} (Mastra migration)`,
+                body,
+                sink,
+              }),
       ]),
     );
     runtimeSingleton = createAiRuntime({ workflows });

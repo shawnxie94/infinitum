@@ -1,6 +1,9 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
+import { runTaskWithLifecycle } from "./lifecycle";
+import type { WorkflowTaskSink } from "./types";
+
 export type DomainTaskContext = {
   signal: AbortSignal;
   taskRunId: string;
@@ -80,5 +83,59 @@ export function createDomainTaskWorkflow(definition: DomainTaskDefinition) {
     workflow = workflow.then(step) as typeof workflow;
   }
 
+  return workflow.commit();
+}
+
+/**
+ * Host adapter for domain declarations backed by a BackgroundTaskRun. Each
+ * declared stage is a persisted Mastra step; the sink/lifecycle wrapper owns
+ * cancellation and terminal projection, while the domain stage owns effects.
+ */
+export function createDomainTaskRunWorkflow(input: {
+  definition: DomainTaskDefinition;
+  sink: WorkflowTaskSink;
+}) {
+  const task = createDomainTask(input.definition);
+  const taskInputSchema = z.object({ taskRunId: z.string() });
+  const taskOutputSchema = z.object({ taskRunId: z.string(), status: z.string() });
+  let workflow = createWorkflow({
+    id: task.kind,
+    description: `Infinitum declarative domain task ${task.kind}`,
+    inputSchema: taskInputSchema,
+    outputSchema: taskOutputSchema,
+    retryConfig: { attempts: 1 },
+  });
+
+  task.stages.forEach((stage, index) => {
+    const step = createStep({
+      id: `${task.kind}-${stage.id}`,
+      inputSchema: taskInputSchema,
+      outputSchema: taskOutputSchema,
+      execute: async ({ inputData, abortSignal }) => {
+        const row = await input.sink.getTaskRun(inputData.taskRunId);
+        if (!row) return { taskRunId: inputData.taskRunId, status: "missing" };
+        const result = await runTaskWithLifecycle({
+          row,
+          sink: input.sink,
+          signal: abortSignal,
+          terminal: index === task.stages.length - 1,
+          startLifecycle: index === 0,
+          finishLifecycle: index === task.stages.length - 1,
+          cancelPollMs: 1_000,
+          body: async (taskRun, context) => {
+            const domainContext: DomainTaskContext = {
+              signal: context!.signal,
+              taskRunId: inputData.taskRunId,
+              attempt: context!.attempt,
+              checkCancellation: context!.checkCancellation,
+            };
+            await stage.execute(taskRun, domainContext);
+          },
+        });
+        return { taskRunId: inputData.taskRunId, status: result.status };
+      },
+    });
+    workflow = workflow.then(step) as unknown as typeof workflow;
+  });
   return workflow.commit();
 }

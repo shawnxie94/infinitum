@@ -7,6 +7,8 @@ import { createDomainTask } from "../../packages/ai/src/orchestration/task-defin
 import { createUsageInterceptor } from "../../packages/ai/src/provider/usage";
 import type { TaskRunSnapshot, WorkflowTaskSink } from "../../packages/ai/src/orchestration/types";
 import { TASK_DEFINITIONS } from "../../src/lib/tasks/definitions";
+import { DAILY_REPORT_WORKFLOW_STAGES } from "../../src/lib/daily-report/generation";
+import { HANDLER_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
 
 const row: TaskRunSnapshot = {
   id: "task-1",
@@ -109,6 +111,16 @@ describe("framework capability evolution", () => {
       "item_processing_recovery",
     ]);
     expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(11);
+    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stages).toEqual([
+      ...DAILY_REPORT_WORKFLOW_STAGES,
+    ]);
+    expect(Object.keys(HANDLER_TASK_DEFINITIONS).sort()).toEqual(
+      TASK_DEFINITIONS.filter((definition) => definition.mode === "handler").map((definition) => definition.kind).sort(),
+    );
+    for (const definition of Object.values(HANDLER_TASK_DEFINITIONS)) {
+      expect(definition.stages).toHaveLength(1);
+      expect(definition.stages[0]?.execute).toEqual(expect.any(Function));
+    }
   });
 
   it("separates usage by task label and retry taxonomy", () => {

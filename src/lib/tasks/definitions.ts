@@ -20,7 +20,7 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   {
     kind: "daily_report_generate",
     mode: "workflow",
-    stages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "review", "validate", "repair", "persist_publish"],
+    stages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "repair", "review", "persist_publish"],
     effects: ["daily_report_revision", "daily_report_publish"],
     checkpoint: "pipelineCheckpointJson",
   },

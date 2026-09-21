@@ -683,9 +683,9 @@ export async function generateDailyReportInternal(input: {
     await saveCheckpoint({
       version: 1,
       pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
-      stage: "plan",
+      stage: input.stopAfterStage === "plan_validate" ? "plan_validate" : "plan",
       completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
-      lastCompletedStage: "plan",
+      lastCompletedStage: input.stopAfterStage === "plan_validate" ? "plan_validate" : "plan",
       failedStage: null,
       failureCode: null,
       resumeAttempt: checkpoint?.resumeAttempt ?? 0,
@@ -715,6 +715,7 @@ export async function generateDailyReportInternal(input: {
       violations: [],
     });
     pauseAfterStage("plan");
+    pauseAfterStage("plan_validate");
     const selectedIds = new Set(getDailyReportPlanCandidateIds(plan));
     const selectedCandidates = planningCandidates.filter((candidate) => selectedIds.has(candidate.id));
     const selectedTopics = buildDailyReportSelectedTopics(plan, planningCandidates, assessments);
@@ -791,10 +792,52 @@ export async function generateDailyReportInternal(input: {
     if (!modelDraft || !draft) {
       throw new Error("WRITE 阶段未生成可校验的日报草稿。");
     }
+    if (!checkpoint?.completedStages.includes("write")) {
+      await saveCheckpoint({
+        ...latestCheckpoint!,
+        stage: "write",
+        completedStages: [...new Set([...latestCheckpoint!.completedStages, "write"])],
+        lastCompletedStage: "write",
+        failedStage: null,
+        failureCode: null,
+        resumeEligible: true,
+        stageAttempts: { ...stageAttempts },
+        draft: modelDraft,
+        violations: draftViolations,
+        data: {
+          ...(latestCheckpoint!.data ?? {}),
+          writeRetryCount,
+          writeRepairRound: repairCount,
+          omittedTopicIds: Array.from(omittedTopicIds),
+          omittedTopicCount: omittedTopicIds.size,
+        },
+      });
+      pauseAfterStage("write");
+    }
     validationViolationCount = draftViolations.length;
     const nonRepairableDraftViolations = draftViolations.filter(
       (violation) => !isDailyReportNotesRepairableViolation(violation),
     );
+    if (input.stopAfterStage === "validate" && latestCheckpoint) {
+      await saveCheckpoint({
+        ...latestCheckpoint,
+        stage: "validate",
+        completedStages: [...new Set([...latestCheckpoint.completedStages, "validate"])],
+        lastCompletedStage: "validate",
+        failedStage: null,
+        failureCode: null,
+        resumeEligible: true,
+        stageAttempts: { ...stageAttempts },
+        draft: modelDraft,
+        violations: draftViolations,
+        data: {
+          ...(latestCheckpoint.data ?? {}),
+          omittedTopicIds: Array.from(omittedTopicIds),
+          omittedTopicCount: omittedTopicIds.size,
+        },
+      });
+      pauseAfterStage("validate");
+    }
     if (draftViolations.length > 0 && nonRepairableDraftViolations.length === 0) {
       let repairViolations = draftViolations.filter(isDailyReportNotesRepairableViolation);
       while (repairViolations.length > 0 && notePatchRepairCount < 2) {
@@ -870,16 +913,21 @@ export async function generateDailyReportInternal(input: {
       }
     }
     if (latestCheckpoint) {
+      const repairStageCheckpoint = input.stopAfterStage === "repair";
       await saveCheckpoint({
         ...latestCheckpoint,
-        stage: "write",
-        completedStages: draftViolations.length > 0
-          ? [...new Set([...latestCheckpoint.completedStages, "write"])]
-          : [...new Set([...latestCheckpoint.completedStages, "write", "validate"])],
-        lastCompletedStage: draftViolations.length > 0 ? "write" : "validate",
+        stage: repairStageCheckpoint ? "repair" : "write",
+        completedStages: repairStageCheckpoint
+          ? [...new Set([...latestCheckpoint.completedStages, "write", "validate", "repair"])]
+          : draftViolations.length > 0
+            ? [...new Set([...latestCheckpoint.completedStages, "write"])]
+            : [...new Set([...latestCheckpoint.completedStages, "write", "validate"])],
+        lastCompletedStage: repairStageCheckpoint
+          ? "repair"
+          : draftViolations.length > 0 ? "write" : "validate",
         failedStage: null,
         failureCode: null,
-        resumeEligible: draftViolations.length === 0,
+        resumeEligible: draftViolations.length === 0 || repairStageCheckpoint,
         stageAttempts: { ...stageAttempts },
         stageLoop: undefined,
         draft: modelDraft,
@@ -892,6 +940,7 @@ export async function generateDailyReportInternal(input: {
           omittedTopicCount: omittedTopicIds.size,
         },
       });
+      pauseAfterStage("repair");
     }
     if (draftViolations.length === 0) {
       currentStageContext = null;
@@ -1625,7 +1674,10 @@ export const DAILY_REPORT_WORKFLOW_STAGES = [
   "assess",
   "merge",
   "plan",
+  "plan_validate",
   "write",
+  "validate",
+  "repair",
   "review",
   "persist_publish",
 ] as const;

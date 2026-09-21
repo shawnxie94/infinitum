@@ -7,10 +7,17 @@ import { TASK_DEFINITIONS } from "@/lib/tasks/definitions";
 
 async function main() {
   const runtime = getAiRuntime();
-  for (const { kind } of TASK_DEFINITIONS) {
-    const wf = runtime.mastra.getWorkflow(kind);
-    if (!wf) throw new Error(`workflow ${kind} 未注册`);
-    console.log(`registered: ${kind} id=${wf.id}`);
+  for (const definition of TASK_DEFINITIONS) {
+    const wf = runtime.mastra.getWorkflow(definition.kind);
+    if (!wf) throw new Error(`workflow ${definition.kind} 未注册`);
+    console.log(`registered: ${definition.kind} id=${wf.id}`);
+    if (definition.kind === "daily_report_generate") {
+      const stepKeys = Object.keys((wf as unknown as { steps?: Record<string, unknown> }).steps ?? {});
+      const expectedStepKeys = definition.stages.map((stage) => `${definition.kind}-${stage}`);
+      if (JSON.stringify(stepKeys) !== JSON.stringify(expectedStepKeys)) {
+        throw new Error(`日报 workflow steps 不匹配：${stepKeys.join(",")} != ${expectedStepKeys.join(",")}`);
+      }
+    }
   }
   const result = await triggerTaskWorkflow("item_processing_recovery", "smoke-nonexistent-row");
   console.log("trigger result:", JSON.stringify(result));

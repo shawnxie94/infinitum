@@ -1,7 +1,7 @@
 export { resolveP0DbUrl, createP0Runtime } from "./runtime";
 export { helloWorkflow } from "./workflows/hello";
 export { recoverableWorkflow } from "./workflows/recoverable";
-export { createDomainTask, createDomainTaskWorkflow } from "./orchestration/task-definition";
+export { createDomainTask, createDomainTaskWorkflow, createDomainTaskRunWorkflow } from "./orchestration/task-definition";
 export { createMemorySingleFlight, createSingleFlight } from "./orchestration/single-flight";
 export { runStageLoop, StageLoopError } from "./orchestration/stage-loop";
 export { createUsageInterceptor } from "./provider/usage";
