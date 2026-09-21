@@ -125,9 +125,15 @@ describe("framework capability evolution", () => {
       TASK_DEFINITIONS.filter((definition) => definition.mode === "handler").map((definition) => definition.kind).sort(),
     );
     for (const definition of Object.values(HANDLER_TASK_DEFINITIONS)) {
-      expect(definition.stages).toHaveLength(1);
-      expect(definition.stages[0]?.execute).toEqual(expect.any(Function));
+      expect(definition.stages.length).toBeGreaterThanOrEqual(1);
+      expect(definition.stages.every((stage) => typeof stage.execute === "function")).toBe(true);
     }
+    expect(HANDLER_TASK_DEFINITIONS.item_regenerate_translation.stages.map((stage) => stage.id)).toEqual([
+      "read", "ai_call", "validate", "writeback",
+    ]);
+    expect(HANDLER_TASK_DEFINITIONS.item_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
+      "read", "ai_call", "validate", "writeback",
+    ]);
   });
 
   it("separates usage by task label and retry taxonomy", () => {

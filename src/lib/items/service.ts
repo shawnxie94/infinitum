@@ -36,9 +36,9 @@ import {
   updateTaskRun,
 } from "@/lib/tasks/service";
 
-type RegenerationTarget = "translation" | "summary";
+export type RegenerationTarget = "translation" | "summary";
 
-type RegenerationOptions = {
+export type RegenerationOptions = {
   aiProvider?: AiProvider;
 };
 
@@ -162,6 +162,59 @@ export async function enqueueItemReanalyzeTask(itemId: string) {
     label: "重新 AI 判定",
     entityId: itemId,
   });
+}
+
+export type ItemRegenerationInput = Awaited<ReturnType<typeof readItemForRegeneration>>;
+
+export async function readItemForRegeneration(itemId: string) {
+  const item = await prisma.item.findUnique({
+    where: { id: itemId },
+    include: { source: true },
+  });
+  if (!item || item.status !== "processed") {
+    throw new Error("Item not found");
+  }
+  return item;
+}
+
+export async function generateItemRegenerationUnderstanding(
+  item: ItemRegenerationInput,
+  options?: RegenerationOptions,
+) {
+  const aiProvider = await resolveAiProvider(options?.aiProvider);
+  return resolveItemUnderstanding(aiProvider, item);
+}
+
+export async function persistItemRegeneration(
+  item: ItemRegenerationInput,
+  target: RegenerationTarget,
+  understanding: ItemUnderstandingResult,
+) {
+  if (target === "translation") {
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        translatedTitle: shouldTranslateTitle(item.originalTitle)
+          ? understanding.translatedTitle?.trim() || item.originalTitle
+          : item.translatedTitle,
+        errorMessage: null,
+      },
+    });
+  } else {
+    if (!understanding.diagnostics.summaryValid || !understanding.summary) {
+      throw new Error("Item understanding returned an invalid summary");
+    }
+    await prisma.item.update({
+      where: { id: item.id },
+      data: {
+        summaryText: understanding.summary || item.summaryText,
+        summaryStatus: "succeeded",
+        errorMessage: null,
+      },
+    });
+  }
+  invalidateFeedCache();
+  return prisma.item.findUniqueOrThrow({ where: { id: item.id }, include: { source: true } });
 }
 
 export async function regenerateItemContent(

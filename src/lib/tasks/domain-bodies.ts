@@ -5,7 +5,18 @@ import { executeClusterMergeCleanPairPrecomputeTask, executeClusterSummaryTask }
 import { executeDailyReportTask } from "@/lib/daily-report/generation";
 import { runIngestionTask } from "@/lib/ingestion/service";
 import { executeItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
-import { executeItemCleanupTask, executeItemReanalyzeTask, executeItemRegenerationTask, executeItemReparseAggregationsTask } from "@/lib/items/service";
+import {
+  executeItemCleanupTask,
+  executeItemReanalyzeTask,
+  executeItemRegenerationTask,
+  executeItemReparseAggregationsTask,
+  generateItemRegenerationUnderstanding,
+  persistItemRegeneration,
+  readItemForRegeneration,
+  type ItemRegenerationInput,
+  type RegenerationTarget,
+} from "@/lib/items/service";
+import type { ItemUnderstandingResult } from "@/lib/ai/provider";
 import { executePrecomputeTask } from "@/lib/precompute/service";
 import { getTaskDefinition } from "@/lib/tasks/definitions";
 import type { TaskBody } from "@infinitum/ai/orchestration/workflow-factory";
@@ -46,6 +57,62 @@ export const TASK_BODIES: Record<BackgroundTaskRun["kind"], TaskBody> = {
   item_reparse_aggregations: async (taskRun) => { await executeItemReparseAggregationsTask(asBackgroundTaskRun(taskRun)); },
 };
 
+type ItemRegenerationStagePayload = {
+  item: ItemRegenerationInput;
+  understanding?: ItemUnderstandingResult;
+  result?: ItemRegenerationInput;
+};
+
+function createItemRegenerationDefinition(kind: HandlerKind, target: RegenerationTarget): DomainTaskDefinition {
+  return createDomainTask({
+    kind,
+    stages: [
+      {
+        id: "read",
+        execute: async (input) => {
+          const taskRun = asBackgroundTaskRun(input);
+          if (!taskRun.entityId) throw new Error("Task entityId is required.");
+          return { item: await readItemForRegeneration(taskRun.entityId) } satisfies ItemRegenerationStagePayload;
+        },
+      },
+      {
+        id: "ai_call",
+        execute: async (input) => {
+          const payload = input as ItemRegenerationStagePayload;
+          return {
+            ...payload,
+            understanding: await generateItemRegenerationUnderstanding(payload.item),
+          } satisfies ItemRegenerationStagePayload;
+        },
+      },
+      {
+        id: "validate",
+        execute: async (input) => {
+          const payload = input as ItemRegenerationStagePayload;
+          if (!payload.understanding) throw new Error("Item regeneration AI result is missing.");
+          if (target === "summary" && (!payload.understanding.diagnostics.summaryValid || !payload.understanding.summary)) {
+            throw new Error("Item understanding returned an invalid summary");
+          }
+          return payload;
+        },
+      },
+      {
+        id: "writeback",
+        execute: async (input) => {
+          const payload = input as ItemRegenerationStagePayload;
+          if (!payload.understanding) throw new Error("Item regeneration AI result is missing.");
+          return {
+            ...payload,
+            result: await persistItemRegeneration(payload.item, target, payload.understanding),
+          } satisfies ItemRegenerationStagePayload;
+        },
+      },
+    ],
+    effects: ["item_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
+
 const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void>> = {
   item_reanalyze: async (input) => { await executeItemReanalyzeTask(asBackgroundTaskRun(input)); },
   item_regenerate_translation: async (input) => { await executeItemRegenerationTask(asBackgroundTaskRun(input), "translation"); },
@@ -60,6 +127,9 @@ const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void
 /** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
 export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
   HANDLER_KINDS.map((kind) => {
+    if (kind === "item_regenerate_translation" || kind === "item_regenerate_summary") {
+      return [kind, createItemRegenerationDefinition(kind, kind.endsWith("translation") ? "translation" : "summary")];
+    }
     const definition = getTaskDefinition(kind);
     return [kind, createDomainTask({
       kind,
