@@ -1,7 +1,16 @@
+import { z } from "zod";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
 import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import type { EntityAliasCheckConfidence, EntityAliasCheckDecision } from "@/lib/ai/provider-types";
+
+export const ENTITY_ALIAS_DECISIONS_SCHEMA = z.object({
+  decisions: z.array(z.object({
+    isSameEntity: z.boolean(),
+    confidence: z.enum(["high", "medium", "low"]).optional(),
+    canonicalName: z.string().nullable().optional(),
+  })),
+});
 
 
 export function parseEntityAliasDecisions(

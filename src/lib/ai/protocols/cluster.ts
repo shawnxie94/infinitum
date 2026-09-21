@@ -1,7 +1,12 @@
+import { z } from "zod";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
 import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import type { ClusterMergeDecision } from "@/lib/ai/provider-types";
+
+export const CLUSTER_MATCH_SCHEMA = z.object({
+  clusterId: z.string().nullable(),
+});
 
 export function compactClusterMergeInputForModel(clustersJson: string) {
   const parsed = JSON.parse(clustersJson) as Record<string, unknown>;

@@ -21,6 +21,8 @@ import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { InvalidJsonModelResponseError, isInvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import { createModelGateway } from "@infinitum/ai/provider/gateway";
 import { createAiSdkTransport, createCompatClientTransport } from "@infinitum/ai/provider/transports";
+import { CLUSTER_MATCH_SCHEMA } from "@/lib/ai/protocols/cluster";
+import { ENTITY_ALIAS_DECISIONS_SCHEMA } from "@/lib/ai/protocols/entity-alias";
 import type { JsonCompleteRequest } from "@infinitum/ai/provider/types";
 import {
   getFallbackUnderstanding,
@@ -135,8 +137,8 @@ export function createAiProvider(
   const gateway = createModelGateway({
     defaultModelApi: config as never,
     transport: clientOverrideArg
-      ? createCompatClientTransport(clientOverrideArg)
-      : createAiSdkTransport(),
+      ? createCompatClientTransport(clientOverrideArg, { maxRetries: 1 })
+      : createAiSdkTransport({ maxRetries: 1, supportsStructuredOutputs: true }),
     normalizeText: normalizeModelResponseText,
     temperatureLockedTaskTypes: TEMPERATURE_LOCKED_PROMPT_TYPES,
     circuitBreaker: {
@@ -217,6 +219,7 @@ export function createAiProvider(
     taskType: string,
     userContent: string,
     usageKey = taskType,
+    schema?: JsonCompleteRequest["schema"],
   ): JsonCompleteRequest {
     return {
       taskType,
@@ -227,6 +230,7 @@ export function createAiProvider(
       topP: promptConfig.topP,
       modelApi: (promptConfig.modelApi ?? undefined) as JsonCompleteRequest["modelApi"],
       usageKey,
+      schema,
     };
   }
 
@@ -291,7 +295,7 @@ export function createAiProvider(
       });
 
       return gateway.completeJson(
-        buildJsonRequest(clusterMatchConfig, "cluster_match", userContent),
+        buildJsonRequest(clusterMatchConfig, "cluster_match", userContent, "cluster_match", CLUSTER_MATCH_SCHEMA),
         (output) => parseClusterMatchCandidateId(
           output,
           metadata.candidates.map((candidate) => candidate.id),
@@ -314,7 +318,7 @@ export function createAiProvider(
 
       return (
         (await gateway.completeJson(
-          buildJsonRequest(entityAliasCheckConfig, "entity_alias_check", userContent),
+          buildJsonRequest(entityAliasCheckConfig, "entity_alias_check", userContent, "entity_alias_check", ENTITY_ALIAS_DECISIONS_SCHEMA),
           (output) => parseEntityAliasDecisions(output, input.pairs),
         )) ?? []
       );

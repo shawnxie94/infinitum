@@ -27,7 +27,6 @@ function isInvalidJsonModelResponse(error: unknown): error is Error {
   );
 }
 
-const DEFAULT_TRANSIENT_RETRY_COUNT = 1;
 const DEFAULT_JSON_PARSE_RETRY_COUNT = 1;
 const DEFAULT_CIRCUIT = { failureThreshold: 3, windowMs: 60_000, openMs: 180_000 };
 
@@ -38,39 +37,6 @@ function defaultBuildJsonParseRetryPrompt(userContent: string, error: Error) {
 
 重要：上一次输出不是合法 JSON，解析错误：${error.message}
 请重新生成，必须只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外解释。请检查字段之间的逗号、完整闭合的括号，以及字符串内部双引号和换行的 JSON 转义。`;
-}
-
-function getErrorStatus(error: unknown): number | null {
-  if (!error || typeof error !== "object") return null;
-  const maybe = error as { status?: unknown; statusCode?: unknown; code?: unknown };
-  const raw = maybe.status ?? maybe.statusCode ?? maybe.code;
-  if (typeof raw === "number" && Number.isInteger(raw)) return raw;
-  if (typeof raw === "string" && /^\d+$/.test(raw)) return Number(raw);
-  return null;
-}
-
-function isTransientModelApiError(error: unknown) {
-  const status = getErrorStatus(error);
-  if (status !== null) {
-    return status === 408 || status === 429 || status >= 500;
-  }
-  if (!error || typeof error !== "object") return false;
-  const maybe = error as { code?: unknown; name?: unknown; message?: unknown };
-  const code = typeof maybe.code === "string" ? maybe.code.toLowerCase() : "";
-  const name = typeof maybe.name === "string" ? maybe.name.toLowerCase() : "";
-  const message = typeof maybe.message === "string" ? maybe.message.toLowerCase() : "";
-  return [
-    "abort",
-    "timeout",
-    "timed out",
-    "read timeout",
-    "gateway timeout",
-    "network",
-    "econnreset",
-    "etimedout",
-    "econnrefused",
-    "socket hang up",
-  ].some((pattern) => code.includes(pattern) || name.includes(pattern) || message.includes(pattern));
 }
 
 type CircuitState = { failures: number[]; openUntil: number };
@@ -96,7 +62,6 @@ export type ModelGateway = {
 
 export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
   const circuit = options.circuitBreaker ?? DEFAULT_CIRCUIT;
-  const transientRetryCount = options.transientRetryCount ?? DEFAULT_TRANSIENT_RETRY_COUNT;
   const jsonParseRetryCount = options.jsonParseRetryCount ?? DEFAULT_JSON_PARSE_RETRY_COUNT;
   const buildRetryPrompt = options.buildJsonParseRetryPrompt ?? defaultBuildJsonParseRetryPrompt;
   const lockedTypes = options.temperatureLockedTaskTypes ?? new Set<string>();
@@ -147,24 +112,6 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     return { text, usage };
   }
 
-  async function completeTextWithTransientRetry(
-    config: ModelApiConfig,
-    request: CompletionRequest,
-    attemptType: UsageSnapshot["attemptType"],
-  ): Promise<{ text: string; usage: UsageSnapshot } | null> {
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt <= transientRetryCount; attempt += 1) {
-      try {
-        return await completeTextOnce(config, request, attempt > 0 ? "transient_retry" : attemptType);
-      } catch (error) {
-        if (isInvalidJsonModelResponse(error)) throw error;
-        lastError = error;
-        if (attempt >= transientRetryCount || !isTransientModelApiError(error)) throw error;
-      }
-    }
-    throw lastError;
-  }
-
   async function completeTextWithCircuitBreaker(
     request: CompletionRequest,
     config: ModelApiConfig,
@@ -174,7 +121,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     const selectedConfig = !isDefaultModel && circuitStateFor(config).openUntil > Date.now() ? options.defaultModelApi : config;
 
     try {
-      const result = await completeTextWithTransientRetry(selectedConfig, request, attemptType);
+      const result = await completeTextOnce(selectedConfig, request, attemptType);
       if (!isDefaultModel && isSameModelApiConfig(selectedConfig, config)) {
         recordSuccess(config);
       }
@@ -187,7 +134,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       }
       const opened = recordFailure(config);
       if (!opened) throw error;
-      return completeTextWithTransientRetry(options.defaultModelApi, request, attemptType);
+      return completeTextOnce(options.defaultModelApi, request, attemptType);
     }
   }
 
@@ -275,6 +222,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
               topP: request.topP,
               requireCompleteJson: true,
               usageKey: request.usageKey,
+              schema: request.schema,
             },
             config,
             attempt > 0 ? "json_retry" : "initial",

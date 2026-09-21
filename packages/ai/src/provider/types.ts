@@ -1,3 +1,5 @@
+import type { ZodType } from "zod";
+
 /**
  * 模型网关类型（spec P1a）：与具体传输无关的请求/响应形状。
  * 传输实现负责映射到 @ai-sdk/openai-compatible 或兼容 client。
@@ -25,6 +27,9 @@ export type CompletionRequest = {
   signal?: AbortSignal;
   /** 用量归集键（网关 onUsage 透传）。 */
   usageKey?: string;
+  /** 结构化输出（可选）：提供时走模型侧 JSON Schema 约束解码（generateObject），
+   * 语法错误在模型侧消除；端点不支持时传输层自动回退 json_object 模式。 */
+  schema?: ZodType;
 };
 
 export type UsageAttemptType = "initial" | "json_retry" | "transient_retry" | "stage_context";
@@ -64,7 +69,6 @@ export type ModelGatewayOptions = {
     windowMs: number;
     openMs: number;
   };
-  transientRetryCount?: number;
   jsonParseRetryCount?: number;
   /** usage 上报（逐次调用）。 */
   onUsage?: (usage: UsageSnapshot, usageKey?: string) => void;
@@ -76,6 +80,8 @@ export type JsonCompleteRequest = {
   taskType: string;
   systemPrompt: string;
   userContent: string;
+  /** 结构化输出 schema（可选，见 CompletionRequest.schema）。 */
+  schema?: ZodType;
   temperature?: number | null;
   maxTokens?: number | null;
   topP?: number | null;
