@@ -115,8 +115,8 @@ export function createDomainTaskRunWorkflow(input: {
   sink: WorkflowTaskSink;
 }) {
   const task = createDomainTask(input.definition);
-  const taskInputSchema = z.object({ taskRunId: z.string() });
-  const taskOutputSchema = z.object({ taskRunId: z.string(), status: z.string() });
+  const taskInputSchema = z.object({ taskRunId: z.string(), payload: z.unknown().optional() });
+  const taskOutputSchema = z.object({ taskRunId: z.string(), status: z.string(), payload: z.unknown().optional() });
   let workflow = createWorkflow({
     id: task.kind,
     description: `Infinitum declarative domain task ${task.kind}`,
@@ -132,7 +132,8 @@ export function createDomainTaskRunWorkflow(input: {
       outputSchema: taskOutputSchema,
       execute: async ({ inputData, abortSignal, runId, retryCount }) => {
         const row = await input.sink.getTaskRun(inputData.taskRunId);
-        if (!row) return { taskRunId: inputData.taskRunId, status: "missing" };
+        if (!row) return { taskRunId: inputData.taskRunId, status: "missing", payload: inputData.payload };
+        let stagePayload: unknown = inputData.payload === undefined ? row : inputData.payload;
         const result = await runTaskWithLifecycle({
           row,
           sink: input.sink,
@@ -156,10 +157,10 @@ export function createDomainTaskRunWorkflow(input: {
               checkpoint: context!.checkpoint,
               checkCancellation: context!.checkCancellation,
             };
-            await stage.execute(taskRun, domainContext);
+            stagePayload = await stage.execute(stagePayload, domainContext);
           },
         });
-        return { taskRunId: inputData.taskRunId, status: result.status };
+        return { taskRunId: inputData.taskRunId, status: result.status, payload: stagePayload };
       },
     });
     workflow = workflow.then(step) as unknown as typeof workflow;
