@@ -989,6 +989,85 @@ export async function enqueueClusterSummaryTask(clusterId: string, label?: strin
   });
 }
 
+export type ClusterSummaryWorkflowPayload = {
+  clusterId: string;
+  summaryInputHash: string;
+  presentation?: {
+    title: string;
+    summary: string;
+    summaryAttempted: boolean;
+    summarySucceeded: boolean;
+  };
+};
+
+export async function readClusterSummaryWorkflow(clusterId: string): Promise<ClusterSummaryWorkflowPayload> {
+  const cluster = await getClusterWithItems(clusterId);
+  if (!cluster) throw new Error("Cluster not found");
+  if (cluster.items.length === 0) {
+    await deleteCluster(clusterId);
+    return { clusterId, summaryInputHash: "", presentation: { title: cluster.title, summary: cluster.summary, summaryAttempted: false, summarySucceeded: false } };
+  }
+  return { clusterId, summaryInputHash: buildClusterSummaryInputHash(cluster.items) };
+}
+
+export async function generateClusterSummaryWorkflow(
+  payload: ClusterSummaryWorkflowPayload,
+  aiProvider?: AiProvider,
+): Promise<ClusterSummaryWorkflowPayload> {
+  const cluster = await getClusterWithItems(payload.clusterId);
+  if (!cluster || cluster.items.length === 0) return payload;
+  let resolvedProvider = aiProvider;
+  if (!resolvedProvider) {
+    const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
+    if (runtimeConfig) {
+      resolvedProvider = createAiProvider(runtimeConfig.modelApi, {
+        itemUnderstanding: runtimeConfig.selectedPromptConfigs?.itemUnderstanding,
+        clusterSummary: runtimeConfig.selectedPromptConfigs?.clusterSummary,
+        clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
+      }, undefined, { aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents, embedding: runtimeConfig.embedding });
+    }
+  }
+  const presentation = await generateClusterPresentation(cluster.items, cluster.title, resolvedProvider, { preferEventTitleFallback: true });
+  return { ...payload, presentation };
+}
+
+export async function persistClusterSummaryWorkflow(payload: ClusterSummaryWorkflowPayload) {
+  const cluster = await getClusterWithItems(payload.clusterId);
+  if (!cluster || cluster.items.length === 0) return { clusterId: payload.clusterId, deleted: true, updated: false };
+  if (!payload.presentation) throw new Error("Cluster summary presentation is missing");
+  const eventSignature = buildClusterEventSignature(cluster.items);
+  const score = Math.max(...cluster.items.map((item) => item.qualityScore));
+  const latestPublishedAt = cluster.items[0]!.publishedAt;
+  const eventIdentity = buildEventIdentity({
+    eventSignature,
+    publishedAt: getEventIdentityAnchor(cluster.items.find((item) => item.publishedAtKnown) ?? cluster.items[0]!),
+  });
+  const nextItemCount = cluster.items.length;
+  await updateClusterSummary(payload.clusterId, {
+    title: payload.presentation.title,
+    summary: payload.presentation.summary,
+    summaryInputHash: payload.summaryInputHash,
+    score,
+    itemCount: nextItemCount,
+    latestPublishedAt,
+    eventType: eventSignature?.eventType ?? null,
+    eventSubject: eventSignature?.eventSubject ?? null,
+    eventAction: eventSignature?.eventAction ?? null,
+    eventObject: eventSignature?.eventObject ?? null,
+    eventDate: eventSignature?.eventDate ?? null,
+    eventFingerprint: eventIdentity?.eventFingerprint ?? null,
+    eventBucket: eventIdentity?.eventBucket ?? null,
+  });
+  await refreshClusterFeedStatsSafely([payload.clusterId], "workflow cluster summary");
+  return {
+    clusterId: payload.clusterId,
+    deleted: false,
+    updated: true,
+    summaryAttempted: payload.presentation.summaryAttempted,
+    summarySucceeded: payload.presentation.summarySucceeded,
+  };
+}
+
 export async function executeClusterSummaryTask(
   taskRun: { id: string; entityId: string | null },
   options?: { aiProvider?: AiProvider },

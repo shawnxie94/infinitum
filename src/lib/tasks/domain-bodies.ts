@@ -1,7 +1,14 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import { createDomainTask, type DomainTaskDefinition } from "@infinitum/ai/orchestration/task-definition";
-import { executeClusterMergeCleanPairPrecomputeTask, executeClusterSummaryTask } from "@/lib/clusters/service";
+import {
+  executeClusterMergeCleanPairPrecomputeTask,
+  executeClusterSummaryTask,
+  generateClusterSummaryWorkflow,
+  persistClusterSummaryWorkflow,
+  readClusterSummaryWorkflow,
+  type ClusterSummaryWorkflowPayload,
+} from "@/lib/clusters/service";
 import { executeDailyReportTask } from "@/lib/daily-report/generation";
 import { runIngestionTask } from "@/lib/ingestion/service";
 import { executeItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
@@ -71,6 +78,19 @@ type ItemCleanupStagePayload = {
   totalDeleted?: number;
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
+
+function createClusterSummaryDefinition(): DomainTaskDefinition {
+  return createDomainTask({
+    kind: "cluster_regenerate_summary",
+    stages: [
+      { id: "read", execute: async (input) => readClusterSummaryWorkflow(asBackgroundTaskRun(input).entityId ?? "") },
+      { id: "ai_call", execute: async (input) => generateClusterSummaryWorkflow(input as ClusterSummaryWorkflowPayload) },
+      { id: "writeback", execute: async (input) => persistClusterSummaryWorkflow(input as ClusterSummaryWorkflowPayload) },
+    ],
+    effects: ["cluster_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
 
 function createPrecomputeDefinition(): DomainTaskDefinition {
   const stages = ["cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates"] as const;
@@ -188,6 +208,9 @@ const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void
 /** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
 export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
   HANDLER_KINDS.map((kind) => {
+    if (kind === "cluster_regenerate_summary") {
+      return [kind, createClusterSummaryDefinition()];
+    }
     if (kind === "precompute") {
       return [kind, createPrecomputeDefinition()];
     }
