@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { getDailyReportDateRange, getTodayDailyReportDate, normalizeDailyReportDate } from "@/lib/daily-report/date";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { withDailyReportLock } from "@/lib/daily-report/history";
-import { DailyReportCancellationError, DailyReportGenerationError } from "@/lib/daily-report/errors";
+import { DailyReportCancellationError, DailyReportGenerationError, DailyReportStagePauseError } from "@/lib/daily-report/errors";
 import { normalizeDailyReportContent } from "@/lib/daily-report/content";
 import { getDailyReportFailureSummary } from "@/lib/daily-report/review";
 import { getDailyReportAttemptLimit, isDailyReportContextOverflowError } from "@/lib/daily-report/attempts";
@@ -47,6 +47,9 @@ export async function generateDailyReportInternal(input: {
   onStageUpdate?: (stage: DailyReportPipelineStage) => Promise<void>;
   onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
   resumeCheckpoint?: TaskPipelineCheckpoint | null;
+  /** P10 staged workflow: stop after a persisted business stage and resume from its checkpoint. */
+  stopAfterStage?: DailyReportPipelineStage;
+  reuseCompletedReview?: boolean;
 }) {
   const { date } = getDailyReportDateRange(input.date);
   const schedule = await ensureDefaultDailyReportSchedule();
@@ -363,6 +366,11 @@ export async function generateDailyReportInternal(input: {
     await input.onCheckpoint?.(checkpointWithRecovery);
     await throwIfCancellationRequested();
   };
+  const pauseAfterStage = (stage: DailyReportPipelineStage) => {
+    if (input.stopAfterStage === stage) {
+      throw new DailyReportStagePauseError(stage, latestCheckpoint, aiUsage.snapshot());
+    }
+  };
   const persistStageLoopContext = async (context: DailyReportStageContext) => {
     currentStageContext = context;
     currentStage = context.stage;
@@ -476,6 +484,7 @@ export async function generateDailyReportInternal(input: {
       ...(canResume && checkpoint?.plan ? { plan: checkpoint.plan } : {}),
       ...(canResume && checkpoint?.draft ? { draft: checkpoint.draft } : {}),
     });
+    pauseAfterStage("prepare");
     await input.onStageUpdate?.("assess");
     const getHistoryFilteredCount = () => assessments.filter(
       (assessment) => assessment.historyDecision === "duplicate",
@@ -552,6 +561,7 @@ export async function generateDailyReportInternal(input: {
       });
     }
     currentBatchIndex = null;
+    pauseAfterStage("assess");
     await input.onStageUpdate?.("merge");
     const ledger = {
       schemaVersion: 1 as const,
@@ -607,6 +617,7 @@ export async function generateDailyReportInternal(input: {
       ledger,
       planningCandidateBriefs: candidateBriefs,
     });
+    pauseAfterStage("merge");
     await input.onStageUpdate?.("plan");
     const hasCompletedPlan = Boolean(
       canResume
@@ -703,6 +714,7 @@ export async function generateDailyReportInternal(input: {
       ...(latestPlanningAudit ? { planningAudit: latestPlanningAudit } : {}),
       violations: [],
     });
+    pauseAfterStage("plan");
     const selectedIds = new Set(getDailyReportPlanCandidateIds(plan));
     const selectedCandidates = planningCandidates.filter((candidate) => selectedIds.has(candidate.id));
     const selectedTopics = buildDailyReportSelectedTopics(plan, planningCandidates, assessments);
@@ -888,8 +900,9 @@ export async function generateDailyReportInternal(input: {
       throw new Error(`WRITE 校验失败：${draftViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
     }
     content = draft;
+    pauseAfterStage("write");
   } catch (error) {
-    if (error instanceof DailyReportGenerationError || error instanceof DailyReportCancellationError) throw error;
+    if (error instanceof DailyReportGenerationError || error instanceof DailyReportCancellationError || error instanceof DailyReportStagePauseError) throw error;
     throw new DailyReportGenerationError(error, aiUsage.snapshot(), buildFailureCheckpoint(error));
   }
   assertDailyReportSourceIdsExist(content, candidates.map((candidate) => ({
@@ -946,7 +959,12 @@ export async function generateDailyReportInternal(input: {
   // Reviewer runs after deterministic WRITE validation. A rejection can ask
   // for exactly one intermediate PLAN/WRITE regeneration; a reviewer failure
   // keeps the valid draft but permanently disables automatic publication.
-  if (runtimeConfig.selectedPromptConfigs?.dailyReportReview?.enabled && finalizationPlan) {
+  const hasCompletedReview = Boolean(
+    input.reuseCompletedReview
+      && effectiveResumeCheckpoint?.completedStages.includes("review")
+      && effectiveResumeCheckpoint.reviewStatus,
+  );
+  if (runtimeConfig.selectedPromptConfigs?.dailyReportReview?.enabled && finalizationPlan && !hasCompletedReview) {
     currentStage = "review";
     currentAttemptKey = "REVIEW";
     await input.onStageUpdate?.("review");
@@ -1136,7 +1154,13 @@ export async function generateDailyReportInternal(input: {
         },
       });
     }
+  } else if (hasCompletedReview && effectiveResumeCheckpoint) {
+    reviewStatus = effectiveResumeCheckpoint.reviewStatus ?? "unavailable";
+    reviewAttempts = effectiveResumeCheckpoint.reviewAttempts ?? 0;
+    reviewViolations = (effectiveResumeCheckpoint.reviewViolations ?? []) as DailyReportReviewViolation[];
+    reviewAudit = (effectiveResumeCheckpoint.reviewAudit as Record<string, unknown> | null) ?? null;
   }
+  pauseAfterStage("review");
   const sourceRows = getSectionSourceIds(content);
   const candidateCoverage = buildDailyReportCandidateCoverage(content, candidates);
   if (candidateCoverage.warnings.length > 0) {
@@ -1249,6 +1273,8 @@ export async function generateDailyReport(input: {
   onStageUpdate?: (stage: DailyReportPipelineStage) => Promise<void>;
   onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
   resumeCheckpoint?: TaskPipelineCheckpoint | null;
+  stopAfterStage?: DailyReportPipelineStage;
+  reuseCompletedReview?: boolean;
 }) {
   const normalizedDate = normalizeDailyReportDate(input.date);
   return withDailyReportLock(normalizedDate, "generate", async ({ assertLock }) => {
@@ -1270,7 +1296,7 @@ export async function generateDailyReport(input: {
   });
 }
 
-export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
+export async function executeDailyReportTask(taskRun: BackgroundTaskRun, options?: { reuseCompletedReview?: boolean }) {
   const date = taskRun.entityId && /^\d{4}-\d{2}-\d{2}$/.test(taskRun.entityId)
     ? taskRun.entityId
     : getTodayDailyReportDate();
@@ -1414,6 +1440,7 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
         resumeCheckpoint = checkpoint;
       },
       resumeCheckpoint,
+      reuseCompletedReview: options?.reuseCompletedReview,
     });
 
     const finishedAt = new Date();
@@ -1590,6 +1617,66 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun) {
       finishedAt,
     });
     await markDailyScheduleRunFinished(taskRun, cancelled ? "cancelled" : "failed");
+  }
+}
+
+export const DAILY_REPORT_WORKFLOW_STAGES = [
+  "prepare",
+  "assess",
+  "merge",
+  "plan",
+  "write",
+  "review",
+  "persist_publish",
+] as const;
+
+export type DailyReportWorkflowStage = typeof DAILY_REPORT_WORKFLOW_STAGES[number];
+
+/** Execute one durable Mastra-owned stage and leave the task running until the final persist step. */
+export async function executeDailyReportWorkflowStage(
+  taskRun: BackgroundTaskRun,
+  stage: DailyReportWorkflowStage,
+): Promise<void> {
+  if (stage === "persist_publish") {
+    await executeDailyReportTask(taskRun, { reuseCompletedReview: true });
+    return;
+  }
+
+  const date = taskRun.entityId && /^\\d{4}-\\d{2}-\\d{2}$/.test(taskRun.entityId)
+    ? taskRun.entityId
+    : getTodayDailyReportDate();
+  const resumeCheckpoint = taskRun.pipelineCheckpointJson
+    ? parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson)
+    : null;
+
+  await updateTaskRun(taskRun.id, {
+    status: "running",
+    progressCurrent: 0,
+    progressTotal: 1,
+    progressLabel: `日报阶段：${stage}`,
+  });
+
+  try {
+    await generateDailyReport({
+      date,
+      taskRunId: taskRun.id,
+      force: taskRun.triggerType !== "scheduled",
+      resumeCheckpoint: resumeCheckpoint?.resumeEligible ? resumeCheckpoint : null,
+      stopAfterStage: stage,
+      onStageUpdate: async (activeStage) => {
+        await updateTaskRun(taskRun.id, { progressLabel: `日报阶段：${activeStage}` });
+      },
+      onCheckpoint: async (checkpoint) => {
+        await updateTaskRun(taskRun.id, { pipelineCheckpoint: checkpoint });
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof DailyReportStagePauseError)) throw error;
+    await updateTaskRun(taskRun.id, {
+      status: "running",
+      progressLabel: `日报阶段已完成：${stage}`,
+      ...(error.checkpoint ? { pipelineCheckpoint: error.checkpoint } : {}),
+    });
   }
 }
 

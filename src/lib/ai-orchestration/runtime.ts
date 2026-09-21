@@ -1,27 +1,23 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { runIngestionTask } from "@/lib/ingestion/service";
-import { executeItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
-import { executeDailyReportTask } from "@/lib/daily-report/generation";
+import { DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
+import { TASK_BODIES } from "@/lib/tasks/domain-bodies";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
-import { createTaskRunWorkflow, type TaskBody, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
+import { createStagedTaskRunWorkflow, createTaskRunWorkflow, type TaskBody, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
 
 /**
  * 主仓侧编排接线（spec P1b-P4/D11）：
  * - sink 把 BackgroundTaskRun 读写映射给 packages/ai（依赖倒置，D9 所有权边界）
- * - 三个 AI 批量 kind 的 workflow 业务体 = 原 handler 执行体（状态簿记/取消轮询/检查点恢复语义不变）
+ * - 11 个 task kind 均由 Mastra workflow 承载；handler-mode kind 仍由 domain body 负责副作用
+ *   （状态簿记/取消轮询/检查点恢复语义不变）
  * - runtime 单例：Next.js 与 worker 进程各自内嵌（D11），共享 SQLite 存储
  */
 
-type WorkflowKind = "daily_report_generate" | "ingestion" | "item_processing_recovery";
+type WorkflowKind = BackgroundTaskRun["kind"];
 
-const WORKFLOW_KINDS: Record<WorkflowKind, TaskBody> = {
-  daily_report_generate: executeDailyReportTask as unknown as TaskBody,
-  ingestion: runIngestionTask as unknown as TaskBody,
-  item_processing_recovery: executeItemProcessingRecoveryTask as unknown as TaskBody,
-};
+const WORKFLOW_KINDS: Record<WorkflowKind, TaskBody> = TASK_BODIES;
 
 const sink: WorkflowTaskSink = {
   async getTaskRun(taskRunId) {
@@ -93,12 +89,22 @@ export function getAiRuntime(): AiRuntime {
     const workflows = Object.fromEntries(
       Object.entries(WORKFLOW_KINDS).map(([kind, body]) => [
         kind,
-        createTaskRunWorkflow({
-          id: kind,
-          description: `Infinitum ${kind} (Mastra migration)`,
-          body,
-          sink,
-        }),
+        kind === "daily_report_generate"
+          ? createStagedTaskRunWorkflow({
+              id: kind,
+              description: `Infinitum ${kind} (Mastra staged workflow)`,
+              stages: DAILY_REPORT_WORKFLOW_STAGES.map((stage) => ({
+                id: stage,
+                body: async (row) => executeDailyReportWorkflowStage(row as unknown as BackgroundTaskRun, stage),
+              })),
+              sink,
+            })
+          : createTaskRunWorkflow({
+              id: kind,
+              description: `Infinitum ${kind} (Mastra migration)`,
+              body,
+              sink,
+            }),
       ]),
     );
     runtimeSingleton = createAiRuntime({ workflows });

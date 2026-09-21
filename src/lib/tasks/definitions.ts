@@ -1,3 +1,4 @@
+import { createDomainTask } from "@infinitum/ai/orchestration/task-definition";
 import type { BackgroundTaskRunKind } from "@/lib/tasks/types";
 
 export type TaskExecutionMode = "workflow" | "handler";
@@ -11,8 +12,9 @@ export type TaskDefinition = {
 };
 
 /**
- * Host-owned task catalog. Framework code executes the declared mode; domain
- * modules own the stage implementations and side effects.
+ * Host-owned task catalog. Framework code executes every declared task through
+ * the Mastra workflow adapter; mode remains the policy label for the domain
+ * implementation shape. Domain modules own stage implementations and effects.
  */
 export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   {
@@ -45,6 +47,16 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   { kind: "item_cleanup", mode: "handler", stages: ["cleanup"], effects: ["item_delete"] },
   { kind: "item_reparse_aggregations", mode: "handler", stages: ["reparse"], effects: ["item_write"] },
 ];
+
+// Validate the host catalog against the framework's declarative stage contract.
+for (const definition of TASK_DEFINITIONS) {
+  createDomainTask({
+    kind: definition.kind,
+    stages: definition.stages.map((id) => ({ id, execute: async (input) => input })),
+    effects: [...definition.effects],
+    checkpoint: definition.checkpoint,
+  });
+}
 
 const definitionsByKind = new Map(TASK_DEFINITIONS.map((definition) => [definition.kind, definition]));
 

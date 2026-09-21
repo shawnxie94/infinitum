@@ -15,6 +15,20 @@ export class DailyReportGenerationError extends Error {
   }
 }
 
+export class DailyReportStagePauseError extends Error {
+  checkpoint: TaskPipelineCheckpoint | null;
+  aiUsage: TaskAiUsageSnapshot;
+  stage: string;
+
+  constructor(stage: string, checkpoint: TaskPipelineCheckpoint | null, aiUsage: TaskAiUsageSnapshot) {
+    super(`日报阶段 ${stage} 已完成，等待下一个 workflow step。`);
+    this.name = "DailyReportStagePauseError";
+    this.stage = stage;
+    this.checkpoint = checkpoint;
+    this.aiUsage = aiUsage;
+  }
+}
+
 export class DailyReportCancellationError extends Error {
   aiUsage: TaskAiUsageSnapshot;
   checkpoint: TaskPipelineCheckpoint | null;

@@ -8,7 +8,7 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
-import { runTaskWithLifecycle } from "./lifecycle";
+import { runTaskWithLifecycle, type TaskExecutionContext } from "./lifecycle";
 import type { TaskBody, TaskRunSnapshot, WorkflowTaskSink } from "./types";
 
 const inputSchema = z.object({ taskRunId: z.string() });
@@ -50,6 +50,56 @@ export function createTaskRunWorkflow(input: {
   })
     .then(step)
     .commit();
+}
+
+export type TaskWorkflowStage = {
+  id: string;
+  body: (taskRun: TaskRunSnapshot, context: TaskExecutionContext) => Promise<void>;
+};
+
+/**
+ * Multi-step variant used by P10. Each business stage persists its own Mastra
+ * snapshot while BackgroundTaskRun remains running until the final stage.
+ */
+export function createStagedTaskRunWorkflow(input: {
+  id: string;
+  description?: string;
+  stages: readonly TaskWorkflowStage[];
+  sink: WorkflowTaskSink;
+}) {
+  if (input.stages.length === 0) throw new Error(`${input.id} needs at least one workflow stage.`);
+  const stagedOutputSchema = z.object({ taskRunId: z.string(), status: z.string() });
+  let workflow = createWorkflow({
+    id: input.id,
+    description: input.description,
+    inputSchema,
+    outputSchema: stagedOutputSchema,
+    retryConfig: { attempts: 1 },
+  });
+  input.stages.forEach((stage, index) => {
+    const step = createStep({
+      id: `${input.id}-${stage.id}`,
+      inputSchema,
+      outputSchema: stagedOutputSchema,
+      execute: async ({ inputData, abortSignal }) => {
+        const row = await input.sink.getTaskRun(inputData.taskRunId);
+        if (!row) return { taskRunId: inputData.taskRunId, status: "missing" };
+        const result = await runTaskWithLifecycle({
+          row,
+          body: (taskRun, context) => stage.body(taskRun, context!),
+          sink: input.sink,
+          signal: abortSignal,
+          terminal: index === input.stages.length - 1,
+          startLifecycle: index === 0,
+          finishLifecycle: index === input.stages.length - 1,
+          cancelPollMs: 1_000,
+        });
+        return { taskRunId: inputData.taskRunId, status: result.status };
+      },
+    });
+    workflow = workflow.then(step) as unknown as typeof workflow;
+  });
+  return workflow.commit();
 }
 
 export async function startTaskWorkflow(workflow: {

@@ -51,6 +51,10 @@ export async function runTaskWithLifecycle(input: {
   signal?: AbortSignal;
   hooks?: TaskLifecycleHooks;
   cancelPollMs?: number;
+  /** Staged workflows keep the task running between business stages. */
+  terminal?: boolean;
+  startLifecycle?: boolean;
+  finishLifecycle?: boolean;
 }): Promise<{ status: "succeeded" | "failed" | "partial" | "cancelled"; failureKind?: TaskFailureKind }> {
   const attempt = input.attempt ?? 1;
   const controller = createAbortController(input.signal);
@@ -74,8 +78,13 @@ export async function runTaskWithLifecycle(input: {
     attempt,
   };
 
-  await input.sink.markStarted?.(input.row.id, input.runId);
-  await emit({ ...base, event: "start", status: "running", at: new Date().toISOString() }, input.hooks?.onStart);
+  const terminal = input.terminal ?? true;
+  const startLifecycle = input.startLifecycle ?? true;
+  const finishLifecycle = input.finishLifecycle ?? terminal;
+  if (startLifecycle) {
+    await input.sink.markStarted?.(input.row.id, input.runId);
+    await emit({ ...base, event: "start", status: "running", at: new Date().toISOString() }, input.hooks?.onStart);
+  }
   if (input.cancelPollMs && input.cancelPollMs > 0) {
     pollTimer = setInterval(() => {
       void checkCancellation().catch(() => undefined);
@@ -90,6 +99,8 @@ export async function runTaskWithLifecycle(input: {
       attempt,
       checkCancellation,
     });
+    await checkCancellation();
+    if (!terminal) return { status: "succeeded" };
     const after = await input.sink.getTaskRun(input.row.id);
     if (after?.status === "cancelled") {
       const event: TaskLifecycleEvent = { ...base, event: "cancel", status: "cancelled", failureKind: "canceled", at: new Date().toISOString() };
@@ -104,7 +115,9 @@ export async function runTaskWithLifecycle(input: {
     }
     await checkCancellation();
     await input.sink.markSucceeded?.(input.row.id, input.runId);
-    await emit({ ...base, event: "finish", status: "succeeded", at: new Date().toISOString() }, input.hooks?.onFinish);
+    if (finishLifecycle) {
+      await emit({ ...base, event: "finish", status: "succeeded", at: new Date().toISOString() }, input.hooks?.onFinish);
+    }
     return { status: "succeeded" };
   } catch (error) {
     const normalized = toTaskExecutionError(error);
