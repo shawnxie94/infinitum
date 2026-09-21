@@ -7,6 +7,39 @@ import type { Workflow } from "@mastra/core/workflows";
 
 import type { TaskExecutionContext, TaskLifecycleEvent } from "./lifecycle";
 
+export type TaskStepStatus = "running" | "succeeded" | "failed" | "partial" | "cancelled";
+
+/** Durable step identity shared by Mastra, task lifecycle and provider usage audit. */
+export type TaskStepIdentity = {
+  stepId: string;
+  workflowId?: string;
+  workflowRunId?: string;
+  taskRunId?: string;
+};
+
+/** The framework-owned checkpoint projection for one persisted Mastra step. */
+export type TaskStepCheckpoint = TaskStepIdentity & {
+  version: 1;
+  attempt: number;
+  retryCount: number;
+  status: TaskStepStatus;
+  startedAt: string;
+  finishedAt?: string;
+  failureKind?: string;
+  errorMessage?: string;
+};
+
+export type TaskStepLifecycleEvent = TaskStepIdentity & {
+  attempt: number;
+  retryCount: number;
+  event: "start" | "finish" | "error" | "cancel";
+  status: TaskStepStatus;
+  failureKind?: string;
+  errorMessage?: string;
+  checkpoint: TaskStepCheckpoint;
+  at: string;
+};
+
 /** BackgroundTaskRun 行的最小投影（body 启动时由 sink 重新读取，保证拿到最新检查点）。 */
 export type TaskRunSnapshot = {
   id: string;
@@ -29,8 +62,10 @@ export type WorkflowTaskSink = {
   markCancelled?(taskRunId: string, message?: string): Promise<void>;
   /** D6 终态兜底：业务体未写自身终态即崩溃时，把 BackgroundTaskRun 落到 failed。 */
   markFailed?(taskRunId: string, message: string, failureKind?: string): Promise<void>;
-  /** 通用生命周期投影；业务层仍可追加自己的 timeline/usage 指标。 */
+  /** 通用任务生命周期投影；不替代 step 级事件。 */
   projectLifecycle?(event: TaskLifecycleEvent): Promise<void>;
+  /** 每个 Mastra step 的持久化生命周期与 checkpoint 投影。 */
+  projectStep?(event: TaskStepLifecycleEvent): Promise<void>;
 };
 
 export type TaskWorkflow = Workflow<any, any, any, any, any, any, any>;

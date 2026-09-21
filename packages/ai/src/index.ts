@@ -14,3 +14,10 @@ export {
 } from "./workflows/cancellable";
 export { classifyTaskError, isCancellationError, TaskCancellationError, TaskExecutionError, toTaskExecutionError } from "./orchestration/errors";
 export { runTaskWithLifecycle } from "./orchestration/lifecycle";
+export type {
+  TaskStepCheckpoint,
+  TaskStepIdentity,
+  TaskStepLifecycleEvent,
+  TaskStepStatus,
+} from "./orchestration/types";
+export type { StepExecutionIdentity } from "./provider/types";

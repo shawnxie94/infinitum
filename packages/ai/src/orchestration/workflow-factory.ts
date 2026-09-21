@@ -24,7 +24,7 @@ export function createTaskRunWorkflow(input: {
     id: `${input.id}-execute`,
     inputSchema,
     outputSchema,
-    execute: async ({ inputData, abortSignal }) => {
+    execute: async ({ inputData, abortSignal, runId, retryCount }) => {
       const row = await input.sink.getTaskRun(inputData.taskRunId);
       if (!row) {
         return { status: "missing" };
@@ -34,6 +34,10 @@ export function createTaskRunWorkflow(input: {
         body: input.body,
         sink: input.sink,
         signal: abortSignal,
+        workflowId: input.id,
+        stepId: `${input.id}-execute`,
+        runId,
+        retryCount,
         cancelPollMs: 1_000,
       });
       return { status: result.status };
@@ -81,7 +85,7 @@ export function createStagedTaskRunWorkflow(input: {
       id: `${input.id}-${stage.id}`,
       inputSchema,
       outputSchema: stagedOutputSchema,
-      execute: async ({ inputData, abortSignal }) => {
+      execute: async ({ inputData, abortSignal, runId, retryCount }) => {
         const row = await input.sink.getTaskRun(inputData.taskRunId);
         if (!row) return { taskRunId: inputData.taskRunId, status: "missing" };
         const result = await runTaskWithLifecycle({
@@ -89,6 +93,10 @@ export function createStagedTaskRunWorkflow(input: {
           body: (taskRun, context) => stage.body(taskRun, context!),
           sink: input.sink,
           signal: abortSignal,
+          workflowId: input.id,
+          stepId: `${input.id}-${stage.id}`,
+          runId,
+          retryCount,
           terminal: index === input.stages.length - 1,
           startLifecycle: index === 0,
           finishLifecycle: index === input.stages.length - 1,

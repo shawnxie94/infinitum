@@ -254,6 +254,7 @@ export type AiProviderOptions = {
   onAttempt?: (event: {
     usageKey?: string;
     attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair";
+    step?: { stepId: string; workflowId?: string; workflowRunId?: string; taskRunId?: string };
   }) => void;
   /** Embedding 召回配置；缺省或未启用时 provider 不具备 embedTexts 能力。 */
   embedding?: RuntimeConfig["embedding"] | null;
@@ -271,6 +272,7 @@ export type AiCallUsage = {
   tokenUsageSource?: "provider" | "estimated" | "mixed";
   model?: string;
   attemptType?: "initial" | "transient_retry" | "json_retry";
+  step?: { stepId: string; workflowId?: string; workflowRunId?: string; taskRunId?: string };
 };
 
 export type CompletionOptions = {

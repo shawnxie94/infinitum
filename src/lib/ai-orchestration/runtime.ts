@@ -7,6 +7,7 @@ import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@inf
 import { createStagedTaskRunWorkflow, createTaskRunWorkflow, type TaskBody, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
 import { createDomainTaskRunWorkflow } from "@infinitum/ai/orchestration/task-definition";
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
+import type { TaskStepLifecycleEvent } from "@infinitum/ai/orchestration/types";
 
 /**
  * 主仓侧编排接线（spec P1b-P4/D11）：
@@ -58,6 +59,22 @@ const sink: WorkflowTaskSink = {
         status: "failed",
         finishedAt: new Date(),
         errorSummary: `${failureKind ? `[${failureKind}] ` : ""}${message}`.slice(0, 500),
+      },
+    });
+  },
+  async projectStep(event: TaskStepLifecycleEvent) {
+    const statusLabel = {
+      running: "运行中",
+      succeeded: "已完成",
+      failed: "失败",
+      partial: "部分完成",
+      cancelled: "已取消",
+    }[event.status];
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: event.taskRunId, status: { in: ["queued", "running"] } },
+      data: {
+        progressLabel: `步骤 ${event.stepId}：${statusLabel}`,
+        ...(event.errorMessage ? { errorSummary: `[${event.failureKind ?? "unknown"}] ${event.errorMessage}`.slice(0, 500) } : {}),
       },
     });
   },

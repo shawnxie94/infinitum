@@ -21,6 +21,7 @@ const row: TaskRunSnapshot = {
 
 function createSink(overrides: Partial<WorkflowTaskSink> = {}) {
   const events: string[] = [];
+  const stepEvents: string[] = [];
   const sink: WorkflowTaskSink = {
     getTaskRun: async () => row,
     isCancellationRequested: async () => false,
@@ -29,9 +30,10 @@ function createSink(overrides: Partial<WorkflowTaskSink> = {}) {
     markCancelled: async () => { events.push("cancelled"); },
     markFailed: async (_id, _message, kind) => { events.push(`failed:${kind}`); },
     projectLifecycle: async (event) => { events.push(event.event); },
+    projectStep: async (event) => { stepEvents.push(`${event.stepId}:${event.event}:${event.status}`); },
     ...overrides,
   };
-  return { sink, events };
+  return { sink, events, stepEvents };
 }
 
 describe("framework capability evolution", () => {
@@ -46,7 +48,7 @@ describe("framework capability evolution", () => {
   });
 
   it("projects successful lifecycle and passes an abort-aware context", async () => {
-    const { sink, events } = createSink();
+    const { sink, events, stepEvents } = createSink();
     let checked = false;
     const result = await runTaskWithLifecycle({
       row,
@@ -60,6 +62,11 @@ describe("framework capability evolution", () => {
     expect(result.status).toBe("succeeded");
     expect(checked).toBe(true);
     expect(events).toEqual(["started", "start", "succeeded", "finish"]);
+    expect(stepEvents).toEqual([
+      "daily_report_generate-task:start:running",
+      "daily_report_generate-task:finish:succeeded",
+    ]);
+    expect(stepEvents.every((event) => event.includes("generate-task"))).toBe(true);
   });
 
   it("maps cooperative cancellation to cancelled instead of failed", async () => {

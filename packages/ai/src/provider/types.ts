@@ -9,6 +9,13 @@ export type ChatRole = "system" | "user" | "assistant";
 
 export type ChatMessage = { role: ChatRole; content: string };
 
+export type StepExecutionIdentity = {
+  stepId: string;
+  workflowId?: string;
+  workflowRunId?: string;
+  taskRunId?: string;
+};
+
 export type ModelApiConfig = {
   apiKey?: string | null;
   baseURL?: string | null;
@@ -27,6 +34,8 @@ export type CompletionRequest = {
   signal?: AbortSignal;
   /** 用量归集键（网关 onUsage 透传）。 */
   usageKey?: string;
+  /** 当前 Mastra step，用于 usage/attempt 按 step 归因。 */
+  step?: StepExecutionIdentity;
   /** 结构化输出（可选）：提供时走模型侧 JSON Schema 约束解码（generateObject），
    * 语法错误在模型侧消除；端点不支持时传输层自动回退 json_object 模式。 */
   schema?: ZodType;
@@ -42,6 +51,7 @@ export type UsageSnapshot = {
   tokenUsageSource: "provider" | "estimated" | "mixed";
   model: string;
   attemptType?: UsageAttemptType;
+  step?: StepExecutionIdentity;
 };
 
 export type CompletionResult = {
@@ -73,7 +83,7 @@ export type ModelGatewayOptions = {
   /** usage 上报（逐次调用）。 */
   onUsage?: (usage: UsageSnapshot, usageKey?: string) => void;
   /** 通用 attempt 分类；不携带 token，供产品层审计 retry/fallback 次数。 */
-  onAttempt?: (event: { usageKey?: string; attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair" }) => void;
+  onAttempt?: (event: { usageKey?: string; attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair"; step?: StepExecutionIdentity }) => void;
 };
 
 type JsonParseRetryPromptBuilder = (userContent: string, error: Error) => string;
@@ -90,6 +100,8 @@ export type JsonCompleteRequest = {
   /** 域级执行配置（不同 modelApi 的熔断与回退）。缺省用 defaultModelApi。 */
   modelApi?: ModelApiConfig;
   usageKey?: string;
+  /** 当前 Mastra step，用于 usage/attempt 按 step 归因。 */
+  step?: StepExecutionIdentity;
   /** 日报阶段上下文模式：多轮对话 transcript，由网关维护追加。 */
   stageContext?: StageContext;
   validationFeedback?: StageValidationFeedback;

@@ -5,8 +5,16 @@ export type UsageAttemptType =
   | "json_retry"
   | "business_repair";
 
+export type UsageStepIdentity = {
+  stepId: string;
+  workflowId?: string;
+  workflowRunId?: string;
+  taskRunId?: string;
+};
+
 export type UsageEvent = {
   usageKey: string;
+  step?: UsageStepIdentity;
   attemptType: UsageAttemptType;
   promptTokens: number;
   completionTokens: number;
@@ -18,6 +26,7 @@ export type UsageSummary = {
   calls: number;
   byKey: Record<string, { calls: number; promptTokens: number; completionTokens: number; totalTokens: number; cachedTokens: number }>;
   byAttempt: Record<UsageAttemptType, number>;
+  byStep: Record<string, { calls: number; totalTokens: number }>;
 };
 
 export function createUsageInterceptor(onEvent?: (event: UsageEvent) => void) {
@@ -39,6 +48,7 @@ export function createUsageInterceptor(onEvent?: (event: UsageEvent) => void) {
     },
     summary(): UsageSummary {
       const byKey: UsageSummary["byKey"] = {};
+      const byStep: UsageSummary["byStep"] = {};
       const byAttempt: UsageSummary["byAttempt"] = {
         initial: 0,
         transport_retry: 0,
@@ -48,6 +58,12 @@ export function createUsageInterceptor(onEvent?: (event: UsageEvent) => void) {
       };
       for (const event of events) {
         byAttempt[event.attemptType] += 1;
+        if (event.step?.stepId) {
+          const step = byStep[event.step.stepId] ?? { calls: 0, totalTokens: 0 };
+          step.calls += 1;
+          step.totalTokens += event.totalTokens;
+          byStep[event.step.stepId] = step;
+        }
         const current = byKey[event.usageKey] ?? { calls: 0, promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedTokens: 0 };
         current.calls += 1;
         current.promptTokens += event.promptTokens;
@@ -56,7 +72,7 @@ export function createUsageInterceptor(onEvent?: (event: UsageEvent) => void) {
         current.cachedTokens += event.cachedTokens ?? 0;
         byKey[event.usageKey] = current;
       }
-      return { calls: events.length, byKey, byAttempt };
+      return { calls: events.length, byKey, byAttempt, byStep };
     },
   };
 }

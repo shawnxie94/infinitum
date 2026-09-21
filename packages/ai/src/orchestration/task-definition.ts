@@ -2,12 +2,16 @@ import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
 import { runTaskWithLifecycle } from "./lifecycle";
-import type { WorkflowTaskSink } from "./types";
+import type { TaskStepCheckpoint, WorkflowTaskSink } from "./types";
 
 export type DomainTaskContext = {
   signal: AbortSignal;
   taskRunId: string;
+  workflowId?: string;
+  stepId: string;
+  retryCount: number;
   attempt: number;
+  checkpoint: TaskStepCheckpoint;
   checkCancellation: () => Promise<void>;
 };
 
@@ -67,11 +71,26 @@ export function createDomainTaskWorkflow(definition: DomainTaskDefinition) {
       id: `${task.kind}-${stage.id}`,
       inputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
       outputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
-      execute: async ({ inputData, abortSignal }) => {
+      execute: async ({ inputData, abortSignal, runId, retryCount }) => {
+        const stepId = `${task.kind}-${stage.id}`;
         const context: DomainTaskContext = {
           signal: abortSignal ?? new AbortController().signal,
           taskRunId: inputData.taskRunId,
+          workflowId: task.kind,
+          stepId,
+          retryCount: retryCount ?? 0,
           attempt: 1,
+          checkpoint: {
+            version: 1,
+            taskRunId: inputData.taskRunId,
+            workflowId: task.kind,
+            workflowRunId: runId,
+            stepId,
+            attempt: 1,
+            retryCount: retryCount ?? 0,
+            status: "running",
+            startedAt: new Date().toISOString(),
+          },
           checkCancellation: async () => {
             if (abortSignal?.aborted) throw new Error("Task aborted");
           },
@@ -111,13 +130,17 @@ export function createDomainTaskRunWorkflow(input: {
       id: `${task.kind}-${stage.id}`,
       inputSchema: taskInputSchema,
       outputSchema: taskOutputSchema,
-      execute: async ({ inputData, abortSignal }) => {
+      execute: async ({ inputData, abortSignal, runId, retryCount }) => {
         const row = await input.sink.getTaskRun(inputData.taskRunId);
         if (!row) return { taskRunId: inputData.taskRunId, status: "missing" };
         const result = await runTaskWithLifecycle({
           row,
           sink: input.sink,
           signal: abortSignal,
+          workflowId: task.kind,
+          stepId: `${task.kind}-${stage.id}`,
+          runId,
+          retryCount,
           terminal: index === task.stages.length - 1,
           startLifecycle: index === 0,
           finishLifecycle: index === task.stages.length - 1,
@@ -126,7 +149,11 @@ export function createDomainTaskRunWorkflow(input: {
             const domainContext: DomainTaskContext = {
               signal: context!.signal,
               taskRunId: inputData.taskRunId,
+              workflowId: task.kind,
+              stepId: `${task.kind}-${stage.id}`,
+              retryCount: context!.retryCount,
               attempt: context!.attempt,
+              checkpoint: context!.checkpoint,
               checkCancellation: context!.checkCancellation,
             };
             await stage.execute(taskRun, domainContext);

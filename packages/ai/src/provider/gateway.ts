@@ -13,6 +13,7 @@ import type {
   ModelTransport,
   StageContext,
   UsageSnapshot,
+  StepExecutionIdentity,
 } from "./types";
 
 export { InvalidJsonModelResponse as InvalidJsonModelResponseError };
@@ -53,7 +54,7 @@ export type ModelGateway = {
   readonly defaultModelApi: ModelApiConfig;
   completeText(
     request: CompletionRequest,
-    execution: { config: ModelApiConfig; attemptType?: UsageSnapshot["attemptType"] },
+    execution: { config: ModelApiConfig; attemptType?: UsageSnapshot["attemptType"]; step?: StepExecutionIdentity },
   ): Promise<{ text: string; usage: UsageSnapshot } | null>;
   /** JSON 任务：解析重试（无 stageContext）或阶段上下文多轮（有 stageContext）。parse 抛 InvalidJsonModelResponse 触发重试。 */
   completeJson<T>(request: JsonCompleteRequest, parse: (output: string) => T): Promise<T | null>;
@@ -98,14 +99,16 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     config: ModelApiConfig,
     request: CompletionRequest,
     attemptType: UsageSnapshot["attemptType"],
+    step?: StepExecutionIdentity,
   ): Promise<{ text: string; usage: UsageSnapshot } | null> {
     if (!config.apiKey) return null;
     options.onAttempt?.({
       usageKey: request.usageKey,
       attemptType: !attemptType || attemptType === "stage_context" ? "initial" : attemptType,
+      step,
     });
     const result = await transport(request, config);
-    const usage: UsageSnapshot = { ...result.usage, attemptType };
+    const usage: UsageSnapshot = { ...result.usage, attemptType, step };
     options.onUsage?.(usage, request.usageKey);
     if (request.requireCompleteJson && result.finishReason === "length") {
       throw new InvalidJsonModelResponse(
@@ -120,12 +123,13 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     request: CompletionRequest,
     config: ModelApiConfig,
     attemptType: UsageSnapshot["attemptType"],
+    step?: StepExecutionIdentity,
   ): Promise<{ text: string; usage: UsageSnapshot } | null> {
     const isDefaultModel = isSameModelApiConfig(config, options.defaultModelApi);
     const selectedConfig = !isDefaultModel && circuitStateFor(config).openUntil > Date.now() ? options.defaultModelApi : config;
 
     try {
-      const result = await completeTextOnce(selectedConfig, request, attemptType);
+      const result = await completeTextOnce(selectedConfig, request, attemptType, step);
       if (!isDefaultModel && isSameModelApiConfig(selectedConfig, config)) {
         recordSuccess(config);
       }
@@ -138,7 +142,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       }
       const opened = recordFailure(config);
       if (!opened) throw error;
-      return completeTextOnce(options.defaultModelApi, request, "transient_retry");
+      return completeTextOnce(options.defaultModelApi, request, "transient_retry", step);
     }
   }
 
@@ -178,7 +182,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     },
 
     async completeText(request, execution) {
-      return completeTextWithCircuitBreaker(request, execution.config, execution.attemptType ?? "initial");
+      return completeTextWithCircuitBreaker(request, execution.config, execution.attemptType ?? "initial", execution.step ?? request.step);
     },
 
     async completeJson<T>(rawRequest: JsonCompleteRequest, parse: (output: string) => T): Promise<T | null> {
@@ -196,6 +200,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
           { messages, requireCompleteJson: true, usageKey: request.usageKey },
           config,
           "stage_context",
+          request.step,
         );
         const output = result?.text ?? null;
         const normalized = output?.trim() ?? "";
@@ -227,9 +232,11 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
               requireCompleteJson: true,
               usageKey: request.usageKey,
               schema: request.schema,
+              step: request.step,
             },
             config,
             attempt > 0 ? "json_retry" : "initial",
+            request.step,
           );
         } catch (error) {
           if (!isInvalidJsonModelResponse(error) || attempt >= jsonParseRetryCount) throw error;

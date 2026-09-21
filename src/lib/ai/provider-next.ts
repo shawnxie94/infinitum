@@ -157,6 +157,7 @@ export function createAiProvider(
           tokenUsageSource: usage.tokenUsageSource,
           model: usage.model,
           attemptType: usage.attemptType === "stage_context" ? "initial" : usage.attemptType,
+          step: usage.step,
         },
         usageKey,
       );
