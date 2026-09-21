@@ -48,7 +48,7 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
     effects: ["item_write", "cluster_write"],
     checkpoint: "pipelineCheckpointJson",
   },
-  { kind: "item_reanalyze", mode: "handler", stages: ["reanalyze"], effects: ["item_write"] },
+  { kind: "item_reanalyze", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write", "cluster_write"] },
   { kind: "item_regenerate_translation", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
   { kind: "item_regenerate_summary", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
   { kind: "cluster_regenerate_summary", mode: "handler", stages: ["read", "ai_call", "writeback"], effects: ["cluster_write"] },

@@ -20,10 +20,12 @@ import {
   executeItemReparseAggregationsTask,
   deleteExpiredItems,
   finalizeItemCleanup,
+  generateItemReanalysisUnderstanding,
   generateItemRegenerationUnderstanding,
   persistItemRegeneration,
   prepareItemCleanup,
   readItemForRegeneration,
+  reanalyzeItem,
   type ItemRegenerationInput,
   type RegenerationTarget,
 } from "@/lib/items/service";
@@ -79,6 +81,49 @@ type ItemCleanupStagePayload = {
   totalDeleted?: number;
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
+
+function createItemReanalyzeDefinition(): DomainTaskDefinition {
+  return createDomainTask({
+    kind: "item_reanalyze",
+    stages: [
+      {
+        id: "read",
+        execute: async (input) => {
+          const taskRun = asBackgroundTaskRun(input);
+          if (!taskRun.entityId) throw new Error("Task entityId is required.");
+          return { itemId: taskRun.entityId };
+        },
+      },
+      {
+        id: "ai_call",
+        execute: async (input) => {
+          const payload = input as { itemId: string };
+          return { ...payload, understanding: await generateItemReanalysisUnderstanding(payload.itemId) };
+        },
+      },
+      {
+        id: "validate",
+        execute: async (input) => {
+          const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
+          if (!payload.understanding?.diagnostics) throw new Error("Item reanalysis result is missing diagnostics.");
+          return payload;
+        },
+      },
+      {
+        id: "writeback",
+        execute: async (input) => {
+          const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
+          return {
+            ...payload,
+            result: await reanalyzeItem(payload.itemId, { precomputedUnderstanding: payload.understanding }),
+          };
+        },
+      },
+    ],
+    effects: ["item_write", "cluster_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
 
 function createClusterMergeCleanPairDefinition(): DomainTaskDefinition {
   return createDomainTask({
@@ -222,6 +267,9 @@ const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void
 /** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
 export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
   HANDLER_KINDS.map((kind) => {
+    if (kind === "item_reanalyze") {
+      return [kind, createItemReanalyzeDefinition()];
+    }
     if (kind === "cluster_merge_precompute_clean_pairs") {
       return [kind, createClusterMergeCleanPairDefinition()];
     }

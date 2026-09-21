@@ -40,6 +40,7 @@ export type RegenerationTarget = "translation" | "summary";
 
 export type RegenerationOptions = {
   aiProvider?: AiProvider;
+  precomputedUnderstanding?: ItemUnderstandingResult;
 };
 
 type AggregationReparseCandidate = {
@@ -603,6 +604,19 @@ async function syncItemProcessingRetryState(itemId: string) {
   });
 }
 
+export async function generateItemReanalysisUnderstanding(itemId: string, options?: RegenerationOptions) {
+  const item = await prisma.item.findUnique({
+    where: { id: itemId },
+    include: {
+      _count: { select: { aggregationSplitChildren: true } },
+      source: true,
+    },
+  });
+  if (!item) throw new Error("Item not found");
+  const aiProvider = await resolveAiProvider(options?.aiProvider);
+  return resolveItemUnderstanding(aiProvider, item);
+}
+
 export async function reanalyzeItem(itemId: string, options?: RegenerationOptions): Promise<ItemReanalyzeOutcome> {
   const item = await prisma.item.findUnique({
     where: { id: itemId },
@@ -622,7 +636,8 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
 
   const hasActiveSplitChildren = item._count.aggregationSplitChildren > 0;
   const aiProvider = await resolveAiProvider(options?.aiProvider);
-  const understanding = await resolveItemUnderstanding(aiProvider, item);
+  const understanding = options?.precomputedUnderstanding
+    ?? await resolveItemUnderstanding(aiProvider, item);
   const summaryText = understanding.diagnostics.summaryValid
     ? understanding.summary
     : item.summaryText;
