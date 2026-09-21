@@ -91,3 +91,15 @@ INFINITUM_EMBED_URL=... INFINITUM_EMBED_MODEL=... INFINITUM_EMBED_KEY=... \
 
 - 生产库：`root@152.32.230.86` → docker `infinitum-worker-1:/app/data/dev.db`（2026-09-18 快照）
 - 窗口：2026-08-19 ~ 2026-09-18
+
+## 生产快照与 snapshot-gate（2026-09-21）
+
+- `snapshots/` 目录（**已 gitignore**）：`prod-snapshot-2026-09-21.db`（生产库 `content_clusters` + `cluster_decisions` 两表瘦身导出，11228 聚类 / 41149 判定）与 `prod-freeze-2026-09-21.json`（同一快照的冻结基线，2195 对）。
+- 重跑快照维度回归门：
+
+  ```bash
+  npm run eval:snapshot-gate -- --snapshot docs/eval/snapshots/prod-snapshot-2026-09-21.db --freeze docs/eval/snapshots/prod-freeze-2026-09-21.json
+  ```
+
+- 基线冻结时点 = 2026-09-21（生产 v0.2.3-rc8 之后、mastra 迁移合入前）；此后任何影响合并判定的代码改动跑此门即可对比生产基线（默认容忍 ≤10 变化，`--strict` 归零）。
+- 换新基线：从生产重新导出两表（worker 容器内 sqlite3 对 `content_clusters`/`cluster_decisions` ATTACH 抽表），再 `eval-cluster-baseline.ts --freeze` 生成新 JSON。

@@ -55,6 +55,9 @@ next-env.d.ts
 /prisma/schema.sql
 /.env.docker
 
+# eval snapshot databases (exported from production; see docs/eval/snapshots/)
+/docs/eval/snapshots/
+
 # local runtime / deployment files
 /config/infinitum.config.json
 /docker-compose.yml
