@@ -316,7 +316,13 @@ export async function runWorkerCycle(options?: {
 
   if (claimedTaskRun) {
     // D10 路由：workflow kind → Mastra workflow；plain kind → handler 直调。
-    await (options?.executeTaskRun ?? dispatchTaskRun)(claimedTaskRun);
+    // 单任务异常只落该任务失败，不允许打死 worker 循环（handler 已写自身终态后
+    // rethrow 的场景，recoverStaleTaskRuns 不会再碰它）。
+    try {
+      await (options?.executeTaskRun ?? dispatchTaskRun)(claimedTaskRun);
+    } catch (error) {
+      console.error(`[Worker] Task ${claimedTaskRun.id} (${claimedTaskRun.kind}) crashed the handler:`, error);
+    }
   }
 
   return {
