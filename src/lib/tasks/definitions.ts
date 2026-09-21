@@ -55,7 +55,7 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   { kind: "precompute", mode: "handler", stages: ["cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates"], effects: ["entity_write", "embedding_write"] },
   { kind: "cluster_merge_precompute_clean_pairs", mode: "handler", stages: ["read", "compute", "writeback"], effects: ["embedding_write"] },
   { kind: "item_cleanup", mode: "handler", stages: ["read", "delete", "cluster_finalize"], effects: ["item_delete"] },
-  { kind: "item_reparse_aggregations", mode: "handler", stages: ["reparse"], effects: ["item_write"] },
+  { kind: "item_reparse_aggregations", mode: "handler", stages: ["read", "ai_call", "cluster_finalize"], effects: ["item_write", "cluster_write"] },
 ];
 
 // Validate the host catalog against the framework's declarative stage contract.

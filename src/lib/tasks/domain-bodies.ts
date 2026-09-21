@@ -20,6 +20,7 @@ import {
   executeItemReparseAggregationsTask,
   deleteExpiredItems,
   finalizeItemCleanup,
+  executeItemReparseWorkflowStage,
   generateItemReanalysisUnderstanding,
   generateItemRegenerationUnderstanding,
   persistItemRegeneration,
@@ -81,6 +82,16 @@ type ItemCleanupStagePayload = {
   totalDeleted?: number;
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
+
+function createItemReparseDefinition(): DomainTaskDefinition {
+  const stages = ["read", "ai_call", "cluster_finalize"] as const;
+  return createDomainTask({
+    kind: "item_reparse_aggregations",
+    stages: stages.map((id) => ({ id, execute: async (input) => executeItemReparseWorkflowStage(id, input as never) })),
+    effects: ["item_write", "cluster_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
 
 function createItemReanalyzeDefinition(): DomainTaskDefinition {
   return createDomainTask({
@@ -267,6 +278,9 @@ const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void
 /** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
 export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
   HANDLER_KINDS.map((kind) => {
+    if (kind === "item_reparse_aggregations") {
+      return [kind, createItemReparseDefinition()];
+    }
     if (kind === "item_reanalyze") {
       return [kind, createItemReanalyzeDefinition()];
     }

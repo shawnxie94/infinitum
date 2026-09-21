@@ -1408,6 +1408,76 @@ function shouldWriteReparseProgress(processedCount: number, totalCandidates: num
  * aggregationDetectionEnabled=true, the item has not been checked or is in a
  * retriable parse state, and useful source text is available.
  */
+export type ItemReparseWorkflowPayload = {
+  candidateIds: string[];
+  affectedClusterIds: string[];
+  processedCount: number;
+  reparsedCount: number;
+};
+
+async function listItemReparseCandidates(candidateIds?: string[]) {
+  return prisma.item.findMany({
+    where: {
+      ...(candidateIds ? { id: { in: candidateIds } } : {}),
+      status: "processed",
+      OR: [
+        { isAggregation: false, aggregationParseStatus: null },
+        { aggregationParseStatus: { in: RETRIABLE_AGGREGATION_PARSE_STATUSES } },
+      ],
+      AND: [{ OR: [{ fullText: { not: null } }, { rssContent: { not: null } }, { rssExcerpt: { not: null } }] }],
+      source: { is: { aggregationDetectionEnabled: true, enabled: true } },
+    },
+    select: {
+      id: true,
+      sourceId: true,
+      originalTitle: true,
+      originalUrl: true,
+      clusterId: true,
+      publishedAt: true,
+      publishedAtKnown: true,
+      fullText: true,
+      rssContent: true,
+      rssExcerpt: true,
+      source: { select: { name: true } },
+    },
+    orderBy: { publishedAt: "desc" },
+    take: REPARSE_AGGREGATIONS_BATCH_SIZE,
+  });
+}
+
+export async function executeItemReparseWorkflowStage(
+  stage: "read" | "ai_call" | "cluster_finalize",
+  payload: ItemReparseWorkflowPayload = { candidateIds: [], affectedClusterIds: [], processedCount: 0, reparsedCount: 0 },
+): Promise<ItemReparseWorkflowPayload> {
+  if (stage === "read") {
+    const candidates = await listItemReparseCandidates();
+    return { ...payload, candidateIds: candidates.map((candidate) => candidate.id) };
+  }
+  if (stage === "cluster_finalize") {
+    for (const clusterId of payload.affectedClusterIds) await recomputeCluster(clusterId);
+    invalidateFeedCache();
+    return payload;
+  }
+  const runtimeConfig = await getIngestionRuntimeConfig();
+  const aiProvider = createAiProvider(runtimeConfig.modelApi, {
+    itemUnderstanding: runtimeConfig.selectedPromptConfigs?.itemUnderstanding,
+  }, undefined, { aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents });
+  const candidates = await listItemReparseCandidates(payload.candidateIds);
+  const affectedClusterIds = new Set(payload.affectedClusterIds);
+  let reparsedCount = payload.reparsedCount;
+  for (const candidate of candidates) {
+    const result = await reparseAggregationCandidate(candidate, { aiProvider });
+    for (const clusterId of result.affectedClusterIds) affectedClusterIds.add(clusterId);
+    if (result.status === "parsed") reparsedCount += 1;
+  }
+  return {
+    candidateIds: payload.candidateIds,
+    affectedClusterIds: [...affectedClusterIds],
+    processedCount: candidates.length,
+    reparsedCount,
+  };
+}
+
 export async function executeItemReparseAggregationsTask(
   taskRun: { id: string; entityId?: string | null },
   options?: RegenerationOptions,
