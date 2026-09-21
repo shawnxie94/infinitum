@@ -20,7 +20,7 @@ import {
   type RegenerationTarget,
 } from "@/lib/items/service";
 import type { ItemUnderstandingResult } from "@/lib/ai/provider";
-import { executePrecomputeTask } from "@/lib/precompute/service";
+import { executePrecomputeTask, executePrecomputeWorkflowStage, type PrecomputeWorkflowPayload } from "@/lib/precompute/service";
 import { getTaskDefinition } from "@/lib/tasks/definitions";
 import type { TaskBody } from "@infinitum/ai/orchestration/workflow-factory";
 
@@ -71,6 +71,19 @@ type ItemCleanupStagePayload = {
   totalDeleted?: number;
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
+
+function createPrecomputeDefinition(): DomainTaskDefinition {
+  const stages = ["cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates"] as const;
+  return createDomainTask({
+    kind: "precompute",
+    stages: stages.map((id) => ({
+      id,
+      execute: async (input) => executePrecomputeWorkflowStage(id, (input as PrecomputeWorkflowPayload | undefined) ?? undefined),
+    })),
+    effects: ["entity_write", "embedding_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
 
 function createItemCleanupDefinition(): DomainTaskDefinition {
   return createDomainTask({
@@ -175,6 +188,9 @@ const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void
 /** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
 export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
   HANDLER_KINDS.map((kind) => {
+    if (kind === "precompute") {
+      return [kind, createPrecomputeDefinition()];
+    }
     if (kind === "item_cleanup") {
       return [kind, createItemCleanupDefinition()];
     }

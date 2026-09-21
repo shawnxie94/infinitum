@@ -52,7 +52,7 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   { kind: "item_regenerate_translation", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
   { kind: "item_regenerate_summary", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
   { kind: "cluster_regenerate_summary", mode: "handler", stages: ["summarize"], effects: ["cluster_write"] },
-  { kind: "precompute", mode: "handler", stages: ["precompute"], effects: ["entity_write", "embedding_write"] },
+  { kind: "precompute", mode: "handler", stages: ["cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates"], effects: ["entity_write", "embedding_write"] },
   { kind: "cluster_merge_precompute_clean_pairs", mode: "handler", stages: ["clean_pair_precompute"], effects: ["embedding_write"] },
   { kind: "item_cleanup", mode: "handler", stages: ["read", "delete", "cluster_finalize"], effects: ["item_delete"] },
   { kind: "item_reparse_aggregations", mode: "handler", stages: ["reparse"], effects: ["item_write"] },

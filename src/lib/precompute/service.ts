@@ -18,7 +18,12 @@ type PrecomputeStageResult = {
   error?: string;
 };
 
-type AliasMediumRecords = Awaited<ReturnType<typeof autoNormalizeEntityAliases>>["mediumRecords"];
+export type AliasMediumRecords = Awaited<ReturnType<typeof autoNormalizeEntityAliases>>["mediumRecords"];
+export type PrecomputeWorkflowStage = PrecomputeStageResult["key"];
+export type PrecomputeWorkflowPayload = {
+  stages: PrecomputeStageResult[];
+  aliasMediumRecords: AliasMediumRecords;
+};
 
 async function runPrecomputeStage(
   key: PrecomputeStageResult["key"],
@@ -64,6 +69,37 @@ export async function enqueuePrecomputeTask(input?: {
     triggerType: input?.triggerType ?? "manual",
     label: "预计算",
   });
+}
+
+export async function executePrecomputeWorkflowStage(
+  stage: PrecomputeWorkflowStage,
+  payload: PrecomputeWorkflowPayload = { stages: [], aliasMediumRecords: [] },
+): Promise<PrecomputeWorkflowPayload> {
+  const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
+  const embedTexts = runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null;
+  const aiProvider: AiProvider | undefined = runtimeConfig
+    ? createAiProvider(runtimeConfig.modelApi, undefined, undefined, { embedding: runtimeConfig.embedding })
+    : undefined;
+  let stageAliasMediumRecords: AliasMediumRecords = [];
+  const result = await runPrecomputeStage(
+    stage,
+    stage === "cluster_merge_clean_pairs" ? "聚合合并候选" : stage === "entity_alias_check" ? "实体别名自动化" : "实体治理候选",
+    async () => {
+      if (stage === "cluster_merge_clean_pairs") {
+        const value = await precomputeClusterMergeCleanPairs(new Date(), { embedTexts });
+        return `聚合候选 ${value.storedPairs}/${value.candidatePairs} 个（向量提名 ${value.vectorAdmittedPairs}），扫描 ${value.scoredPairs} 对`;
+      }
+      if (stage === "entity_alias_check") {
+        const value = await autoNormalizeEntityAliases(new Date(), aiProvider);
+        stageAliasMediumRecords = value.mediumRecords;
+        return `别名候选 ${value.result.candidatePairs}，仲裁 ${value.result.adjudicatedPairs}，自动合并 ${value.result.autoMergedAliases}，建议 ${value.result.mediumSuggestions}`;
+      }
+      const value = await precomputeEntitySuggestionCandidates(new Date(), { additionalRecords: payload.aliasMediumRecords });
+      return `实体候选 ${value.storedCandidates} 个，扫描 ${value.scannedPairs} 对`;
+    },
+  );
+  const aliasMediumRecords = stage === "entity_alias_check" ? stageAliasMediumRecords : payload.aliasMediumRecords;
+  return { stages: [...payload.stages, result], aliasMediumRecords };
 }
 
 export async function executePrecomputeTask(taskRun: { id: string }) {
