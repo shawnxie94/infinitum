@@ -2,7 +2,7 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { buildDailyReportStageIdentity, DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
-import { HANDLER_TASK_DEFINITIONS, TASK_BODIES } from "@/lib/tasks/domain-bodies";
+import { TASK_BODIES, WORKFLOW_TASK_DEFINITIONS } from "@/lib/tasks/domain-bodies";
 import { getTaskDefinition } from "@/lib/tasks/definitions";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
 import {
@@ -125,7 +125,8 @@ export function getAiRuntime(): AiRuntime {
   if (!runtimeSingleton) {
     const workflows = Object.fromEntries(
       Object.entries(WORKFLOW_KINDS).map(([kind, body]) => {
-        const definition = getTaskDefinition(kind as WorkflowKind);
+        const workflowKind = kind as WorkflowKind;
+        const definition = getTaskDefinition(workflowKind);
         return [
           kind,
           kind === "daily_report_generate"
@@ -156,9 +157,9 @@ export function getAiRuntime(): AiRuntime {
                 },
                 sink,
               })
-            : HANDLER_TASK_DEFINITIONS[kind as keyof typeof HANDLER_TASK_DEFINITIONS]
+            : WORKFLOW_TASK_DEFINITIONS[workflowKind]
             ? createDomainTaskRunWorkflow({
-                definition: HANDLER_TASK_DEFINITIONS[kind as keyof typeof HANDLER_TASK_DEFINITIONS],
+                definition: WORKFLOW_TASK_DEFINITIONS[workflowKind],
                 sink,
               })
             : createTaskRunWorkflow({

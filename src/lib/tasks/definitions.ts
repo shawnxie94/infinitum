@@ -30,10 +30,7 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   {
     kind: "ingestion",
     mode: "workflow",
-    // The service still couples these phases through in-memory state. Keep the
-    // names as an explicit boundary contract, but do not expose false
-    // stage-level retry/resume semantics yet.
-    stageExecution: "monolithic_boundary_adapter",
+    stageExecution: "staged",
     stages: ["source_sync", "item_processing", "cluster_merge", "cluster_finalize"],
     effects: ["item_write", "cluster_write", "embedding_write"],
     checkpoint: "pipelineCheckpointJson",
@@ -41,9 +38,7 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   {
     kind: "item_processing_recovery",
     mode: "workflow",
-    // Candidate selection, retries and persistence currently share mutable
-    // recovery state; splitting them would risk repeating item side effects.
-    stageExecution: "monolithic_boundary_adapter",
+    stageExecution: "staged",
     stages: ["recovery_batch", "recovery_persist"],
     effects: ["item_write", "cluster_write"],
     checkpoint: "pipelineCheckpointJson",

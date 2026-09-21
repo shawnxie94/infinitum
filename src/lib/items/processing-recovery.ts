@@ -27,7 +27,7 @@ import {
   updateTaskRun,
 } from "@/lib/tasks/service";
 
-type RecoveryCandidate = {
+export type RecoveryCandidate = {
   id: string;
   originalTitle: string;
   clusterId: string | null;
@@ -50,7 +50,7 @@ type RecoveryCandidate = {
   reasons: ItemProcessingRecoveryReason[];
 };
 
-async function listRecoveryCandidates(now: Date): Promise<RecoveryCandidate[]> {
+export async function listRecoveryCandidates(now: Date): Promise<RecoveryCandidate[]> {
   const since = new Date(now.getTime() - ITEM_PROCESSING_RECOVERY_LOOKBACK_MS);
   const rows = await prisma.item.findMany({
     where: {

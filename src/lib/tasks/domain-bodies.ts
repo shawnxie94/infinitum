@@ -32,6 +32,8 @@ import {
 } from "@/lib/items/service";
 import type { ItemUnderstandingResult } from "@/lib/ai/provider";
 import { executePrecomputeTask, executePrecomputeWorkflowStage, type PrecomputeWorkflowPayload } from "@/lib/precompute/service";
+import { executeIngestionWorkflowStage, type IngestionWorkflowStage } from "@/lib/ingestion/workflow-stages";
+import { executeRecoveryWorkflowStage } from "@/lib/items/recovery-workflow-stages";
 import { getTaskDefinition } from "@/lib/tasks/definitions";
 import type { TaskBody } from "@infinitum/ai/orchestration/workflow-factory";
 
@@ -82,6 +84,31 @@ type ItemCleanupStagePayload = {
   totalDeleted?: number;
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
+
+function createIngestionDefinition(): DomainTaskDefinition {
+  const stages: IngestionWorkflowStage[] = ["source_sync", "item_processing", "cluster_merge", "cluster_finalize"];
+  return createDomainTask({
+    kind: "ingestion",
+    stages: stages.map((id) => ({
+      id,
+      execute: async (input, context) => executeIngestionWorkflowStage(id, input, context),
+    })),
+    effects: ["item_write", "cluster_write", "embedding_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
+
+function createRecoveryDefinition(): DomainTaskDefinition {
+  return createDomainTask({
+    kind: "item_processing_recovery",
+    stages: ["recovery_batch", "recovery_persist"].map((id) => ({
+      id,
+      execute: async (input, context) => executeRecoveryWorkflowStage(id as "recovery_batch" | "recovery_persist", input, context),
+    })),
+    effects: ["item_write", "cluster_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
 
 function createItemReparseDefinition(): DomainTaskDefinition {
   const stages = ["read", "ai_call", "cluster_finalize"] as const;
@@ -300,12 +327,14 @@ export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition>
       return [kind, createItemRegenerationDefinition(kind, kind.endsWith("translation") ? "translation" : "summary")];
     }
     const definition = getTaskDefinition(kind);
+    const handler = HANDLER_STAGE_BODIES[kind as HandlerKind];
+    if (!handler) throw new Error(`No handler stage body registered for ${kind}.`);
     return [kind, createDomainTask({
       kind,
       stages: definition.stages.map((id) => ({
         id,
         execute: async (input) => {
-          await HANDLER_STAGE_BODIES[kind](input);
+          await handler(input);
           return input;
         },
       })),
@@ -314,3 +343,9 @@ export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition>
     })];
   }),
 ) as Record<HandlerKind, DomainTaskDefinition>;
+
+export const WORKFLOW_TASK_DEFINITIONS: Partial<Record<BackgroundTaskRun["kind"], DomainTaskDefinition>> = {
+  ingestion: createIngestionDefinition(),
+  item_processing_recovery: createRecoveryDefinition(),
+  ...HANDLER_TASK_DEFINITIONS,
+};

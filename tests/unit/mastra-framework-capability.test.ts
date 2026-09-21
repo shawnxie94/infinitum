@@ -13,7 +13,7 @@ import {
   buildDailyReportStageIdentity,
   DAILY_REPORT_WORKFLOW_STAGES,
 } from "../../src/lib/daily-report/generation";
-import { HANDLER_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
+import { HANDLER_TASK_DEFINITIONS, WORKFLOW_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
 
 const row: TaskRunSnapshot = {
   id: "task-1",
@@ -163,8 +163,8 @@ describe("framework capability evolution", () => {
       "item_processing_recovery",
     ]);
     expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stageExecution).toBe("staged");
-    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "ingestion")?.stageExecution).toBe("monolithic_boundary_adapter");
-    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "item_processing_recovery")?.stageExecution).toBe("monolithic_boundary_adapter");
+    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "ingestion")?.stageExecution).toBe("staged");
+    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "item_processing_recovery")?.stageExecution).toBe("staged");
     expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(11);
     expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stages).toEqual([
       ...DAILY_REPORT_WORKFLOW_STAGES,
@@ -172,6 +172,12 @@ describe("framework capability evolution", () => {
     expect(Object.keys(HANDLER_TASK_DEFINITIONS).sort()).toEqual(
       TASK_DEFINITIONS.filter((definition) => definition.mode === "handler").map((definition) => definition.kind).sort(),
     );
+    expect(WORKFLOW_TASK_DEFINITIONS.ingestion?.stages.map((stage) => stage.id)).toEqual([
+      "source_sync", "item_processing", "cluster_merge", "cluster_finalize",
+    ]);
+    expect(WORKFLOW_TASK_DEFINITIONS.item_processing_recovery?.stages.map((stage) => stage.id)).toEqual([
+      "recovery_batch", "recovery_persist",
+    ]);
     for (const definition of Object.values(HANDLER_TASK_DEFINITIONS)) {
       expect(definition.stages.length).toBeGreaterThanOrEqual(1);
       expect(definition.stages.every((stage) => typeof stage.execute === "function")).toBe(true);

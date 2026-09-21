@@ -70,7 +70,7 @@ import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 
 export const DEFAULT_MAX_FEED_ITEMS_TO_SCAN = 500;
 
-type ResolvedRunOptions = RunIngestionOptions & {
+export type ResolvedRunOptions = RunIngestionOptions & {
   now: Date;
   taskTimelineModelNames: IngestionTimelineModelNames;
   aiUsage: ReturnType<typeof createTaskAiUsageTracker>;
@@ -140,7 +140,7 @@ function resolvePromptModelName(
 }
 
 
-async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promise<ResolvedRunOptions> {
+export async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promise<ResolvedRunOptions> {
   const now = options?.now ?? new Date();
   const aiUsage = createTaskAiUsageTracker();
   const runtimeConfig =
@@ -224,7 +224,7 @@ async function resolveRunOptions(options?: Partial<RunIngestionOptions>): Promis
   };
 }
 
-async function runWithConcurrency(
+export async function runWithConcurrency(
   tasks: Array<() => Promise<void>>,
   concurrency: number,
   options?: {
@@ -254,14 +254,14 @@ async function runWithConcurrency(
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 }
 
-function buildFeedRequestHeaders(source: Source): Record<string, string> {
+export function buildFeedRequestHeaders(source: Source): Record<string, string> {
   return {
     ...(source.feedEtag ? { "If-None-Match": source.feedEtag } : {}),
     ...(source.feedLastModified ? { "If-Modified-Since": source.feedLastModified } : {}),
   };
 }
 
-function buildFeedContentHash(items: Array<{ title?: string | null; link?: string | null; isoDate?: string | null; pubDate?: string | null; content?: string | null; "content:encoded"?: string | null; contentSnippet?: string | null }>) {
+export function buildFeedContentHash(items: Array<{ title?: string | null; link?: string | null; isoDate?: string | null; pubDate?: string | null; content?: string | null; "content:encoded"?: string | null; contentSnippet?: string | null }>) {
   const payload = items.map((item) => ({
     title: item.title?.trim() ?? null,
     link: item.link?.trim() ?? null,
@@ -290,7 +290,7 @@ async function markSourceHealth(
   await updateSourceHealthStatus(sourceId, data);
 }
 
-function getExistingItemForLookup(
+export function getExistingItemForLookup(
   lookup: PreparedFeedItemLookup | null,
   existingByUrlHash: Map<string, Item>,
 ) {
@@ -301,7 +301,7 @@ function getExistingItemForLookup(
   return existingByUrlHash.get(lookup.dedupeKeys.urlHash) ?? null;
 }
 
-function hasItemProcessingFailure(result: ProcessedItemRecord | null) {
+export function hasItemProcessingFailure(result: ProcessedItemRecord | null) {
   return Boolean(
     result?.metrics?.summaryFailed ||
     result?.metrics?.aggregationParseFailed ||
@@ -309,13 +309,13 @@ function hasItemProcessingFailure(result: ProcessedItemRecord | null) {
   );
 }
 
-function buildItemProcessingFailureMessage(result: ProcessedItemRecord) {
+export function buildItemProcessingFailureMessage(result: ProcessedItemRecord) {
   return result.errorMessage
     ? `Item ${result.id}: ${result.errorMessage}`
     : `Item ${result.id}: AI processing failed`;
 }
 
-function dedupePreparedLookupsByDedupeKey<T extends { lookup: PreparedFeedItemLookup | null }>(entries: T[]) {
+export function dedupePreparedLookupsByDedupeKey<T extends { lookup: PreparedFeedItemLookup | null }>(entries: T[]) {
   const seen = new Set<string>();
   const deduped: T[] = [];
 
@@ -338,7 +338,7 @@ function dedupePreparedLookupsByDedupeKey<T extends { lookup: PreparedFeedItemLo
   return deduped;
 }
 
-function shouldEnqueueProcessingRecoveryFromIngestion(input: {
+export function shouldEnqueueProcessingRecoveryFromIngestion(input: {
   summaryFailed: number;
   analysisFailed: number;
   aggregationParseFailed: number;
