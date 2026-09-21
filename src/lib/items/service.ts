@@ -978,6 +978,55 @@ const REPARSE_AGGREGATIONS_BATCH_SIZE = 200;
 const REPARSE_AGGREGATIONS_MIN_TEXT_CHARS = 40;
 const REPARSE_AGGREGATIONS_PROGRESS_UPDATE_INTERVAL = 10;
 
+export type ItemCleanupPlan = {
+  cutoff: Date;
+  estimatedTotal: number;
+  affectedClusterIds: string[];
+};
+
+export async function prepareItemCleanup(): Promise<ItemCleanupPlan> {
+  const schedule = await ensureDefaultItemCleanupSchedule();
+  const cutoff = new Date(Date.now() - schedule.cleanupRetentionDays * 24 * 60 * 60 * 1000);
+  const itemsToClean = await prisma.item.findMany({
+    where: { createdAt: { lt: cutoff } },
+    select: { clusterId: true },
+  });
+  return {
+    cutoff,
+    estimatedTotal: itemsToClean.length,
+    affectedClusterIds: [...new Set(itemsToClean.map((item) => item.clusterId).filter(Boolean))] as string[],
+  };
+}
+
+export async function deleteExpiredItems(
+  plan: ItemCleanupPlan,
+  options?: { checkCancellation?: () => Promise<void>; onProgress?: (deleted: number, total: number) => Promise<void> },
+) {
+  let totalDeleted = 0;
+  while (true) {
+    await options?.checkCancellation?.();
+    const batchItems = await prisma.item.findMany({
+      where: { createdAt: { lt: plan.cutoff } },
+      include: { source: { select: { name: true } } },
+      take: CLEANUP_BATCH_SIZE,
+    });
+    if (batchItems.length === 0) break;
+    await archiveItemDedupeHistories(batchItems, plan.cutoff);
+    const deleted = await prisma.item.deleteMany({ where: { id: { in: batchItems.map((item) => item.id) } } });
+    totalDeleted += deleted.count;
+    await options?.onProgress?.(totalDeleted, plan.estimatedTotal);
+  }
+  return totalDeleted;
+}
+
+export async function finalizeItemCleanup(plan: ItemCleanupPlan, totalDeleted: number) {
+  for (const clusterId of plan.affectedClusterIds) {
+    await recomputeCluster(clusterId);
+  }
+  invalidateFeedCache();
+  return { totalDeleted, affectedClusterCount: plan.affectedClusterIds.length };
+}
+
 export async function executeItemCleanupTask(taskRun: BackgroundTaskRun) {
   const schedule = await ensureDefaultItemCleanupSchedule();
   const retentionDays = schedule.cleanupRetentionDays;

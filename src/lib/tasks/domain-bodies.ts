@@ -10,8 +10,11 @@ import {
   executeItemReanalyzeTask,
   executeItemRegenerationTask,
   executeItemReparseAggregationsTask,
+  deleteExpiredItems,
+  finalizeItemCleanup,
   generateItemRegenerationUnderstanding,
   persistItemRegeneration,
+  prepareItemCleanup,
   readItemForRegeneration,
   type ItemRegenerationInput,
   type RegenerationTarget,
@@ -62,6 +65,51 @@ type ItemRegenerationStagePayload = {
   understanding?: ItemUnderstandingResult;
   result?: ItemRegenerationInput;
 };
+
+type ItemCleanupStagePayload = {
+  plan: { cutoff: string; estimatedTotal: number; affectedClusterIds: string[] };
+  totalDeleted?: number;
+  result?: { totalDeleted: number; affectedClusterCount: number };
+};
+
+function createItemCleanupDefinition(): DomainTaskDefinition {
+  return createDomainTask({
+    kind: "item_cleanup",
+    stages: [
+      {
+        id: "read",
+        execute: async () => {
+          const plan = await prepareItemCleanup();
+          return { plan: { ...plan, cutoff: plan.cutoff.toISOString() } } satisfies ItemCleanupStagePayload;
+        },
+      },
+      {
+        id: "delete",
+        execute: async (input, context) => {
+          const payload = input as ItemCleanupStagePayload;
+          const totalDeleted = await deleteExpiredItems(
+            { ...payload.plan, cutoff: new Date(payload.plan.cutoff) },
+            { checkCancellation: context.checkCancellation },
+          );
+          return { ...payload, totalDeleted };
+        },
+      },
+      {
+        id: "cluster_finalize",
+        execute: async (input) => {
+          const payload = input as ItemCleanupStagePayload;
+          const result = await finalizeItemCleanup(
+            { ...payload.plan, cutoff: new Date(payload.plan.cutoff) },
+            payload.totalDeleted ?? 0,
+          );
+          return { ...payload, result };
+        },
+      },
+    ],
+    effects: ["item_delete"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
 
 function createItemRegenerationDefinition(kind: HandlerKind, target: RegenerationTarget): DomainTaskDefinition {
   return createDomainTask({
@@ -127,6 +175,9 @@ const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void
 /** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
 export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
   HANDLER_KINDS.map((kind) => {
+    if (kind === "item_cleanup") {
+      return [kind, createItemCleanupDefinition()];
+    }
     if (kind === "item_regenerate_translation" || kind === "item_regenerate_summary") {
       return [kind, createItemRegenerationDefinition(kind, kind.endsWith("translation") ? "translation" : "summary")];
     }
