@@ -989,6 +989,13 @@ export async function enqueueClusterSummaryTask(clusterId: string, label?: strin
   });
 }
 
+export async function executeClusterMergeCleanPairWorkflow() {
+  const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
+  return precomputeClusterMergeCleanPairs(new Date(), {
+    embedTexts: runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null,
+  });
+}
+
 export type ClusterSummaryWorkflowPayload = {
   clusterId: string;
   summaryInputHash: string;

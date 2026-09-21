@@ -188,6 +188,9 @@ describe("framework capability evolution", () => {
     expect(HANDLER_TASK_DEFINITIONS.cluster_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "writeback",
     ]);
+    expect(HANDLER_TASK_DEFINITIONS.cluster_merge_precompute_clean_pairs.stages.map((stage) => stage.id)).toEqual([
+      "read", "compute", "writeback",
+    ]);
   });
 
   it("separates usage by task label and retry taxonomy", () => {

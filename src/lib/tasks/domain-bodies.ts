@@ -3,6 +3,7 @@ import type { BackgroundTaskRun } from "@prisma/client";
 import { createDomainTask, type DomainTaskDefinition } from "@infinitum/ai/orchestration/task-definition";
 import {
   executeClusterMergeCleanPairPrecomputeTask,
+  executeClusterMergeCleanPairWorkflow,
   executeClusterSummaryTask,
   generateClusterSummaryWorkflow,
   persistClusterSummaryWorkflow,
@@ -78,6 +79,19 @@ type ItemCleanupStagePayload = {
   totalDeleted?: number;
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
+
+function createClusterMergeCleanPairDefinition(): DomainTaskDefinition {
+  return createDomainTask({
+    kind: "cluster_merge_precompute_clean_pairs",
+    stages: [
+      { id: "read", execute: async () => ({ preparedAt: new Date().toISOString() }) },
+      { id: "compute", execute: async () => executeClusterMergeCleanPairWorkflow() },
+      { id: "writeback", execute: async (input) => input },
+    ],
+    effects: ["embedding_write"],
+    checkpoint: "pipelineCheckpointJson",
+  });
+}
 
 function createClusterSummaryDefinition(): DomainTaskDefinition {
   return createDomainTask({
@@ -208,6 +222,9 @@ const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void
 /** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
 export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
   HANDLER_KINDS.map((kind) => {
+    if (kind === "cluster_merge_precompute_clean_pairs") {
+      return [kind, createClusterMergeCleanPairDefinition()];
+    }
     if (kind === "cluster_regenerate_summary") {
       return [kind, createClusterSummaryDefinition()];
     }
