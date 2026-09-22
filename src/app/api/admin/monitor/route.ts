@@ -42,6 +42,7 @@ export async function GET(request: Request) {
         kind: TASK_KINDS.has(kind) ? (kind as BackgroundTaskRunKind) : null,
         timeRange: TASK_TIME_RANGES.has(timeRange) ? (timeRange as "today" | "week" | "month") : null,
         rangeDays: TASK_RANGE_DAYS.has(rangeDays) ? (rangeDays as 1 | 3 | 7) : null,
+        includeDetails: false,
       }),
     );
   } catch (error) {

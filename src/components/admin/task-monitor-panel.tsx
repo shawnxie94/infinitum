@@ -852,6 +852,22 @@ export function TaskMonitorPanel({
   }, [taskLists]);
 
   const recoveryOptions = getDailyReportRetryOptions(recoveryTask);
+  const detailLoadingTaskIdsRef = useRef(new Set<string>());
+
+  const loadTaskDetail = useCallback(async (taskId: string) => {
+    try {
+      const response = await fetch(`/api/admin/monitor/tasks/${taskId}`);
+      const payload = (await response.json()) as { task?: TaskRunSnapshot; error?: string };
+      if (!response.ok || !payload.task) {
+        showToast(payload.error || "加载任务详情失败", "error");
+        return null;
+      }
+      return payload.task;
+    } catch {
+      showToast("加载任务详情失败", "error");
+      return null;
+    }
+  }, [showToast]);
 
   useEffect(() => {
     if (!selectedTask) {
@@ -859,10 +875,26 @@ export function TaskMonitorPanel({
     }
 
     const latestSelectedTask = allTasks.find((task) => task.id === selectedTask.id);
-    if (latestSelectedTask && latestSelectedTask !== selectedTask) {
+    if (latestSelectedTask && latestSelectedTask !== selectedTask && selectedTask.isDetailLoaded !== true) {
       setSelectedTask(latestSelectedTask);
     }
   }, [allTasks, selectedTask]);
+
+  useEffect(() => {
+    if (!isDetailOpen || !selectedTask || selectedTask.isDetailLoaded !== false) {
+      return;
+    }
+    if (detailLoadingTaskIdsRef.current.has(selectedTask.id)) {
+      return;
+    }
+
+    detailLoadingTaskIdsRef.current.add(selectedTask.id);
+    void loadTaskDetail(selectedTask.id).then((detail) => {
+      if (detail) setSelectedTask(detail);
+    }).finally(() => {
+      detailLoadingTaskIdsRef.current.delete(selectedTask.id);
+    });
+  }, [isDetailOpen, loadTaskDetail, selectedTask]);
 
   useEffect(() => {
     if (initialFocusTaskId === pendingRouteTaskIdRef.current) {
@@ -963,6 +995,10 @@ export function TaskMonitorPanel({
     setIsRefreshingSnapshot(true);
     try {
       await refreshSnapshot();
+      if (selectedTask?.isDetailLoaded) {
+        const detail = await loadTaskDetail(selectedTask.id);
+        if (detail) setSelectedTask(detail);
+      }
     } finally {
       setIsRefreshingSnapshot(false);
     }
@@ -975,10 +1011,12 @@ export function TaskMonitorPanel({
     setPage(1);
   };
 
-  const handleOpenRecovery = (task: TaskRunSnapshot) => {
-    const options = getDailyReportRetryOptions(task);
+  const handleOpenRecovery = async (task: TaskRunSnapshot) => {
+    const detail = task.isDetailLoaded === false ? await loadTaskDetail(task.id) : task;
+    if (!detail) return;
+    const options = getDailyReportRetryOptions(detail);
     const recommended = options.find((option) => option.recommended);
-    setRecoveryTask(task);
+    setRecoveryTask(detail);
     setRecoveryChoice(recommended?.value ?? "all");
     setIsRecoveryOpen(true);
   };
@@ -991,7 +1029,7 @@ export function TaskMonitorPanel({
 
   const handleOpenConfirm = (task: TaskRunSnapshot, action: "retrigger" | "cancel") => {
     if (action === "retrigger" && task.kind === "daily_report_generate") {
-      handleOpenRecovery(task);
+      void handleOpenRecovery(task);
       return;
     }
     setConfirmTask(task);
@@ -1072,7 +1110,7 @@ export function TaskMonitorPanel({
   const handleRetrigger = (taskId: string) => {
     const targetTask = allTasks.find((task) => task.id === taskId) ?? null;
     if (targetTask?.kind === "daily_report_generate") {
-      handleOpenRecovery(targetTask);
+      void handleOpenRecovery(targetTask);
       return;
     }
     void handleLegacyRetrigger(taskId);
