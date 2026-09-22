@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { getEventBriefingDateRange } from "@/lib/events/date";
 import { compressBehaviorNetScore, getCuratorBehaviorScore } from "@/lib/curator-behavior/service";
-import { calculateEventBriefingBaseRankScore } from "@/lib/events/service";
 import { calculateCuratorPreference } from "@/lib/events/preferences";
-import type { EventBriefingCandidate } from "@/lib/events/types";
+import {
+  calculateEventBriefingBaseRankScore,
+  createEventBriefingRankContext,
+  sortEventBriefingEntries,
+} from "@/lib/events/service";
+import type { EventBriefingCandidate, EventBriefingEntryDTO } from "@/lib/events/types";
 
 function buildCandidate(overrides: Partial<EventBriefingCandidate> = {}): EventBriefingCandidate {
   return {
@@ -78,6 +82,50 @@ describe("event briefing helpers", () => {
     expect(
       calculateEventBriefingBaseRankScore(fresher, range) - calculateEventBriefingBaseRankScore(baseline, range),
     ).toBeLessThanOrEqual(8);
+  });
+
+  it("keeps historical event volume from overpowering current-day momentum", () => {
+    const range = getEventBriefingDateRange("2026-06-30");
+    const established = buildCandidate({ sourceCount: 50, itemCount: 100 });
+    const smaller = buildCandidate({ sourceCount: 2, itemCount: 2 });
+
+    expect(
+      calculateEventBriefingBaseRankScore(established, range) -
+        calculateEventBriefingBaseRankScore(smaller, range),
+    ).toBe(5);
+  });
+
+  it("blends candidate-set relative scores to smooth fixed thresholds", () => {
+    const range = getEventBriefingDateRange("2026-06-30");
+    const low = buildCandidate({ itemCount: 2 });
+    const middle = buildCandidate({ itemCount: 3 });
+    const high = buildCandidate({ itemCount: 4 });
+    const context = createEventBriefingRankContext([low, middle, high]);
+
+    expect(calculateEventBriefingBaseRankScore(middle, range, context)).toBeGreaterThan(
+      calculateEventBriefingBaseRankScore(low, range, context),
+    );
+    expect(calculateEventBriefingBaseRankScore(high, range, context)).toBeGreaterThan(
+      calculateEventBriefingBaseRankScore(middle, range, context),
+    );
+  });
+
+  it("uses a stable id tie-breaker when ranked entries otherwise match", () => {
+    const common = {
+      type: "single",
+      rankScore: 80,
+      baseRankScore: 80,
+      latestCreatedAt: "2026-06-30T08:00:00.000Z",
+    } as const;
+    const entries = [
+      { ...common, id: "event-b" } as EventBriefingEntryDTO,
+      { ...common, id: "event-a" } as EventBriefingEntryDTO,
+    ];
+
+    expect(entries.sort(sortEventBriefingEntries).map((entry) => entry.id)).toEqual([
+      "event-a",
+      "event-b",
+    ]);
   });
 
   it("penalizes delayed publication without changing the createdAt inclusion boundary", () => {

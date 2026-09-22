@@ -30,31 +30,145 @@ function normalizePositiveInteger(value: number | undefined, fallback: number) {
   return Number.isInteger(value) && value && value > 0 ? value : fallback;
 }
 
-function calculateEvidenceScore(candidate: EventBriefingCandidate) {
+type EventBriefingRankContext = {
+  historicalSourceCounts: readonly number[];
+  historicalItemCounts: readonly number[];
+  sameDaySourceCounts: readonly number[];
+  sameDayItemCounts: readonly number[];
+};
+
+const MIN_CONTEXTUAL_CANDIDATE_COUNT = 3;
+
+function lowerBound(values: readonly number[], value: number) {
+  let low = 0;
+  let high = values.length;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (values[middle]! < value) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  return low;
+}
+
+function upperBound(values: readonly number[], value: number) {
+  let low = 0;
+  let high = values.length;
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (values[middle]! <= value) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+
+  return low;
+}
+
+function calculateRelativeScore(
+  value: number,
+  sortedValues: readonly number[],
+  maxScore: number,
+) {
+  if (
+    sortedValues.length < MIN_CONTEXTUAL_CANDIDATE_COUNT ||
+    sortedValues[0] === sortedValues[sortedValues.length - 1]
+  ) {
+    return null;
+  }
+
+  const lowerCount = lowerBound(sortedValues, value);
+  const equalCount = upperBound(sortedValues, value) - lowerCount;
+  const percentile = (lowerCount + (equalCount - 1) / 2) / (sortedValues.length - 1);
+  return Math.round(percentile * maxScore);
+}
+
+function blendFixedAndRelativeScore(
+  fixedScore: number,
+  relativeScore: number | null,
+  maxScore: number,
+) {
+  if (relativeScore === null) {
+    return fixedScore;
+  }
+
+  return clamp(Math.round((fixedScore + relativeScore) / 2), 0, maxScore);
+}
+
+function sortCounts(values: number[]) {
+  return values.sort((left, right) => left - right);
+}
+
+export function createEventBriefingRankContext(
+  candidates: readonly EventBriefingCandidate[],
+): EventBriefingRankContext {
+  return {
+    historicalSourceCounts: sortCounts(candidates.map((candidate) => candidate.sourceCount)),
+    historicalItemCounts: sortCounts(candidates.map((candidate) => candidate.itemCount)),
+    sameDaySourceCounts: sortCounts(candidates.map((candidate) => candidate.newSourceCountOnDate)),
+    sameDayItemCounts: sortCounts(candidates.map((candidate) => candidate.newItemCountOnDate)),
+  };
+}
+
+function calculateHistoricalEvidenceScore(
+  candidate: EventBriefingCandidate,
+  context?: EventBriefingRankContext,
+) {
+  // Historical volume is useful as a confidence signal, but should not
+  // overpower today's progress. Keep it deliberately below the combined
+  // same-day evidence and momentum budget.
   const sourceScore = candidate.sourceCount >= 4
-    ? 10
-    : candidate.sourceCount >= 3
-      ? 8
-      : candidate.sourceCount >= 2
-        ? 5
-        : 0;
-  const itemScore = candidate.itemCount >= 8
     ? 7
-    : candidate.itemCount >= 4
+    : candidate.sourceCount >= 3
       ? 5
-      : candidate.itemCount >= 2
+      : candidate.sourceCount >= 2
         ? 3
         : 0;
+  const itemScore = candidate.itemCount >= 8
+    ? 5
+    : candidate.itemCount >= 4
+      ? 4
+      : candidate.itemCount >= 2
+        ? 2
+        : 0;
+  const contextualSourceScore = context
+    ? calculateRelativeScore(candidate.sourceCount, context.historicalSourceCounts, 7)
+    : null;
+  const contextualItemScore = context
+    ? calculateRelativeScore(candidate.itemCount, context.historicalItemCounts, 5)
+    : null;
 
-  return Math.min(15, sourceScore + itemScore);
+  return Math.min(
+    10,
+    blendFixedAndRelativeScore(sourceScore, contextualSourceScore, 7) +
+      blendFixedAndRelativeScore(itemScore, contextualItemScore, 5),
+  );
 }
 
-function calculateSameDaySourceScore(candidate: EventBriefingCandidate) {
-  return Math.min(6, candidate.newSourceCountOnDate * 2);
-}
+function calculateSameDayEvidenceScore(
+  candidate: EventBriefingCandidate,
+  context?: EventBriefingRankContext,
+) {
+  const sourceScore = Math.min(6, candidate.newSourceCountOnDate * 2);
+  const itemScore = Math.min(3, candidate.newItemCountOnDate);
+  const contextualSourceScore = context
+    ? calculateRelativeScore(candidate.newSourceCountOnDate, context.sameDaySourceCounts, 6)
+    : null;
+  const contextualItemScore = context
+    ? calculateRelativeScore(candidate.newItemCountOnDate, context.sameDayItemCounts, 3)
+    : null;
 
-function calculateSameDayItemScore(candidate: EventBriefingCandidate) {
-  return Math.min(3, candidate.newItemCountOnDate);
+  return Math.min(
+    9,
+    blendFixedAndRelativeScore(sourceScore, contextualSourceScore, 6) +
+      blendFixedAndRelativeScore(itemScore, contextualItemScore, 3),
+  );
 }
 
 function getLatestCreatedItem(candidate: EventBriefingCandidate) {
@@ -112,11 +226,11 @@ function calculatePublishedAtDelayPenalty(candidate: EventBriefingCandidate) {
 export function calculateEventBriefingBaseRankScore(
   candidate: EventBriefingCandidate,
   range: ReturnType<typeof getEventBriefingDateRange>,
+  context?: EventBriefingRankContext,
 ) {
   const qualityComponent = Math.round(candidate.qualityScore * 0.65);
-  const evidenceScore = calculateEvidenceScore(candidate);
-  const sameDaySourceScore = calculateSameDaySourceScore(candidate);
-  const sameDayItemScore = calculateSameDayItemScore(candidate);
+  const historicalEvidenceScore = calculateHistoricalEvidenceScore(candidate, context);
+  const sameDayEvidenceScore = calculateSameDayEvidenceScore(candidate, context);
   const freshnessScore = calculateFreshnessScore(candidate, range);
   const publishedAtDelayPenalty = calculatePublishedAtDelayPenalty(candidate);
   const hasNewFacts = candidate.newItemCountOnDate > 0 || candidate.newSourceCountOnDate > 0;
@@ -124,9 +238,8 @@ export function calculateEventBriefingBaseRankScore(
 
   return clamp(
     qualityComponent +
-      evidenceScore +
-      sameDaySourceScore +
-      sameDayItemScore +
+      historicalEvidenceScore +
+      sameDayEvidenceScore +
       freshnessScore +
       momentumScore -
       publishedAtDelayPenalty,
@@ -147,8 +260,13 @@ function toEntryDTO(input: {
   candidate: EventBriefingCandidate;
   range: ReturnType<typeof getEventBriefingDateRange>;
   preference: BriefingPreferenceForRuntime;
+  rankContext?: EventBriefingRankContext;
 }): EventBriefingEntryDTO {
-  const baseRankScore = calculateEventBriefingBaseRankScore(input.candidate, input.range);
+  const baseRankScore = calculateEventBriefingBaseRankScore(
+    input.candidate,
+    input.range,
+    input.rankContext,
+  );
   const curator = calculateCuratorPreference(input.candidate, input.preference);
   const rankScore = clamp(baseRankScore + curator.curatorBoost - curator.curatorPenalty, 0, 100);
 
@@ -189,15 +307,23 @@ function toEntryDTO(input: {
   };
 }
 
-function sortEntries(left: EventBriefingEntryDTO, right: EventBriefingEntryDTO) {
+export function sortEventBriefingEntries(left: EventBriefingEntryDTO, right: EventBriefingEntryDTO) {
   if (right.rankScore !== left.rankScore) {
     return right.rankScore - left.rankScore;
   }
   if (right.baseRankScore !== left.baseRankScore) {
     return right.baseRankScore - left.baseRankScore;
   }
-  return new Date(right.latestCreatedAt).getTime() - new Date(left.latestCreatedAt).getTime();
+
+  const createdAtOrder = new Date(right.latestCreatedAt).getTime() - new Date(left.latestCreatedAt).getTime();
+  if (createdAtOrder !== 0) {
+    return createdAtOrder;
+  }
+
+  return `${left.type}:${left.id}`.localeCompare(`${right.type}:${right.id}`);
 }
+
+const sortEntries = sortEventBriefingEntries;
 
 type RankedEventBriefing = {
   date: string;
@@ -269,12 +395,14 @@ async function loadEntriesForChannel(input: {
     groupIds: input.channel.sourceGroupIds,
     tag: normalizeEventBriefingTag(input.tag),
   });
+  const rankContext = createEventBriefingRankContext(candidateResult.candidates);
 
   return candidateResult.candidates
     .map((candidate) => toEntryDTO({
       candidate,
       range: input.range,
       preference: input.preference,
+      rankContext,
     }))
     .filter((entry) => entry.rankScore >= input.minRankScore)
     .sort(sortEntries);
