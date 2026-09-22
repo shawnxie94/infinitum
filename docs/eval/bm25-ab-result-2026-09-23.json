@@ -1,0 +1,3439 @@
+{
+  "generatedAt": "2026-09-22T18:16:35.130Z",
+  "db": "docs/eval/snapshots/prod-snapshot-2026-09-21.db",
+  "corpus": {
+    "docCount": 7783,
+    "windowDays": 30,
+    "avgDocLen": 160.3
+  },
+  "bm25": {
+    "k1": 1.2,
+    "b": 0.75,
+    "idf": "ln((N-df+0.5)/(df+0.5)+1)",
+    "pairScore": "mean of both directions"
+  },
+  "note": "评分只比词汇通道本身：current=scoreClusterMergeCandidatePair（含守卫前的原始 score），BM25 无守卫。guard 语义（object_conflict 等）不在本实验替换范围。",
+  "summary": {
+    "below-gray-truth": {
+      "pairs": 107,
+      "same": 17,
+      "diff": 90,
+      "current": {
+        "auc": 0.6291,
+        "medianSame": 20,
+        "medianDiff": -1000000000,
+        "sameVeto": 5,
+        "diffVeto": 54,
+        "vetoByReason": {
+          "object_conflict": 55,
+          "no_event_anchor": 4
+        },
+        "recallAtFpr1": 0,
+        "recallAtFpr5": 0,
+        "recallAtFpr10": 23.5
+      },
+      "bm25": {
+        "auc": 0.5935,
+        "medianSame": 22.38,
+        "medianDiff": 23.56,
+        "recallAtFpr1": 0,
+        "recallAtFpr5": 23.5,
+        "recallAtFpr10": 41.2
+      }
+    },
+    "production-overmerge": {
+      "pairs": 24,
+      "same": 9,
+      "diff": 15,
+      "current": {
+        "auc": 0.5185,
+        "medianSame": 95,
+        "medianDiff": 89,
+        "sameVeto": 2,
+        "diffVeto": 0,
+        "vetoByReason": {
+          "object_conflict": 2
+        },
+        "recallAtFpr1": 0,
+        "recallAtFpr5": 0,
+        "recallAtFpr10": 33.3
+      },
+      "bm25": {
+        "auc": 1,
+        "medianSame": 192.3,
+        "medianDiff": 27.73,
+        "recallAtFpr1": 100,
+        "recallAtFpr5": 100,
+        "recallAtFpr10": 100
+      }
+    },
+    "eval-sample-30d": {
+      "pairs": 203,
+      "same": 0,
+      "diff": 203,
+      "current": {
+        "auc": null,
+        "medianSame": null,
+        "medianDiff": 58,
+        "sameVeto": 0,
+        "diffVeto": 42,
+        "vetoByReason": {
+          "object_conflict": 42
+        },
+        "recallAtFpr1": null,
+        "recallAtFpr5": null,
+        "recallAtFpr10": null
+      },
+      "bm25": {
+        "auc": null,
+        "medianSame": null,
+        "medianDiff": 18.14,
+        "recallAtFpr1": null,
+        "recallAtFpr5": null,
+        "recallAtFpr10": null
+      }
+    }
+  },
+  "rows": [
+    {
+      "key": "cmszv5opm0jf1rz015uqgytl9|cmt0851s50y9dk601se2zsy7q",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 38.878,
+      "bm25Max": 41.878
+    },
+    {
+      "key": "cmszv5opm0jf1rz015uqgytl9|cmth4tuj1qi96nr011y7z1erf",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 55.649,
+      "bm25Max": 57.843
+    },
+    {
+      "key": "cmszv5opm0jf1rz015uqgytl9|cmtuvug3wvjpfnr01l2e3wx3c",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 37.951,
+      "bm25Max": 42.074
+    },
+    {
+      "key": "cmszv6g8f0jgxrz01gxa1pimj|cmszg6yc735iml501ikjmdn2w",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 26.49,
+      "bm25Max": 27.285
+    },
+    {
+      "key": "cmszv6g8f0jgxrz01gxa1pimj|cmt2lwcme5or5o70154p2ycj3",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 46.831,
+      "bm25Max": 51.019
+    },
+    {
+      "key": "cmszv538d0jc1rz01l0qs3pfx|cmszzgbux019zph019dayfm9n",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 23.059,
+      "bm25Max": 24.485
+    },
+    {
+      "key": "cmszv538d0jc1rz01l0qs3pfx|cmt05xpbp0metk601717rh9ny",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 37.815,
+      "bm25Max": 46.123
+    },
+    {
+      "key": "cmszv538d0jc1rz01l0qs3pfx|cmszzg1c8018vph01cch54vlk",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 25.048,
+      "bm25Max": 29.059
+    },
+    {
+      "key": "cmszzgbux019zph019dayfm9n|cmszg6yc735iml501ikjmdn2w",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 113.049,
+      "bm25Max": 121.027
+    },
+    {
+      "key": "cmszzgbux019zph019dayfm9n|cmt0kuco22z03k601ukj4uvx2",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 14.17,
+      "bm25Max": 15.21
+    },
+    {
+      "key": "cmszzggqr01a7ph01zqy71v9h|cmt1nhxr508yxo701zhhj4w4n",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 9.185,
+      "bm25Max": 9.594
+    },
+    {
+      "key": "cmszzgimc01afph01e8u365zd|cmtec3n7xaoj6nr01mpgx7tla",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 23.233,
+      "bm25Max": 24.801
+    },
+    {
+      "key": "cmszzh48r01cvph01q8fmo0rr|cmt05wq5t0mabk601vun28h8r",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 45.054,
+      "bm25Max": 47.362
+    },
+    {
+      "key": "cmszzh48r01cvph01q8fmo0rr|cmtiz5c7m0r74nr0123y6whx4",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 36.497,
+      "bm25Max": 37.89
+    },
+    {
+      "key": "cmszzh48r01cvph01q8fmo0rr|cmtnx1x89s7axnr01jf6rbb6z",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 32.154,
+      "bm25Max": 36.362
+    },
+    {
+      "key": "cmszv69nt0jgnrz017rudgo4f|cmtqwaw5f995bnr011l7yi66t",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 51.779,
+      "bm25Max": 54.61
+    },
+    {
+      "key": "cmszv6hpm0jh5rz01a1urvw74|cmt05w0050m8xk601i3tslc4w",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 43,
+      "currentRejected": false,
+      "currentScoreEffective": 43,
+      "bm25Mean": 67.543,
+      "bm25Max": 68.452
+    },
+    {
+      "key": "cmszv6hpm0jh5rz01a1urvw74|cmt0ku3ke2yznk6019xehycrm",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 43,
+      "currentRejected": false,
+      "currentScoreEffective": 43,
+      "bm25Mean": 78.211,
+      "bm25Max": 81.544
+    },
+    {
+      "key": "cmsz162v80rlyl501waks6eb7|cmt8srnpg1yilnr01xq4e7qdk",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 36.058,
+      "bm25Max": 42.44
+    },
+    {
+      "key": "cmsz162v80rlyl501waks6eb7|cmt93c0y03la7nr01txbsczwy",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 12.931,
+      "bm25Max": 14.298
+    },
+    {
+      "key": "cmsz162v80rlyl501waks6eb7|cmt9gaw1p5mwfnr01uugpzt6u",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 28.156,
+      "bm25Max": 29.18
+    },
+    {
+      "key": "cmszketiv3trsl501z0wbof71|cmt05w9p20m9fk601lcjxpfgv",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 23.749,
+      "bm25Max": 24.292
+    },
+    {
+      "key": "cmszketiv3trsl501z0wbof71|cmt0ipg0l2ml6k601nozes2az",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 29.202,
+      "bm25Max": 30.047
+    },
+    {
+      "key": "cmt05xgu40me1k601an9fh1me|cmt0egqsp1xsik601hsabzeeg",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 46.335,
+      "bm25Max": 53.336
+    },
+    {
+      "key": "cmt05xgu40me1k601an9fh1me|cmt0tg4cx4bl5k601hab0s8yb",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 45.326,
+      "bm25Max": 47.585
+    },
+    {
+      "key": "cmt05xgu40me1k601an9fh1me|cmt6cqvbhqxobo701sgoicdcw",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 54.817,
+      "bm25Max": 63.35
+    },
+    {
+      "key": "cmt05xh910me3k601wxq6bffp|cmtavqox7dpnlnr01gchrry0r",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 66.486,
+      "bm25Max": 68.543
+    },
+    {
+      "key": "cmt05xh910me3k601wxq6bffp|cmtaehm7oaydwnr01bohh4egn",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 46.922,
+      "bm25Max": 63.262
+    },
+    {
+      "key": "cmt05xh910me3k601wxq6bffp|cmtdx05x28bfinr01tffplrkz",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 67.073,
+      "bm25Max": 77.212
+    },
+    {
+      "key": "cmt05xivi0me6k601e7wwf2xh|cmt05vk860m89k601e5hx5kyj",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 15.859,
+      "bm25Max": 17.82
+    },
+    {
+      "key": "cmt05xj900me8k601gb5mfqda|cmt144r3j0x34o1017l1yps1u",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 15.772,
+      "bm25Max": 18.693
+    },
+    {
+      "key": "cmt05xj900me8k601gb5mfqda|cmt1ew1e22mkzo101bdpvsc2i",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 28.641,
+      "bm25Max": 35.147
+    },
+    {
+      "key": "cmt05xjqq0meak601wyqep359|cmt0egvbc1xsok601d9d6uevh",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 35.411,
+      "bm25Max": 41.94
+    },
+    {
+      "key": "cmt05xk6b0meck6013wkqdrbv|cmt05wi0q0ma3k601q7vvt3ui",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 25.736,
+      "bm25Max": 29.692
+    },
+    {
+      "key": "cmt05xk6b0meck6013wkqdrbv|cmt0p4ash3mixk6014piuqdq8",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 17.79,
+      "bm25Max": 20.637
+    },
+    {
+      "key": "cmt05xk6b0meck6013wkqdrbv|cmt43a4kge0vko701fwsip98r",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 52,
+      "currentRejected": false,
+      "currentScoreEffective": 52,
+      "bm25Mean": 17.179,
+      "bm25Max": 19.819
+    },
+    {
+      "key": "cmt05xkoh0meek601kwb4hfxm|cmt0tg4cx4bl5k601hab0s8yb",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 19.546,
+      "bm25Max": 21.028
+    },
+    {
+      "key": "cmt05xl2c0megk601tvqniyky|cmt0tg4cx4bl5k601hab0s8yb",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 36.243,
+      "bm25Max": 38.992
+    },
+    {
+      "key": "cmt05xl2c0megk601tvqniyky|cmt7ue3tgza9no7018v97uv6r",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 22.987,
+      "bm25Max": 29.827
+    },
+    {
+      "key": "cmt05xl2c0megk601tvqniyky|cmu12pfkspg54od01dndzkavc",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 20.098,
+      "bm25Max": 23.005
+    },
+    {
+      "key": "cmt020ahs02wvk60136f8yrwq|cmt6cqnbmqxnvo7012tb4f0wr",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": false,
+      "currentScoreEffective": 8,
+      "bm25Mean": 3.966,
+      "bm25Max": 4.623
+    },
+    {
+      "key": "cmt05w1o60m91k601qim7vfm1|cmtjvb9xm5tarnr01kxybqq51",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": "no_event_anchor",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 0,
+      "bm25Max": 0
+    },
+    {
+      "key": "cmt05w1o60m91k601qim7vfm1|cmtvlikepzkomnr013ds0sbqh",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "no_event_anchor",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 0,
+      "bm25Max": 0
+    },
+    {
+      "key": "cmt0xpyx04yzvk601n7hf4dk0|cmt9t5ren7nfxnr01f9t5phyh",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 5.243,
+      "bm25Max": 5.939
+    },
+    {
+      "key": "cmt0xpyx04yzvk601n7hf4dk0|cmtrfi8tzc9n9nr01rwusz8gx",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 28,
+      "currentRejected": false,
+      "currentScoreEffective": 28,
+      "bm25Mean": 4.64,
+      "bm25Max": 5.076
+    },
+    {
+      "key": "cmt5rabr8njhao701404t33bc|cmt6cqnbmqxnvo7012tb4f0wr",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 28,
+      "currentRejected": false,
+      "currentScoreEffective": 28,
+      "bm25Mean": 12.599,
+      "bm25Max": 16.473
+    },
+    {
+      "key": "cmt6ldjr7sareo7016kjyjx3h|cmtte942ynbbenr01bz43wpse",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": false,
+      "currentScoreEffective": 0,
+      "bm25Mean": 0.852,
+      "bm25Max": 0.985
+    },
+    {
+      "key": "cmt7b6yjgwb70o701urmp55r9|cmtte942ynbbenr01bz43wpse",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": "no_event_anchor",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 0.991,
+      "bm25Max": 0.997
+    },
+    {
+      "key": "cmt8qj9ge1mjznr01ciinotui|cmth4tuj1qi96nr011y7z1erf",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 13.502,
+      "bm25Max": 15.499
+    },
+    {
+      "key": "cmtaa8cv3a9xhnr01flf5nm8v|cmtte942ynbbenr01bz43wpse",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": false,
+      "currentScoreEffective": 8,
+      "bm25Mean": 0.856,
+      "bm25Max": 0.985
+    },
+    {
+      "key": "cmtan33h4ccjanr01fkwxkr5i|cmtknar9sa2ffnr01cuuce8ey",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": false,
+      "currentScoreEffective": 8,
+      "bm25Mean": 25.62,
+      "bm25Max": 25.919
+    },
+    {
+      "key": "cmtcwl1jn2mn8nr01xw8k6v6n|cmu3kqys73uk2od01v9kpoxkc",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": false,
+      "currentScoreEffective": 8,
+      "bm25Mean": 9.338,
+      "bm25Max": 10.135
+    },
+    {
+      "key": "cmtd10gf13b7dnr01isjzy9ii|cmts33ixxfzj0nr01619zs1by",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 43,
+      "currentRejected": false,
+      "currentScoreEffective": 43,
+      "bm25Mean": 7.767,
+      "bm25Max": 9.183
+    },
+    {
+      "key": "cmthbaim0rh2knr01l31wsdno|cmttc2egbmytenr01mucdulah",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "no_event_anchor",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 0.957,
+      "bm25Max": 1.241
+    },
+    {
+      "key": "cmtknar9sa2ffnr01cuuce8ey|cmtn3e6k0nivlnr01y0291sj5",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 29.197,
+      "bm25Max": 32.779
+    },
+    {
+      "key": "cmtknar9sa2ffnr01cuuce8ey|cmu3kqys73uk2od01v9kpoxkc",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": false,
+      "currentScoreEffective": 8,
+      "bm25Mean": 13.673,
+      "bm25Max": 15.401
+    },
+    {
+      "key": "cmtlaur47dpyvnr01mtna1l0c|cmttc2cojmytanr01wqyyi2pb",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 8,
+      "currentRejected": false,
+      "currentScoreEffective": 8,
+      "bm25Mean": 3.384,
+      "bm25Max": 4.531
+    },
+    {
+      "key": "cmtld1q3ce1lsnr01h2e6gidd|cmttc2egbmytenr01mucdulah",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": false,
+      "currentScoreEffective": 0,
+      "bm25Mean": 1.034,
+      "bm25Max": 1.241
+    },
+    {
+      "key": "cmtnx1hxrs79jnr01q1tk853b|cmttc2egbmytenr01mucdulah",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 22.379,
+      "bm25Max": 28.021
+    },
+    {
+      "key": "cmtqnmryy7vjlnr01tlcn4oie|cmtxx3iwz7a6hod014h1qdz14",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 21.346,
+      "bm25Max": 23.115
+    },
+    {
+      "key": "cmtyxjiv6d1atod019ow2fe2u|cmtxz8ac47mptod01ige9vjp1",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 17.469,
+      "bm25Max": 22.735
+    },
+    {
+      "key": "cmttc2cojmytanr01wqyyi2pb|cmu0nqu1en24yod010zbbgusq",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 12.931,
+      "bm25Max": 13.862
+    },
+    {
+      "key": "cmttc2h7imytmnr01ce82h6lz|cmtwo5vbf0249od016ne66kz7",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 15.24,
+      "bm25Max": 17.981
+    },
+    {
+      "key": "cmttc2h7imytmnr01ce82h6lz|cmtzrjnaghw6xod01sx4ijzan",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 20,
+      "currentRejected": false,
+      "currentScoreEffective": 20,
+      "bm25Mean": 14.523,
+      "bm25Max": 17.981
+    },
+    {
+      "key": "cmtu411jxraisnr01qnjzpqxg|cmtxz8ac47mptod01ige9vjp1",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 28,
+      "currentRejected": false,
+      "currentScoreEffective": 28,
+      "bm25Mean": 13.215,
+      "bm25Max": 17.198
+    },
+    {
+      "key": "cmtxx3k287a6lod01upquaayh|cmu2qre72z17rod01j9j8ek9n",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 28,
+      "currentRejected": false,
+      "currentScoreEffective": 28,
+      "bm25Mean": 13.024,
+      "bm25Max": 15.161
+    },
+    {
+      "key": "cmu3kqys73uk2od01v9kpoxkc|cmu6bc50tjnjpod0124obmh3i",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 30,
+      "currentRejected": false,
+      "currentScoreEffective": 30,
+      "bm25Mean": 14.822,
+      "bm25Max": 17.763
+    },
+    {
+      "key": "cmszv5opm0jf1rz015uqgytl9|cmt1combk2a39o101tvarrbgy",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 22.447,
+      "bm25Max": 23.23
+    },
+    {
+      "key": "cmszv5opm0jf1rz015uqgytl9|cmt1ewp7w2mnno101qua15kfk",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 40.399,
+      "bm25Max": 44.117
+    },
+    {
+      "key": "cmszv5opm0jf1rz015uqgytl9|cmt22gzqd2m56o701ld207svs",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 34.012,
+      "bm25Max": 36.554
+    },
+    {
+      "key": "cmszv6g8f0jgxrz01gxa1pimj|cmszibice3horl501m81qq9i7",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 25.75,
+      "bm25Max": 29.725
+    },
+    {
+      "key": "cmszv6g8f0jgxrz01gxa1pimj|cmt1pmbiu0kwjo701v05kpxki",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 22.471,
+      "bm25Max": 25.133
+    },
+    {
+      "key": "cmszv6g8f0jgxrz01gxa1pimj|cmt22gi352m4qo7017djkd50u",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 60.272,
+      "bm25Max": 60.755
+    },
+    {
+      "key": "cmszv538d0jc1rz01l0qs3pfx|cmt0p4ash3mixk6014piuqdq8",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 15.013,
+      "bm25Max": 15.077
+    },
+    {
+      "key": "cmszv538d0jc1rz01l0qs3pfx|cmt0vl9jw4nv9k601ll5mubxx",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 34.655,
+      "bm25Max": 35.655
+    },
+    {
+      "key": "cmszv538d0jc1rz01l0qs3pfx|cmt0xq64w4z03k6015y7c126k",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 28.76,
+      "bm25Max": 29.989
+    },
+    {
+      "key": "cmszv6kd00jhdrz01qykvb54p|cmt2udujg70cso701rq01xa9w",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 30.088,
+      "bm25Max": 32.284
+    },
+    {
+      "key": "cmszzgbux019zph019dayfm9n|cmszzg3td0199ph01vhmxyhig",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 68.531,
+      "bm25Max": 78.387
+    },
+    {
+      "key": "cmszzgbux019zph019dayfm9n|cmszibice3horl501m81qq9i7",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 40.631,
+      "bm25Max": 48.507
+    },
+    {
+      "key": "cmszzgbux019zph019dayfm9n|cmt0xsqh24z9ek601x72nmff5",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 58.171,
+      "bm25Max": 66.444
+    },
+    {
+      "key": "cmszzggqr01a7ph01zqy71v9h|cmsz162v80rlyl501waks6eb7",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 6.7,
+      "bm25Max": 7.587
+    },
+    {
+      "key": "cmszzggqr01a7ph01zqy71v9h|cmt1lfs3s0tg4nx0121avxcqq",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 16.194,
+      "bm25Max": 17.17
+    },
+    {
+      "key": "cmszzggqr01a7ph01zqy71v9h|cmt1twhkf1923o701dpnyya6o",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 17.268,
+      "bm25Max": 18.015
+    },
+    {
+      "key": "cmszzgimc01afph01e8u365zd|cmt82xyvu0mvso701pst6b54r",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 34.196,
+      "bm25Max": 36.001
+    },
+    {
+      "key": "cmszzgimc01afph01e8u365zd|cmtcdbn10lyeanr01e0iid1pi",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 26.508,
+      "bm25Max": 32.16
+    },
+    {
+      "key": "cmszzgimc01afph01e8u365zd|cmth924izr54anr01iyh2fdsv",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 36.58,
+      "bm25Max": 38.52
+    },
+    {
+      "key": "cmszzh48r01cvph01q8fmo0rr|cmt1exogf2mqbo101uj1hjk9p",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 33.43,
+      "bm25Max": 33.83
+    },
+    {
+      "key": "cmszzh48r01cvph01q8fmo0rr|cmt2d52xv4b2fo701zzyb091y",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 49,
+      "bm25Max": 52.719
+    },
+    {
+      "key": "cmszzh48r01cvph01q8fmo0rr|cmt2ue9c070e6o701aolt9z1k",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 43.196,
+      "bm25Max": 43.99
+    },
+    {
+      "key": "cmszv69nt0jgnrz017rudgo4f|cmt05xlyq0mekk601yxtv8lbv",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 90.033,
+      "bm25Max": 110.346
+    },
+    {
+      "key": "cmszv69nt0jgnrz017rudgo4f|cmt0ei19x1xwkk6012396n965",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 19.397,
+      "bm25Max": 23.621
+    },
+    {
+      "key": "cmszv69nt0jgnrz017rudgo4f|cmt353zd48n0oo7019ceo0fbt",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 29.772,
+      "bm25Max": 29.835
+    },
+    {
+      "key": "cmszv6hpm0jh5rz01a1urvw74|cmt1ew1e22mkzo101bdpvsc2i",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 43,
+      "currentRejected": false,
+      "currentScoreEffective": 43,
+      "bm25Mean": 19.457,
+      "bm25Max": 20.825
+    },
+    {
+      "key": "cmszv6hpm0jh5rz01a1urvw74|cmt1pognh0l0go7016hkk0gnd",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 74.965,
+      "bm25Max": 79.287
+    },
+    {
+      "key": "cmszv6hpm0jh5rz01a1urvw74|cmt2fb3kt4nebo701jydypmc9",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 23.376,
+      "bm25Max": 23.61
+    },
+    {
+      "key": "cmsz162v80rlyl501waks6eb7|cmszibice3horl501m81qq9i7",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 6.442,
+      "bm25Max": 6.752
+    },
+    {
+      "key": "cmsz162v80rlyl501waks6eb7|cmt1nhxr508yxo701zhhj4w4n",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 8.221,
+      "bm25Max": 9.667
+    },
+    {
+      "key": "cmszketiv3trsl501z0wbof71|cmt1w34rc1l3fo701ba63m3b5",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 38.872,
+      "bm25Max": 41.187
+    },
+    {
+      "key": "cmszketiv3trsl501z0wbof71|cmt4bzsfjfdowo701qypvs4bl",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 29.413,
+      "bm25Max": 30.126
+    },
+    {
+      "key": "cmszketiv3trsl501z0wbof71|cmt74mlx3vbbco7013a3flhqk",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 20.543,
+      "bm25Max": 22.778
+    },
+    {
+      "key": "cmt05xgu40me1k601an9fh1me|cmt05xkoh0meek601kwb4hfxm",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 13.328,
+      "bm25Max": 13.676
+    },
+    {
+      "key": "cmt05xgu40me1k601an9fh1me|cmt05xl2c0megk601tvqniyky",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 29.699,
+      "bm25Max": 30.474
+    },
+    {
+      "key": "cmt05xgu40me1k601an9fh1me|cmszibeff3ho1l501riz5j7wc",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 15.408,
+      "bm25Max": 16.26
+    },
+    {
+      "key": "cmt05xh910me3k601wxq6bffp|cmszibfqc3hobl5011etipj9d",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 7.064,
+      "bm25Max": 7.322
+    },
+    {
+      "key": "cmt05xh910me3k601wxq6bffp|cmt0te0an4bhkk601mq0c7ik5",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 6.216,
+      "bm25Max": 6.92
+    },
+    {
+      "key": "cmt05xh910me3k601wxq6bffp|cmt2q0ky36cbpo701walphs4p",
+      "dataset": "below-gray-truth",
+      "label": "same",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 36.871,
+      "bm25Max": 37.184
+    },
+    {
+      "key": "cmt05xivi0me6k601e7wwf2xh|cmt0xsq2d4z9ck6014wsaxf8t",
+      "dataset": "below-gray-truth",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 11.536,
+      "bm25Max": 11.845
+    },
+    {
+      "key": "shangtang_qwen_hn",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 20.818,
+      "bm25Max": 21.335
+    },
+    {
+      "key": "omdia_oppo_watch",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 13.566,
+      "bm25Max": 14.12
+    },
+    {
+      "key": "so_agents_openai_guide",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 28.057,
+      "bm25Max": 28.057
+    },
+    {
+      "key": "ff_dongfeng_robot",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 89,
+      "currentRejected": false,
+      "currentScoreEffective": 89,
+      "bm25Mean": 44.527,
+      "bm25Max": 44.686
+    },
+    {
+      "key": "ff_zhihuijun_robot",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 68,
+      "currentRejected": false,
+      "currentScoreEffective": 68,
+      "bm25Mean": 34.115,
+      "bm25Max": 37.05
+    },
+    {
+      "key": "ff_idc_quadruped",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 72,
+      "currentRejected": false,
+      "currentScoreEffective": 72,
+      "bm25Mean": 35.202,
+      "bm25Max": 38.23
+    },
+    {
+      "key": "huangjx_cbs_ifanr_geekpark",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 73.706,
+      "bm25Max": 77.199
+    },
+    {
+      "key": "huangjx_cbs_geekpark_ainews",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 243.212,
+      "bm25Max": 257.763
+    },
+    {
+      "key": "huangjx_stratechery_essay",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 54.258,
+      "bm25Max": 61.79
+    },
+    {
+      "key": "brockman_anthropic_revenue",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 89,
+      "currentRejected": false,
+      "currentScoreEffective": 89,
+      "bm25Mean": 27.729,
+      "bm25Max": 30.78
+    },
+    {
+      "key": "miniagi_bird_dialect",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 19.183,
+      "bm25Max": 20.446
+    },
+    {
+      "key": "timeatlas_chessatlas",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 15.562,
+      "bm25Max": 17.248
+    },
+    {
+      "key": "salon_trump_rename",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 16.83,
+      "bm25Max": 18.344
+    },
+    {
+      "key": "oura_ipo_siri_settlement",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 32.031,
+      "bm25Max": 34.041
+    },
+    {
+      "key": "verus_whirlpool_hn",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 123,
+      "currentRejected": false,
+      "currentScoreEffective": 123,
+      "bm25Mean": 18.671,
+      "bm25Max": 19.295
+    },
+    {
+      "key": "sunilpai_essay_hn",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 92.732,
+      "bm25Max": 106.09
+    },
+    {
+      "key": "qwen_image_sam31",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 15.744,
+      "bm25Max": 19.244
+    },
+    {
+      "key": "qwen_image_ainews_geekpark",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 68,
+      "currentRejected": false,
+      "currentScoreEffective": 68,
+      "bm25Mean": 251.828,
+      "bm25Max": 287.751
+    },
+    {
+      "key": "hn_marketing_harnesstax",
+      "dataset": "production-overmerge",
+      "label": "diff",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 43.334,
+      "bm25Max": 45.317
+    },
+    {
+      "key": "step5_preview_open_vs_release",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 292.439,
+      "bm25Max": 293.948
+    },
+    {
+      "key": "gemini_intrusion_confirm_vs_report",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 95,
+      "currentRejected": false,
+      "currentScoreEffective": 95,
+      "bm25Mean": 192.687,
+      "bm25Max": 230.179
+    },
+    {
+      "key": "doubao_assist_launch_vs_navix_sale",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 192.295,
+      "bm25Max": 193.4
+    },
+    {
+      "key": "amodei_pace_support_vs_blog",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 109,
+      "currentRejected": false,
+      "currentScoreEffective": 109,
+      "bm25Mean": 70.5,
+      "bm25Max": 72.976
+    },
+    {
+      "key": "claude_code_projects_refactor_vs_redesign",
+      "dataset": "production-overmerge",
+      "label": "same",
+      "currentScore": 109,
+      "currentRejected": false,
+      "currentScoreEffective": 109,
+      "bm25Mean": 144.202,
+      "bm25Max": 153.401
+    },
+    {
+      "key": "cmtdodmyc6yk6nr0125tdfmqp_cmtdodlxx6yk0nr01k28llnyp",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 113.261,
+      "bm25Max": 118.114
+    },
+    {
+      "key": "cmt0xqv064z5uk60174sla6jt_cmt0xqjgi4z4sk601lojrtraf",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 118,
+      "currentRejected": false,
+      "currentScoreEffective": 118,
+      "bm25Mean": 31.509,
+      "bm25Max": 32.359
+    },
+    {
+      "key": "cmtsdvka0hmwcnr010hf9hi08_cmtsdvi9xhmw0nr01iz7xfwav",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 57.427,
+      "bm25Max": 59.047
+    },
+    {
+      "key": "cmszzgvd901c5ph01fouuevkj_cmszzgu0g01c3ph01j1rehvwr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 130,
+      "currentRejected": false,
+      "currentScoreEffective": 130,
+      "bm25Mean": 80.544,
+      "bm25Max": 86.491
+    },
+    {
+      "key": "cmti7b2nzwgajnr0122dstxi5_cmti7ayx9wg9znr018gr03m5i",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 11.998,
+      "bm25Max": 12.352
+    },
+    {
+      "key": "cmt0kueyd2z0bk601d8j96915_cmt120edk0kr3o101qftjxl1f",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 118,
+      "currentRejected": false,
+      "currentScoreEffective": 118,
+      "bm25Mean": 45.296,
+      "bm25Max": 53.915
+    },
+    {
+      "key": "cmti157i4vi29nr01iksvo8q0_cmtktlvvrb1oqnr01dsnq32zj",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 45.57,
+      "bm25Max": 49.285
+    },
+    {
+      "key": "cmtdodmyc6yk6nr0125tdfmqp_cmtdodlli6yjynr01w3t91r4z",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 126.722,
+      "bm25Max": 126.931
+    },
+    {
+      "key": "cmtwhobhi4pv2nr013a4u5gjc_cmtwhnuei4pugnr01zun52loo",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 21.332,
+      "bm25Max": 22.414
+    },
+    {
+      "key": "cmtlptkilg153nr015vds1ibr_cmtlptjt6g14znr015fobu1zj",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 66.083,
+      "bm25Max": 68.058
+    },
+    {
+      "key": "cmtjt58fu5gzfnr01ig7612t5_cmtjvayvz5ta5nr01zeaoqkws",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 11.751,
+      "bm25Max": 13.381
+    },
+    {
+      "key": "cmu0nqn9bn23sod0195tuqkuz_cmu0nqkp9n23lod01lv3qevo9",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 105,
+      "currentRejected": false,
+      "currentScoreEffective": 105,
+      "bm25Mean": 32.375,
+      "bm25Max": 32.76
+    },
+    {
+      "key": "cmtdodmax6yk2nr01jnurwt34_cmtdodlxx6yk0nr01k28llnyp",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 92.742,
+      "bm25Max": 94.467
+    },
+    {
+      "key": "cmtclwviu0ygynr01xqdxh5km_cmtclwo1u0ygcnr01wasvwyua",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 87.114,
+      "bm25Max": 87.777
+    },
+    {
+      "key": "cmtkpcyu0ad70nr01s44cnwco_cmtkpcn86ad6enr01dwcnsh3e",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 118,
+      "currentRejected": false,
+      "currentScoreEffective": 118,
+      "bm25Mean": 133.929,
+      "bm25Max": 140.866
+    },
+    {
+      "key": "cmti7ay6owg9vnr01ps2ja9bo_cmti7axudwg9tnr015uqu9hyi",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 138,
+      "currentRejected": false,
+      "currentScoreEffective": 138,
+      "bm25Mean": 120.256,
+      "bm25Max": 121.532
+    },
+    {
+      "key": "cmta1tgin8yv7nr01cp21jbae_cmta1tg5p8yv4nr0198cdpo1i",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 95,
+      "currentRejected": false,
+      "currentScoreEffective": 95,
+      "bm25Mean": 12.506,
+      "bm25Max": 13.117
+    },
+    {
+      "key": "cmtxbopjs3tuiod01afq9vfgr_cmtw930og3cwunr0136lptyn7",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 22.799,
+      "bm25Max": 27.633
+    },
+    {
+      "key": "cmtzgtqd5g5iood01htxp1y16_cmtzgtzxeg5jaod01lgx3gmc5",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 28.514,
+      "bm25Max": 31.388
+    },
+    {
+      "key": "cmu0nro5xn26aod01tsgh6tn9_cmu0nqtqnn24wod01zrvzh9qa",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 18.144,
+      "bm25Max": 20.518
+    },
+    {
+      "key": "cmtqjc6ui774vnr01ha6eg0y7_cmtqjbgw3773lnr010wnj91be",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 26.363,
+      "bm25Max": 27.19
+    },
+    {
+      "key": "cmtclw8q10ydsnr01eizbf4n5_cmtclwndk0yganr01hea2uegv",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 59.94,
+      "bm25Max": 72.542
+    },
+    {
+      "key": "cmt45fw9pedddo7011hg13tye_cmt45fvrmeddbo701efonv69s",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 118,
+      "currentRejected": false,
+      "currentScoreEffective": 118,
+      "bm25Mean": 40.968,
+      "bm25Max": 43.49
+    },
+    {
+      "key": "cmtlptj42g14vnr01vzltiz64_cmtlptedyg14pnr01nfmb23uy",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 33.288,
+      "bm25Max": 34.875
+    },
+    {
+      "key": "cmtw0j9f5201cnr01hrlhjrqe_cmtw0iv8g200knr01w6561zt5",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 95,
+      "currentRejected": false,
+      "currentScoreEffective": 95,
+      "bm25Mean": 19.409,
+      "bm25Max": 19.972
+    },
+    {
+      "key": "cmu0lmciemq0vod01xpm765cz_cmu0lnrodmq2fod01wlirbkhy",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 13.771,
+      "bm25Max": 13.947
+    },
+    {
+      "key": "cmu56mel9d4urod01uop0xewg_cmu56me9bd4upod01yscbkqfq",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 103,
+      "currentRejected": false,
+      "currentScoreEffective": 103,
+      "bm25Mean": 81.793,
+      "bm25Max": 84.402
+    },
+    {
+      "key": "cmu2qq6yiz11lod01kl5o5klb_cmu2qr80iz175od01wv8xibr6",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 28.956,
+      "bm25Max": 34.583
+    },
+    {
+      "key": "cmtj3h1gr1fz7nr0138s54g5z_cmtj3h0ww1fz3nr0171tkfvxi",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 95,
+      "currentRejected": false,
+      "currentScoreEffective": 95,
+      "bm25Mean": 40.097,
+      "bm25Max": 40.097
+    },
+    {
+      "key": "cmu3r82ql4vpzod01rgw21ozc_cmu3r80j54vptod01kssbwrc7",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 118,
+      "currentRejected": false,
+      "currentScoreEffective": 118,
+      "bm25Mean": 40.229,
+      "bm25Max": 41.721
+    },
+    {
+      "key": "cmu5ll3opfjf7od013reoknvj_cmu62qh2hibm7od01sezyqybb",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 19.652,
+      "bm25Max": 21.091
+    },
+    {
+      "key": "cmu6m1bhvldfqod01e9hhqn09_cmu6m23f1ldglod01vhvkgywe",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 16.285,
+      "bm25Max": 17.708
+    },
+    {
+      "key": "cmu3r5qsk4vmkod01kdoe86eo_cmu3r5num4vmeod01eek3epjj",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 51.241,
+      "bm25Max": 56.868
+    },
+    {
+      "key": "cmtatiym6dd90nr01qn8huhqc_cmtatiudvdd8cnr01bmmw0831",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 45.565,
+      "bm25Max": 53.07
+    },
+    {
+      "key": "cmti7b1j6wgadnr01acsv2p5f_cmti7ayx9wg9znr018gr03m5i",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 98,
+      "currentRejected": false,
+      "currentScoreEffective": 98,
+      "bm25Mean": 19.837,
+      "bm25Max": 20.117
+    },
+    {
+      "key": "cmtqu1ctn8wmbnr01f9dpny44_cmtqu25ff8wnnnr019slnjzch",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 21.094,
+      "bm25Max": 22.324
+    },
+    {
+      "key": "cmtgprlt2o812nr0195twz1cd_cmtgprmdxo814nr01km3fgld8",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 30.408,
+      "bm25Max": 33.472
+    },
+    {
+      "key": "cmtnsxjo3rjh5nr016is65qp3_cmtnsxhocrjgynr01k4gkf7sh",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 20.824,
+      "bm25Max": 21.006
+    },
+    {
+      "key": "cmtr6ysrbaxy8nr014veessba_cmtr6zg10axzanr017nifhls1",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 23.028,
+      "bm25Max": 23.699
+    },
+    {
+      "key": "cmty3j35w86k1od012xwm7yng_cmty3j2l286jxod01e8zsh1ts",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 30.055,
+      "bm25Max": 30.297
+    },
+    {
+      "key": "cmt9vadcw7zo6nr01ppx5mxwx_cmt9va1l47zlxnr01fr652e3n",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 52.366,
+      "bm25Max": 54.229
+    },
+    {
+      "key": "cmttztxysqnmhnr01vurisx4i_cmttztxj3qnmfnr01i21za28t",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 56.261,
+      "bm25Max": 57.452
+    },
+    {
+      "key": "cmt49qh87f2ceo70186vvm6zx_cmt49rbzjf2fio701awiiryey",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 44.262,
+      "bm25Max": 51.866
+    },
+    {
+      "key": "cmtm93qkkiz6enr01knkfa7i1_cmtm93q8iiz6cnr01k5jga5ss",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 18.598,
+      "bm25Max": 19.413
+    },
+    {
+      "key": "cmtxom2k95wqjod01vslulvgs_cmtxom28e5wqhod018aypvjlw",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 54.004,
+      "bm25Max": 55.703
+    },
+    {
+      "key": "cmt6y6fgsubejo701ubcvuh5y_cmt6y6jlyubero701svxejndo",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 7.839,
+      "bm25Max": 8.66
+    },
+    {
+      "key": "cmu56mex3d4utod01h4x6fkqb_cmu56me9bd4upod01yscbkqfq",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 45.709,
+      "bm25Max": 45.934
+    },
+    {
+      "key": "cmt6aln5hql71o701db37r9fn_cmt6aljthql6lo701w881gkdz",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 29.952,
+      "bm25Max": 30.891
+    },
+    {
+      "key": "cmu4y1gn9brgtod010iil9b5z_cmu4y1utcbrhjod01hxvgrxxm",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 13.025,
+      "bm25Max": 13.602
+    },
+    {
+      "key": "cmt020ahs02wvk60136f8yrwq_cmt0209mz02wtk601bu8c67pt",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 15.81,
+      "bm25Max": 16.125
+    },
+    {
+      "key": "cmu56nynqd511od01ltk2i0d1_cmu56nqxfd50dod0154s4ztgd",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 21.806,
+      "bm25Max": 22.987
+    },
+    {
+      "key": "cmtqlkrsn7jlpnr01w5db44pe_cmtqlkp9n7jlhnr01amngoxtg",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 78.253,
+      "bm25Max": 78.913
+    },
+    {
+      "key": "cmu5hburneuj4od01cwnw9lan_cmu5hbs5ieuiqod01zqviglla",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 89,
+      "currentRejected": false,
+      "currentScoreEffective": 89,
+      "bm25Mean": 11.481,
+      "bm25Max": 14.035
+    },
+    {
+      "key": "cmtqwbdi89961nr01617ymjxe_cmtqwbe9g9963nr01m2uaus4u",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 31.824,
+      "bm25Max": 31.863
+    },
+    {
+      "key": "cmt8ftvfa2o9lo701dp1k9veo_cmt8ftufc2o9fo701twxolp26",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 27.955,
+      "bm25Max": 28.252
+    },
+    {
+      "key": "cmt53qjsbjrgso701aoshrjdf_cmt53qjfxjrgqo701ed07t9no",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 15.811,
+      "bm25Max": 16.465
+    },
+    {
+      "key": "cmt80u5hk0b85o701erxr1rr7_cmt80u9gp0b8ko7012b5kerln",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 13.887,
+      "bm25Max": 14.374
+    },
+    {
+      "key": "cmti56rs4w4avnr01no44oyd0_cmti56rhkw4atnr01r4p7u7r7",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 18.575,
+      "bm25Max": 18.796
+    },
+    {
+      "key": "cmtq27fw14gydnr01ncpcs80c_cmtnoj12gquwunr01lo42szxs",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 89,
+      "currentRejected": false,
+      "currentScoreEffective": 89,
+      "bm25Mean": 40.934,
+      "bm25Max": 44.776
+    },
+    {
+      "key": "cmt8521jk0ysto701jyq2d8n5_cmt85322v0yv5o701dbu67yv0",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 7.322,
+      "bm25Max": 7.33
+    },
+    {
+      "key": "cmt5rajvonjhso701s25m1x96_cmt5raih6njhoo70165o6nq0u",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 68.045,
+      "bm25Max": 68.604
+    },
+    {
+      "key": "cmtqlkntn7jl9nr013ltyy38u_cmtp3x9mpz1oknr011t9iesfz",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 89,
+      "currentRejected": false,
+      "currentScoreEffective": 89,
+      "bm25Mean": 11.078,
+      "bm25Max": 12.254
+    },
+    {
+      "key": "cmty5o9wl8ix7od01iiq55hj3_cmty5ongu8ixvod01ivl1cknl",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 89,
+      "currentRejected": false,
+      "currentScoreEffective": 89,
+      "bm25Mean": 41.529,
+      "bm25Max": 41.579
+    },
+    {
+      "key": "cmt01zard02r6k601l7v6nv31_cmt0209mz02wtk601bu8c67pt",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 24.64,
+      "bm25Max": 27.333
+    },
+    {
+      "key": "cmtsbtahrhbkinr01obgizq65_cmtsbtggchbkynr0197l72bh7",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 40.844,
+      "bm25Max": 43.42
+    },
+    {
+      "key": "cmt3hvj2dam5lo701hz2jtdau_cmt3hv62vam53o70151ple4my",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 47.879,
+      "bm25Max": 48.148
+    },
+    {
+      "key": "cmtan3nd8cck5nr01d7sh3iu3_cmtan3fctccjpnr01upu1ig3d",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 32.253,
+      "bm25Max": 33.173
+    },
+    {
+      "key": "cmtl4bd5ocpz8nr01d550f1yy_cmtl4ajsocpxsnr01ow810fy1",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 18.566,
+      "bm25Max": 19.747
+    },
+    {
+      "key": "cmtkxwn44bpn7nr01s7uf289i_cmtkaezaf83mynr01ukkv309o",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 79.288,
+      "bm25Max": 82.215
+    },
+    {
+      "key": "cmtqu1kwz8wmjnr01hxel1cll_cmtqwaibe994nnr01b4alufg0",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 22.474,
+      "bm25Max": 22.474
+    },
+    {
+      "key": "cmt3ocfawbmm7o701a6vi1vx7_cmt3ocewpbmm5o701nwwha5e3",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 46.036,
+      "bm25Max": 48.428
+    },
+    {
+      "key": "cmttztxj3qnmfnr01i21za28t_cmttztx6mqnmdnr01lg61e9et",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 41.751,
+      "bm25Max": 42.635
+    },
+    {
+      "key": "cmtec3p48aojenr01atan8v6x_cmtdut2487yxlnr01l12wyn8b",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 10.895,
+      "bm25Max": 11.69
+    },
+    {
+      "key": "cmszv5skc0jflrz013inxbqw9_cmszv5rth0jfhrz01ml8jgjy4",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 22.997,
+      "bm25Max": 23.935
+    },
+    {
+      "key": "cmta63wx29mtynr01wiog8g45_cmta6453s9muhnr01pziu5jxe",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 17.532,
+      "bm25Max": 19.318
+    },
+    {
+      "key": "cmt76z397vnroo701b6vrppej_cmt76z19avnrco701rzv5euk4",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 9.712,
+      "bm25Max": 9.827
+    },
+    {
+      "key": "cmttkp1gaobgnnr01tqtfbj96_cmttkpo7aobjnnr01a0paq5im",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 44.953,
+      "bm25Max": 45.93
+    },
+    {
+      "key": "cmtktmqgxb1unnr01w7toeft5_cmtktmp7xb1ufnr01kpiggjaf",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 18.139,
+      "bm25Max": 18.733
+    },
+    {
+      "key": "cmtifvkk2xt3cnr01793p2emv_cmtifve88xt2wnr013in6za0r",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 33.105,
+      "bm25Max": 34.301
+    },
+    {
+      "key": "cmt1pm8460kvjo701ivakxmxg_cmt1pm7lg0kvho7017c9285uk",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 12.196,
+      "bm25Max": 12.301
+    },
+    {
+      "key": "cmt80u9gp0b8ko7012b5kerln_cmt6y6fgsubejo701ubcvuh5y",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 20.752,
+      "bm25Max": 22.661
+    },
+    {
+      "key": "cmtxom02b5wq5od01b4c574rd_cmtxomx0c5wrxod01ndhi5hdr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 38.463,
+      "bm25Max": 41.55
+    },
+    {
+      "key": "cmt6ni5wtsmt3o7011b24vurh_cmt6ni7ansmtbo701r4x1iudy",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 12.76,
+      "bm25Max": 13.322
+    },
+    {
+      "key": "cmu1sfzr4tkdcod011mexiles_cmu1sfgx8tkcuod01putddbgy",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 8.289,
+      "bm25Max": 8.617
+    },
+    {
+      "key": "cmt1ewi4z2mn1o101bge542ha_cmt1exaxv2mpno1013734vrzr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 60,
+      "currentRejected": false,
+      "currentScoreEffective": 60,
+      "bm25Mean": 32.2,
+      "bm25Max": 37.056
+    },
+    {
+      "key": "cmti7b2nzwgajnr0122dstxi5_cmti7b1j6wgadnr01acsv2p5f",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 83,
+      "currentRejected": false,
+      "currentScoreEffective": 83,
+      "bm25Mean": 7.611,
+      "bm25Max": 7.728
+    },
+    {
+      "key": "cmt53qok7jrh7o701s00u1563_cmt53qjsbjrgso701aoshrjdf",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 70,
+      "currentRejected": false,
+      "currentScoreEffective": 70,
+      "bm25Mean": 13.393,
+      "bm25Max": 14.385
+    },
+    {
+      "key": "cmttkpojqobjpnr01g7oyobud_cmtsssfe4jy5inr01fqnadisy",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 78,
+      "currentRejected": false,
+      "currentScoreEffective": 78,
+      "bm25Mean": 14.025,
+      "bm25Max": 17.458
+    },
+    {
+      "key": "cmt4xbfubiqtyo7017c83yejd_cmt3wuy35czqbo701e06wc351",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 89,
+      "currentRejected": false,
+      "currentScoreEffective": 89,
+      "bm25Mean": 26.031,
+      "bm25Max": 26.502
+    },
+    {
+      "key": "cmtf3snczf1iqnr01ewh1v4nu_cmtf3ski8f1iinr01t1lztmb3",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 7.198,
+      "bm25Max": 8.04
+    },
+    {
+      "key": "cmu41x8jk6lf5od01ljn5g0ho_cmu41v8v06l85od017g0cb5xg",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 20.255,
+      "bm25Max": 23.334
+    },
+    {
+      "key": "cmt2ltrst5oi1o7018tia2q4x_cmt2lw5mt5oq7o701e7srs2j1",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 8.817,
+      "bm25Max": 9.891
+    },
+    {
+      "key": "cmtkcn4v98fdfnr01tz2dohwy_cmtkacsof83kmnr01ssxyjlx0",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 23.751,
+      "bm25Max": 26.98
+    },
+    {
+      "key": "cmtbpqk5yiawinr01jouq02yn_cmtbprdt1iaxynr01wm0dtutg",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.488,
+      "bm25Max": 12.026
+    },
+    {
+      "key": "cmtgcuw17m879nr01ou4bdfg1_cmtgcuervm86dnr01r5es5bro",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 18.956,
+      "bm25Max": 19.096
+    },
+    {
+      "key": "cmtw0iwzb200snr01yea1l0lg_cmtw0iv8g200knr01w6561zt5",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 15.442,
+      "bm25Max": 15.479
+    },
+    {
+      "key": "cmta884ug9ybcnr01dfk9tjn0_cmta88h4i9ybknr013cbbsz6o",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 16.401,
+      "bm25Max": 18.172
+    },
+    {
+      "key": "cmu4nb9xha22zod016mkvw25u_cmu4nc1k7a249od01by4bu06c",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 13.17,
+      "bm25Max": 13.543
+    },
+    {
+      "key": "cmu0jeliamdkeod016s5nwtxw_cmu0jefyymdk0od01fele80df",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 6.964,
+      "bm25Max": 7.436
+    },
+    {
+      "key": "cmu04efm4jz3nod01um2yjsig_cmu04fgbdjz4zod01zyiw3gxr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 12.9,
+      "bm25Max": 13.079
+    },
+    {
+      "key": "cmu0nqt2cn24sod01b23yzsij_cmu0nqsfon24ood019dvemzxt",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 30.285,
+      "bm25Max": 30.59
+    },
+    {
+      "key": "cmt2lrcj85oeeo701q8b4dcua_cmt2lvlyh5olfo701vnql1ykc",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 18.391,
+      "bm25Max": 20.956
+    },
+    {
+      "key": "cmtkcn0278fd1nr01aqsd0eqk_cmtkcn4v98fdfnr01tz2dohwy",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 21.041,
+      "bm25Max": 22.379
+    },
+    {
+      "key": "cmu2i52fxxnl4od01kdolgkrt_cmu2i5nloxnlood01p5w2wun8",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 18.739,
+      "bm25Max": 19.351
+    },
+    {
+      "key": "cmt6nhiqdsmsno701lepsi4so_cmt6ni5wtsmt3o7011b24vurh",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 8.757,
+      "bm25Max": 9.163
+    },
+    {
+      "key": "cmtb8l09qfodqnr01xp3x7srg_cmtb8jewdfoalnr0121z713db",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 19.341,
+      "bm25Max": 21.026
+    },
+    {
+      "key": "cmu6o6ubplps0od01gczq1g91_cmu6o6nx5lprsod01khfjbhv4",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 10.984,
+      "bm25Max": 12.168
+    },
+    {
+      "key": "cmtni1w7hpu4dnr01wztaxyx0_cmtmfg59hjyzlnr01khq05lo3",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 14.935,
+      "bm25Max": 14.952
+    },
+    {
+      "key": "cmu3r6hmn4vnvod01b0vtesqk_cmu3r5num4vmeod01eek3epjj",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 69,
+      "currentRejected": false,
+      "currentScoreEffective": 69,
+      "bm25Mean": 30.094,
+      "bm25Max": 34.034
+    },
+    {
+      "key": "cmtm93kzeiz5rnr01muf8tppq_cmtm93rwniz6mnr01jlg9c1a0",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.352,
+      "bm25Max": 11.371
+    },
+    {
+      "key": "cmu4aggtj7yxxod01u9isu1xx_cmu4agrby7yydod01e1t42rrp",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 9.509,
+      "bm25Max": 10.315
+    },
+    {
+      "key": "cmtcsarxr1yr4nr01er6h3uv3_cmtcsb6001yrynr01iqdaecw3",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 34.354,
+      "bm25Max": 34.651
+    },
+    {
+      "key": "cmt8oc2la1a04nr01azojnf0f_cmt8obj8619ysnr010g3yv5q2",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 13.646,
+      "bm25Max": 14.248
+    },
+    {
+      "key": "cmu2qrbbzz17bod012k08a7cg_cmu2qq6yiz11lod01kl5o5klb",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.126,
+      "bm25Max": 13.114
+    },
+    {
+      "key": "cmtgw68xrp6tonr01doxnj2kw_cmtgw6fsfp6uhnr016x70tid1",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 12.814,
+      "bm25Max": 14.076
+    },
+    {
+      "key": "cmtr0j0p49x23nr01znrhe0ss_cmtr0j5e49x2gnr015wylzhyk",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 12.902,
+      "bm25Max": 13.462
+    },
+    {
+      "key": "cmtkvrlagbdvgnr01t71h9ke0_cmtkvsjhvbdwsnr011i13id6d",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 22.11,
+      "bm25Max": 28.041
+    },
+    {
+      "key": "cmt2ude0i70bfo70128h3spsi_cmt2ue4sd70dyo701usf8rd99",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 14.09,
+      "bm25Max": 14.75
+    },
+    {
+      "key": "cmthd9182rsa3nr01a248cc3o_cmthd9nxbrsbbnr01p5mcinzt",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.487,
+      "bm25Max": 12.235
+    },
+    {
+      "key": "cmt0xqq1g4z5qk6014t85zucn_cmt0xqps64z5ok601b81ocvaq",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 37.483,
+      "bm25Max": 38.44
+    },
+    {
+      "key": "cmth4tlytqi8unr01hq0gluqu_cmth4uzltqiaynr01jw447m64",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 4.946,
+      "bm25Max": 5.269
+    },
+    {
+      "key": "cmts7cdaxgneenr01erw080om_cmts7ccyignecnr011bwotupj",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 18.021,
+      "bm25Max": 18.458
+    },
+    {
+      "key": "cmtrdjgt5bye1nr0117a8qwec_cmtrdj0nxbydenr01hcxp7vpb",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 7.461,
+      "bm25Max": 7.763
+    },
+    {
+      "key": "cmtclwndk0yganr01hea2uegv_cmtcuih8t2av7nr01i49s9u8l",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 20.55,
+      "bm25Max": 24.981
+    },
+    {
+      "key": "cmu04efm4jz3nod01um2yjsig_cmu04eju7jz3vod016loo7b81",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 16.217,
+      "bm25Max": 17.882
+    },
+    {
+      "key": "cmti56tpiw4b9nr012c1itjc6_cmti56p89w4adnr01e349khia",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.332,
+      "bm25Max": 11.57
+    },
+    {
+      "key": "cmtkna09ba2dvnr01q7ifa4u7_cmtknajyca2eznr01u2ujaxw4",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.18,
+      "bm25Max": 11.519
+    },
+    {
+      "key": "cmtbao5b4g0evnr01mjlivnb6_cmtbanuymg0ennr01os7tqz0n",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 22.586,
+      "bm25Max": 23.488
+    },
+    {
+      "key": "cmu212nz2uxhgod01kxfubhcb_cmu212n7ouxhcod01dpc8be0b",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.815,
+      "bm25Max": 12.205
+    },
+    {
+      "key": "cmt22fi1f2m37o701iuhl7dy0_cmt22gzqd2m56o701ld207svs",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 5.886,
+      "bm25Max": 6.277
+    },
+    {
+      "key": "cmt3hv6paam55o701d5ru8e5h_cmt3hvj2dam5lo701hz2jtdau",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 61.595,
+      "bm25Max": 64.055
+    },
+    {
+      "key": "cmtdsttxk7ndznr01ivv5aili_cmtdsttnn7ndxnr01kqt9zk54",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 10.165,
+      "bm25Max": 10.165
+    },
+    {
+      "key": "cmttxp52qqc69nr01rgbtn83w_cmttxogbtqc56nr016yjyljbo",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 17.798,
+      "bm25Max": 18.091
+    },
+    {
+      "key": "cmtxolx035wprod011sf53j8d_cmtxomx0c5wrxod01ndhi5hdr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 10.977,
+      "bm25Max": 11.301
+    },
+    {
+      "key": "cmtmjw2xsknfgnr01ft2jv9a3_cmtmjs7sjkne9nr01a256cabi",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 55,
+      "currentRejected": false,
+      "currentScoreEffective": 55,
+      "bm25Mean": 8.78,
+      "bm25Max": 9.214
+    },
+    {
+      "key": "cmtiqn8rjzgcsnr01iijyatfr_cmtiqmkaszg9dnr01jvzi3q31",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 12.273,
+      "bm25Max": 12.576
+    },
+    {
+      "key": "cmti14qlfvi1tnr013ilojbk1_cmti15g1gvi2pnr016d508btw",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 9.889,
+      "bm25Max": 10.426
+    },
+    {
+      "key": "cmtr4sjssaljynr01s3laui8o_cmts7ccyignecnr011bwotupj",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 80.69,
+      "bm25Max": 89.031
+    },
+    {
+      "key": "cmt8srv0j1yj3nr01g3nql93y_cmt8uv77529x6nr01mzuvragu",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 18.027,
+      "bm25Max": 18.833
+    },
+    {
+      "key": "cmu170gfrq4t8od0101feefhs_cmu170wt4q4u2od01v6x9fyw0",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 27.175,
+      "bm25Max": 27.304
+    },
+    {
+      "key": "cmta1tgu88yv9nr014t6nv57q_cmta1tfie8yv0nr01fdsjkl3h",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 55,
+      "currentRejected": false,
+      "currentScoreEffective": 55,
+      "bm25Mean": 14.51,
+      "bm25Max": 14.536
+    },
+    {
+      "key": "cmtqnn5017vk9nr01x1o0p304_cmtqnmutp7vjtnr01zw3isx60",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 8.827,
+      "bm25Max": 9.906
+    },
+    {
+      "key": "cmtmdc4wujn3knr018q0bu7cu_cmtmddvfrjn5enr01la7v3um3",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 19.531,
+      "bm25Max": 19.87
+    },
+    {
+      "key": "cmt8m88gr0xoanr01xlh0s2hr_cmt8m88460xo8nr014or823uy",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 55,
+      "currentRejected": false,
+      "currentScoreEffective": 55,
+      "bm25Mean": 24.422,
+      "bm25Max": 24.627
+    },
+    {
+      "key": "cmt6leu7osaxdo7012l8yhqia_cmt6lcsb4saqio7013r2zejzc",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.306,
+      "bm25Max": 13.683
+    },
+    {
+      "key": "cmtnoj1riquwynr01gm1s14xe_cmtnoj2w3qux4nr011f4mwodr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 14.355,
+      "bm25Max": 15.488
+    },
+    {
+      "key": "cmu2mgs4qycedod01k147taeo_cmu2mgrgsyce9od01eiob7ezt",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 58,
+      "currentRejected": false,
+      "currentScoreEffective": 58,
+      "bm25Mean": 11.608,
+      "bm25Max": 11.864
+    },
+    {
+      "key": "cmt6nhiqdsmsno701lepsi4so_cmt6niellsmtjo7011o02el8z",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 9.747,
+      "bm25Max": 10.521
+    },
+    {
+      "key": "cmtnqnb2ur71lnr01w1w9q9mm_cmtmq9gvxll03nr01sfe2qxfe",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 3.444,
+      "bm25Max": 3.531
+    },
+    {
+      "key": "cmtlrwwgzgd5gnr0149dum2ss_cmtlrwb1ygd44nr01zjh2dse7",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 4.854,
+      "bm25Max": 4.866
+    },
+    {
+      "key": "cmtlrwm36gd4snr01rlb3ycud_cmtlrwb1ygd44nr01zjh2dse7",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 5.341,
+      "bm25Max": 5.511
+    },
+    {
+      "key": "cmtj9xl9v2fncnr01pjkx3227_cmtj5ltax1s1gnr018nc3eogr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 5.385,
+      "bm25Max": 5.459
+    },
+    {
+      "key": "cmtqw9qlw993unr01jv1zdvbk_cmtqw9uu89942nr010sbmkh4m",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 30.061,
+      "bm25Max": 30.854
+    },
+    {
+      "key": "cmtifvmrsxt3mnr018ajbogqt_cmti7azzowga5nr019d7e9mgi",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 30.805,
+      "bm25Max": 32.368
+    },
+    {
+      "key": "cmtchjebq09ljnr01xlfqo3z2_cmtchjdps09lhnr01vmpbhp66",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 48,
+      "currentRejected": false,
+      "currentScoreEffective": 48,
+      "bm25Mean": 26.728,
+      "bm25Max": 28.557
+    },
+    {
+      "key": "cmtcdbkt8lydwnr01g84j1n9t_cmtcdbmo7lye8nr01xrp9b8xn",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 10.616,
+      "bm25Max": 11.935
+    },
+    {
+      "key": "cmtul37dltvc5nr01iivkjist_cmtul33ndtvbznr01xc90l318",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 68,
+      "currentRejected": false,
+      "currentScoreEffective": 68,
+      "bm25Mean": 61.773,
+      "bm25Max": 65.488
+    },
+    {
+      "key": "cmtwfji984e6anr01acvdhmfe_cmtwb9gzw3pfqnr01tqzsz9o6",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 11.893,
+      "bm25Max": 12.155
+    },
+    {
+      "key": "cmu3xkycv5wk0od01h9w4jbdr_cmu3xldft5wkwod018bq226ix",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 4.719,
+      "bm25Max": 4.84
+    },
+    {
+      "key": "cmtclw6x00ydknr01xn076fwz_cmtclwndk0yganr01hea2uegv",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 2.273,
+      "bm25Max": 2.489
+    },
+    {
+      "key": "cmtul2xretvbjnr01imfakdok_cmtul37dltvc5nr01iivkjist",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 30.931,
+      "bm25Max": 32.408
+    },
+    {
+      "key": "cmtm93rkriz6knr01onfi4pgl_cmtm6w5skimjjnr01eccpcp5n",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 12.04,
+      "bm25Max": 14.959
+    },
+    {
+      "key": "cmt24klbv2xvjo701yii9wkz8_cmt2jk2ur5c4oo701or1ydrwc",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 5.973,
+      "bm25Max": 6.44
+    },
+    {
+      "key": "cmti56sl5w4b1nr01k1vkf6ge_cmti56s1iw4axnr01876uthtg",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 9.344,
+      "bm25Max": 10.961
+    },
+    {
+      "key": "cmtatgy9zdd02nr01s34oiy8i_cmtatixjudd8unr012c9v6ef5",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 9.288,
+      "bm25Max": 10.207
+    },
+    {
+      "key": "cmtifvi5oxt33nr01tvo80txt_cmti15g1gvi2pnr016d508btw",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 6.368,
+      "bm25Max": 7.543
+    },
+    {
+      "key": "cmtktmljjb1tvnr01l1vhwzqx_cmti157i4vi29nr01iksvo8q0",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 4.659,
+      "bm25Max": 5.157
+    },
+    {
+      "key": "cmtlh7i3leorpnr01m6qsd7wl_cmtlh7d8ueoqxnr0130dhgjnr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 43,
+      "currentRejected": false,
+      "currentScoreEffective": 43,
+      "bm25Mean": 13.127,
+      "bm25Max": 14.526
+    },
+    {
+      "key": "cmtii4yrny5conr01oz65yw9p_cmtii5rw9y5dcnr013slnuj5f",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 33.74,
+      "bm25Max": 34.97
+    },
+    {
+      "key": "cmtvavlxqxwjwnr01d8dnjbqq_cmtvava0cxwjinr01m0atzbp3",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 12.897,
+      "bm25Max": 13.368
+    },
+    {
+      "key": "cmtmq9gvxll03nr01sfe2qxfe_cmtmqalo6ll22nr01vf8ifz8x",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 5.057,
+      "bm25Max": 5.552
+    },
+    {
+      "key": "cmtt1d7ogla98nr018a4g3z5u_cmttkoko3obg7nr01ea4kb1ya",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 37.868,
+      "bm25Max": 38.096
+    },
+    {
+      "key": "cmttgcwp7nnhenr01berkka0k_cmttger21nnjqnr01ckwdi80s",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 13.553,
+      "bm25Max": 15.125
+    },
+    {
+      "key": "cmttgcwp7nnhenr01berkka0k_cmtuahl5ssa71nr01yvmz3x12",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 14.406,
+      "bm25Max": 15.115
+    },
+    {
+      "key": "cmts0ycm9fnucnr015bwsivns_cmts0zf46fnvunr010urmybxk",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 13.265,
+      "bm25Max": 14.985
+    },
+    {
+      "key": "cmthyqgm5v61vnr018fte9207_cmti14sh4vi21nr014lomtwuw",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 2.909,
+      "bm25Max": 3.129
+    },
+    {
+      "key": "cmt6lcsb4saqio7013r2zejzc_cmt6lcy7esaqqo701pbzjfwi9",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 20.929,
+      "bm25Max": 21.212
+    },
+    {
+      "key": "cmtclw8q10ydsnr01eizbf4n5_cmtchjdps09lhnr01vmpbhp66",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 68,
+      "currentRejected": false,
+      "currentScoreEffective": 68,
+      "bm25Mean": 24.459,
+      "bm25Max": 25.56
+    },
+    {
+      "key": "cmtm93s9giz6onr01xg3s25nu_cmtm6w5skimjjnr01eccpcp5n",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 7.552,
+      "bm25Max": 9.361
+    },
+    {
+      "key": "cmtcdbpb9lyeonr014yg0lr4o_cmtcdaa54ly8anr01kjy7g67z",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 48.868,
+      "bm25Max": 55.083
+    },
+    {
+      "key": "cmu0lkty5mpzdod01bsfbpzqm_cmu0lkunempzhod01uj2j8zmh",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 10.949,
+      "bm25Max": 11.026
+    },
+    {
+      "key": "cmtj5md2d1s29nr011vl76aau_cmtj5ltax1s1gnr018nc3eogr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 4.771,
+      "bm25Max": 4.827
+    },
+    {
+      "key": "cmttmzl70onsbnr01w9kg1emf_cmtt3is42lmtcnr01ne5pz9o8",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 7.187,
+      "bm25Max": 7.693
+    },
+    {
+      "key": "cmtw2oujn2chrnr018l1thgqd_cmttgdwtannifnr01guzgbk0i",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 5.315,
+      "bm25Max": 5.503
+    },
+    {
+      "key": "cmt4mlmjch1ago701dc3qlgfm_cmt4g8tplg1hqo701l6hnrg32",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 3.831,
+      "bm25Max": 4.009
+    },
+    {
+      "key": "cmtyxl547d1i5od01pxpth7zc_cmtyxlsymd1jaod01hzcy2ax0",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 5.755,
+      "bm25Max": 6.17
+    },
+    {
+      "key": "cmtp3xbyjz1ownr01disouo0q_cmtp3x9mpz1oknr011t9iesfz",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 8.219,
+      "bm25Max": 9.127
+    },
+    {
+      "key": "cmt0ei2481xwok6019ddv4pov_cmt1h5hfq05dunx01nkysrcmf",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 24.378,
+      "bm25Max": 25.263
+    },
+    {
+      "key": "cmu6bbatujninod01yx47ixfo_cmu60l6gshz16od014okpzzre",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 19.99,
+      "bm25Max": 25.106
+    },
+    {
+      "key": "cmth2npd4q6ksnr015k3u2ock_cmth2n05yq6jtnr01culr93vg",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 29.03,
+      "bm25Max": 35.56
+    },
+    {
+      "key": "cmttgcwp7nnhenr01berkka0k_cmttgerpdnnjsnr01o1yeloxr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 17.851,
+      "bm25Max": 18.012
+    },
+    {
+      "key": "cmtnsxkuzrjhdnr01abifrfzg_cmtm6vpv7imj3nr01exmduc9v",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 6.162,
+      "bm25Max": 6.929
+    },
+    {
+      "key": "cmtn7df1go58vnr01njy2tz1y_cmtmq9gvxll03nr01sfe2qxfe",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 11.194,
+      "bm25Max": 12.24
+    },
+    {
+      "key": "cmthyqyz4v631nr01zs9tcdbf_cmth2npd4q6ksnr015k3u2ock",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 24.183,
+      "bm25Max": 24.919
+    },
+    {
+      "key": "cmtiuxtvx03kvnr012maanxsj_cmtiuycy003lrnr01y9sattdx",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 9.759,
+      "bm25Max": 10.115
+    },
+    {
+      "key": "cmtiz54180r6onr01y2ttx96z_cmtiz59zq0r6wnr014kvw0085",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 19.929,
+      "bm25Max": 21.776
+    },
+    {
+      "key": "cmthbb71trh44nr014eljnv9m_cmthbaxpmrh3inr01xrxduq4t",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 5.053,
+      "bm25Max": 5.07
+    },
+    {
+      "key": "cmtbaogcpg0f3nr01gffv219s_cmtaxu547e1khnr016fxuy9g3",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 49,
+      "currentRejected": false,
+      "currentScoreEffective": 49,
+      "bm25Mean": 15.381,
+      "bm25Max": 16.409
+    },
+    {
+      "key": "cmt6tvovmtmpco7013y69t2j1_cmt6w15wltz18o701t3mklsra",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 4.797,
+      "bm25Max": 4.946
+    },
+    {
+      "key": "cmt0xqq1g4z5qk6014t85zucn_cmt1pnrtd0kzeo701jlhq5n18",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 13.113,
+      "bm25Max": 13.448
+    },
+    {
+      "key": "cmtjgctf03g9enr017uteyx48_cmthuk4itui9enr0117nvhbi6",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 33.916,
+      "bm25Max": 34.417
+    },
+    {
+      "key": "cmtp3x9mpz1oknr011t9iesfz_cmtp3x977z1oinr01slumssfw",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 0,
+      "currentRejected": "object_conflict",
+      "currentScoreEffective": -1000000000,
+      "bm25Mean": 7.351,
+      "bm25Max": 7.988
+    },
+    {
+      "key": "cmtlh7hf2eorlnr01pbcskphf_cmtlh7d8ueoqxnr0130dhgjnr",
+      "dataset": "eval-sample-30d",
+      "label": "diff",
+      "currentScore": 43,
+      "currentRejected": false,
+      "currentScoreEffective": 43,
+      "bm25Mean": 12.763,
+      "bm25Max": 14.556
+    }
+  ]
+}

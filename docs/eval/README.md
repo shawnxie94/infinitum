@@ -16,6 +16,7 @@
 - `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 行 / 238 unique pair，含 2 重复 failed pair）
 - `production-declined-2026-09-20.csv` — 生产快照中双方仍存活的 200 条最新 declined pair，作为困难负例；不作为 approved 正例
 - `production-overmerge-2026-09-23.csv` — **decision-layer FP 负例 + 漏合并正例对照**：2026-09-21/22 生产误合并聚类重建的 19 对（14 diff / 4 same / 1 uncertain）+ 2026-09-23 追加第二批（1 diff：HN 营销腔↔HarnessTax；5 same：Step5Preview、Gemini 入侵、豆包手机/NaviX、Amodei 节奏、Claude Code Projects 的碎片化漏合并对，双侧 cluster 存活故为 cluster 级文本，`verdictStored=none` 表示生产从未提名送审），共 25 对（15 diff / 9 same / 1 uncertain）；配 `eval:overmerge-gate` 使用。现有其余负例全部来自 declined 决策，本文件是唯一覆盖「LLM 批准了不该批准」盲区的集合
+- `bm25-ab-result-2026-09-23.json` — 词汇打分通道 A/B 实验（`scripts/eval-bm25-vs-lexical.ts`）：BM25(in-code, bigram+in-window IDF) 对照现有 scoreClusterMergeCandidatePair。结论：碎片化变体/同日异事件层（overmerge 集）BM25 AUC 1.0 vs 0.52（median 192 vs 28）；below-gray 双低层两者均弱（0.59 vs 0.63）；eval-sample approved 12 对因合并删侧缺文本无法重算（数据闭环动机案例），且现有守卫会否决全部 12 对（守卫漂移，需重校准）
 
 ## 复跑
 
