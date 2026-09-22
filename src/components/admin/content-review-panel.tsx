@@ -747,15 +747,22 @@ function ClusterReviewModal({
             暂无待处理复核
           </EmptyState>
         ) : (
-          <div className="w-full overflow-x-auto">
-            <table className="w-full table-auto text-sm">
+          <div className="w-full overflow-x-auto rounded-lg border border-[color:var(--line)]">
+            <table className="w-full min-w-[64rem] table-fixed text-sm">
+              <colgroup>
+                <col className="w-[10%]" />
+                <col className="w-[25%]" />
+                <col className="w-[25%]" />
+                <col className="w-[30%]" />
+                <col className="w-[10%]" />
+              </colgroup>
               <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
                 <tr>
-                  <th className="w-[12%] whitespace-nowrap px-3 py-2 text-left">判定</th>
-                  <th className="w-[24%] px-3 py-2 text-left">左聚合</th>
-                  <th className="w-[24%] px-3 py-2 text-left">右聚合</th>
-                  <th className="w-[24%] px-3 py-2 text-left">判断依据</th>
-                  <th className="w-[10%] whitespace-nowrap px-3 py-2 text-right">操作</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-left">判定</th>
+                  <th className="px-3 py-2 text-left">左聚合</th>
+                  <th className="px-3 py-2 text-left">右聚合</th>
+                  <th className="px-3 py-2 text-left">判断依据</th>
+                  <th className="whitespace-nowrap px-3 py-2 text-right">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--line)]">
@@ -797,8 +804,10 @@ function ClusterReviewModal({
                           {candidate.rightCluster.itemCount} 条 · {formatDate(candidate.rightCluster.latestPublishedAt)}
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-xs leading-5 text-[var(--text-2)]">
-                        {reason}
+                      <td className="max-w-0 px-3 py-3 text-xs leading-5 text-[var(--text-2)]">
+                        <div className="line-clamp-3 break-words [overflow-wrap:anywhere]" title={reason}>
+                          {reason}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
