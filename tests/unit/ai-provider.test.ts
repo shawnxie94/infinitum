@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createAiProvider } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import type { DailyReportReviewInput } from "@/lib/daily-report/types";
 

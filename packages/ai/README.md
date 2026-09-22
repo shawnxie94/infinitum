@@ -21,7 +21,7 @@
 - `@mastra/libsql` **1.23.0**
 - `@libsql/client` ^0.18.0（与 @mastra/libsql 同源）
 
-## 验证门结论（12/12 PASS，`npm run verify:mastra-p0` 可复跑）
+## 验证门结论（12/12 PASS，P0 历史记录，harness 已删除不可复跑）
 
 | 门 | 结论 |
 |---|---|
@@ -44,13 +44,8 @@
 4. **崩溃恢复无自动开关**：1.67 `Config.recovery` 仅 `durableAgents`；`autoRestartActiveRuns` 配置不存在（记忆中的调研口径过时）。worker 启动时显式调一次 `restartAllActiveWorkflowRuns()` 即可（与 spec D4/C8 兼容）。
 5. **run 状态表是 `mastra_workflow_snapshot`**（无 `mastra_workflow_runs`），status 在 snapshot JSON 内（`json_extract(snapshot,'$.status')`）。
 6. **`mastra.on(topic)` 无公开类型面**：events 子路径提供 PubSub/EventEmitterPubSub，但无公开事件名注册表——D4 主机制定为 workflow 级回调 + D6 wrapper 采集（与 spec Revision 2 预案一致，无需修订）。
-7. busy_timeout 默认 0；双进程同库在低并发下无锁冲突，P1a 接入真实 dev.db 时建议显式设置。
+7. LibSQLStore 初始化时自动设置 `journal_mode=WAL` 与 `busy_timeout=5000`（@mastra/libsql 1.23.0 实测；P0 期间"默认 0"的记录已过时）。双进程同库在低并发下无锁冲突。
 
-## 复跑方式
+## P0 历史说明
 
-```bash
-npm run db:setup            # 前置：worktree 内生成 prisma/dev.db
-npm run verify:mastra-p0    # 全套验证门（写 packages/ai/src/verify/results.json）
-```
-
-P0 临时产物清单（P1a 清理）：`src/verify/*`、`src/app/api/mastra-p0/route.ts`、`workflows/{hello,recoverable,cancellable}.ts`（正式域工作流在 P1b-P4 另建）。
+P0 验证产物（`src/runtime.ts`、`src/workflows/`、`src/verify/`、主仓 `src/app/api/mastra-p0/` 与 `verify:mastra-p0` 脚本）已于 2026-09-23 迁移终态扫尾时删除，上方验证门结论保留为历史记录，不可复跑。

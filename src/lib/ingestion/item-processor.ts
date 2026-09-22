@@ -3,7 +3,7 @@ import type { Item } from "@prisma/client";
 import { AGGREGATION_PARSE_STATUS, RETRIABLE_AGGREGATION_PARSE_STATUSES } from "@/lib/aggregation/status";
 import { persistAggregationChildItems } from "@/lib/aggregation/persist";
 import { normalizeStoredSummary } from "@/lib/ai/summary-quality";
-import type { AiEventSignature } from "@/lib/ai/provider";
+import type { AiEventSignature } from "@/lib/ai/provider-types";
 import type { ClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { assignItemToCluster } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";

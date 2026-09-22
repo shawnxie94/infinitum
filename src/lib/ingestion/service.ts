@@ -4,7 +4,7 @@ import type { BackgroundTaskRun, FetchRun, FetchRunStatus, Item, Source } from "
 
 import { INGESTION_PROGRESS_FLUSH_INTERVAL_MS } from "@/config/constants";
 import type { RuntimeConfig } from "@/config/runtime";
-import { createAiProvider } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
 import {
   executeClusterMerge,
   recomputeCluster,

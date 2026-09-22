@@ -10,7 +10,7 @@ import {
   CLUSTER_MERGE_DIRTY_NEIGHBOR_SCAN_LIMIT,
   CLUSTER_MERGE_RELATED_PAIR_LIMIT,
 } from "@/config/constants";
-import { type AiEventSignature, type AiProvider } from "@/lib/ai/provider";
+import { type AiEventSignature, type AiProvider } from "@/lib/ai/provider-types";
 import { shouldRegenerateChineseSummary } from "@/lib/ai/summary-language";
 import type { ClusterAssignmentCandidate } from "@/lib/clusters/repository";
 import {

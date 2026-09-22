@@ -22,7 +22,7 @@ import {
   type ItemRegenerationInput,
   type RegenerationTarget,
 } from "@/lib/items/service";
-import type { ItemUnderstandingResult } from "@/lib/ai/provider";
+import type { ItemUnderstandingResult } from "@/lib/ai/provider-types";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 import { executePrecomputeWorkflowStage, type PrecomputeWorkflowPayload } from "@/lib/precompute/service";
 import { executeIngestionWorkflowStage, type IngestionWorkflowStage } from "@/lib/ingestion/workflow-stages";
@@ -88,7 +88,7 @@ function createItemReparseDefinition(): DomainTaskDefinition {
     kind: "item_reparse_aggregations",
     stages: stages.map((id) => ({
       id,
-      execute: async (input, context) => executeItemReparseWorkflowStage(id, input as never, {
+      execute: async (input, context) => executeItemReparseWorkflowStage(id, input, {
         onAiUsage: async (usage) => context.projectAiUsage?.(usage),
       }),
     })),

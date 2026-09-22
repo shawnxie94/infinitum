@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./runtime": "./src/runtime.ts",
     "./provider/gateway": "./src/provider/gateway.ts",
     "./provider/transports": "./src/provider/transports.ts",
     "./provider/types": "./src/provider/types.ts",

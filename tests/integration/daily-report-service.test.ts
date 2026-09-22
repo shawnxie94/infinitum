@@ -25,7 +25,8 @@ const {
   writeDailyReportMock: vi.fn(),
 }));
 
-vi.mock("@/lib/ai/provider", () => ({
+vi.mock("@/lib/ai/provider-next", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createAiProvider: vi.fn(() => ({
     assessDailyReportCandidates: assessDailyReportCandidatesMock,
     planDailyReport: planDailyReportMock,

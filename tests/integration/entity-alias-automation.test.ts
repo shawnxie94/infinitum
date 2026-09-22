@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createEmbedTexts, type EmbedTextsFn } from "@/lib/ai/embeddings";
-import type { AiProvider, EntityAliasCheckDecision } from "@/lib/ai/provider";
+import type { AiProvider, EntityAliasCheckDecision } from "@/lib/ai/provider-types";
 import { precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
 import {

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { executeItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
 import { reanalyzeItem } from "@/lib/items/service";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
-import type { AiProvider } from "@/lib/ai/provider";
+import type { AiProvider } from "@/lib/ai/provider-types";
 
 function buildUnderstandingProvider(overrides: {
   summary: string;

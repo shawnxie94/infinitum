@@ -1,6 +1,6 @@
 import type { ItemStatus, SourceConfig } from "@/lib/feed/types";
 
-import type { AiProvider } from "@/lib/ai/provider";
+import type { AiProvider } from "@/lib/ai/provider-types";
 import type {
   TaskAiCallBreakdownSnapshot,
   TaskStageTimingSnapshot,

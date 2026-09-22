@@ -4,7 +4,8 @@ import type { BackgroundTaskRun } from "@prisma/client";
 import type { StepExecutionIdentity } from "@infinitum/ai/provider/types";
 import type { TaskExecutionContext } from "@infinitum/ai/orchestration/lifecycle";
 
-import { createAiProvider, type DailyReportStageContext } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
+import { type DailyReportStageContext } from "@/lib/ai/provider-types";
 import { prisma } from "@/lib/db";
 import { getDailyReportDateRange, getTodayDailyReportDate, normalizeDailyReportDate } from "@/lib/daily-report/date";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";

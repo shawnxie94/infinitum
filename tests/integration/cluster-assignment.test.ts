@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AiProvider } from "@/lib/ai/provider";
+import type { AiProvider } from "@/lib/ai/provider-types";
 import { CLUSTER_MERGE_SCAN_CLUSTER_LIMIT } from "@/config/constants";
 import { buildEventIdentity } from "@/lib/clusters/identity";
 import {

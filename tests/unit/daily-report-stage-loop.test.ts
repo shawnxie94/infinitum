@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { runDailyReportStageLoop } from "@/lib/daily-report/stage-loop";
-import type { DailyReportStageContext } from "@/lib/ai/provider";
+import type { DailyReportStageContext } from "@/lib/ai/provider-types";
 
 describe("daily report stage loop", () => {
   it("reuses the stage context for validation feedback and keeps clean retries isolated", async () => {

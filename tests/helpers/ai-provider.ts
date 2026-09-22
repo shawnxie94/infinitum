@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 
-import type { AiProvider } from "@/lib/ai/provider";
+import type { AiProvider } from "@/lib/ai/provider-types";
 
 export function buildEventSignature(
   overrides: Partial<{

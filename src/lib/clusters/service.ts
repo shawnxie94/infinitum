@@ -21,13 +21,9 @@ import {
   CLUSTER_MERGE_SCAN_CLUSTER_LIMIT,
 } from "@/config/constants";
 
-import {
-  buildClusterMergeGroupsFromDecisions,
-  createAiProvider,
-  type AiEventSignature,
-  type AiProvider,
-  type ClusterMergeDecision,
-} from "@/lib/ai/provider";
+import { buildClusterMergeGroupsFromDecisions } from "@/lib/ai/protocols/cluster";
+import { createAiProvider } from "@/lib/ai/provider-next";
+import { type AiEventSignature, type AiProvider, type ClusterMergeDecision } from "@/lib/ai/provider-types";
 import {
   buildCandidateRange,
   buildCandidateRangeKey,

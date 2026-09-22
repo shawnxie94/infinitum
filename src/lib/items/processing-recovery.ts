@@ -4,7 +4,8 @@ import {
   ITEM_PROCESSING_RECOVERY_MAX_ATTEMPTS,
   ITEM_PROCESSING_RECOVERY_MAX_ROUNDS,
 } from "@/config/constants";
-import { createAiProvider, type AiProvider } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
+import { type AiProvider } from "@/lib/ai/provider-types";
 import { RETRIABLE_AGGREGATION_PARSE_STATUSES } from "@/lib/aggregation/status";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";

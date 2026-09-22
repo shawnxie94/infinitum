@@ -1,5 +1,6 @@
 import { createEmbedTexts } from "@/lib/ai/embeddings";
-import { createAiProvider, type AiProvider } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
+import { type AiProvider } from "@/lib/ai/provider-types";
 import { precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
 import {

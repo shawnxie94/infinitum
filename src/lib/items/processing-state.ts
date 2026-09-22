@@ -3,7 +3,7 @@ import {
   ITEM_PROCESSING_RECOVERY_MAX_ATTEMPTS,
   ITEM_PROCESSING_RECOVERY_MAX_DELAY_MS,
 } from "@/config/constants";
-import type { AiEventSignature } from "@/lib/ai/provider";
+import type { AiEventSignature } from "@/lib/ai/provider-types";
 import {
   AGGREGATION_PARSE_STATUS,
   RETRIABLE_AGGREGATION_PARSE_STATUSES,

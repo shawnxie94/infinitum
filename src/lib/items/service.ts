@@ -4,7 +4,8 @@ import {
   AGGREGATION_PARSE_STATUS,
   RETRIABLE_AGGREGATION_PARSE_STATUSES,
 } from "@/lib/aggregation/status";
-import { createAiProvider, type AiCallUsage, type AiEventSignature, type AiProvider, type ItemUnderstandingResult } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
+import { type AiCallUsage, type AiEventSignature, type AiProvider, type ItemUnderstandingResult } from "@/lib/ai/provider-types";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import { createClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
@@ -1474,7 +1475,7 @@ function isItemReparseWorkflowPayload(value: unknown): value is ItemReparseWorkf
 
 export async function executeItemReparseWorkflowStage(
   stage: "read" | "ai_call" | "cluster_finalize",
-  payload?: ItemReparseWorkflowPayload,
+  payload?: unknown,
   options?: {
     onAiUsage?: (usage: TaskAiUsageSnapshot) => Promise<void>;
   },

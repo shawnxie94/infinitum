@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { AiProvider } from "@/lib/ai/provider";
+import type { AiProvider } from "@/lib/ai/provider-types";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 
 describe("task AI usage provider wrapper", () => {

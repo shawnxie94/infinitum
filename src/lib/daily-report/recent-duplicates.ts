@@ -1,6 +1,6 @@
 
 
-import { type AiEventSignature } from "@/lib/ai/provider";
+import { type AiEventSignature } from "@/lib/ai/provider-types";
 import { type RecentDailyReportSourceSnapshot } from "@/lib/daily-report/repository";
 import { type DailyReportCandidate } from "@/lib/daily-report/types";
 import { normalizeEventSignatureForStorage } from "@/lib/clusters/normalization";

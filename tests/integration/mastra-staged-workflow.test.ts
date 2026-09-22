@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/ai/provider", () => ({
+vi.mock("@/lib/ai/provider-next", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   createAiProvider: () => new Proxy({}, { get: () => vi.fn(async () => null) }),
 }));
 

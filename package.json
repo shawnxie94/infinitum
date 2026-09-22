@@ -28,8 +28,7 @@
     "test": "npm run prisma:generate && npm run db:test:setup && vitest run --coverage",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
-    "schema:generate": "node scripts/generate-sqlite-schema.mjs",
-    "verify:mastra-p0": "tsx packages/ai/verify/run-all.ts"
+    "schema:generate": "node scripts/generate-sqlite-schema.mjs"
   },
   "dependencies": {
     "@ant-design/nextjs-registry": "^1.3.0",

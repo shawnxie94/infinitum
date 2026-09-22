@@ -18,7 +18,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 import { buildEventFingerprint } from "@/lib/clusters/identity";
-import type { AiEventSignature } from "@/lib/ai/provider";
+import type { AiEventSignature } from "@/lib/ai/provider-types";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");

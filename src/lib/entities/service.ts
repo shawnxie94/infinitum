@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { CLUSTER_LOOKBACK_MS } from "@/config/constants";
 import { prisma } from "@/lib/db";
 import { resetMentionResolverCache } from "@/lib/entities/mention-resolution";
-import type { AiProvider } from "@/lib/ai/provider";
+import type { AiProvider } from "@/lib/ai/provider-types";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { invalidateEventBriefingCache } from "@/lib/events/cache";

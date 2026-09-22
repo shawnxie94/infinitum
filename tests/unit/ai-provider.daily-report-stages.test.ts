@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createAiProvider, createDailyReportStageContext } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
+import { createDailyReportStageContext } from "@/lib/ai/provider-types";
 import { DEFAULT_DAILY_REPORT_TEMPLATE, normalizeDailyReportTemplateConfig } from "@/lib/daily-report/template";
 import type { DailyReportPlanningCandidate, DailyReportPlanningCandidateBrief } from "@/lib/daily-report/types";
 

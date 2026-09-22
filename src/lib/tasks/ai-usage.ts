@@ -1,5 +1,5 @@
-import type { AiProvider } from "@/lib/ai/provider";
-import type { AiCallUsage } from "@/lib/ai/provider";
+import type { AiProvider } from "@/lib/ai/provider-types";
+import type { AiCallUsage } from "@/lib/ai/provider-types";
 import { getAiTaskContract } from "@/lib/ai/contracts";
 import { AI_OPERATION_REGISTRY } from "@/lib/ai/operations";
 import { createUsageLedger } from "@infinitum/ai/provider/usage-ledger";

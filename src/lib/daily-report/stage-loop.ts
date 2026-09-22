@@ -1,8 +1,4 @@
-import {
-  type DailyReportStage,
-  type DailyReportStageContext,
-  type DailyReportStageValidationFeedback,
-} from "@/lib/ai/provider";
+import { type DailyReportStage, type DailyReportStageContext, type DailyReportStageValidationFeedback } from "@/lib/ai/provider-types";
 import { runStageLoop, StageLoopError } from "@infinitum/ai/orchestration/stage-loop";
 import type { DailyReportViolation } from "@/lib/daily-report/types";
 

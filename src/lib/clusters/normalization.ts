@@ -1,4 +1,4 @@
-import type { AiEventSignature } from "@/lib/ai/provider";
+import type { AiEventSignature } from "@/lib/ai/provider-types";
 import { collapseWhitespace, trimBoundaryPunctuation } from "@/lib/utils/text";
 
 const EVENT_TYPES = new Set<NonNullable<AiEventSignature["eventType"]>>([

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import type { AiEventSignature } from "@/lib/ai/provider";
+import type { AiEventSignature } from "@/lib/ai/provider-types";
 import {
   getEventDatePrecision,
   normalizeEventDateForStorage,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createAiProvider } from "@/lib/ai/provider";
+import { createAiProvider } from "@/lib/ai/provider-next";
 import { ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE } from "@/config/prompts";
 import {
   DEFAULT_QUALITY_RUBRIC,
