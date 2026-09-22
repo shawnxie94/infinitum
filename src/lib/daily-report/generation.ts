@@ -27,7 +27,7 @@ import { type TaskPipelineCheckpoint } from "@/lib/tasks/types";
 import type { TaskAiCallBreakdownSnapshot } from "@/lib/tasks/types";
 import { parseTaskPipelineCheckpointJson } from "@/lib/tasks/checkpoint";
 import { ensureDefaultDailyReportSchedule, isTaskRunCancellationRequested, parseDailyReportChannelIdsJson, TASK_RUN_CANCELLED_LABEL, TASK_RUN_CANCELLED_MESSAGE, updateTaskRun } from "@/lib/tasks/service";
-import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
+import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/ai-usage";
 import { buildDailyReportTaskTimeline, normalizeDailyReportTimelineStage, type DailyReportPipelineStage } from "@/lib/daily-report/timeline";
 import { getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
 import { DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS } from "@/lib/tasks/scheduler";
@@ -1350,6 +1350,22 @@ export async function generateDailyReport(input: {
   });
 }
 
+function compactCompletedDailyReportCheckpoint(checkpoint: TaskPipelineCheckpoint): TaskPipelineCheckpoint {
+  const compact: TaskPipelineCheckpoint = {
+    ...checkpoint,
+    data: {
+      ...(checkpoint.data ?? {}),
+      candidateSnapshotStorage: "daily_report",
+      checkpointCompacted: true,
+    },
+  };
+  // A persisted DailyReport already owns the candidate snapshot. Keep the
+  // assessment batches and planning briefs because recovery UI and retries
+  // still use them, but avoid duplicating the full candidate snapshot.
+  delete compact.candidateSnapshot;
+  return compact;
+}
+
 export async function executeDailyReportTask(taskRun: BackgroundTaskRun, options?: { reuseCompletedReview?: boolean }) {
   const date = taskRun.entityId && /^\d{4}-\d{2}-\d{2}$/.test(taskRun.entityId)
     ? taskRun.entityId
@@ -1580,7 +1596,9 @@ export async function executeDailyReportTask(taskRun: BackgroundTaskRun, options
       }),
       // Keep the final planning inputs and plan so a completed report can be
       // regenerated from ASSESS/PLAN/WRITE as a new task.
-      pipelineCheckpoint: finalPipelineCheckpoint,
+      pipelineCheckpoint: finalPipelineCheckpoint && result.report
+        ? compactCompletedDailyReportCheckpoint(finalPipelineCheckpoint)
+        : finalPipelineCheckpoint,
       finishedAt,
     });
     await markDailyScheduleRunFinished(taskRun, finalStatus);
@@ -1708,6 +1726,7 @@ export type DailyReportWorkflowStage = typeof DAILY_REPORT_WORKFLOW_STAGES[numbe
 export type DailyReportWorkflowProjection = {
   onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
   onProgress?: (label: string) => Promise<void>;
+  onAiUsage?: (usage: TaskAiUsageSnapshot) => Promise<void>;
 };
 
 /** Execute one business stage; task lifecycle/checkpoint projection stays in the Mastra glue port. */
@@ -1727,7 +1746,7 @@ export async function executeDailyReportWorkflowStage(
   await projection.onProgress?.(`日报阶段：${stage}`);
 
   try {
-    await generateDailyReport({
+    const result = await generateDailyReport({
       date,
       taskRunId: taskRun.id,
       force: taskRun.triggerType !== "scheduled",
@@ -1742,8 +1761,10 @@ export async function executeDailyReportWorkflowStage(
         await projection.onCheckpoint?.(checkpoint);
       },
     });
+    await projection.onAiUsage?.(result.aiUsage);
   } catch (error) {
     if (!(error instanceof DailyReportStagePauseError)) throw error;
+    await projection.onAiUsage?.(error.aiUsage);
     await projection.onProgress?.(`日报阶段已完成：${stage}`);
     if (error.checkpoint) await projection.onCheckpoint?.(error.checkpoint);
   }

@@ -101,6 +101,20 @@ export type TaskTimelineNodeSnapshot = {
   audit?: Record<string, unknown>;
 };
 
+export type TaskWorkflowCheckpoint = {
+  version: 1;
+  mastra: Record<string, unknown>;
+};
+
+export type TaskCheckpointSummary = {
+  pipelineStage: string | null;
+  resumeEligible: boolean;
+  resumeFrom: DailyReportRecoveryStage | null;
+  reviewStatus: TaskPipelineCheckpoint["reviewStatus"] | null;
+  workflowStage: string | null;
+  workflowStatus: string | null;
+};
+
 export type TaskPipelineCheckpoint = {
   version: 1;
   pipelineVersion: string;
@@ -203,6 +217,9 @@ export type TaskRunSnapshot = {
   stageTimings: TaskStageTimingSnapshot[];
   taskTimeline?: TaskTimelineNodeSnapshot[];
   pipelineCheckpoint?: TaskPipelineCheckpoint | null;
+  workflowCheckpoint?: TaskWorkflowCheckpoint | null;
+  checkpointSummary?: TaskCheckpointSummary;
+  isDetailLoaded?: boolean;
 };
 
 export type TaskScheduleSnapshot = {

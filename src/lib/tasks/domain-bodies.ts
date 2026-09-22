@@ -2,22 +2,13 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { createDomainTask, type DomainTaskDefinition } from "@infinitum/ai/orchestration/task-definition";
 import {
-  executeClusterMergeCleanPairPrecomputeTask,
   executeClusterMergeCleanPairWorkflow,
-  executeClusterSummaryTask,
   generateClusterSummaryWorkflow,
   persistClusterSummaryWorkflow,
   readClusterSummaryWorkflow,
   type ClusterSummaryWorkflowPayload,
 } from "@/lib/clusters/service";
-import { executeDailyReportTask } from "@/lib/daily-report/generation";
-import { runIngestionTask } from "@/lib/ingestion/service";
-import { executeItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
 import {
-  executeItemCleanupTask,
-  executeItemReanalyzeTask,
-  executeItemRegenerationTask,
-  executeItemReparseAggregationsTask,
   deleteExpiredItems,
   finalizeItemCleanup,
   executeItemReparseWorkflowStage,
@@ -27,17 +18,17 @@ import {
   prepareItemCleanup,
   readItemForRegeneration,
   reanalyzeItem,
+  resolveAiProvider,
   type ItemRegenerationInput,
   type RegenerationTarget,
 } from "@/lib/items/service";
 import type { ItemUnderstandingResult } from "@/lib/ai/provider";
-import { executePrecomputeTask, executePrecomputeWorkflowStage, type PrecomputeWorkflowPayload } from "@/lib/precompute/service";
+import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
+import { executePrecomputeWorkflowStage, type PrecomputeWorkflowPayload } from "@/lib/precompute/service";
 import { executeIngestionWorkflowStage, type IngestionWorkflowStage } from "@/lib/ingestion/workflow-stages";
 import { executeRecoveryWorkflowStage } from "@/lib/items/recovery-workflow-stages";
-import { getTaskDefinition } from "@/lib/tasks/definitions";
-import type { TaskBody } from "@infinitum/ai/orchestration/workflow-factory";
 
-const HANDLER_KINDS = [
+const DOMAIN_STAGE_KINDS = [
   "item_reanalyze",
   "item_regenerate_translation",
   "item_regenerate_summary",
@@ -48,30 +39,11 @@ const HANDLER_KINDS = [
   "item_reparse_aggregations",
 ] as const;
 
-type HandlerKind = typeof HANDLER_KINDS[number];
+type DomainStageKind = typeof DOMAIN_STAGE_KINDS[number];
 
 function asBackgroundTaskRun(input: unknown): BackgroundTaskRun {
   return input as BackgroundTaskRun;
 }
-
-/**
- * Domain-owned execution bodies. These remain compatibility exports for
- * direct callers, while the worker's default route uses the declarative
- * definitions below through the Mastra workflow adapter.
- */
-export const TASK_BODIES: Record<BackgroundTaskRun["kind"], TaskBody> = {
-  daily_report_generate: executeDailyReportTask as unknown as TaskBody,
-  ingestion: runIngestionTask as unknown as TaskBody,
-  item_processing_recovery: executeItemProcessingRecoveryTask as unknown as TaskBody,
-  item_reanalyze: async (taskRun) => { await executeItemReanalyzeTask(asBackgroundTaskRun(taskRun)); },
-  item_regenerate_translation: async (taskRun) => { await executeItemRegenerationTask(asBackgroundTaskRun(taskRun), "translation"); },
-  item_regenerate_summary: async (taskRun) => { await executeItemRegenerationTask(asBackgroundTaskRun(taskRun), "summary"); },
-  cluster_regenerate_summary: async (taskRun) => { await executeClusterSummaryTask(asBackgroundTaskRun(taskRun)); },
-  precompute: async (taskRun) => { await executePrecomputeTask(asBackgroundTaskRun(taskRun)); },
-  cluster_merge_precompute_clean_pairs: async (taskRun) => { await executeClusterMergeCleanPairPrecomputeTask(asBackgroundTaskRun(taskRun)); },
-  item_cleanup: async (taskRun) => { await executeItemCleanupTask(asBackgroundTaskRun(taskRun)); },
-  item_reparse_aggregations: async (taskRun) => { await executeItemReparseAggregationsTask(asBackgroundTaskRun(taskRun)); },
-};
 
 type ItemRegenerationStagePayload = {
   item: ItemRegenerationInput;
@@ -114,7 +86,12 @@ function createItemReparseDefinition(): DomainTaskDefinition {
   const stages = ["read", "ai_call", "cluster_finalize"] as const;
   return createDomainTask({
     kind: "item_reparse_aggregations",
-    stages: stages.map((id) => ({ id, execute: async (input) => executeItemReparseWorkflowStage(id, input as never) })),
+    stages: stages.map((id) => ({
+      id,
+      execute: async (input, context) => executeItemReparseWorkflowStage(id, input as never, {
+        onAiUsage: async (usage) => context.projectAiUsage?.(usage),
+      }),
+    })),
     effects: ["item_write", "cluster_write"],
     checkpoint: "pipelineCheckpointJson",
   });
@@ -134,9 +111,13 @@ function createItemReanalyzeDefinition(): DomainTaskDefinition {
       },
       {
         id: "ai_call",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const payload = input as { itemId: string };
-          return { ...payload, understanding: await generateItemReanalysisUnderstanding(payload.itemId) };
+          const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
+          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(), { understandItemEstimated: false });
+          const understanding = await generateItemReanalysisUnderstanding(payload.itemId, { aiProvider });
+          await context.projectAiUsage?.(aiUsage.snapshot());
+          return { ...payload, understanding };
         },
       },
       {
@@ -149,12 +130,16 @@ function createItemReanalyzeDefinition(): DomainTaskDefinition {
       },
       {
         id: "writeback",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
-          return {
-            ...payload,
-            result: await reanalyzeItem(payload.itemId, { precomputedUnderstanding: payload.understanding }),
-          };
+          const aiUsage = createTaskAiUsageTracker();
+          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider());
+          const result = await reanalyzeItem(payload.itemId, {
+            aiProvider,
+            precomputedUnderstanding: payload.understanding,
+          });
+          await context.projectAiUsage?.(aiUsage.snapshot());
+          return { ...payload, result };
         },
       },
     ],
@@ -241,7 +226,7 @@ function createItemCleanupDefinition(): DomainTaskDefinition {
   });
 }
 
-function createItemRegenerationDefinition(kind: HandlerKind, target: RegenerationTarget): DomainTaskDefinition {
+function createItemRegenerationDefinition(kind: DomainStageKind, target: RegenerationTarget): DomainTaskDefinition {
   return createDomainTask({
     kind,
     stages: [
@@ -255,11 +240,15 @@ function createItemRegenerationDefinition(kind: HandlerKind, target: Regeneratio
       },
       {
         id: "ai_call",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const payload = input as ItemRegenerationStagePayload;
+          const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
+          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(), { understandItemEstimated: false });
+          const understanding = await generateItemRegenerationUnderstanding(payload.item, { aiProvider });
+          await context.projectAiUsage?.(aiUsage.snapshot());
           return {
             ...payload,
-            understanding: await generateItemRegenerationUnderstanding(payload.item),
+            understanding,
           } satisfies ItemRegenerationStagePayload;
         },
       },
@@ -291,20 +280,9 @@ function createItemRegenerationDefinition(kind: HandlerKind, target: Regeneratio
   });
 }
 
-const HANDLER_STAGE_BODIES: Record<HandlerKind, (input: unknown) => Promise<void>> = {
-  item_reanalyze: async (input) => { await executeItemReanalyzeTask(asBackgroundTaskRun(input)); },
-  item_regenerate_translation: async (input) => { await executeItemRegenerationTask(asBackgroundTaskRun(input), "translation"); },
-  item_regenerate_summary: async (input) => { await executeItemRegenerationTask(asBackgroundTaskRun(input), "summary"); },
-  cluster_regenerate_summary: async (input) => { await executeClusterSummaryTask(asBackgroundTaskRun(input)); },
-  precompute: async (input) => { await executePrecomputeTask(asBackgroundTaskRun(input)); },
-  cluster_merge_precompute_clean_pairs: async (input) => { await executeClusterMergeCleanPairPrecomputeTask(asBackgroundTaskRun(input)); },
-  item_cleanup: async (input) => { await executeItemCleanupTask(asBackgroundTaskRun(input)); },
-  item_reparse_aggregations: async (input) => { await executeItemReparseAggregationsTask(asBackgroundTaskRun(input)); },
-};
-
-/** One declarative stage per handler kind; stage policy comes from TASK_DEFINITIONS. */
-export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition> = Object.fromEntries(
-  HANDLER_KINDS.map((kind) => {
+/** Declarative domain stages; every definition is hosted by a Mastra workflow. */
+export const DOMAIN_STAGE_TASK_DEFINITIONS: Record<DomainStageKind, DomainTaskDefinition> = Object.fromEntries(
+  DOMAIN_STAGE_KINDS.map((kind) => {
     if (kind === "item_reparse_aggregations") {
       return [kind, createItemReparseDefinition()];
     }
@@ -326,26 +304,12 @@ export const HANDLER_TASK_DEFINITIONS: Record<HandlerKind, DomainTaskDefinition>
     if (kind === "item_regenerate_translation" || kind === "item_regenerate_summary") {
       return [kind, createItemRegenerationDefinition(kind, kind.endsWith("translation") ? "translation" : "summary")];
     }
-    const definition = getTaskDefinition(kind);
-    const handler = HANDLER_STAGE_BODIES[kind as HandlerKind];
-    if (!handler) throw new Error(`No handler stage body registered for ${kind}.`);
-    return [kind, createDomainTask({
-      kind,
-      stages: definition.stages.map((id) => ({
-        id,
-        execute: async (input) => {
-          await handler(input);
-          return input;
-        },
-      })),
-      effects: [...definition.effects],
-      checkpoint: definition.checkpoint,
-    })];
+    throw new Error(`Unhandled declarative domain stage kind ${kind}.`);
   }),
-) as Record<HandlerKind, DomainTaskDefinition>;
+) as Record<DomainStageKind, DomainTaskDefinition>;
 
 export const WORKFLOW_TASK_DEFINITIONS: Partial<Record<BackgroundTaskRun["kind"], DomainTaskDefinition>> = {
   ingestion: createIngestionDefinition(),
   item_processing_recovery: createRecoveryDefinition(),
-  ...HANDLER_TASK_DEFINITIONS,
+  ...DOMAIN_STAGE_TASK_DEFINITIONS,
 };

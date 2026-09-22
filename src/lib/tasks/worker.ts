@@ -315,13 +315,13 @@ export async function runWorkerCycle(options?: {
   const claimedTaskRun = await claimNextQueuedTaskRun();
 
   if (claimedTaskRun) {
-    // D10 路由：workflow kind → Mastra workflow；plain kind → handler 直调。
-    // 单任务异常只落该任务失败，不允许打死 worker 循环（handler 已写自身终态后
-    // rethrow 的场景，recoverStaleTaskRuns 不会再碰它）。
+    // D10 路由：所有 task kind → Mastra workflow。
+    // 单任务异常只落该任务失败，不允许打死 worker 循环；workflow lifecycle
+    // 会负责终态投影，recoverStaleTaskRuns 不会重复处理已落终态的任务。
     try {
       await (options?.executeTaskRun ?? dispatchTaskRun)(claimedTaskRun);
     } catch (error) {
-      console.error(`[Worker] Task ${claimedTaskRun.id} (${claimedTaskRun.kind}) crashed the handler:`, error);
+      console.error(`[Worker] Task ${claimedTaskRun.id} (${claimedTaskRun.kind}) crashed the workflow:`, error);
     }
   }
 

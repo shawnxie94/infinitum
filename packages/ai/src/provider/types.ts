@@ -102,6 +102,8 @@ export type JsonCompleteRequest = {
   usageKey?: string;
   /** 当前 Mastra step，用于 usage/attempt 按 step 归因。 */
   step?: StepExecutionIdentity;
+  /** operation contract 可覆盖的 JSON 解析重试次数。 */
+  jsonParseRetryCount?: number;
   /** 日报阶段上下文模式：多轮对话 transcript，由网关维护追加。 */
   stageContext?: StageContext;
   validationFeedback?: StageValidationFeedback;

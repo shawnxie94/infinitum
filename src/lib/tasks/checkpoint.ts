@@ -1,5 +1,5 @@
 import { DAILY_REPORT_RECOVERY_STAGES, DAILY_REPORT_LEGACY_RECOVERY_STAGES } from "@/lib/tasks/types";
-import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
+import type { TaskPipelineCheckpoint, TaskWorkflowCheckpoint } from "@/lib/tasks/types";
 
 export function parseTaskPipelineCheckpointJson(value: string | null | undefined): TaskPipelineCheckpoint | null {
   if (!value) return null;
@@ -52,6 +52,21 @@ export function parseTaskPipelineCheckpointJson(value: string | null | undefined
       ...(Array.isArray(parsed.violations) ? { violations: parsed.violations } : {}),
       ...(parsed.data && typeof parsed.data === "object" && !Array.isArray(parsed.data) ? { data: parsed.data as Record<string, unknown> } : {}),
     };
+  } catch {
+    return null;
+  }
+}
+
+export function parseTaskWorkflowCheckpointJson(value: string | null | undefined): TaskWorkflowCheckpoint | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as { __mastra?: unknown };
+    if (!parsed.__mastra || typeof parsed.__mastra !== "object" || Array.isArray(parsed.__mastra)) return null;
+    const mastra = parsed.__mastra as Record<string, unknown>;
+    const publicMastra = Object.fromEntries(
+      Object.entries(mastra).filter(([key]) => key !== "aiUsageBase" && key !== "aiUsageByStep"),
+    );
+    return { version: 1, mastra: publicMastra };
   } catch {
     return null;
   }

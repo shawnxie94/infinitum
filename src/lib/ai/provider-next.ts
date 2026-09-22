@@ -16,14 +16,16 @@ import {
 import type { RuntimeConfig } from "@/config/runtime";
 import type { PromptConfigType } from "@/lib/settings/types";
 import { createEmbedTexts } from "@/lib/ai/embeddings";
+import { AI_OPERATION_REGISTRY, assertAiOperation } from "@/lib/ai/operations";
 import { isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { InvalidJsonModelResponseError, isInvalidJsonModelResponseError } from "@/lib/ai/provider-types";
-import { createModelGateway } from "@infinitum/ai/provider/gateway";
+import { createAiModelRuntime } from "@infinitum/ai/provider/runtime";
+import { createAiOperationRunner } from "@infinitum/ai/provider/operations";
 import { createAiSdkTransport, createCompatClientTransport } from "@infinitum/ai/provider/transports";
 import { CLUSTER_MATCH_SCHEMA } from "@/lib/ai/protocols/cluster";
 import { ENTITY_ALIAS_DECISIONS_SCHEMA } from "@/lib/ai/protocols/entity-alias";
-import type { JsonCompleteRequest } from "@infinitum/ai/provider/types";
+import type { JsonCompleteRequest, StageContext, StageValidationFeedback } from "@infinitum/ai/provider/types";
 import {
   getFallbackUnderstanding,
   normalizeAggregationSplitMaxEvents,
@@ -64,11 +66,25 @@ import {
 import type {
   AiProvider,
   AiProviderOptions,
+  DailyReportStageContext,
+  DailyReportStageValidationFeedback,
   PromptOverrides,
   PromptRuntimeConfig,
 } from "@/lib/ai/provider-types";
 
 const MAX_DAILY_REPORT_REPAIR_TOKENS = 8192;
+
+function toGatewayStageContext(context: DailyReportStageContext): StageContext {
+  // The gateway mutates the transcript in place between repair rounds. Keep
+  // the business context identity instead of copying it into a detached DTO.
+  return context;
+}
+
+function toGatewayValidationFeedback(
+  feedback: DailyReportStageValidationFeedback | undefined,
+): StageValidationFeedback | undefined {
+  return feedback;
+}
 
 function resolvePromptConfig(
   type: PromptConfigType,
@@ -134,8 +150,8 @@ export function createAiProvider(
   clientOverrideArg?: unknown | null,
   options?: AiProviderOptions,
 ): AiProvider {
-  const gateway = createModelGateway({
-    defaultModelApi: config as never,
+  const gateway = createAiModelRuntime({
+    defaultModelApi: config,
     transport: clientOverrideArg
       ? createCompatClientTransport(clientOverrideArg, { maxRetries: 1 })
       : createAiSdkTransport({ maxRetries: 1, supportsStructuredOutputs: true }),
@@ -162,7 +178,8 @@ export function createAiProvider(
         usageKey,
       );
     },
-  });
+  }).gateway;
+  const operations = createAiOperationRunner({ gateway, registry: AI_OPERATION_REGISTRY });
 
   const embedTexts = createEmbedTexts(options?.embedding);
   const aggregationSplitMaxEvents = normalizeAggregationSplitMaxEvents(options?.aggregationSplitMaxEvents);
@@ -223,8 +240,12 @@ export function createAiProvider(
     usageKey = taskType,
     schema?: JsonCompleteRequest["schema"],
   ): JsonCompleteRequest {
+    const operation = assertAiOperation(usageKey);
+    if (operation.key !== taskType) {
+      throw new Error(`AI operation/task type mismatch: ${taskType} != ${operation.key}`);
+    }
     return {
-      taskType,
+      taskType: operation.key,
       systemPrompt: promptConfig.systemPrompt,
       userContent,
       temperature: promptConfig.temperature,
@@ -256,7 +277,7 @@ export function createAiProvider(
         translateTitle: metadata.translateTitle,
         inputText,
       });
-      const result = await gateway.completeJson(
+      const result = await operations.completeJson(
         buildJsonRequest(itemUnderstandingConfig, "item_understanding", userContent),
         (output) => parseItemUnderstandingOutput(
           output,
@@ -279,7 +300,7 @@ export function createAiProvider(
         title: metadata.title,
         inputText,
       });
-      const output = await gateway.completeJson(
+      const output = await operations.completeJson(
         buildJsonRequest(clusterSummaryConfig, "cluster_summary", userContent),
         parseClusterSummaryOutput,
       );
@@ -297,7 +318,7 @@ export function createAiProvider(
         candidates: metadata.candidates,
       });
 
-      return gateway.completeJson(
+      return operations.completeJson(
         buildJsonRequest(clusterMatchConfig, "cluster_match", userContent, "cluster_match", CLUSTER_MATCH_SCHEMA),
         (output) => parseClusterMatchCandidateId(
           output,
@@ -320,7 +341,7 @@ export function createAiProvider(
       });
 
       return (
-        (await gateway.completeJson(
+        (await operations.completeJson(
           buildJsonRequest(entityAliasCheckConfig, "entity_alias_check", userContent, "entity_alias_check", ENTITY_ALIAS_DECISIONS_SCHEMA),
           (output) => parseEntityAliasDecisions(output, input.pairs),
         )) ?? []
@@ -333,7 +354,7 @@ export function createAiProvider(
         compactClusterMergeInputForModel(clustersJson),
       );
 
-      const decisions = await gateway.completeJson(
+      const decisions = await operations.completeJson(
         buildJsonRequest(clusterMergeConfig, "cluster_merge", userContent),
         (output) => parseClusterMergeDecisions(output, metadata),
       );
@@ -358,11 +379,11 @@ export function createAiProvider(
           `${DAILY_REPORT_CANDIDATE_FIELD_GUIDE}\n${DAILY_REPORT_ASSESSMENT_FIELD_GUIDE}`,
         );
       const output = input.stageContext
-        ? await gateway.completeJson(
-            { ...buildJsonRequest(promptConfig, "daily_report_assess", userContent, "daily_report_assess"), stageContext: input.stageContext as never, validationFeedback: input.validationFeedback as never },
+        ? await operations.completeJson(
+            { ...buildJsonRequest(promptConfig, "daily_report_assess", userContent, "daily_report_assess"), stageContext: toGatewayStageContext(input.stageContext), validationFeedback: toGatewayValidationFeedback(input.validationFeedback) },
             parseAssessmentOutput,
           )
-        : await gateway.completeJson(buildJsonRequest(promptConfig, "daily_report_assess", userContent, "daily_report_assess"), parseAssessmentOutput);
+        : await operations.completeJson(buildJsonRequest(promptConfig, "daily_report_assess", userContent, "daily_report_assess"), parseAssessmentOutput);
       return output ?? [];
     },
     async planDailyReport(input) {
@@ -384,11 +405,11 @@ export function createAiProvider(
           `${DAILY_REPORT_PLAN_TOPIC_CONTRACT}\n${DAILY_REPORT_PLAN_FIELD_GUIDE}\n${DAILY_REPORT_REVIEW_FEEDBACK_GUIDE}`,
         );
       const output = input.stageContext
-        ? await gateway.completeJson(
-            { ...buildJsonRequest(promptConfig, "daily_report_plan", userContent, "daily_report_plan"), stageContext: input.stageContext as never, validationFeedback: input.validationFeedback as never },
+        ? await operations.completeJson(
+            { ...buildJsonRequest(promptConfig, "daily_report_plan", userContent, "daily_report_plan"), stageContext: toGatewayStageContext(input.stageContext), validationFeedback: toGatewayValidationFeedback(input.validationFeedback) },
             parsePlanOutput,
           )
-        : await gateway.completeJson(buildJsonRequest(promptConfig, "daily_report_plan", userContent, "daily_report_plan"), parsePlanOutput);
+        : await operations.completeJson(buildJsonRequest(promptConfig, "daily_report_plan", userContent, "daily_report_plan"), parsePlanOutput);
       if (!output) throw new Error("PLAN 阶段没有返回结果。");
       return output;
     },
@@ -413,11 +434,11 @@ export function createAiProvider(
           `${DAILY_REPORT_WRITE_FIELD_GUIDE}\n${DAILY_REPORT_REVIEW_FEEDBACK_GUIDE}`,
         );
       const output = input.stageContext
-        ? await gateway.completeJson(
-            { ...buildJsonRequest(promptConfig, "daily_report_write", userContent, "daily_report_write"), stageContext: input.stageContext as never, validationFeedback: input.validationFeedback as never },
+        ? await operations.completeJson(
+            { ...buildJsonRequest(promptConfig, "daily_report_write", userContent, "daily_report_write"), stageContext: toGatewayStageContext(input.stageContext), validationFeedback: toGatewayValidationFeedback(input.validationFeedback) },
             parseDraftOutput,
           )
-        : await gateway.completeJson(buildJsonRequest(promptConfig, "daily_report_write", userContent, "daily_report_write"), parseDraftOutput);
+        : await operations.completeJson(buildJsonRequest(promptConfig, "daily_report_write", userContent, "daily_report_write"), parseDraftOutput);
       if (!output) throw new Error("WRITE 阶段没有返回结果。");
       return output;
     },
@@ -451,7 +472,7 @@ export function createAiProvider(
         temperature: 0,
         maxTokens: Math.min(dailyReportConfig.maxTokens ?? 4096, MAX_DAILY_REPORT_REPAIR_TOKENS),
       };
-      const output = await gateway.completeJson(
+      const output = await operations.completeJson(
         buildJsonRequest(
           repairPromptConfig,
           "daily_report_repair",
@@ -489,7 +510,7 @@ export function createAiProvider(
         "以下是由系统生成的审核输入 JSON，请只基于其中的内容进行审核：",
         JSON.stringify(input),
       ].filter(Boolean).join("\n\n");
-      const output = await gateway.completeJson(
+      const output = await operations.completeJson(
         {
           ...buildJsonRequest(
             {

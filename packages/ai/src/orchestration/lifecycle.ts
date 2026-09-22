@@ -1,6 +1,6 @@
 import { classifyTaskError, isCancellationError, toTaskExecutionError, type TaskFailureKind } from "./errors";
 import type {
-  TaskBody,
+  TaskStageBody,
   TaskRunSnapshot,
   TaskStepCheckpoint,
   TaskStepLifecycleEvent,
@@ -60,7 +60,7 @@ function createAbortController(signal?: AbortSignal): AbortController {
  */
 export async function runTaskWithLifecycle(input: {
   row: TaskRunSnapshot;
-  body: TaskBody;
+  body: TaskStageBody;
   sink: WorkflowTaskSink;
   runId?: string;
   attempt?: number;

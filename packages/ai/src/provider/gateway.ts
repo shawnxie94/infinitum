@@ -218,8 +218,9 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       }
 
       // 普通 JSON 模式：解析失败换修复提示重试。
+      const parseRetryCount = Math.max(0, request.jsonParseRetryCount ?? jsonParseRetryCount);
       let lastParseError: Error | null = null;
-      for (let attempt = 0; attempt <= jsonParseRetryCount; attempt += 1) {
+      for (let attempt = 0; attempt <= parseRetryCount; attempt += 1) {
         const userContent = attempt === 0 || !lastParseError
           ? request.userContent
           : buildRetryPrompt(request.userContent, lastParseError);
@@ -244,7 +245,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
             request.step,
           );
         } catch (error) {
-          if (!isInvalidJsonModelResponse(error) || attempt >= jsonParseRetryCount) throw error;
+          if (!isInvalidJsonModelResponse(error) || attempt >= parseRetryCount) throw error;
           lastParseError = error;
           continue;
         }
@@ -252,7 +253,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         try {
           return parse(result.text);
         } catch (error) {
-          if (!isInvalidJsonModelResponse(error) || attempt >= jsonParseRetryCount) throw error;
+          if (!isInvalidJsonModelResponse(error) || attempt >= parseRetryCount) throw error;
           lastParseError = error;
         }
       }

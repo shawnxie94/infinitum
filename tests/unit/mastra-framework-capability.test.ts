@@ -4,16 +4,16 @@ import { createMemorySingleFlight } from "../../packages/ai/src/orchestration/si
 import { runTaskWithLifecycle } from "../../packages/ai/src/orchestration/lifecycle";
 import { TaskCancellationError } from "../../packages/ai/src/orchestration/errors";
 import { createDomainTask } from "../../packages/ai/src/orchestration/task-definition";
-import { createMonolithicStageAdapter } from "../../packages/ai/src/orchestration/workflow-factory";
 import { createUsageInterceptor } from "../../packages/ai/src/provider/usage";
 import type { TaskRunSnapshot, WorkflowTaskSink } from "../../packages/ai/src/orchestration/types";
 import { TASK_DEFINITIONS } from "../../src/lib/tasks/definitions";
-import { getAiRuntime } from "../../src/lib/ai-orchestration/runtime";
+import { getAiRuntime, isWorkflowKind } from "../../src/lib/ai-orchestration/runtime";
 import {
   buildDailyReportStageIdentity,
   DAILY_REPORT_WORKFLOW_STAGES,
 } from "../../src/lib/daily-report/generation";
-import { HANDLER_TASK_DEFINITIONS, WORKFLOW_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
+import { DOMAIN_STAGE_TASK_DEFINITIONS, WORKFLOW_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
+import { parseTaskWorkflowCheckpointJson } from "../../src/lib/tasks/checkpoint";
 
 const row: TaskRunSnapshot = {
   id: "task-1",
@@ -135,42 +135,31 @@ describe("framework capability evolution", () => {
     expect(runtime.mastra.getWorkflow("item_processing_recovery")).toBeDefined();
   });
 
-  it("adapts coupled services to one Mastra staged entry without repeating effects", async () => {
-    const { sink } = createSink();
-    let executions = 0;
-    const workflow = createMonolithicStageAdapter({
-      id: "coupled-task",
-      adapter: {
-        boundaries: ["phase_one", "phase_two"],
-        body: async () => {
-          executions += 1;
-        },
-      },
-      sink,
+  it("routes every declared BackgroundTaskRun kind through the workflow catalog", () => {
+    for (const definition of TASK_DEFINITIONS) {
+      expect(isWorkflowKind(definition.kind)).toBe(true);
+    }
+  });
+
+  it("keeps framework checkpoints visible without confusing them with resumable pipelines", () => {
+    const checkpoint = parseTaskWorkflowCheckpointJson(JSON.stringify({
+      __mastra: { stage: "writeback", lifecycle: { status: "succeeded" } },
+    }));
+    expect(checkpoint).toEqual({
+      version: 1,
+      mastra: { stage: "writeback", lifecycle: { status: "succeeded" } },
     });
-
-    const run = await workflow.createRun();
-    await run.start({ inputData: { taskRunId: row.id } });
-
-    expect(executions).toBe(1);
   });
 
   it("keeps every BackgroundTaskRun kind covered by one declarative host definition", () => {
     expect(TASK_DEFINITIONS).toHaveLength(11);
-    expect(TASK_DEFINITIONS.filter((definition) => definition.mode === "workflow").map((definition) => definition.kind)).toEqual([
-      "daily_report_generate",
-      "ingestion",
-      "item_processing_recovery",
-    ]);
-    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stageExecution).toBe("staged");
-    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "ingestion")?.stageExecution).toBe("staged");
-    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "item_processing_recovery")?.stageExecution).toBe("staged");
+    expect(TASK_DEFINITIONS.every((definition) => definition.mode === "workflow")).toBe(true);
     expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(11);
     expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stages).toEqual([
       ...DAILY_REPORT_WORKFLOW_STAGES,
     ]);
-    expect(Object.keys(HANDLER_TASK_DEFINITIONS).sort()).toEqual(
-      TASK_DEFINITIONS.filter((definition) => definition.mode === "handler").map((definition) => definition.kind).sort(),
+    expect(Object.keys(DOMAIN_STAGE_TASK_DEFINITIONS).sort()).toEqual(
+      TASK_DEFINITIONS.filter((definition) => definition.kind !== "daily_report_generate" && definition.kind !== "ingestion" && definition.kind !== "item_processing_recovery").map((definition) => definition.kind).sort(),
     );
     expect(WORKFLOW_TASK_DEFINITIONS.ingestion?.stages.map((stage) => stage.id)).toEqual([
       "source_sync", "item_processing", "cluster_merge", "cluster_finalize",
@@ -178,29 +167,29 @@ describe("framework capability evolution", () => {
     expect(WORKFLOW_TASK_DEFINITIONS.item_processing_recovery?.stages.map((stage) => stage.id)).toEqual([
       "recovery_batch", "recovery_persist",
     ]);
-    for (const definition of Object.values(HANDLER_TASK_DEFINITIONS)) {
+    for (const definition of Object.values(DOMAIN_STAGE_TASK_DEFINITIONS)) {
       expect(definition.stages.length).toBeGreaterThanOrEqual(1);
       expect(definition.stages.every((stage) => typeof stage.execute === "function")).toBe(true);
     }
-    expect(HANDLER_TASK_DEFINITIONS.item_regenerate_translation.stages.map((stage) => stage.id)).toEqual([
+    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_regenerate_translation.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "validate", "writeback",
     ]);
-    expect(HANDLER_TASK_DEFINITIONS.item_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
+    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "validate", "writeback",
     ]);
-    expect(HANDLER_TASK_DEFINITIONS.item_cleanup.stages.map((stage) => stage.id)).toEqual([
+    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_cleanup.stages.map((stage) => stage.id)).toEqual([
       "read", "delete", "cluster_finalize",
     ]);
-    expect(HANDLER_TASK_DEFINITIONS.cluster_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
+    expect(DOMAIN_STAGE_TASK_DEFINITIONS.cluster_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "writeback",
     ]);
-    expect(HANDLER_TASK_DEFINITIONS.cluster_merge_precompute_clean_pairs.stages.map((stage) => stage.id)).toEqual([
+    expect(DOMAIN_STAGE_TASK_DEFINITIONS.cluster_merge_precompute_clean_pairs.stages.map((stage) => stage.id)).toEqual([
       "read", "compute", "writeback",
     ]);
-    expect(HANDLER_TASK_DEFINITIONS.item_reanalyze.stages.map((stage) => stage.id)).toEqual([
+    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_reanalyze.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "validate", "writeback",
     ]);
-    expect(HANDLER_TASK_DEFINITIONS.item_reparse_aggregations.stages.map((stage) => stage.id)).toEqual([
+    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_reparse_aggregations.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "cluster_finalize",
     ]);
   });

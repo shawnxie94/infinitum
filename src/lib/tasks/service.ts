@@ -40,6 +40,7 @@ import {
   type TaskTimelineNodeSnapshot,
   type TaskTimelineNodeStatus,
   type TaskPipelineCheckpoint,
+  type TaskCheckpointSummary,
   type TaskRunSnapshot,
   type TaskScheduleSnapshot,
   type BackgroundTaskRunKind,
@@ -47,7 +48,11 @@ import {
   type DailyReportRecoveryStage,
 } from "@/lib/tasks/types";
 import { prisma } from "@/lib/db";
-import { parseTaskPipelineCheckpointJson, serializeTaskPipelineCheckpoint } from "@/lib/tasks/checkpoint";
+import {
+  parseTaskPipelineCheckpointJson,
+  parseTaskWorkflowCheckpointJson,
+  serializeTaskPipelineCheckpoint,
+} from "@/lib/tasks/checkpoint";
 import { DAILY_REPORT_RECOVERY_STAGE_LABELS, getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
 
 export const TASK_RUN_CANCELLED_MESSAGE = "管理员手动终止任务。";
@@ -518,6 +523,23 @@ export async function updateTaskRun(
   return taskRun;
 }
 
+function buildTaskCheckpointSummary(taskRun: { pipelineCheckpointJson?: string | null }): TaskCheckpointSummary {
+  const pipeline = parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson);
+  const workflow = parseTaskWorkflowCheckpointJson(taskRun.pipelineCheckpointJson);
+  const mastra = workflow?.mastra ?? {};
+  const lifecycle = mastra.lifecycle && typeof mastra.lifecycle === "object" && !Array.isArray(mastra.lifecycle)
+    ? mastra.lifecycle as Record<string, unknown>
+    : {};
+  return {
+    pipelineStage: pipeline?.stage ?? null,
+    resumeEligible: pipeline?.resumeEligible ?? false,
+    resumeFrom: pipeline?.resumeFrom ?? null,
+    reviewStatus: pipeline?.reviewStatus ?? null,
+    workflowStage: typeof mastra.stage === "string" ? mastra.stage : null,
+    workflowStatus: typeof lifecycle.status === "string" ? lifecycle.status : null,
+  };
+}
+
 export function toTaskRunSnapshot(taskRun: {
   id: string;
   kind: EnqueueTaskRunInput["kind"];
@@ -540,7 +562,7 @@ export function toTaskRunSnapshot(taskRun: {
   stageTimingsJson: string | null;
   taskTimelineJson: string | null;
   pipelineCheckpointJson?: string | null;
-}): TaskRunSnapshot {
+}, options: { isDetailLoaded?: boolean } = {}): TaskRunSnapshot {
   return {
     id: taskRun.id,
     kind: taskRun.kind,
@@ -563,6 +585,21 @@ export function toTaskRunSnapshot(taskRun: {
     stageTimings: parseTaskStageTimingsJson(taskRun.stageTimingsJson),
     taskTimeline: parseTaskTimelineJson(taskRun.taskTimelineJson),
     pipelineCheckpoint: parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson),
+    workflowCheckpoint: parseTaskWorkflowCheckpointJson(taskRun.pipelineCheckpointJson),
+    checkpointSummary: buildTaskCheckpointSummary({ pipelineCheckpointJson: taskRun.pipelineCheckpointJson }),
+    isDetailLoaded: options.isDetailLoaded ?? true,
+  };
+}
+
+export function toTaskRunListSnapshot(taskRun: Parameters<typeof toTaskRunSnapshot>[0]): TaskRunSnapshot {
+  const snapshot = toTaskRunSnapshot(taskRun, { isDetailLoaded: false });
+  return {
+    ...snapshot,
+    aiCallBreakdown: undefined,
+    stageTimings: [],
+    taskTimeline: undefined,
+    pipelineCheckpoint: undefined,
+    workflowCheckpoint: undefined,
   };
 }
 
@@ -991,6 +1028,7 @@ export async function getBackgroundTaskMonitorSnapshot(
     kind?: BackgroundTaskRunKind | null;
     timeRange?: "today" | "week" | "month" | null;
     rangeDays?: 1 | 3 | 7 | null;
+    includeDetails?: boolean;
   },
 ): Promise<BackgroundTaskMonitorSnapshot> {
   const schedule = await ensureDefaultIngestionSchedule();
@@ -1019,10 +1057,12 @@ export async function getBackgroundTaskMonitorSnapshot(
     prisma.backgroundTaskRun.count({ where }),
   ]);
 
+  const snapshotMapper = opts?.includeDetails === false ? toTaskRunListSnapshot : toTaskRunSnapshot;
+
   return {
     schedule: toTaskScheduleSnapshot(schedule, now),
-    runningTasks: await attachTaskEntityTitles(runningTasks.map(toTaskRunSnapshot)),
-    recentTasks: await attachTaskEntityTitles(recentTasks.map(toTaskRunSnapshot)),
+    runningTasks: await attachTaskEntityTitles(runningTasks.map((task) => snapshotMapper(task))),
+    recentTasks: await attachTaskEntityTitles(recentTasks.map((task) => snapshotMapper(task))),
     recentTotal,
     page,
     pageSize,

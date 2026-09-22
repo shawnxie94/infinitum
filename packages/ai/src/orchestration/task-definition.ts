@@ -13,6 +13,7 @@ export type DomainTaskContext = {
   attempt: number;
   checkpoint: TaskStepCheckpoint;
   checkCancellation: () => Promise<void>;
+  projectAiUsage?: (usage: unknown) => Promise<void>;
 };
 
 export type DomainTaskStage = {
@@ -156,8 +157,21 @@ export function createDomainTaskRunWorkflow(input: {
               attempt: context!.attempt,
               checkpoint: context!.checkpoint,
               checkCancellation: context!.checkCancellation,
+              projectAiUsage: async (usage) => input.sink.projectAiUsage?.(inputData.taskRunId, usage, {
+                stepId: `${task.kind}-${stage.id}`,
+                workflowId: task.kind,
+                workflowRunId: context!.runId,
+                attempt: context!.attempt,
+                retryCount: context!.retryCount,
+              }),
             };
             stagePayload = await stage.execute(stagePayload, domainContext);
+            await input.sink.projectCheckpoint?.(inputData.taskRunId, {
+              __mastra: {
+                stage: stage.id,
+                checkpoint: domainContext.checkpoint,
+              },
+            });
           },
         });
         return { taskRunId: inputData.taskRunId, status: result.status, payload: stagePayload };

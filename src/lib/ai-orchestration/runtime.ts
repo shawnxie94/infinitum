@@ -2,31 +2,282 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { buildDailyReportStageIdentity, DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
-import { TASK_BODIES, WORKFLOW_TASK_DEFINITIONS } from "@/lib/tasks/domain-bodies";
-import { getTaskDefinition } from "@/lib/tasks/definitions";
+import { WORKFLOW_TASK_DEFINITIONS } from "@/lib/tasks/domain-bodies";
+import { TASK_DEFINITIONS } from "@/lib/tasks/definitions";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
-import {
-  createMonolithicStageAdapter,
-  createStagedTaskRunWorkflow,
-  createTaskRunWorkflow,
-  type TaskBody,
-  type WorkflowTaskSink,
-} from "@infinitum/ai/orchestration/workflow-factory";
+import { createStagedTaskRunWorkflow, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
 import { createDomainTaskRunWorkflow } from "@infinitum/ai/orchestration/task-definition";
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
-import type { TaskStepLifecycleEvent } from "@infinitum/ai/orchestration/types";
+import type { TaskStepIdentity, TaskStepLifecycleEvent } from "@infinitum/ai/orchestration/types";
+import type { TaskAiCallBreakdownSnapshot, TaskStageTimingSnapshot } from "@/lib/tasks/types";
 
 /**
  * 主仓侧编排接线（spec P1b-P4/D11）：
  * - sink 把 BackgroundTaskRun 读写映射给 packages/ai（依赖倒置，D9 所有权边界）
- * - 11 个 task kind 均由 Mastra workflow 承载；handler-mode kind 仍由 domain body 负责副作用
- *   （状态簿记/取消轮询/检查点恢复语义不变）
+ * - 11 个 task kind 均由 Mastra workflow 承载；声明式 domain stage 只负责业务副作用，生命周期由 framework glue 统一托管
  * - runtime 单例：Next.js 与 worker 进程各自内嵌（D11），共享 SQLite 存储
  */
 
 type WorkflowKind = BackgroundTaskRun["kind"];
 
-const WORKFLOW_KINDS: Record<WorkflowKind, TaskBody> = TASK_BODIES;
+const WORKFLOW_KINDS: readonly WorkflowKind[] = TASK_DEFINITIONS.map((definition) => definition.kind);
+
+type CheckpointRecord = Record<string, unknown>;
+
+function asCheckpointRecord(value: unknown): CheckpointRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as CheckpointRecord : {};
+}
+
+async function mergeTaskCheckpoint(taskRunId: string, value: unknown) {
+  const current = await prisma.backgroundTaskRun.findUnique({
+    where: { id: taskRunId },
+    select: { pipelineCheckpointJson: true },
+  });
+  let existing: CheckpointRecord = {};
+  if (current?.pipelineCheckpointJson) {
+    try {
+      existing = asCheckpointRecord(JSON.parse(current.pipelineCheckpointJson));
+    } catch {
+      existing = {};
+    }
+  }
+  const next = asCheckpointRecord(value);
+  const existingMastra = asCheckpointRecord(existing.__mastra);
+  const nextMastra = asCheckpointRecord(next.__mastra);
+  const merged = {
+    ...existing,
+    ...next,
+    ...(Object.keys(existingMastra).length > 0 || Object.keys(nextMastra).length > 0
+      ? { __mastra: { ...existingMastra, ...nextMastra } }
+      : {}),
+  };
+  await prisma.backgroundTaskRun.updateMany({
+    where: { id: taskRunId },
+    data: { pipelineCheckpointJson: JSON.stringify(merged) },
+  });
+}
+
+const WORKFLOW_STAGE_LABELS: Record<string, string> = {
+  read: "读取数据",
+  ai_call: "AI 分析",
+  validate: "结果校验",
+  writeback: "结果写回",
+  source_sync: "信息源同步",
+  item_processing: "内容处理",
+  cluster_merge: "聚合合并",
+  cluster_finalize: "聚合收尾",
+  recovery_batch: "补偿处理",
+  recovery_persist: "补偿写回",
+  delete: "删除过期内容",
+  compute: "计算候选",
+  entity_alias_check: "实体别名判定",
+  entity_suggestion_candidates: "实体候选生成",
+  cluster_merge_clean_pairs: "聚合合并候选",
+};
+
+function stageKey(event: TaskStepLifecycleEvent) {
+  const prefix = event.workflowId ? `${event.workflowId}-` : "";
+  return event.stepId.startsWith(prefix) ? event.stepId.slice(prefix.length) : event.stepId;
+}
+
+function stageLabel(key: string) {
+  return WORKFLOW_STAGE_LABELS[key] ?? key;
+}
+
+function parseStageTimings(value: string | null): TaskStageTimingSnapshot[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is TaskStageTimingSnapshot => (
+        Boolean(entry)
+        && typeof entry === "object"
+        && typeof (entry as Record<string, unknown>).key === "string"
+        && typeof (entry as Record<string, unknown>).label === "string"
+      ))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function projectTaskStepTiming(event: TaskStepLifecycleEvent) {
+  const current = await prisma.backgroundTaskRun.findUnique({
+    where: { id: event.taskRunId },
+    select: { stageTimingsJson: true },
+  });
+  const key = stageKey(event);
+  const startedAt = event.checkpoint.startedAt;
+  const finishedAt = event.checkpoint.finishedAt ?? null;
+  const durationMs = finishedAt
+    ? Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime())
+    : null;
+  const timings = parseStageTimings(current?.stageTimingsJson ?? null);
+  const nextTiming: TaskStageTimingSnapshot = {
+    key,
+    label: stageLabel(key),
+    startedAt,
+    finishedAt,
+    durationMs,
+  };
+  const existingIndex = timings.findIndex((timing) => timing.key === key);
+  if (existingIndex >= 0) timings[existingIndex] = nextTiming;
+  else timings.push(nextTiming);
+  await prisma.backgroundTaskRun.updateMany({
+    where: { id: event.taskRunId },
+    data: { stageTimingsJson: JSON.stringify(timings) },
+  });
+}
+
+function parseAiBreakdown(value: string | null): TaskAiCallBreakdownSnapshot[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is TaskAiCallBreakdownSnapshot => (
+        Boolean(entry)
+        && typeof entry === "object"
+        && typeof (entry as Record<string, unknown>).key === "string"
+        && typeof (entry as Record<string, unknown>).label === "string"
+      ))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function compactAiBreakdown(entries: TaskAiCallBreakdownSnapshot[]) {
+  return entries.filter((entry) => entry.actual > 0 || entry.estimated > 0 || (entry.totalTokens ?? 0) > 0);
+}
+
+function mergeAiBreakdowns(groups: TaskAiCallBreakdownSnapshot[][]) {
+  const merged = new Map<string, TaskAiCallBreakdownSnapshot>();
+  for (const group of groups) {
+    for (const entry of group) {
+      const previous = merged.get(entry.key);
+      const previousSource = previous?.tokenUsageSource;
+      const nextSource = entry.tokenUsageSource;
+      merged.set(entry.key, {
+        ...entry,
+        actual: (previous?.actual ?? 0) + entry.actual,
+        estimated: (previous?.estimated ?? 0) + entry.estimated,
+        ...(entry.promptTokens !== undefined || previous?.promptTokens !== undefined
+          ? { promptTokens: (previous?.promptTokens ?? 0) + (entry.promptTokens ?? 0) }
+          : {}),
+        ...(entry.completionTokens !== undefined || previous?.completionTokens !== undefined
+          ? { completionTokens: (previous?.completionTokens ?? 0) + (entry.completionTokens ?? 0) }
+          : {}),
+        ...(entry.totalTokens !== undefined || previous?.totalTokens !== undefined
+          ? { totalTokens: (previous?.totalTokens ?? 0) + (entry.totalTokens ?? 0) }
+          : {}),
+        ...(entry.cachedTokens !== undefined || previous?.cachedTokens !== undefined
+          ? { cachedTokens: (previous?.cachedTokens ?? 0) + (entry.cachedTokens ?? 0) }
+          : {}),
+        ...(previousSource && nextSource && previousSource !== nextSource
+          ? { tokenUsageSource: "mixed" as const }
+          : { tokenUsageSource: nextSource ?? previousSource }),
+      });
+    }
+  }
+  return compactAiBreakdown([...merged.values()]);
+}
+
+type AiUsageProjection = {
+  actual: number;
+  estimated: number;
+  breakdown: TaskAiCallBreakdownSnapshot[];
+};
+
+type AiUsageIdentity = TaskStepIdentity & { attempt: number; retryCount: number };
+
+function parseAiUsageProjection(value: unknown): AiUsageProjection | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Record<string, unknown>;
+  const actual = typeof raw.actual === "number" && Number.isFinite(raw.actual) ? raw.actual : 0;
+  const estimated = typeof raw.estimated === "number" && Number.isFinite(raw.estimated) ? raw.estimated : 0;
+  const breakdown = Array.isArray(raw.breakdown)
+    ? compactAiBreakdown(raw.breakdown.filter((entry): entry is TaskAiCallBreakdownSnapshot => (
+      Boolean(entry)
+      && typeof entry === "object"
+      && typeof (entry as Record<string, unknown>).key === "string"
+      && typeof (entry as Record<string, unknown>).label === "string"
+    )))
+    : [];
+  return { actual, estimated, breakdown };
+}
+
+async function projectTaskAiUsage(taskRunId: string, value: unknown, identity?: AiUsageIdentity) {
+  const projection = parseAiUsageProjection(value);
+  if (!projection || (projection.actual === 0 && projection.estimated === 0 && projection.breakdown.length === 0)) return;
+  const current = await prisma.backgroundTaskRun.findUnique({
+    where: { id: taskRunId },
+    select: {
+      aiCallCountActual: true,
+      aiCallCountEstimated: true,
+      aiCallBreakdownJson: true,
+      pipelineCheckpointJson: true,
+    },
+  });
+  if (!current) return;
+
+  let checkpoint: CheckpointRecord = {};
+  try {
+    checkpoint = asCheckpointRecord(current.pipelineCheckpointJson ? JSON.parse(current.pipelineCheckpointJson) : {});
+  } catch {
+    checkpoint = {};
+  }
+  const mastra = asCheckpointRecord(checkpoint.__mastra);
+  const rawByStep = asCheckpointRecord(mastra.aiUsageByStep);
+  const usageKey = identity
+    ? [identity.workflowRunId ?? "unknown-run", identity.stepId, identity.attempt, identity.retryCount].join(":")
+    : null;
+  if (usageKey && Object.prototype.hasOwnProperty.call(rawByStep, usageKey)) return;
+
+  if (!identity) {
+    const existing = parseAiBreakdown(current.aiCallBreakdownJson);
+    const merged = mergeAiBreakdowns([existing, projection.breakdown]);
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId },
+      data: {
+        aiCallCountActual: current.aiCallCountActual + projection.actual,
+        aiCallCountEstimated: current.aiCallCountEstimated + projection.estimated,
+        aiCallBreakdownJson: JSON.stringify(merged),
+      },
+    });
+    return;
+  }
+
+  const base = parseAiUsageProjection(mastra.aiUsageBase) ?? {
+    actual: current.aiCallCountActual,
+    estimated: current.aiCallCountEstimated,
+    breakdown: parseAiBreakdown(current.aiCallBreakdownJson),
+  };
+  const byStep = {
+    ...rawByStep,
+    [usageKey as string]: projection,
+  };
+  const projections = Object.values(byStep)
+    .map(parseAiUsageProjection)
+    .filter((entry): entry is AiUsageProjection => entry !== null);
+  const allBreakdowns = [base.breakdown, ...projections.map((entry) => entry.breakdown)];
+  const nextCheckpoint = {
+    ...checkpoint,
+    __mastra: {
+      ...mastra,
+      aiUsageBase: base,
+      aiUsageByStep: byStep,
+    },
+  };
+  await prisma.backgroundTaskRun.updateMany({
+    where: { id: taskRunId },
+    data: {
+      aiCallCountActual: base.actual + projections.reduce((sum, entry) => sum + entry.actual, 0),
+      aiCallCountEstimated: base.estimated + projections.reduce((sum, entry) => sum + entry.estimated, 0),
+      aiCallBreakdownJson: JSON.stringify(mergeAiBreakdowns(allBreakdowns)),
+      pipelineCheckpointJson: JSON.stringify(nextCheckpoint),
+    },
+  });
+}
 
 const sink: WorkflowTaskSink = {
   async getTaskRun(taskRunId) {
@@ -78,24 +329,33 @@ const sink: WorkflowTaskSink = {
       cancelled: "已取消",
     }[event.status];
     await prisma.backgroundTaskRun.updateMany({
-      where: { id: event.taskRunId, status: { in: ["queued", "running"] } },
+      where: { id: event.taskRunId },
       data: {
         progressLabel: `步骤 ${event.stepId}：${statusLabel}`,
         ...(event.errorMessage ? { errorSummary: `[${event.failureKind ?? "unknown"}] ${event.errorMessage}`.slice(0, 500) } : {}),
       },
     });
+    await projectTaskStepTiming(event);
+    if (!event.taskRunId) return;
+    await mergeTaskCheckpoint(event.taskRunId, {
+      __mastra: {
+        step: event.checkpoint,
+        lifecycle: event,
+        checkpoint: event.checkpoint,
+      },
+    });
   },
   async projectCheckpoint(taskRunId, checkpoint) {
-    await prisma.backgroundTaskRun.updateMany({
-      where: { id: taskRunId, status: { in: ["queued", "running"] } },
-      data: { pipelineCheckpointJson: JSON.stringify(checkpoint) },
-    });
+    await mergeTaskCheckpoint(taskRunId, checkpoint);
   },
   async projectProgress(taskRunId, label) {
     await prisma.backgroundTaskRun.updateMany({
       where: { id: taskRunId, status: { in: ["queued", "running"] } },
       data: { progressLabel: label },
     });
+  },
+  async projectAiUsage(taskRunId, usage, identity) {
+    await projectTaskAiUsage(taskRunId, usage, identity);
   },
   async projectLifecycle(event: TaskLifecycleEvent) {
     if (event.event === "start") {
@@ -124,51 +384,40 @@ let runtimeSingleton: AiRuntime | null = null;
 export function getAiRuntime(): AiRuntime {
   if (!runtimeSingleton) {
     const workflows = Object.fromEntries(
-      Object.entries(WORKFLOW_KINDS).map(([kind, body]) => {
-        const workflowKind = kind as WorkflowKind;
-        const definition = getTaskDefinition(workflowKind);
-        return [
-          kind,
-          kind === "daily_report_generate"
-          ? createStagedTaskRunWorkflow({
+      WORKFLOW_KINDS.map((kind) => {
+        if (kind === "daily_report_generate") {
+          return [
+            kind,
+            createStagedTaskRunWorkflow({
               id: kind,
               description: `Infinitum ${kind} (Mastra staged workflow)`,
               stages: DAILY_REPORT_WORKFLOW_STAGES.map((stage) => ({
                 id: stage,
-                body: async (row, context) => executeDailyReportWorkflowStage(
-                  row as unknown as BackgroundTaskRun,
-                  stage,
-                  {
-                    onCheckpoint: async (checkpoint) => sink.projectCheckpoint?.(row.id, checkpoint),
-                    onProgress: async (label) => sink.projectProgress?.(row.id, label),
-                  },
-                  buildDailyReportStageIdentity(row.id, context),
-                ),
+                body: async (row, context) => {
+                  const identity = buildDailyReportStageIdentity(row.id, context);
+                  return executeDailyReportWorkflowStage(
+                    row as unknown as BackgroundTaskRun,
+                    stage,
+                    {
+                      onCheckpoint: async (checkpoint) => sink.projectCheckpoint?.(row.id, checkpoint),
+                      onProgress: async (label) => sink.projectProgress?.(row.id, label),
+                      onAiUsage: async (usage) => sink.projectAiUsage?.(row.id, usage, {
+                        ...identity,
+                        attempt: context.attempt,
+                        retryCount: context.retryCount,
+                      }),
+                    },
+                    identity,
+                  );
+                },
               })),
               sink,
-            })
-          : definition.stageExecution === "monolithic_boundary_adapter"
-            ? createMonolithicStageAdapter({
-                id: kind,
-                description: `Infinitum ${kind} (Mastra boundary adapter; service remains monolithic)`,
-                adapter: {
-                  boundaries: definition.stages,
-                  body,
-                },
-                sink,
-              })
-            : WORKFLOW_TASK_DEFINITIONS[workflowKind]
-            ? createDomainTaskRunWorkflow({
-                definition: WORKFLOW_TASK_DEFINITIONS[workflowKind],
-                sink,
-              })
-            : createTaskRunWorkflow({
-                id: kind,
-                description: `Infinitum ${kind} (Mastra migration)`,
-                body,
-                sink,
-              }),
-        ];
+            }),
+          ];
+        }
+        const definition = WORKFLOW_TASK_DEFINITIONS[kind];
+        if (!definition) throw new Error(`No declarative workflow definition registered for ${kind}.`);
+        return [kind, createDomainTaskRunWorkflow({ definition, sink })];
       }),
     );
     runtimeSingleton = createAiRuntime({ workflows });
@@ -198,5 +447,5 @@ export async function restartActiveAiWorkflowRuns(): Promise<void> {
 }
 
 export function isWorkflowKind(kind: BackgroundTaskRun["kind"]): kind is WorkflowKind {
-  return kind in WORKFLOW_KINDS;
+  return WORKFLOW_KINDS.includes(kind);
 }

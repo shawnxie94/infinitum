@@ -1,13 +1,10 @@
 import { createDomainTask } from "@infinitum/ai/orchestration/task-definition";
 import type { BackgroundTaskRunKind } from "@/lib/tasks/types";
 
-export type TaskExecutionMode = "workflow" | "handler";
-export type TaskStageExecution = "staged" | "monolithic_boundary_adapter";
-
+export type TaskExecutionMode = "workflow";
 export type TaskDefinition = {
   kind: BackgroundTaskRunKind;
   mode: TaskExecutionMode;
-  stageExecution?: TaskStageExecution;
   stages: readonly string[];
   effects: readonly string[];
   checkpoint?: string;
@@ -22,7 +19,6 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   {
     kind: "daily_report_generate",
     mode: "workflow",
-    stageExecution: "staged",
     stages: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "repair", "review", "persist_publish"],
     effects: ["daily_report_revision", "daily_report_publish"],
     checkpoint: "pipelineCheckpointJson",
@@ -30,7 +26,6 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   {
     kind: "ingestion",
     mode: "workflow",
-    stageExecution: "staged",
     stages: ["source_sync", "item_processing", "cluster_merge", "cluster_finalize"],
     effects: ["item_write", "cluster_write", "embedding_write"],
     checkpoint: "pipelineCheckpointJson",
@@ -38,19 +33,18 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = [
   {
     kind: "item_processing_recovery",
     mode: "workflow",
-    stageExecution: "staged",
     stages: ["recovery_batch", "recovery_persist"],
     effects: ["item_write", "cluster_write"],
     checkpoint: "pipelineCheckpointJson",
   },
-  { kind: "item_reanalyze", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write", "cluster_write"] },
-  { kind: "item_regenerate_translation", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
-  { kind: "item_regenerate_summary", mode: "handler", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
-  { kind: "cluster_regenerate_summary", mode: "handler", stages: ["read", "ai_call", "writeback"], effects: ["cluster_write"] },
-  { kind: "precompute", mode: "handler", stages: ["cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates"], effects: ["entity_write", "embedding_write"] },
-  { kind: "cluster_merge_precompute_clean_pairs", mode: "handler", stages: ["read", "compute", "writeback"], effects: ["embedding_write"] },
-  { kind: "item_cleanup", mode: "handler", stages: ["read", "delete", "cluster_finalize"], effects: ["item_delete"] },
-  { kind: "item_reparse_aggregations", mode: "handler", stages: ["read", "ai_call", "cluster_finalize"], effects: ["item_write", "cluster_write"] },
+  { kind: "item_reanalyze", mode: "workflow", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write", "cluster_write"] },
+  { kind: "item_regenerate_translation", mode: "workflow", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
+  { kind: "item_regenerate_summary", mode: "workflow", stages: ["read", "ai_call", "validate", "writeback"], effects: ["item_write"] },
+  { kind: "cluster_regenerate_summary", mode: "workflow", stages: ["read", "ai_call", "writeback"], effects: ["cluster_write"] },
+  { kind: "precompute", mode: "workflow", stages: ["cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates"], effects: ["entity_write", "embedding_write"] },
+  { kind: "cluster_merge_precompute_clean_pairs", mode: "workflow", stages: ["read", "compute", "writeback"], effects: ["embedding_write"] },
+  { kind: "item_cleanup", mode: "workflow", stages: ["read", "delete", "cluster_finalize"], effects: ["item_delete"] },
+  { kind: "item_reparse_aggregations", mode: "workflow", stages: ["read", "ai_call", "cluster_finalize"], effects: ["item_write", "cluster_write"] },
 ];
 
 // Validate the host catalog against the framework's declarative stage contract.

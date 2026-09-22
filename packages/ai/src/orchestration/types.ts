@@ -51,8 +51,8 @@ export type TaskRunSnapshot = {
   status?: string;
 };
 
-/** 业务执行体：原 executeTaskRun handler 语义（自己负责 BackgroundTaskRun 状态簿记、取消轮询、检查点）。 */
-export type TaskBody = (taskRun: TaskRunSnapshot, context?: TaskExecutionContext) => Promise<void>;
+/** Framework-owned stage callback. Domain code receives lifecycle context but does not own task terminal state. */
+export type TaskStageBody = (taskRun: TaskRunSnapshot, context?: TaskExecutionContext) => Promise<void>;
 
 export type WorkflowTaskSink = {
   getTaskRun(taskRunId: string): Promise<TaskRunSnapshot | null>;
@@ -66,9 +66,10 @@ export type WorkflowTaskSink = {
   projectLifecycle?(event: TaskLifecycleEvent): Promise<void>;
   /** 每个 Mastra step 的持久化生命周期与 checkpoint 投影。 */
   projectStep?(event: TaskStepLifecycleEvent): Promise<void>;
-  /** Domain stage 产生的 checkpoint/progress 只通过 glue port 投影回任务行。 */
+  /** Domain stage 产生的 checkpoint/progress/遥测只通过 glue port 投影回任务行。 */
   projectCheckpoint?(taskRunId: string, checkpoint: unknown): Promise<void>;
   projectProgress?(taskRunId: string, label: string): Promise<void>;
+  projectAiUsage?(taskRunId: string, usage: unknown, identity?: TaskStepIdentity & { attempt: number; retryCount: number }): Promise<void>;
 };
 
 export type TaskWorkflow = Workflow<any, any, any, any, any, any, any>;

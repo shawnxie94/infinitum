@@ -71,10 +71,22 @@ export async function enqueuePrecomputeTask(input?: {
   });
 }
 
+function isPrecomputeWorkflowPayload(value: unknown): value is PrecomputeWorkflowPayload {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && Array.isArray((value as Partial<PrecomputeWorkflowPayload>).stages)
+    && Array.isArray((value as Partial<PrecomputeWorkflowPayload>).aliasMediumRecords),
+  );
+}
+
 export async function executePrecomputeWorkflowStage(
   stage: PrecomputeWorkflowStage,
-  payload: PrecomputeWorkflowPayload = { stages: [], aliasMediumRecords: [] },
+  payload?: PrecomputeWorkflowPayload,
 ): Promise<PrecomputeWorkflowPayload> {
+  const currentPayload = isPrecomputeWorkflowPayload(payload)
+    ? payload
+    : { stages: [], aliasMediumRecords: [] } satisfies PrecomputeWorkflowPayload;
   const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
   const embedTexts = runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null;
   const aiProvider: AiProvider | undefined = runtimeConfig
@@ -94,12 +106,12 @@ export async function executePrecomputeWorkflowStage(
         stageAliasMediumRecords = value.mediumRecords;
         return `别名候选 ${value.result.candidatePairs}，仲裁 ${value.result.adjudicatedPairs}，自动合并 ${value.result.autoMergedAliases}，建议 ${value.result.mediumSuggestions}`;
       }
-      const value = await precomputeEntitySuggestionCandidates(new Date(), { additionalRecords: payload.aliasMediumRecords });
+      const value = await precomputeEntitySuggestionCandidates(new Date(), { additionalRecords: currentPayload.aliasMediumRecords });
       return `实体候选 ${value.storedCandidates} 个，扫描 ${value.scannedPairs} 对`;
     },
   );
-  const aliasMediumRecords = stage === "entity_alias_check" ? stageAliasMediumRecords : payload.aliasMediumRecords;
-  return { stages: [...payload.stages, result], aliasMediumRecords };
+  const aliasMediumRecords = stage === "entity_alias_check" ? stageAliasMediumRecords : currentPayload.aliasMediumRecords;
+  return { stages: [...currentPayload.stages, result], aliasMediumRecords };
 }
 
 export async function executePrecomputeTask(taskRun: { id: string }) {

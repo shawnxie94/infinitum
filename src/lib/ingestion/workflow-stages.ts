@@ -3,6 +3,7 @@ import type { DomainTaskContext } from "@infinitum/ai/orchestration/task-definit
 import { createClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { executeClusterMerge, recomputeCluster } from "@/lib/clusters/service";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
+import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import {
   completeFetchRun,
@@ -375,10 +376,33 @@ export async function executeIngestionWorkflowStage(
   input: unknown,
   context: DomainTaskContext,
 ): Promise<IngestionWorkflowPayload> {
-  if (stage === "source_sync") return runSourceSyncStage(asTaskRun(input), context);
-  if (!input || typeof input !== "object" || !("fetchRunId" in input)) throw new Error(`Ingestion stage ${stage} requires previous stage output.`);
-  const payload = input as IngestionWorkflowPayload;
-  if (stage === "item_processing") return runItemProcessingStage(payload, context);
-  if (stage === "cluster_merge") return runClusterMergeStage(payload, context);
-  return runClusterFinalizeStage(payload, context);
+  try {
+    if (stage === "source_sync") return runSourceSyncStage(asTaskRun(input), context);
+    if (!input || typeof input !== "object" || !("fetchRunId" in input)) throw new Error(`Ingestion stage ${stage} requires previous stage output.`);
+    const payload = input as IngestionWorkflowPayload;
+    if (stage === "item_processing") return runItemProcessingStage(payload, context);
+    if (stage === "cluster_merge") return runClusterMergeStage(payload, context);
+    return runClusterFinalizeStage(payload, context);
+  } catch (error) {
+    const taskRunId = context.taskRunId;
+    const payload = input && typeof input === "object" && "fetchRunId" in input && typeof input.fetchRunId === "string"
+      ? input as Partial<IngestionWorkflowPayload>
+      : null;
+    const fetchRun = payload?.fetchRunId
+      ? await prisma.fetchRun.findUnique({ where: { id: payload.fetchRunId } })
+      : await prisma.fetchRun.findFirst({ where: { taskRunId }, orderBy: { startedAt: "desc" } });
+    if (fetchRun?.status === "running") {
+      await completeFetchRun(fetchRun.id, {
+        status: "failed",
+        finishedAt: new Date(),
+        sourceCount: payload?.sourceCount ?? 0,
+        itemCount: payload?.processableItemCount ?? 0,
+        successCount: payload?.successCount ?? 0,
+        failureCount: Math.max(1, payload?.failureCount ?? 0),
+        itemsAdded: payload?.itemsAdded ?? 0,
+        errorSummary: context.signal.aborted ? TASK_RUN_CANCELLED_MESSAGE : error instanceof Error ? error.message : "Unknown ingestion workflow error",
+      });
+    }
+    throw error;
+  }
 }

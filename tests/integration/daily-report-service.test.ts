@@ -817,6 +817,8 @@ describe("daily report service", () => {
       resumeEligible: true,
       completedStages: expect.arrayContaining(["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate"]),
     });
+    expect(checkpoint.candidateSnapshot).toBeUndefined();
+    expect(checkpoint.data.candidateSnapshotStorage).toBe("daily_report");
     expect(checkpoint.assessmentBatches).toEqual(expect.any(Array));
     expect(checkpoint.planningCandidateBriefs).toEqual(expect.any(Array));
     expect(checkpoint.plan).toBeDefined();
