@@ -53,10 +53,16 @@ export type ParsedEventSignature = {
   eventDate: string | null;
 };
 
+export type QualityBreakdownEntry = {
+  name: string;
+  score: number;
+};
+
 export type ParsedEvent = ParsedEventSignature & {
   title: string | null;
   oneLiner: string;
   qualityScore: number;
+  qualityBreakdown: QualityBreakdownEntry[];
   sourceUrl: string | null;
 };
 

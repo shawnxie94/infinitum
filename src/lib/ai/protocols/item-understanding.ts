@@ -12,6 +12,7 @@ import type {
   ItemUnderstandingResult,
   ParsedEvent,
   ParsedEventSignature,
+  QualityBreakdownEntry,
 } from "@/lib/ai/provider-types";
 
 const DEFAULT_PARSED_AGGREGATION_MAX_EVENTS = 20;
@@ -130,7 +131,7 @@ export function parseItemUnderstandingOutput(
   const isAggregation = rawAggregation?.isAggregation === true;
   const events = Array.isArray(rawAggregation?.events)
     ? rawAggregation.events
-        .map((event) => normalizeParsedEvent(event as Partial<ParsedEvent>))
+        .map((event) => normalizeParsedEvent(event as Partial<ParsedEvent>, qualityRubric))
         .filter((event): event is ParsedEvent => event !== null)
         .filter(hasCompleteParsedEvent)
         .slice(0, maxEvents)
@@ -179,7 +180,41 @@ function normalizeParsedEventSignature(
   };
 }
 
-function normalizeParsedEvent(raw: Partial<ParsedEvent>): ParsedEvent | null {
+function normalizeQualityBreakdown(value: unknown): QualityBreakdownEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const normalized: QualityBreakdownEntry[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return [];
+    }
+
+    const name = typeof (entry as { name?: unknown }).name === "string"
+      ? (entry as { name: string }).name.trim()
+      : "";
+    const rawScore = (entry as { score?: unknown }).score;
+    const score = typeof rawScore === "number"
+      ? rawScore
+      : typeof rawScore === "string" && rawScore.trim()
+        ? Number(rawScore)
+        : Number.NaN;
+
+    if (!name || !Number.isFinite(score)) {
+      return [];
+    }
+
+    normalized.push({ name, score: Math.round(score) });
+  }
+
+  return normalized;
+}
+
+function normalizeParsedEvent(
+  raw: Partial<ParsedEvent>,
+  qualityRubric: QualityRubric | null,
+): ParsedEvent | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
@@ -187,34 +222,27 @@ function normalizeParsedEvent(raw: Partial<ParsedEvent>): ParsedEvent | null {
   const signature = normalizeParsedEventSignature(raw);
   const title = typeof raw.title === "string" ? raw.title.trim().slice(0, 120) || null : null;
   const oneLiner = typeof raw.oneLiner === "string" ? raw.oneLiner.trim() : "";
+  const qualityBreakdown = normalizeQualityBreakdown(raw.qualityBreakdown);
+  const rubricScore = resolveRubricQualityScore(qualityRubric, qualityBreakdown);
+  const legacyScore = isValidQualityScore(raw.qualityScore)
+    ? normalizeScore(raw.qualityScore, 50)
+    : null;
+  const qualityScore = rubricScore.matched ? rubricScore.score : legacyScore;
 
-  if (!title || !oneLiner || !isValidQualityScore(raw.qualityScore)) {
+  if (!title || !oneLiner || qualityScore === null) {
     return null;
   }
 
-  if (!signature) {
-    return {
-      eventType: null,
-      eventSubject: null,
-      eventAction: null,
-      eventObject: null,
-      eventDate: null,
-      title,
-      oneLiner,
-      qualityScore: normalizeScore(raw.qualityScore, 50),
-      sourceUrl: normalizeSourceUrl(raw.sourceUrl ?? null),
-    };
-  }
-
   return {
-    eventType: signature.eventType,
-    eventSubject: signature.eventSubject,
-    eventAction: signature.eventAction,
-    eventObject: signature.eventObject,
-    eventDate: signature.eventDate,
+    eventType: signature?.eventType ?? null,
+    eventSubject: signature?.eventSubject ?? null,
+    eventAction: signature?.eventAction ?? null,
+    eventObject: signature?.eventObject ?? null,
+    eventDate: signature?.eventDate ?? null,
     title,
     oneLiner,
-    qualityScore: normalizeScore(raw.qualityScore, 50),
+    qualityScore,
+    qualityBreakdown,
     sourceUrl: normalizeSourceUrl(raw.sourceUrl ?? null),
   };
 }

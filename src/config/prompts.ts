@@ -6,7 +6,7 @@ const LEGACY_ITEM_UNDERSTANDING_OUTPUT_FORMAT = `{"summary":"...","translatedTit
 
 // 评分字段契约（v4）：qualityBreakdown 逐维度子分数由代码校验吸附后求和。
 // 单独提取成常量，供 PREVIOUS_DEFAULT 派生上一版文本。
-const QUALITY_SCORE_RULE = `4. qualityScore 为 0-100 整数，qualityBreakdown 为按系统评分标准逐维度给出的子分数数组（name 使用评分标准中的维度名，score 为该维度选中档位的分值）；qualityRationale 用一句中文说明主要维度的档位选择理由。`;
+const QUALITY_SCORE_RULE = `4. 顶层条目和 aggregation.events 中每个子事件都必须返回 qualityBreakdown；qualityBreakdown 为按系统评分标准逐维度给出的子分数数组（name 使用评分标准中的维度名，score 为该维度选中档位的分值）。每个子事件独立评分，不继承父条目分数，也不得把其他事件的事实计入当前事件。qualityScore 必须等于各维度分数之和，但最终总分由代码计算；qualityRationale 用一句中文说明主要维度的档位选择理由。`;
 
 // 上一版规则 4（v3）：单字段总分，无维度子分数。
 const QUALITY_SCORE_RULE_PREVIOUS = `4. qualityScore 为 0-100 整数；qualityRationale 用一句中文说明事实密度、独特性、完整度、可信度或时效性。`;
@@ -15,7 +15,7 @@ const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES = `非聚合内容示例（所有�
 {"summary":"示例摘要","translatedTitle":"","moderationStatus":"allowed","moderationReason":null,"moderationDetail":"示例说明","qualityScore":80,"qualityBreakdown":[{"name":"维度名","score":20}],"qualityRationale":"示例理由","eventSignature":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"aggregation":{"isAggregation":false,"mainEvent":null,"events":[]}}
 
 聚合内容仅将 aggregation 改为以下结构：
-{"isAggregation":true,"mainEvent":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"events":[{"eventType":"other","eventSubject":"子事件主体","eventAction":"子事件动作","eventObject":"子事件对象","eventDate":null,"title":"子事件标题","oneLiner":"子事件摘要","qualityScore":80,"sourceUrl":null}]}`;
+{"isAggregation":true,"mainEvent":{"eventType":"other","eventSubject":"示例主体","eventAction":"示例动作","eventObject":"示例对象","eventDate":null},"events":[{"eventType":"other","eventSubject":"子事件主体","eventAction":"子事件动作","eventObject":"子事件对象","eventDate":null,"title":"子事件标题","oneLiner":"子事件摘要","qualityScore":80,"qualityBreakdown":[{"name":"维度名","score":20}],"sourceUrl":null}]}`;
 
 // 上一版（v3）JSON 示例：无 qualityBreakdown 字段。
 const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES_PREVIOUS = `非聚合内容示例（所有字段都必须保留）：
@@ -31,6 +31,9 @@ const ARGUMENT_RULE_CANONICAL = `5. eventSignature 描述整篇内容最主要�
 // 上一版规则 5（v2）：允许任意字段无判据即 null，是聚合层 no_event_anchor 泛滥的抽取侧根因。
 const ARGUMENT_RULE_PERMISSIVE = `5. eventSignature 描述整篇内容最主要的具体事件；无法稳定判断的字段返回 null，不要用宽泛主题代替具体事件。`;
 
+const AGGREGATION_EVENT_RULE = "8. 聚合内容最多返回系统输入中 maxEvents 指定数量的 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象，并按照与顶层条目相同的评分标准独立返回 qualityBreakdown。";
+const AGGREGATION_EVENT_RULE_WITHOUT_EVENT_BREAKDOWN = "8. 聚合内容最多返回系统输入中 maxEvents 指定数量的 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。";
+
 export const DEFAULT_ITEM_UNDERSTANDING_PROMPT = `你是资讯内容理解助手。只基于输入标题、来源和正文，一次完成摘要、内容分析、事件识别与聚合拆分。严格输出单个 JSON 对象，不要输出 Markdown、代码块或额外解释。
 
 固定输出格式（以下 JSON 示例都可直接解析，示例值仅说明结构，不得照抄）：
@@ -44,7 +47,7 @@ ${QUALITY_SCORE_RULE}
 ${ARGUMENT_RULE_CANONICAL}
 6. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
 7. 非聚合内容必须返回 mainEvent:null、events:[]。
-8. 聚合内容最多返回系统输入中 maxEvents 指定数量的 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。
+${AGGREGATION_EVENT_RULE}
 9. 子事件 title 为自然可读的短标题；oneLiner 为 100-200 字中文摘要；sourceUrl 仅填写正文明确给出的对应原文 http/https URL，不得猜测。
 10. aggregation.mainEvent 仅在全文存在清晰主事件时填写；它应与顶层 eventSignature 一致或更具体。
 11. 不要输出独立分类字段；系统会从结构化事件主体和对象自动生成实体关联。
@@ -56,7 +59,8 @@ ${ARGUMENT_RULE_CANONICAL}
 // databases; custom prompts never match because equality is required.
 export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTANDING_PROMPT
   .replace(QUALITY_SCORE_RULE, QUALITY_SCORE_RULE_PREVIOUS)
-  .replace(ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES, ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES_PREVIOUS);
+  .replace(ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES, ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES_PREVIOUS)
+  .replace(AGGREGATION_EVENT_RULE, AGGREGATION_EVENT_RULE_WITHOUT_EVENT_BREAKDOWN);
 
 // v4 之前的存量默认文本（v3 与更早的 v2 措辞）都要能被幂等升级到当前默认。
 export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS = [

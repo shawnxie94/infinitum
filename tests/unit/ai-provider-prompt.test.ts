@@ -142,6 +142,7 @@ describe("ai provider quality rubric integration", () => {
 
     const systemPrompt = request.messages?.find((message) => message.role === "system")?.content ?? "";
     expect(systemPrompt).toContain("qualityScore 评分标准");
+    expect(systemPrompt).toContain("aggregation.events 中每个子事件都必须返回 qualityBreakdown");
     expect(systemPrompt).toContain("事实密度（满分 30 分");
     expect(systemPrompt).toContain(ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE);
     // 系统提示词以代码契约为底，持久化 systemPrompt 是遗留数据不得透传。

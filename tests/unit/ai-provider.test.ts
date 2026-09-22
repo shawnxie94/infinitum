@@ -171,6 +171,13 @@ describe("ai provider", () => {
                   title: "OpenAI 发布 Agent SDK",
                   oneLiner: "OpenAI 发布新的 Agent SDK。",
                   qualityScore: 90,
+                  qualityBreakdown: [
+                    { name: "事实密度", score: 20 },
+                    { name: "一手性", score: 15 },
+                    { name: "完整度", score: 12 },
+                    { name: "可信度", score: 8 },
+                    { name: "信息聚焦", score: 5 },
+                  ],
                   sourceUrl: "https://example.com/openai",
                 },
                 {
@@ -182,6 +189,13 @@ describe("ai provider", () => {
                   title: "Anthropic 上线 Console",
                   oneLiner: "Anthropic 上线新的开发者 Console。",
                   qualityScore: 85,
+                  qualityBreakdown: [
+                    { name: "事实密度", score: 20 },
+                    { name: "一手性", score: 5 },
+                    { name: "完整度", score: 12 },
+                    { name: "可信度", score: 8 },
+                    { name: "信息聚焦", score: 5 },
+                  ],
                   sourceUrl: null,
                 },
               ],
@@ -206,6 +220,14 @@ describe("ai provider", () => {
     expect(result.aggregation.isAggregation).toBe(true);
     expect(result.aggregation.events).toHaveLength(1);
     expect(result.aggregation.events[0]?.eventObject).toBe("Agent SDK");
+    expect(result.aggregation.events[0]?.qualityScore).toBe(60);
+    expect(result.aggregation.events[0]?.qualityBreakdown).toEqual([
+      { name: "事实密度", score: 20 },
+      { name: "一手性", score: 15 },
+      { name: "完整度", score: 12 },
+      { name: "可信度", score: 8 },
+      { name: "信息聚焦", score: 5 },
+    ]);
     expect(create).toHaveBeenCalledTimes(1);
   });
 
