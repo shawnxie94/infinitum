@@ -8,6 +8,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const ACTIONABLE_MONITOR_RANGE_DAYS = [1, 3, 7] as const;
 const AUTO_ENTITY_CONFIDENCE_THRESHOLD = 0.98;
 const MIN_ENTITY_SUGGESTION_AFFECTED_COUNT = 3;
+const AI_TELEMETRY_STAGE_KINDS = new Set(["item_reanalyze", "item_regenerate_summary", "item_regenerate_translation", "item_processing_recovery", "item_reparse_aggregations", "daily_report_generate"]);
 
 export type ActionableMonitorRangeDays = (typeof ACTIONABLE_MONITOR_RANGE_DAYS)[number];
 export type ActionableMonitorSeverity = "critical" | "warning" | "info";
@@ -46,6 +47,38 @@ function getTaskHref(status: BackgroundTaskRunStatus, rangeDays: ActionableMonit
   return `/admin?tab=monitoring&section=tasks&status=${status}&rangeDays=${rangeDays}`;
 }
 
+function parseStageKeys(value: string | null) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.flatMap((entry) => (
+          entry && typeof entry === "object" && typeof (entry as { key?: unknown }).key === "string"
+            ? [(entry as { key: string }).key]
+            : []
+        ))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function hasMissingAiTelemetry(task: {
+  kind: string;
+  progressTotal: number;
+  aiCallCountActual: number;
+  aiCallCountEstimated: number;
+  stageTimingsJson: string | null;
+}) {
+  if (!AI_TELEMETRY_STAGE_KINDS.has(task.kind) || task.progressTotal <= 0) return false;
+  if (task.aiCallCountActual > 0 || task.aiCallCountEstimated > 0) return false;
+  const stages = parseStageKeys(task.stageTimingsJson);
+  const expectedStages = task.kind === "daily_report_generate"
+    ? ["assess", "plan", "write", "review"]
+    : ["ai_call"];
+  return stages.some((stage) => expectedStages.includes(stage));
+}
+
 export async function getActionableMonitorSnapshot(
   now = new Date(),
   options?: { rangeDays?: number | string | null },
@@ -62,6 +95,7 @@ export async function getActionableMonitorSnapshot(
     aggregationSplitCounts,
     recentIssueTaskCount,
     recentFailedTaskCount,
+    telemetryCandidates,
   ] = await Promise.all([
     getSourceMonitorSnapshot(now, { page: 1, pageSize: 1 }),
     prisma.item.count({
@@ -108,6 +142,22 @@ export async function getActionableMonitorSnapshot(
         status: "failed",
         startedAt: { gte: since },
       },
+    }),
+    prisma.backgroundTaskRun.findMany({
+      where: {
+        status: { in: ["succeeded", "partial"] },
+        startedAt: { gte: since },
+      },
+      select: {
+        id: true,
+        kind: true,
+        progressTotal: true,
+        aiCallCountActual: true,
+        aiCallCountEstimated: true,
+        stageTimingsJson: true,
+      },
+      orderBy: { startedAt: "desc" },
+      take: 100,
     }),
   ]);
 
@@ -208,6 +258,21 @@ export async function getActionableMonitorSnapshot(
       href: `/admin?tab=monitoring&section=content&view=clusters&review=pending&rangeDays=${rangeDays}`,
       actionLabel: "查看",
       details: [],
+    });
+  }
+
+  const telemetryIssues = telemetryCandidates.filter(hasMissingAiTelemetry);
+  if (telemetryIssues.length > 0) {
+    items.push({
+      id: "ai-telemetry",
+      category: "task",
+      severity: "critical",
+      title: "AI 遥测缺失",
+      description: `${telemetryIssues.length} 个已完成任务包含 AI 阶段，但调用数为 0，需要确认 provider 调用或 usage 投影是否丢失。`,
+      count: telemetryIssues.length,
+      href: getTaskHref("succeeded", rangeDays),
+      actionLabel: "查看",
+      details: telemetryIssues.slice(0, 5).map((task) => `${task.kind}：${task.id}`),
     });
   }
 

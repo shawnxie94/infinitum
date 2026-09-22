@@ -236,4 +236,29 @@ describe("actionable monitor snapshot", () => {
     expect(threeDaySnapshot.rangeDays).toBe(3);
     expect(threeDaySnapshot.items.find((item) => item.id === "filtered-content")?.count).toBe(2);
   });
+
+  it("flags completed AI tasks whose AI stage has no usage attempts", async () => {
+    await prisma.backgroundTaskRun.create({
+      data: {
+        id: "task-missing-ai-telemetry",
+        kind: "item_reanalyze",
+        triggerType: "manual",
+        status: "succeeded",
+        label: "条目重分析",
+        progressTotal: 1,
+        aiCallCountActual: 0,
+        aiCallCountEstimated: 0,
+        stageTimingsJson: JSON.stringify([{ key: "ai_call", label: "AI 分析", durationMs: 250 }]),
+        startedAt: new Date("2026-06-30T00:00:00.000Z"),
+        createdAt: new Date("2026-06-30T00:00:00.000Z"),
+      },
+    });
+
+    const snapshot = await getActionableMonitorSnapshot(new Date("2026-06-30T01:00:00.000Z"), { rangeDays: 1 });
+    const item = snapshot.items.find((entry) => entry.id === "ai-telemetry");
+
+    expect(item?.severity).toBe("critical");
+    expect(item?.count).toBe(1);
+    expect(item?.details).toContain("item_reanalyze：task-missing-ai-telemetry");
+  });
 });
