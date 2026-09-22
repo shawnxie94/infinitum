@@ -15,6 +15,7 @@
 - `label-cases.md` — 238 unique pair 抽样标注记录（AI 辅助标注，人工抽样建议；逐条覆盖 approved 12 + strong-declined 36 + failed 抽查）
 - `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 行 / 238 unique pair，含 2 重复 failed pair）
 - `production-declined-2026-09-20.csv` — 生产快照中双方仍存活的 200 条最新 declined pair，作为困难负例；不作为 approved 正例
+- `production-overmerge-2026-09-23.csv` — **decision-layer FP 负例**（approved 但实为不同事件）：2026-09-21/22 生产误合并聚类重建的 19 对（14 diff / 4 same / 1 uncertain），配 `eval:overmerge-gate` 使用；现有其余负例全部来自 declined 决策，本文件是唯一覆盖「LLM 批准了不该批准」盲区的集合
 
 ## 复跑
 
@@ -86,6 +87,40 @@ INFINITUM_EMBED_URL=... INFINITUM_EMBED_MODEL=... INFINITUM_EMBED_KEY=... \
 调灰区阈值前先跑此评测；阈值变更视为基线变更（向量重算不涉及，但提名分布会变）。
 
 基线更新：指标改善后重设 `baseline-regression.json` 基准；换冻结快照时同步重建 freeze JSON 并提交。
+
+## Overmerge 回归门（决策层假阳性，2026-09-23）
+
+snapshot-gate / baseline-gate 只重放**规则与准入层**；LLM 合并决策层此前无门——
+2026-09-18 基线 approved 抽样仅 12 对（恰好全对），无法外推。2026-09-21/22 生产
+观测到决策层假阳性放量（14 个误合并聚类、约 15 对 FP，送审分 70-118 全部由规则
+提名、LLM approved），由此从生产重建 `production-overmerge-2026-09-23.csv`：
+pair 两侧取自合并后 cluster 的存活成员 item（标题/摘要/事件签名），itemCount 按
+pending 合并链重建，localScore 取当次决策存档分。
+
+```bash
+# 不调用模型，检查 fixture 解析与 pair 组装
+npm run eval:overmerge-gate -- --dry-run
+
+# 实跑：对 19 对重放当前 assessClusterMergePairs（默认 batch 8/次）
+INFINITUM_EVAL_AI_URL=http://<gateway>/v1 INFINITUM_EVAL_AI_KEY=<key> INFINITUM_EVAL_AI_MODEL=<model> \
+  npm run eval:overmerge-gate -- --out docs/eval/overmerge-gate-result.json
+```
+
+判定口径：`diff` 对必须 declined（默认 ≥12/14），`same` 对必须 approved
+（默认 ≥3/4，防「全部拒绝」退化通过）；`uncertain` 仅展示不进门；任何调用
+失败即 FAIL。阈值变更视为基线变更。
+
+2026-09-23 首跑基线（生产默认模型 MiniMax-M3，batch 8）：19/19 全对
+（`overmerge-gate-result-2026-09-23.json`）。两次 batch-19 单调用重放各翻转
+1 对且翻转对不同（verus_whirlpool approved↔declined、sunilpai declined、
+qwen_image_sam31 approved）——同输入随机判决噪声实测存在，批量越长噪声
+暴露越多；门的容忍阈值（各允许 2 对）即为此设计。运行门时保持默认
+batch 8 作为规范配置。
+
+已知边界：pair 侧文本为合并后重建，非当次决策的逐字节输入；重建的
+itemCount 为近似值；fixture 是一次性人工标注快照（labels：shangtang_qwen_hn、
+verus_whirlpool_hn 等 14 diff；huangjx_cbs 两对、sunilpai_essay_hn、
+qwen_image_ainews_geekpark 4 same；anthropic_rnd_wetlab 1 uncertain）。
 
 ## 数据源
 

@@ -1,0 +1,148 @@
+{
+  "fixture": "docs/eval/production-overmerge-2026-09-23.csv",
+  "totalPairs": 19,
+  "diffDeclined": 14,
+  "diffTotal": 14,
+  "sameApproved": 4,
+  "sameTotal": 4,
+  "callFailed": 0,
+  "thresholds": {
+    "minDiffDeclined": 12,
+    "minSameApproved": 3
+  },
+  "rows": [
+    {
+      "pairKey": "shangtang_qwen_hn",
+      "label": "diff",
+      "storedScore": 84,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "omdia_oppo_watch",
+      "label": "diff",
+      "storedScore": 98,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "so_agents_openai_guide",
+      "label": "diff",
+      "storedScore": 83,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "anthropic_rnd_wetlab",
+      "label": "uncertain",
+      "storedScore": 95,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "ff_dongfeng_robot",
+      "label": "diff",
+      "storedScore": 89,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "ff_zhihuijun_robot",
+      "label": "diff",
+      "storedScore": 91,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "ff_idc_quadruped",
+      "label": "diff",
+      "storedScore": 91,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "huangjx_cbs_ifanr_geekpark",
+      "label": "same",
+      "storedScore": 91,
+      "verdict": "approved",
+      "ok": true
+    },
+    {
+      "pairKey": "huangjx_cbs_geekpark_ainews",
+      "label": "same",
+      "storedScore": 89,
+      "verdict": "approved",
+      "ok": true
+    },
+    {
+      "pairKey": "huangjx_stratechery_essay",
+      "label": "diff",
+      "storedScore": 118,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "brockman_anthropic_revenue",
+      "label": "diff",
+      "storedScore": 70,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "miniagi_bird_dialect",
+      "label": "diff",
+      "storedScore": 83,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "timeatlas_chessatlas",
+      "label": "diff",
+      "storedScore": 83,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "salon_trump_rename",
+      "label": "diff",
+      "storedScore": 83,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "oura_ipo_siri_settlement",
+      "label": "diff",
+      "storedScore": 98,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "verus_whirlpool_hn",
+      "label": "diff",
+      "storedScore": 115,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "sunilpai_essay_hn",
+      "label": "same",
+      "storedScore": 103,
+      "verdict": "approved",
+      "ok": true
+    },
+    {
+      "pairKey": "qwen_image_sam31",
+      "label": "diff",
+      "storedScore": 98,
+      "verdict": "declined",
+      "ok": true
+    },
+    {
+      "pairKey": "qwen_image_ainews_geekpark",
+      "label": "same",
+      "storedScore": 118,
+      "verdict": "approved",
+      "ok": true
+    }
+  ]
+}
