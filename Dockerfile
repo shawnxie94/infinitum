@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 # memory budget. Runtime stages do not inherit this builder-only setting.
 ENV NODE_OPTIONS=--max-old-space-size=1024
 
-# lockfile 由本地 npm 11 生成（含 workspace 图谱），node:20-alpine 自带 npm 10 校验不过
+# lockfile 由本地 npm 11 生成（含 workspace 图谱），使用 Node 22 以满足 Mastra/AI SDK runtime engine 要求
 RUN npm i -g npm@11.19.0
 
 COPY package.json package-lock.json ./

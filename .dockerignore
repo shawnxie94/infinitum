@@ -14,6 +14,11 @@ docs/
 tests/
 .claude/
 .github/
+.agent/
+.codegraph/
+.zcode/
+next-env.d.ts
+graphify-out/
 .husky/
 .vscode/
 .idea/
