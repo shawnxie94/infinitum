@@ -15,7 +15,7 @@
 - `label-cases.md` — 238 unique pair 抽样标注记录（AI 辅助标注，人工抽样建议；逐条覆盖 approved 12 + strong-declined 36 + failed 抽查）
 - `eval-sample-30d.csv` — 标注样本集原始数据（30 天窗口，240 行 / 238 unique pair，含 2 重复 failed pair）
 - `production-declined-2026-09-20.csv` — 生产快照中双方仍存活的 200 条最新 declined pair，作为困难负例；不作为 approved 正例
-- `production-overmerge-2026-09-23.csv` — **decision-layer FP 负例**（approved 但实为不同事件）：2026-09-21/22 生产误合并聚类重建的 19 对（14 diff / 4 same / 1 uncertain），配 `eval:overmerge-gate` 使用；现有其余负例全部来自 declined 决策，本文件是唯一覆盖「LLM 批准了不该批准」盲区的集合
+- `production-overmerge-2026-09-23.csv` — **decision-layer FP 负例 + 漏合并正例对照**：2026-09-21/22 生产误合并聚类重建的 19 对（14 diff / 4 same / 1 uncertain）+ 2026-09-23 追加第二批（1 diff：HN 营销腔↔HarnessTax；5 same：Step5Preview、Gemini 入侵、豆包手机/NaviX、Amodei 节奏、Claude Code Projects 的碎片化漏合并对，双侧 cluster 存活故为 cluster 级文本，`verdictStored=none` 表示生产从未提名送审），共 25 对（15 diff / 9 same / 1 uncertain）；配 `eval:overmerge-gate` 使用。现有其余负例全部来自 declined 决策，本文件是唯一覆盖「LLM 批准了不该批准」盲区的集合
 
 ## 复跑
 
@@ -101,9 +101,10 @@ pending 合并链重建，localScore 取当次决策存档分。
 # 不调用模型，检查 fixture 解析与 pair 组装
 npm run eval:overmerge-gate -- --dry-run
 
-# 实跑：对 19 对重放当前 assessClusterMergePairs（默认 batch 8/次）
+# 实跑：对全部 pair 重放当前 assessClusterMergePairs（默认 batch 8/次）。
+# fixture 扩到 25 对后脚本内置默认阈值（12/3）偏松，建议显式收紧：
 INFINITUM_EVAL_AI_URL=http://<gateway>/v1 INFINITUM_EVAL_AI_KEY=<key> INFINITUM_EVAL_AI_MODEL=<model> \
-  npm run eval:overmerge-gate -- --out docs/eval/overmerge-gate-result.json
+  npm run eval:overmerge-gate -- --min-diff-declined 13 --min-same-approved 7 --out docs/eval/overmerge-gate-result.json
 ```
 
 判定口径：`diff` 对必须 declined（默认 ≥12/14），`same` 对必须 approved
@@ -118,9 +119,10 @@ qwen_image_sam31 approved）——同输入随机判决噪声实测存在，批�
 batch 8 作为规范配置。
 
 已知边界：pair 侧文本为合并后重建，非当次决策的逐字节输入；重建的
-itemCount 为近似值；fixture 是一次性人工标注快照（labels：shangtang_qwen_hn、
-verus_whirlpool_hn 等 14 diff；huangjx_cbs 两对、sunilpai_essay_hn、
-qwen_image_ainews_geekpark 4 same；anthropic_rnd_wetlab 1 uncertain）。
+itemCount 为近似值；fixture 是一次性人工标注快照。第二批 5 对漏合并
+（same）在生产中从未进入合并候选（0 条决策记录），属提名层/碎片化漏——
+门只重放决策层，对这些对的判定通过只说明决策层本身能正确合并，
+提名层召回由 `eval:embedding-recall` 与碎片化检测覆盖。
 
 ## 数据源
 
