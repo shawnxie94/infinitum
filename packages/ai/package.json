@@ -10,6 +10,7 @@
     "./provider/types": "./src/provider/types.ts",
     "./provider/usage": "./src/provider/usage.ts",
     "./provider/usage-ledger": "./src/provider/usage-ledger.ts",
+    "./provider/embeddings": "./src/provider/embeddings.ts",
     "./provider/operations": "./src/provider/operations.ts",
     "./provider/runtime": "./src/provider/runtime.ts",
     "./orchestration/workflow-factory": "./src/orchestration/workflow-factory.ts",

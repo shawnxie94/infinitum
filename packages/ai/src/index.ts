@@ -3,6 +3,20 @@ export { createMemorySingleFlight, createSingleFlight } from "./orchestration/si
 export { runStageLoop, StageLoopError } from "./orchestration/stage-loop";
 export { createUsageInterceptor } from "./provider/usage";
 export { createUsageLedger } from "./provider/usage-ledger";
+export {
+  buildEmbeddingCacheHash,
+  cosineSimilarity,
+  createEmbedTexts,
+  isEmbeddingClientConfigReady,
+  resetEmbeddingFailureCache,
+} from "./provider/embeddings";
+export type {
+  EmbeddingApiClient,
+  EmbeddingClientConfig,
+  EmbeddingDeps,
+  EmbeddingVectorStore,
+  EmbedTextsFn,
+} from "./provider/embeddings";
 export { createAiOperationRegistry, createAiOperationRunner } from "./provider/operations";
 export { createAiModelRuntime } from "./provider/runtime";
 export type { AiOperationDefinition, AiOperationRegistry } from "./provider/operations";
