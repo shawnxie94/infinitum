@@ -1,6 +1,19 @@
-# @infinitum/ai — P0 Mastra 概念验证
+# @infinitum/ai — Mastra AI Runtime
 
-spec-mastra-migration P0 阶段产物（2026-09-21）。工作流代码为验证原型，P1a 起重构为正式结构。
+`@infinitum/ai` 是 Infinitum 的 AI 调用与 workflow runtime。正式业务 workflow 已由 Mastra 承载；业务层继续拥有 Prompt、operation 语义、配置解析、schema/parser 和业务副作用。
+
+## 当前正式边界
+
+- `src/provider/gateway.ts`：Model Gateway，负责 transport、structured JSON、retry、repair、fallback、熔断和 usage 回调。
+- `src/provider/operations.ts`：operation contract / runner，负责 operation key、schema 和 JSON retry policy 绑定。
+- `src/provider/usage-ledger.ts`：框架无关的 AI call、token、attempt ledger。
+- `src/orchestration/`：Mastra workflow、step lifecycle、checkpoint、取消和终态投影适配。
+- 主仓 `src/lib/ai/`：业务 Prompt、parser、schema 和 operation 注册。
+- 主仓 `src/lib/ai-orchestration/runtime.ts`：将 Mastra lifecycle / telemetry 投影到 `BackgroundTaskRun`。
+
+运行时要求 Node.js `>=22.13.0`，与 Mastra 和 AI SDK 的 engines 约束一致。
+
+本文件下方的 P0 内容是历史验证记录，不再代表当前生产接入状态。
 
 ## 钉版
 
