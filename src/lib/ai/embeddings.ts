@@ -1,20 +1,18 @@
-import OpenAI from "openai";
-
 import type { RuntimeConfig } from "@/config/runtime";
 import { prisma } from "@/lib/db";
 import {
   createEmbedTexts as createFrameworkEmbedTexts,
+  createOpenAICompatibleEmbeddingTransport,
   decodeVector,
   encodeVector,
   isEmbeddingClientConfigReady,
-  type EmbeddingApiClient,
+  type EmbeddingTransport,
   type EmbeddingVectorStore,
 } from "@infinitum/ai/provider/embeddings";
 
 export type EmbeddingRuntimeConfig = RuntimeConfig["embedding"];
 
-export type { EmbeddingApiClient } from "@infinitum/ai/provider/embeddings";
-export type { EmbedTextsFn } from "@infinitum/ai/provider/embeddings";
+export type { EmbedTextsFn, EmbeddingTransport } from "@infinitum/ai/provider/embeddings";
 export {
   buildEmbeddingCacheHash,
   cosineSimilarity,
@@ -90,20 +88,15 @@ const prismaVectorStore: EmbeddingVectorStore = {
 
 export function createEmbedTexts(
   config: EmbeddingRuntimeConfig | null | undefined,
-  deps: { client?: EmbeddingApiClient | null } = {},
+  deps: { transport?: EmbeddingTransport | null } = {},
 ) {
-  const ready = isEmbeddingClientConfigReady(config);
-  const client =
-    deps.client ??
-    (ready
-      ? (new OpenAI({
-          apiKey: config.apiKey,
-          baseURL: config.baseUrl,
-          timeout: config.timeoutMs ?? 15_000,
-          // 批次级失败由嵌入管线内部隔离降级，SDK 不做批级重试（避免挂起文本 ×3 放大时延）
-          maxRetries: 0,
-        }) as unknown as EmbeddingApiClient)
-      : null);
+  // 未注入测试传输时按配置装配 AI SDK 默认传输；配置不就绪则恒降级。
+  const transport =
+    deps.transport !== undefined
+      ? deps.transport
+      : isEmbeddingClientConfigReady(config)
+        ? createOpenAICompatibleEmbeddingTransport(config)
+        : null;
 
-  return createFrameworkEmbedTexts(config, { client, vectorStore: prismaVectorStore });
+  return createFrameworkEmbedTexts(config, { transport, vectorStore: prismaVectorStore });
 }

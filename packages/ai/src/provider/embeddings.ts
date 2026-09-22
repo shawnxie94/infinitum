@@ -1,24 +1,7 @@
 import { createHash } from "node:crypto";
 
-type EmbeddingsResponse = {
-  data?: Array<{
-    embedding?: number[];
-    index?: number;
-  }>;
-  usage?: {
-    prompt_tokens?: number;
-    total_tokens?: number;
-  };
-};
-
-export type EmbeddingApiClient = {
-  embeddings: {
-    create: (
-      payload: Record<string, unknown>,
-      options?: { maxRetries?: number },
-    ) => Promise<EmbeddingsResponse>;
-  };
-};
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { embedMany } from "ai";
 
 // 运行时配置的形状保持宽松（业务侧 RuntimeConfig["embedding"] 结构兼容即可）。
 export type EmbeddingClientConfig = {
@@ -49,6 +32,9 @@ export function isEmbeddingClientConfigReady(
 // 调用方（矩阵构建 / RRF 召回）需容忍缺失。整体 null 仅表示通道不可用。
 export type EmbedTextsFn = (texts: string[]) => Promise<Array<number[] | null> | null>;
 
+// 传输缝：输入文本数组 → 与输入对齐的向量数组；失败抛错（由管线隔离降级）。
+export type EmbeddingTransport = (values: string[]) => Promise<number[][]>;
+
 // 向量缓存由业务侧注入（框架不感知 Prisma / 存储细节）。
 export type EmbeddingVectorStore = {
   loadCached(hashes: string[]): Promise<Map<string, number[]>>;
@@ -61,7 +47,7 @@ export type EmbeddingVectorStore = {
 };
 
 export type EmbeddingDeps = {
-  client: EmbeddingApiClient | null;
+  transport: EmbeddingTransport | null;
   vectorStore: EmbeddingVectorStore;
 };
 
@@ -123,46 +109,58 @@ export function resetEmbeddingFailureCache() {
   failedEmbeddingHashes.clear();
 }
 
+// 默认传输：@ai-sdk/openai-compatible embedMany。maxRetries=0——批次级失败
+// 由嵌入管线内部隔离降级为单条，SDK 不做批级重试（避免挂起文本 ×3 放大时延）；
+// dimensions 经 providerOptions 透传到 /embeddings 请求体。
+export function createOpenAICompatibleEmbeddingTransport(
+  config: ReadyEmbeddingClientConfig,
+): EmbeddingTransport {
+  const provider = createOpenAICompatible({
+    name: "infinitum-embedding",
+    baseURL: config.baseUrl,
+    apiKey: config.apiKey,
+  });
+  const model = provider.embeddingModel(config.modelName);
+
+  return async (values) => {
+    const { embeddings } = await embedMany({
+      model,
+      values,
+      maxRetries: 0,
+      abortSignal: config.timeoutMs ? AbortSignal.timeout(config.timeoutMs) : undefined,
+      providerOptions: {
+        openaiCompatible: {
+          ...(config.dimensions && config.dimensions > 0
+            ? { dimensions: Math.floor(config.dimensions) }
+            : {}),
+        },
+      },
+    });
+    return embeddings;
+  };
+}
+
 export function createEmbedTexts(
   config: EmbeddingClientConfig | null | undefined,
   deps: EmbeddingDeps,
 ): EmbedTextsFn {
-  if (!isEmbeddingClientConfigReady(config) || !deps.client) {
+  if (!isEmbeddingClientConfigReady(config) || !deps.transport) {
     return async () => null;
   }
 
   const modelName = config.modelName;
   const batchSize = clampBatchSize(config.batchSize ?? 32);
-  const client = deps.client;
+  const transport = deps.transport;
   const vectorStore = deps.vectorStore;
 
-  const embedBatch = async (input: string[]): Promise<number[][] | null> => {
-    const response = await client.embeddings.create(
-      {
-        model: modelName,
-        input,
-        ...(config.dimensions && config.dimensions > 0 ? { dimensions: config.dimensions } : {}),
-      },
-      { maxRetries: 0 },
-    );
-    const data = response.data ?? [];
-    if (data.length !== input.length) {
-      return null;
-    }
-
-    // Responses may be unordered; index field is the contract when present.
-    const ordered: Array<number[] | null> = input.map(() => null);
-    data.forEach((row, position) => {
-      const target = typeof row.index === "number" ? row.index : position;
-      if (!row.embedding || target < 0 || target >= ordered.length) {
-        return;
-      }
-      ordered[target] = row.embedding;
-    });
-    if (ordered.some((vector) => vector === null)) {
-      return null;
-    }
-    return ordered as number[][];
+  // 传输层返回不齐（协议违约）按批次失败处理，走隔离降级。
+  const callTransport = async (values: string[]): Promise<number[][] | null> => {
+    const result = await transport(values);
+    return Array.isArray(result)
+      && result.length === values.length
+      && result.every((vector) => Array.isArray(vector))
+      ? result
+      : null;
   };
 
   return async (texts: string[]): Promise<Array<number[] | null> | null> => {
@@ -184,7 +182,7 @@ export function createEmbedTexts(
         const slice = misses.slice(start, start + batchSize);
         let batchVectors: number[][] | null = null;
         try {
-          batchVectors = await embedBatch(slice.map((entry) => texts[entry.index]!));
+          batchVectors = await callTransport(slice.map((entry) => texts[entry.index]!));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.warn(`[embeddings] 批次异常: ${message.slice(0, 120)}`);
@@ -212,7 +210,7 @@ export function createEmbedTexts(
         for (const entry of slice) {
           let single: number[][] | null = null;
           try {
-            single = await embedBatch([texts[entry.index]!]);
+            single = await callTransport([texts[entry.index]!]);
           } catch {
             single = null;
           }

@@ -1,29 +1,21 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { EmbeddingApiClient } from "@/lib/ai/embeddings";
+import type { EmbeddingTransport } from "@/lib/ai/embeddings";
 import { buildEmbeddingCacheHash, createEmbedTexts, resetEmbeddingFailureCache } from "@/lib/ai/embeddings";
 import { prisma } from "@/lib/db";
 
 const MODEL = "test-embed-model";
 
-function fakeClient(impl: (input: string[]) => number[][]) {
+function fakeTransport(impl: (input: string[]) => number[][]): {
+  transport: EmbeddingTransport;
+  callCount: () => number;
+} {
   let calls = 0;
-  const client = {
-    embeddings: {
-      create: async (payload: Record<string, unknown>) => {
-        calls += 1;
-        const input = payload.input as string[];
-        const vectors = impl(input);
-        return {
-          data: vectors.map((embedding, index) => ({ embedding, index })),
-        };
-      },
-    },
-  } as unknown as EmbeddingApiClient & { embeddings: { create: unknown } };
-  return {
-    client: client as EmbeddingApiClient,
-    callCount: () => calls,
+  const transport: EmbeddingTransport = async (input) => {
+    calls += 1;
+    return impl(input);
   };
+  return { transport, callCount: () => calls };
 }
 
 afterEach(async () => {
@@ -33,7 +25,7 @@ afterEach(async () => {
 
 describe("createEmbedTexts cache behaviour", () => {
   it("stores fetched vectors and serves subsequent calls from cache", async () => {
-    const { client, callCount } = fakeClient((input) =>
+    const { transport, callCount } = fakeTransport((input) =>
       input.map((_, index) => [index + 0.5, 1, 0]),
     );
     const embed = createEmbedTexts(
@@ -46,7 +38,7 @@ describe("createEmbedTexts cache behaviour", () => {
         batchSize: 2,
         timeoutMs: 5000,
       },
-      { client },
+      { transport },
     );
 
     const texts = ["文本甲", "文本乙", "文本丙"];
@@ -69,7 +61,7 @@ describe("createEmbedTexts cache behaviour", () => {
   });
 
   it("does not reuse a vector cache entry across dimensions", async () => {
-    const { client, callCount } = fakeClient(() => [[1, 0, 0]]);
+    const { transport, callCount } = fakeTransport(() => [[1, 0, 0]]);
     const baseConfig = {
       enabled: true,
       baseUrl: "http://localhost:3000/v1",
@@ -79,28 +71,21 @@ describe("createEmbedTexts cache behaviour", () => {
       timeoutMs: 5000,
     };
 
-    await createEmbedTexts({ ...baseConfig, dimensions: 3 }, { client })(["同一文本"]);
-    await createEmbedTexts({ ...baseConfig, dimensions: 4 }, { client })(["同一文本"]);
+    await createEmbedTexts({ ...baseConfig, dimensions: 3 }, { transport })(["同一文本"]);
+    await createEmbedTexts({ ...baseConfig, dimensions: 4 }, { transport })(["同一文本"]);
 
     expect(callCount()).toBe(2);
   });
 
   it("isolates a failing text inside a batch and caches the healthy ones", async () => {
     const calls: string[][] = [];
-    const client = {
-      embeddings: {
-        create: async (payload: Record<string, unknown>) => {
-          const input = payload.input as string[];
-          calls.push(input);
-          // 毒文本：包含「毒」字的请求整批失败（模拟供应商挂起/500）
-          if (input.some((text) => text.includes("毒"))) {
-            throw new Error("upstream 500");
-          }
-          return {
-            data: input.map((text, index) => ({ embedding: [text.length + index, 1, 0], index })),
-          };
-        },
-      },
+    const transport: EmbeddingTransport = async (input) => {
+      calls.push(input);
+      // 毒文本：包含「毒」字的请求整批失败（模拟供应商挂起/500）
+      if (input.some((text) => text.includes("毒"))) {
+        throw new Error("upstream 500");
+      }
+      return input.map((text, index) => [text.length + index, 1, 0]);
     };
     const embed = createEmbedTexts(
       {
@@ -112,7 +97,7 @@ describe("createEmbedTexts cache behaviour", () => {
         batchSize: 8,
         timeoutMs: 5000,
       },
-      { client: client as unknown as EmbeddingApiClient },
+      { transport },
     );
 
     const texts = ["健康甲", "毒文本", "健康乙"];
@@ -142,13 +127,9 @@ describe("createEmbedTexts cache behaviour", () => {
 
   it("degrades to per-text nulls when the API client fails entirely", async () => {
     let calls = 0;
-    const failing = {
-      embeddings: {
-        create: async () => {
-          calls += 1;
-          throw new Error("connection refused");
-        },
-      },
+    const failing: EmbeddingTransport = async () => {
+      calls += 1;
+      throw new Error("connection refused");
     };
     const embed = createEmbedTexts(
       {
@@ -160,7 +141,7 @@ describe("createEmbedTexts cache behaviour", () => {
         batchSize: 8,
         timeoutMs: 5000,
       },
-      { client: failing as unknown as EmbeddingApiClient },
+      { transport: failing },
     );
 
     const result = await embed(["文本"]);

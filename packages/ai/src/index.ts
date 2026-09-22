@@ -7,13 +7,14 @@ export {
   buildEmbeddingCacheHash,
   cosineSimilarity,
   createEmbedTexts,
+  createOpenAICompatibleEmbeddingTransport,
   isEmbeddingClientConfigReady,
   resetEmbeddingFailureCache,
 } from "./provider/embeddings";
 export type {
-  EmbeddingApiClient,
   EmbeddingClientConfig,
   EmbeddingDeps,
+  EmbeddingTransport,
   EmbeddingVectorStore,
   EmbedTextsFn,
 } from "./provider/embeddings";

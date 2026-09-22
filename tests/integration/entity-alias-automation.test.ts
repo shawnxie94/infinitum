@@ -215,7 +215,7 @@ describe("precompute embedTexts wiring", () => {
   it("accepts injected embedTexts on the clean-pair precompute", async () => {
     const embedTexts: EmbedTextsFn = async (texts) => texts.map(() => [1, 0]);
     const result = await precomputeClusterMergeCleanPairs(NOW, {
-      embedTexts: createEmbedTexts(null, { client: null }) ?? embedTexts,
+      embedTexts: createEmbedTexts(null, { transport: null }) ?? embedTexts,
     });
     // createEmbedTexts(null) 返回恒 null 的降级函数 → 向量通道关闭，不阻断
     expect(result.vectorEnabled).toBe(false);

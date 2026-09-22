@@ -287,15 +287,15 @@ describe("createEmbedTexts", () => {
   };
 
   it("returns null for unconfigured or disabled config", async () => {
-    const disabled = createEmbedTexts({ ...config, enabled: false }, { client: null });
+    const disabled = createEmbedTexts({ ...config, enabled: false }, { transport: null });
     expect(await disabled(["文本"])).toBeNull();
 
-    const missing = createEmbedTexts(null, { client: null });
+    const missing = createEmbedTexts(null, { transport: null });
     expect(await missing(["文本"])).toBeNull();
   });
 
   it("returns empty array for empty input", async () => {
-    const embed = createEmbedTexts(config, { client: { embeddings: { create: async () => { throw new Error("no"); } } } });
+    const embed = createEmbedTexts(config, { transport: async () => { throw new Error("no"); } });
     expect(await embed([])).toEqual([]);
   });
 });

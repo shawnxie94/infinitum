@@ -7,7 +7,7 @@
 - `src/provider/gateway.ts`：Model Gateway，负责 transport、structured JSON、retry、repair、fallback、熔断和 usage 回调。
 - `src/provider/operations.ts`：operation contract / runner，负责 operation key、schema 和 JSON retry policy 绑定。
 - `src/provider/usage-ledger.ts`：框架无关的 AI call、token、attempt ledger。
-- `src/provider/embeddings.ts`：嵌入管线（缓存哈希、批次隔离降级、进程内负缓存、cosine）；向量存储由业务侧注入 `EmbeddingVectorStore`，框架不感知 Prisma。
+- `src/provider/embeddings.ts`：嵌入管线（缓存哈希、批次隔离降级、进程内负缓存、cosine），默认传输走 @ai-sdk/openai-compatible embedMany（dimensions 经 providerOptions 透传）；传输缝 `EmbeddingTransport` 可注入替换，向量存储由业务侧注入 `EmbeddingVectorStore`，框架不感知 Prisma。
 - `src/orchestration/`：Mastra workflow、step lifecycle、checkpoint、取消和终态投影适配。
 - 主仓 `src/lib/ai/`：业务 Prompt、parser、schema 和 operation 注册。
 - 主仓 `src/lib/ai-orchestration/runtime.ts`：将 Mastra lifecycle / telemetry 投影到 `BackgroundTaskRun`。
