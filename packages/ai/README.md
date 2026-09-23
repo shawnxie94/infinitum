@@ -1,52 +1,33 @@
-# @infinitum/ai — Mastra AI Runtime
+# @infinitum/ai — AI Runtime
 
-`@infinitum/ai` 是 Infinitum 的 AI 调用与 workflow runtime。正式业务 workflow 已由 Mastra 承载；业务层继续拥有 Prompt、operation 语义、配置解析、schema/parser 和业务副作用。
+`@infinitum/ai` 提供 Infinitum 的模型调用、嵌入和 workflow runtime。正式后台任务由 Mastra workflow 承载；业务 Prompt、operation 语义、配置解析、schema/parser 和业务副作用仍由主仓拥有。
 
-## 当前正式边界
+## 当前边界
 
-- `src/provider/gateway.ts`：Model Gateway，负责 transport、structured JSON、retry、repair、fallback、熔断和 usage 回调。
-- `src/provider/operations.ts`：operation contract / runner，负责 operation key、schema 和 JSON retry policy 绑定。
+- `src/provider/gateway.ts`：模型传输、结构化 JSON、重试、修复、fallback、熔断和 usage 回调。
+- `src/provider/operations.ts`：operation contract、schema 和 JSON retry policy。
 - `src/provider/usage-ledger.ts`：框架无关的 AI call、token、attempt ledger。
-- `src/provider/embeddings.ts`：嵌入管线（缓存哈希、批次隔离降级、进程内负缓存、cosine），默认传输走 @ai-sdk/openai-compatible embedMany（dimensions 经 providerOptions 透传）；传输缝 `EmbeddingTransport` 可注入替换，向量存储由业务侧注入 `EmbeddingVectorStore`，框架不感知 Prisma。
+- `src/provider/embeddings.ts`：嵌入管线；默认通过 `@ai-sdk/openai-compatible` 的 `embedMany` 传输，向量存储由业务侧注入。
 - `src/orchestration/`：Mastra workflow、step lifecycle、checkpoint、取消和终态投影适配。
 - 主仓 `src/lib/ai/`：业务 Prompt、parser、schema 和 operation 注册。
-- 主仓 `src/lib/ai-orchestration/runtime.ts`：将 Mastra lifecycle / telemetry 投影到 `BackgroundTaskRun`。
+- 主仓 `src/lib/ai-orchestration/runtime.ts`：将 Mastra lifecycle 和遥测投影到 `BackgroundTaskRun`。
 
-运行时要求 Node.js `>=22.13.0`，与 Mastra 和 AI SDK 的 engines 约束一致。
+运行时要求 Node.js `>=22.13.0`。Mastra 依赖版本由 workspace manifest 和 lockfile 管理。
 
-本文件下方的 P0 内容是历史验证记录，不再代表当前生产接入状态。
+## 验证
 
-## 钉版
+- 包类型检查：`npm run build -w @infinitum/ai`
+- Mastra 接入测试：`npx vitest run tests/unit/mastra-framework-capability.test.ts tests/integration/mastra-staged-workflow.test.ts`
+- 真实 Runtime + LibSQL 冒烟（先创建隔离库）：
+  ```bash
+  node scripts/setup-sqlite.mjs /tmp/infinitum-mastra-smoke.db --reset
+  DATABASE_URL=file:/tmp/infinitum-mastra-smoke.db npm run smoke:ai-orchestration
+  ```
 
-- `@mastra/core` **1.67.0**（精确版本，lockfile 锁定）
-- `@mastra/libsql` **1.23.0**
-- `@libsql/client` ^0.18.0（与 @mastra/libsql 同源）
+冒烟检查会通过 Mastra/LibSQL 初始化或写入 runtime 存储表。请使用测试库或专用临时数据库，不要指向生产库；默认 smoke 使用不存在的 task id，不触发业务任务写入。
 
-## 验证门结论（12/12 PASS，P0 历史记录，harness 已删除不可复跑）
+## 历史 P0 验证记录（2026-09-23）
 
-| 门 | 结论 |
-|---|---|
-| G1 workspace build | `npm run build -w @infinitum/ai`（tsc --noEmit）通过；npm workspaces 生效 |
-| G2 钉版 | package.json 无 `^` 前缀，lockfile 锁定 |
-| G3 hello（tsx） | `createRun()` → `run.start({ inputData })` 双步链成功 |
-| G3b hello（Next route） | `/api/mastra-p0` 经 transpilePackages 引 TS 源码包跑通 |
-| G4 存储与重启 | LibSQL 本地文件自动建 44 张 `mastra_*` 表；journal_mode=**wal**（LibSQLStore 自动设置）；跨进程 `createRun({ runId })` + `run.resume({ step, resumeData })` 成功 |
-| G4 双进程同库 | 两个进程并发跑 workflow + 直写同一 SQLite 文件无锁冲突 |
-| G5 崩溃恢复 | SIGKILL 孤儿 run 被 `listActiveWorkflowRuns()` 拾起，`restartAllActiveWorkflowRuns()` 重跑中断步（attempt 计数 ≥2 证实），终态 success |
-| G6 取消钉版 | 见下 |
-| G7 事件 | `WorkflowOptions.onStart/onFinish/onError` 实测触发（onFinish 覆盖 success/failed） |
-| G8 DB 信号量 | `INSERT ... ON CONFLICT DO NOTHING` 语义：4 进程竞争恰 1 个胜出；持有期二次触发 skip；释放后可再取 |
+迁移早期曾完成 12 项 P0 探索/验证，覆盖 workflow 启动、LibSQL 存储与恢复、取消、事件和 DB 信号量。该阶段的临时 harness 与 API 路由已删除，历史结果**不可由仓库内的 P0 命令复跑，也不代表当前版本刚刚通过了这些门**。当前版本请以本节列出的包构建、接入测试和真实 Runtime 冒烟结果为准。
 
-## 行为钉版（对 spec 决策的修正输入）
-
-1. **1.67 的 `start/cancel/resume/watch` 都在 `Run` 上**，Workflow 只有 `createRun/commit`——旧文档的 `workflow.start()` 不存在。跨进程恢复 = `workflow.createRun({ runId })` 绑定已有 run。
-2. **`run.cancel()` 干净终止**：步内 `abortSignal` 即时生效，终态 `canceled`，无残留——**社区报告的卡 suspended bug 在 1.67.0 未复现**（仍在 P1b 决策点复验）。D7 的跨进程主路径仍必须是 DB flag（abortSignal 跨进程无效）。
-3. **协作取消（DB flag）终态是 `failed` + 业务错误**：D6 wrapper 必须把 `P0CooperativeCancelError` 类错误映射为 cancelled 语义（BackgroundTaskRun 终态/monitor 展示），不能直接透传为失败。
-4. **崩溃恢复无自动开关**：1.67 `Config.recovery` 仅 `durableAgents`；`autoRestartActiveRuns` 配置不存在（记忆中的调研口径过时）。worker 启动时显式调一次 `restartAllActiveWorkflowRuns()` 即可（与 spec D4/C8 兼容）。
-5. **run 状态表是 `mastra_workflow_snapshot`**（无 `mastra_workflow_runs`），status 在 snapshot JSON 内（`json_extract(snapshot,'$.status')`）。
-6. **`mastra.on(topic)` 无公开类型面**：events 子路径提供 PubSub/EventEmitterPubSub，但无公开事件名注册表——D4 主机制定为 workflow 级回调 + D6 wrapper 采集（与 spec Revision 2 预案一致，无需修订）。
-7. LibSQLStore 初始化时自动设置 `journal_mode=WAL` 与 `busy_timeout=5000`（@mastra/libsql 1.23.0 实测；P0 期间"默认 0"的记录已过时）。双进程同库在低并发下无锁冲突。
-
-## P0 历史说明
-
-P0 验证产物（`src/runtime.ts`、`src/workflows/`、`src/verify/`、主仓 `src/app/api/mastra-p0/` 与 `verify:mastra-p0` 脚本）已于 2026-09-23 迁移终态扫尾时删除，上方验证门结论保留为历史记录，不可复跑。
+后续 Mastra 版本行为以当前依赖版本为准；历史实验结论不作为未来版本兼容保证。

@@ -15,7 +15,7 @@ import {
   updateTaskRun,
   updateDefaultIngestionSchedule,
 } from "@/lib/tasks/service";
-import { recoverStaleTaskRuns, runWorkerCycle } from "@/lib/tasks/worker";
+import { recoverStaleTaskRuns, recoverWorkerStartupTasks, runWorkerCycle } from "@/lib/tasks/worker";
 
 describe("background task persistence", () => {
   beforeEach(async () => {
@@ -271,6 +271,64 @@ describe("background task persistence", () => {
     expect(updatedFetchRun.status).toBe("failed");
     expect(updatedFetchRun.finishedAt).not.toBeNull();
     expect(updatedFetchRun.errorSummary).toContain("Worker exited");
+  });
+
+  it("resumes Mastra runs before failing orphaned task rows during startup", async () => {
+    const activeRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "item_cleanup",
+        triggerType: "manual",
+        status: "running",
+        label: "可恢复任务",
+        startedAt: new Date("2026-04-12T00:10:00.000Z"),
+      },
+    });
+    const orphanedRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "item_cleanup",
+        triggerType: "manual",
+        status: "running",
+        label: "孤儿任务",
+        startedAt: new Date("2026-04-12T00:10:00.000Z"),
+      },
+    });
+    const cancellationRequestedRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "item_cleanup",
+        triggerType: "manual",
+        status: "running",
+        label: "待取消任务",
+        startedAt: new Date("2026-04-12T00:10:00.000Z"),
+        cancelRequestedAt: new Date("2026-04-12T00:11:00.000Z"),
+      },
+    });
+    let restartObservedRunningRow = false;
+    let restartObservedCancellation = false;
+
+    const recovered = await recoverWorkerStartupTasks(new Date("2026-04-12T00:12:00.000Z"), async () => {
+      const [active, cancellationRequested] = await Promise.all([
+        prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: activeRun.id } }),
+        prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: cancellationRequestedRun.id } }),
+      ]);
+      restartObservedRunningRow = active.status === "running";
+      restartObservedCancellation = cancellationRequested.status === "cancelled";
+      await prisma.backgroundTaskRun.update({
+        where: { id: activeRun.id },
+        data: { status: "succeeded", finishedAt: new Date("2026-04-12T00:12:00.000Z") },
+      });
+    });
+
+    const [active, orphaned, cancellationRequested] = await Promise.all([
+      prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: activeRun.id } }),
+      prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: orphanedRun.id } }),
+      prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: cancellationRequestedRun.id } }),
+    ]);
+    expect(restartObservedRunningRow).toBe(true);
+    expect(restartObservedCancellation).toBe(true);
+    expect(recovered).toBe(1);
+    expect(active.status).toBe("succeeded");
+    expect(orphaned.status).toBe("failed");
+    expect(cancellationRequested.status).toBe("cancelled");
   });
 
   it("reconciles cancellation-requested running tasks as cancelled during recovery", async () => {

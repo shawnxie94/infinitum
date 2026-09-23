@@ -5,6 +5,7 @@ import { findRecentActiveClusterCandidates } from "@/lib/clusters/repository";
 import { prisma } from "@/lib/db";
 import { countDisplayItemsCreatedDuringFetchRun, toFetchRunSnapshot } from "@/lib/feed/repository";
 import { runIngestion, runIngestionTask, startIngestionTask } from "@/lib/ingestion/service";
+import { findOrCreateIngestionFetchRun } from "@/lib/ingestion/workflow-stages";
 import { buildDedupeKeys } from "@/lib/ingestion/dedupe";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
 
@@ -30,6 +31,15 @@ describe("runIngestion", () => {
     expect(taskRun.kind).toBe("ingestion");
     expect(taskRun.status).toBe("queued");
     expect(taskRun.triggerType).toBe("manual");
+  });
+
+  it("reuses the active FetchRun when the source-sync stage is replayed", async () => {
+    const taskRun = await startIngestionTask({ triggerType: "manual" });
+    const first = await findOrCreateIngestionFetchRun(taskRun.id, "manual", new Date("2026-04-10T09:00:00.000Z"));
+    const replay = await findOrCreateIngestionFetchRun(taskRun.id, "manual", new Date("2026-04-10T09:01:00.000Z"));
+
+    expect(replay.id).toBe(first.id);
+    await expect(prisma.fetchRun.count({ where: { taskRunId: taskRun.id } })).resolves.toBe(1);
   });
 
   it("records ingestion task progress using item counts instead of source counts", async () => {

@@ -12,7 +12,7 @@ import {
   buildDailyReportStageIdentity,
   DAILY_REPORT_WORKFLOW_STAGES,
 } from "../../src/lib/daily-report/generation";
-import { DOMAIN_STAGE_TASK_DEFINITIONS, WORKFLOW_TASK_DEFINITIONS } from "../../src/lib/tasks/domain-bodies";
+import { WORKFLOW_TASK_DEFINITIONS } from "@/lib/workflows/catalog";
 import { parseTaskWorkflowCheckpointJson } from "../../src/lib/tasks/checkpoint";
 
 const row: TaskRunSnapshot = {
@@ -50,6 +50,26 @@ describe("framework capability evolution", () => {
     await expect(singleFlight.acquire("ingestion", "b")).resolves.toBe(false);
     await singleFlight.release("ingestion", "a");
     await expect(singleFlight.acquire("ingestion", "b")).resolves.toBe(true);
+  });
+
+  it("increments the step attempt after replay from a persisted checkpoint", async () => {
+    const { sink } = createSink();
+    const replayRow: TaskRunSnapshot = {
+      ...row,
+      pipelineCheckpointJson: JSON.stringify({
+        __mastra: { step: { stepId: "daily_report_generate-write", attempt: 2 } },
+      }),
+    };
+    let observedAttempt = 0;
+
+    await runTaskWithLifecycle({
+      row: replayRow,
+      sink,
+      stepId: "daily_report_generate-write",
+      body: async (_input, context) => { observedAttempt = context?.attempt ?? 0; },
+    });
+
+    expect(observedAttempt).toBe(3);
   });
 
   it("projects successful lifecycle and passes an abort-aware context", async () => {
@@ -155,41 +175,46 @@ describe("framework capability evolution", () => {
     expect(TASK_DEFINITIONS).toHaveLength(11);
     expect(TASK_DEFINITIONS.every((definition) => definition.mode === "workflow")).toBe(true);
     expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(11);
+    for (const workflowDefinition of Object.values(WORKFLOW_TASK_DEFINITIONS)) {
+      expect(workflowDefinition).toBeDefined();
+      expect(workflowDefinition!.stages.every((stage) => ["replay_safe", "at_least_once", "business_checkpointed"].includes(stage.replayPolicy ?? ""))).toBe(true);
+      expect(TASK_DEFINITIONS.find((definition) => definition.kind === workflowDefinition!.kind)?.stageReplayPolicies).toEqual(
+        Object.fromEntries(workflowDefinition!.stages.map((stage) => [stage.id, stage.replayPolicy])),
+      );
+    }
     expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stages).toEqual([
       ...DAILY_REPORT_WORKFLOW_STAGES,
     ]);
-    expect(Object.keys(DOMAIN_STAGE_TASK_DEFINITIONS).sort()).toEqual(
-      TASK_DEFINITIONS.filter((definition) => definition.kind !== "daily_report_generate" && definition.kind !== "ingestion" && definition.kind !== "item_processing_recovery").map((definition) => definition.kind).sort(),
-    );
+    expect(Object.keys(WORKFLOW_TASK_DEFINITIONS).sort()).toEqual(TASK_DEFINITIONS.map((definition) => definition.kind).sort());
     expect(WORKFLOW_TASK_DEFINITIONS.ingestion?.stages.map((stage) => stage.id)).toEqual([
       "source_sync", "item_processing", "cluster_merge", "cluster_finalize",
     ]);
     expect(WORKFLOW_TASK_DEFINITIONS.item_processing_recovery?.stages.map((stage) => stage.id)).toEqual([
       "recovery_batch", "recovery_persist",
     ]);
-    for (const definition of Object.values(DOMAIN_STAGE_TASK_DEFINITIONS)) {
+    for (const definition of Object.values(WORKFLOW_TASK_DEFINITIONS)) {
       expect(definition.stages.length).toBeGreaterThanOrEqual(1);
       expect(definition.stages.every((stage) => typeof stage.execute === "function")).toBe(true);
     }
-    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_regenerate_translation.stages.map((stage) => stage.id)).toEqual([
+    expect(WORKFLOW_TASK_DEFINITIONS.item_regenerate_translation!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "validate", "writeback",
     ]);
-    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
+    expect(WORKFLOW_TASK_DEFINITIONS.item_regenerate_summary!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "validate", "writeback",
     ]);
-    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_cleanup.stages.map((stage) => stage.id)).toEqual([
+    expect(WORKFLOW_TASK_DEFINITIONS.item_cleanup!.stages.map((stage) => stage.id)).toEqual([
       "read", "delete", "cluster_finalize",
     ]);
-    expect(DOMAIN_STAGE_TASK_DEFINITIONS.cluster_regenerate_summary.stages.map((stage) => stage.id)).toEqual([
+    expect(WORKFLOW_TASK_DEFINITIONS.cluster_regenerate_summary!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "writeback",
     ]);
-    expect(DOMAIN_STAGE_TASK_DEFINITIONS.cluster_merge_precompute_clean_pairs.stages.map((stage) => stage.id)).toEqual([
+    expect(WORKFLOW_TASK_DEFINITIONS.cluster_merge_precompute_clean_pairs!.stages.map((stage) => stage.id)).toEqual([
       "read", "compute", "writeback",
     ]);
-    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_reanalyze.stages.map((stage) => stage.id)).toEqual([
+    expect(WORKFLOW_TASK_DEFINITIONS.item_reanalyze!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "validate", "writeback",
     ]);
-    expect(DOMAIN_STAGE_TASK_DEFINITIONS.item_reparse_aggregations.stages.map((stage) => stage.id)).toEqual([
+    expect(WORKFLOW_TASK_DEFINITIONS.item_reparse_aggregations!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "cluster_finalize",
     ]);
   });

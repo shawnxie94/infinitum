@@ -82,6 +82,18 @@ async function resolveStageOptions(payload?: IngestionWorkflowPayload): Promise<
   });
 }
 
+export async function findOrCreateIngestionFetchRun(
+  taskRunId: string,
+  trigger: "scheduled" | "manual",
+  startedAt: Date,
+) {
+  const resumedRun = await prisma.fetchRun.findFirst({
+    where: { taskRunId, status: "running" },
+    orderBy: { startedAt: "desc" },
+  });
+  return resumedRun ?? createFetchRun(trigger, startedAt, taskRunId);
+}
+
 async function runSourceSyncStage(
   taskRun: Pick<BackgroundTaskRun, "id" | "triggerType">,
   context: DomainTaskContext,
@@ -89,7 +101,7 @@ async function runSourceSyncStage(
   const trigger = taskRun.triggerType === "scheduled" ? "scheduled" : "manual";
   const now = new Date();
   const options = await resolveRunOptions({ trigger, now });
-  const run = await createFetchRun(trigger, now, taskRun.id);
+  const run = await findOrCreateIngestionFetchRun(taskRun.id, trigger, now);
   const sources = await syncSources(options.sourceConfigs);
   const preparedItems: PreparedFeedItem[] = [];
   const errors: string[] = [];

@@ -2,23 +2,31 @@ import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
 import { runTaskWithLifecycle } from "./lifecycle";
-import type { TaskStepCheckpoint, WorkflowTaskSink } from "./types";
+import { isTerminalTaskStatus } from "./types";
+import type { TaskRunSnapshot, TaskStepCheckpoint, WorkflowTaskSink } from "./types";
 
 export type DomainTaskContext = {
   signal: AbortSignal;
   taskRunId: string;
   workflowId?: string;
+  runId?: string;
   stepId: string;
   retryCount: number;
   attempt: number;
   checkpoint: TaskStepCheckpoint;
   checkCancellation: () => Promise<void>;
+  getTaskRun?: () => Promise<TaskRunSnapshot | null>;
+  projectCheckpoint?: (checkpoint: unknown) => Promise<void>;
+  projectProgress?: (label: string) => Promise<void>;
   projectAiUsage?: (usage: unknown) => Promise<void>;
 };
 
+export type DomainTaskReplayPolicy = "replay_safe" | "at_least_once" | "business_checkpointed";
+
 export type DomainTaskStage = {
   id: string;
-  idempotent?: boolean;
+  /** Describes restart consequences; Mastra execution remains at-least-once. */
+  replayPolicy?: DomainTaskReplayPolicy;
   execute: (input: unknown, context: DomainTaskContext) => Promise<unknown>;
 };
 
@@ -27,6 +35,7 @@ export type DomainTaskDefinition = {
   inputSchema?: z.ZodType;
   outputSchema?: z.ZodType;
   stages: DomainTaskStage[];
+  replayPolicy?: DomainTaskReplayPolicy;
   validate?: (output: unknown) => Promise<void> | void;
   effects?: string[];
   checkpoint?: string;
@@ -49,28 +58,33 @@ export function createDomainTask(definition: DomainTaskDefinition): DomainTaskDe
     ...definition,
     inputSchema: definition.inputSchema ?? z.unknown(),
     outputSchema: definition.outputSchema ?? z.unknown(),
-    stages: definition.stages.map((stage) => ({ ...stage, idempotent: stage.idempotent ?? false })),
+    stages: definition.stages.map((stage) => ({
+      ...stage,
+      replayPolicy: stage.replayPolicy ?? definition.replayPolicy ?? "at_least_once",
+    })),
   };
 }
 
 /**
- * Mastra adapter for declarative tasks. Domain effects/checkpoints stay in the
- * stage implementation; the adapter only carries the stage chain.
+ * Legacy framework-only adapter retained for package API compatibility.
+ * Application task execution uses createDomainTaskRunWorkflow so lifecycle and
+ * task-row ownership are always routed through the host sink.
  */
 export function createDomainTaskWorkflow(definition: DomainTaskDefinition) {
   const task = createDomainTask(definition);
+  const inputSchema = z.object({ taskRunId: z.string(), payload: z.unknown() });
   let workflow = createWorkflow({
     id: task.kind,
     description: `Infinitum domain task ${task.kind}`,
-    inputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
-    outputSchema: z.object({ payload: z.unknown() }),
+    inputSchema,
+    outputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
     retryConfig: { attempts: 1 },
   });
 
   for (const stage of task.stages) {
     const step = createStep({
       id: `${task.kind}-${stage.id}`,
-      inputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
+      inputSchema,
       outputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
       execute: async ({ inputData, abortSignal, runId, retryCount }) => {
         const stepId = `${task.kind}-${stage.id}`;
@@ -78,6 +92,7 @@ export function createDomainTaskWorkflow(definition: DomainTaskDefinition) {
           signal: abortSignal ?? new AbortController().signal,
           taskRunId: inputData.taskRunId,
           workflowId: task.kind,
+          runId,
           stepId,
           retryCount: retryCount ?? 0,
           attempt: 1,
@@ -134,6 +149,9 @@ export function createDomainTaskRunWorkflow(input: {
       execute: async ({ inputData, abortSignal, runId, retryCount }) => {
         const row = await input.sink.getTaskRun(inputData.taskRunId);
         if (!row) return { taskRunId: inputData.taskRunId, status: "missing", payload: inputData.payload };
+        if (isTerminalTaskStatus(row.status)) {
+          return { taskRunId: inputData.taskRunId, status: row.status as string, payload: inputData.payload };
+        }
         let stagePayload: unknown = inputData.payload === undefined ? row : inputData.payload;
         const result = await runTaskWithLifecycle({
           row,
@@ -152,11 +170,15 @@ export function createDomainTaskRunWorkflow(input: {
               signal: context!.signal,
               taskRunId: inputData.taskRunId,
               workflowId: task.kind,
+              runId: context!.runId,
               stepId: `${task.kind}-${stage.id}`,
               retryCount: context!.retryCount,
               attempt: context!.attempt,
               checkpoint: context!.checkpoint,
               checkCancellation: context!.checkCancellation,
+              getTaskRun: () => input.sink.getTaskRun(inputData.taskRunId),
+              projectCheckpoint: async (checkpoint) => input.sink.projectCheckpoint?.(inputData.taskRunId, checkpoint),
+              projectProgress: async (label) => input.sink.projectProgress?.(inputData.taskRunId, label),
               projectAiUsage: async (usage) => input.sink.projectAiUsage?.(inputData.taskRunId, usage, {
                 stepId: `${task.kind}-${stage.id}`,
                 workflowId: task.kind,

@@ -2,10 +2,9 @@
  * 内嵌 Mastra runtime（spec D11）：双进程（Next.js + worker）各自内嵌实例，
  * 共享 LibSQL 存储；同 kind 唯一执行者由触发层 DB 信号量仲裁（D5）。
  */
-/* eslint-disable @typescript-eslint/no-explicit-any -- Mastra Workflow 占位泛型，P1a 定型后收敛 */
 import { Mastra } from "@mastra/core";
 import { LibSQLStore } from "@mastra/libsql";
-import type { Workflow } from "@mastra/core/workflows";
+import type { AnyWorkflow } from "@mastra/core/workflows";
 
 export type AiRuntime = {
   mastra: Mastra;
@@ -20,7 +19,7 @@ export function resolveStorageUrl(databaseUrl: string | undefined): string {
 
 export function createAiRuntime(input: {
   databaseUrl?: string;
-  workflows: Record<string, Workflow<any, any, any, any, any, any, any>>;
+  workflows: Record<string, AnyWorkflow>;
 }): AiRuntime {
   const storage = new LibSQLStore({
     id: "infinitum-ai-store",

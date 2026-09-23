@@ -1,18 +1,11 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import { createDomainTask, type DomainTaskDefinition } from "@infinitum/ai/orchestration/task-definition";
-import {
-  executeClusterMergeCleanPairWorkflow,
-  generateClusterSummaryWorkflow,
-  persistClusterSummaryWorkflow,
-  resolveClusterSummaryProvider,
-  readClusterSummaryWorkflow,
-  type ClusterSummaryWorkflowPayload,
-} from "@/lib/clusters/service";
+import type { ItemUnderstandingResult } from "@/lib/ai/provider-types";
 import {
   deleteExpiredItems,
-  finalizeItemCleanup,
   executeItemReparseWorkflowStage,
+  finalizeItemCleanup,
   generateItemReanalysisUnderstanding,
   generateItemRegenerationUnderstanding,
   persistItemRegeneration,
@@ -23,24 +16,7 @@ import {
   type ItemRegenerationInput,
   type RegenerationTarget,
 } from "@/lib/items/service";
-import type { ItemUnderstandingResult } from "@/lib/ai/provider-types";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
-import { executePrecomputeWorkflowStage, type PrecomputeWorkflowPayload } from "@/lib/precompute/service";
-import { executeIngestionWorkflowStage, type IngestionWorkflowStage } from "@/lib/ingestion/workflow-stages";
-import { executeRecoveryWorkflowStage } from "@/lib/items/recovery-workflow-stages";
-
-const DOMAIN_STAGE_KINDS = [
-  "item_reanalyze",
-  "item_regenerate_translation",
-  "item_regenerate_summary",
-  "cluster_regenerate_summary",
-  "precompute",
-  "cluster_merge_precompute_clean_pairs",
-  "item_cleanup",
-  "item_reparse_aggregations",
-] as const;
-
-type DomainStageKind = typeof DOMAIN_STAGE_KINDS[number];
 
 function asBackgroundTaskRun(input: unknown): BackgroundTaskRun {
   return input as BackgroundTaskRun;
@@ -58,37 +34,13 @@ type ItemCleanupStagePayload = {
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
 
-function createIngestionDefinition(): DomainTaskDefinition {
-  const stages: IngestionWorkflowStage[] = ["source_sync", "item_processing", "cluster_merge", "cluster_finalize"];
-  return createDomainTask({
-    kind: "ingestion",
-    stages: stages.map((id) => ({
-      id,
-      execute: async (input, context) => executeIngestionWorkflowStage(id, input, context),
-    })),
-    effects: ["item_write", "cluster_write", "embedding_write"],
-    checkpoint: "pipelineCheckpointJson",
-  });
-}
-
-function createRecoveryDefinition(): DomainTaskDefinition {
-  return createDomainTask({
-    kind: "item_processing_recovery",
-    stages: ["recovery_batch", "recovery_persist"].map((id) => ({
-      id,
-      execute: async (input, context) => executeRecoveryWorkflowStage(id as "recovery_batch" | "recovery_persist", input, context),
-    })),
-    effects: ["item_write", "cluster_write"],
-    checkpoint: "pipelineCheckpointJson",
-  });
-}
-
-function createItemReparseDefinition(): DomainTaskDefinition {
+export function createItemReparseWorkflowDefinition(): DomainTaskDefinition {
   const stages = ["read", "ai_call", "cluster_finalize"] as const;
   return createDomainTask({
     kind: "item_reparse_aggregations",
     stages: stages.map((id) => ({
       id,
+      replayPolicy: id === "ai_call" ? "at_least_once" : "replay_safe",
       execute: async (input, context) => executeItemReparseWorkflowStage(id, input, {
         onAiUsage: async (usage) => context.projectAiUsage?.(usage),
       }),
@@ -98,12 +50,13 @@ function createItemReparseDefinition(): DomainTaskDefinition {
   });
 }
 
-function createItemReanalyzeDefinition(): DomainTaskDefinition {
+export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
   return createDomainTask({
     kind: "item_reanalyze",
     stages: [
       {
         id: "read",
+        replayPolicy: "replay_safe",
         execute: async (input) => {
           const taskRun = asBackgroundTaskRun(input);
           if (!taskRun.entityId) throw new Error("Task entityId is required.");
@@ -112,6 +65,7 @@ function createItemReanalyzeDefinition(): DomainTaskDefinition {
       },
       {
         id: "ai_call",
+        replayPolicy: "at_least_once",
         execute: async (input, context) => {
           const payload = input as { itemId: string };
           const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
@@ -123,6 +77,7 @@ function createItemReanalyzeDefinition(): DomainTaskDefinition {
       },
       {
         id: "validate",
+        replayPolicy: "replay_safe",
         execute: async (input) => {
           const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
           if (!payload.understanding?.diagnostics) throw new Error("Item reanalysis result is missing diagnostics.");
@@ -131,6 +86,7 @@ function createItemReanalyzeDefinition(): DomainTaskDefinition {
       },
       {
         id: "writeback",
+        replayPolicy: "at_least_once",
         execute: async (input, context) => {
           const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
           const aiUsage = createTaskAiUsageTracker();
@@ -149,62 +105,13 @@ function createItemReanalyzeDefinition(): DomainTaskDefinition {
   });
 }
 
-function createClusterMergeCleanPairDefinition(): DomainTaskDefinition {
-  return createDomainTask({
-    kind: "cluster_merge_precompute_clean_pairs",
-    stages: [
-      { id: "read", execute: async () => ({ preparedAt: new Date().toISOString() }) },
-      { id: "compute", execute: async () => executeClusterMergeCleanPairWorkflow() },
-      { id: "writeback", execute: async (input) => input },
-    ],
-    effects: ["embedding_write"],
-    checkpoint: "pipelineCheckpointJson",
-  });
-}
-
-function createClusterSummaryDefinition(): DomainTaskDefinition {
-  return createDomainTask({
-    kind: "cluster_regenerate_summary",
-    stages: [
-      { id: "read", execute: async (input) => readClusterSummaryWorkflow(asBackgroundTaskRun(input).entityId ?? "") },
-      {
-        id: "ai_call",
-        execute: async (input, context) => {
-          const payload = input as ClusterSummaryWorkflowPayload;
-          const aiUsage = createTaskAiUsageTracker(1, "cluster_summary");
-          const resolved = await resolveClusterSummaryProvider();
-          const aiProvider = resolved ? aiUsage.wrapProvider(resolved, { summarizeClusterEstimated: false }) : undefined;
-          const next = await generateClusterSummaryWorkflow(payload, aiProvider);
-          await context.projectAiUsage?.(aiUsage.snapshot());
-          return next;
-        },
-      },
-      { id: "writeback", execute: async (input) => persistClusterSummaryWorkflow(input as ClusterSummaryWorkflowPayload) },
-    ],
-    effects: ["cluster_write"],
-    checkpoint: "pipelineCheckpointJson",
-  });
-}
-
-function createPrecomputeDefinition(): DomainTaskDefinition {
-  const stages = ["cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates"] as const;
-  return createDomainTask({
-    kind: "precompute",
-    stages: stages.map((id) => ({
-      id,
-      execute: async (input) => executePrecomputeWorkflowStage(id, (input as PrecomputeWorkflowPayload | undefined) ?? undefined),
-    })),
-    effects: ["entity_write", "embedding_write"],
-    checkpoint: "pipelineCheckpointJson",
-  });
-}
-
-function createItemCleanupDefinition(): DomainTaskDefinition {
+export function createItemCleanupWorkflowDefinition(): DomainTaskDefinition {
   return createDomainTask({
     kind: "item_cleanup",
     stages: [
       {
         id: "read",
+        replayPolicy: "replay_safe",
         execute: async () => {
           const plan = await prepareItemCleanup();
           return { plan: { ...plan, cutoff: plan.cutoff.toISOString() } } satisfies ItemCleanupStagePayload;
@@ -212,6 +119,7 @@ function createItemCleanupDefinition(): DomainTaskDefinition {
       },
       {
         id: "delete",
+        replayPolicy: "at_least_once",
         execute: async (input, context) => {
           const payload = input as ItemCleanupStagePayload;
           const totalDeleted = await deleteExpiredItems(
@@ -223,6 +131,7 @@ function createItemCleanupDefinition(): DomainTaskDefinition {
       },
       {
         id: "cluster_finalize",
+        replayPolicy: "at_least_once",
         execute: async (input) => {
           const payload = input as ItemCleanupStagePayload;
           const result = await finalizeItemCleanup(
@@ -238,12 +147,16 @@ function createItemCleanupDefinition(): DomainTaskDefinition {
   });
 }
 
-function createItemRegenerationDefinition(kind: DomainStageKind, target: RegenerationTarget): DomainTaskDefinition {
+export function createItemRegenerationWorkflowDefinition(
+  kind: "item_regenerate_translation" | "item_regenerate_summary",
+  target: RegenerationTarget,
+): DomainTaskDefinition {
   return createDomainTask({
     kind,
     stages: [
       {
         id: "read",
+        replayPolicy: "replay_safe",
         execute: async (input) => {
           const taskRun = asBackgroundTaskRun(input);
           if (!taskRun.entityId) throw new Error("Task entityId is required.");
@@ -252,20 +165,19 @@ function createItemRegenerationDefinition(kind: DomainStageKind, target: Regener
       },
       {
         id: "ai_call",
+        replayPolicy: "at_least_once",
         execute: async (input, context) => {
           const payload = input as ItemRegenerationStagePayload;
           const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
           const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(), { understandItemEstimated: false });
           const understanding = await generateItemRegenerationUnderstanding(payload.item, { aiProvider });
           await context.projectAiUsage?.(aiUsage.snapshot());
-          return {
-            ...payload,
-            understanding,
-          } satisfies ItemRegenerationStagePayload;
+          return { ...payload, understanding } satisfies ItemRegenerationStagePayload;
         },
       },
       {
         id: "validate",
+        replayPolicy: "replay_safe",
         execute: async (input) => {
           const payload = input as ItemRegenerationStagePayload;
           if (!payload.understanding) throw new Error("Item regeneration AI result is missing.");
@@ -277,6 +189,7 @@ function createItemRegenerationDefinition(kind: DomainStageKind, target: Regener
       },
       {
         id: "writeback",
+        replayPolicy: "at_least_once",
         execute: async (input) => {
           const payload = input as ItemRegenerationStagePayload;
           if (!payload.understanding) throw new Error("Item regeneration AI result is missing.");
@@ -292,36 +205,10 @@ function createItemRegenerationDefinition(kind: DomainStageKind, target: Regener
   });
 }
 
-/** Declarative domain stages; every definition is hosted by a Mastra workflow. */
-export const DOMAIN_STAGE_TASK_DEFINITIONS: Record<DomainStageKind, DomainTaskDefinition> = Object.fromEntries(
-  DOMAIN_STAGE_KINDS.map((kind) => {
-    if (kind === "item_reparse_aggregations") {
-      return [kind, createItemReparseDefinition()];
-    }
-    if (kind === "item_reanalyze") {
-      return [kind, createItemReanalyzeDefinition()];
-    }
-    if (kind === "cluster_merge_precompute_clean_pairs") {
-      return [kind, createClusterMergeCleanPairDefinition()];
-    }
-    if (kind === "cluster_regenerate_summary") {
-      return [kind, createClusterSummaryDefinition()];
-    }
-    if (kind === "precompute") {
-      return [kind, createPrecomputeDefinition()];
-    }
-    if (kind === "item_cleanup") {
-      return [kind, createItemCleanupDefinition()];
-    }
-    if (kind === "item_regenerate_translation" || kind === "item_regenerate_summary") {
-      return [kind, createItemRegenerationDefinition(kind, kind.endsWith("translation") ? "translation" : "summary")];
-    }
-    throw new Error(`Unhandled declarative domain stage kind ${kind}.`);
-  }),
-) as Record<DomainStageKind, DomainTaskDefinition>;
-
-export const WORKFLOW_TASK_DEFINITIONS: Partial<Record<BackgroundTaskRun["kind"], DomainTaskDefinition>> = {
-  ingestion: createIngestionDefinition(),
-  item_processing_recovery: createRecoveryDefinition(),
-  ...DOMAIN_STAGE_TASK_DEFINITIONS,
+export const ITEM_WORKFLOW_DEFINITIONS: Partial<Record<BackgroundTaskRun["kind"], DomainTaskDefinition>> = {
+  item_reparse_aggregations: createItemReparseWorkflowDefinition(),
+  item_reanalyze: createItemReanalyzeWorkflowDefinition(),
+  item_cleanup: createItemCleanupWorkflowDefinition(),
+  item_regenerate_translation: createItemRegenerationWorkflowDefinition("item_regenerate_translation", "translation"),
+  item_regenerate_summary: createItemRegenerationWorkflowDefinition("item_regenerate_summary", "summary"),
 };

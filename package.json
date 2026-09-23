@@ -14,6 +14,7 @@
     "build:worker": "node scripts/build-worker.mjs",
     "start": "next start",
     "worker": "tsx scripts/run-worker.ts",
+    "smoke:ai-orchestration": "tsx scripts/smoke-ai-orchestration.ts",
     "lint": "eslint .",
     "db:setup": "npm run prisma:generate && npm run schema:generate && node scripts/setup-sqlite.mjs prisma/dev.db && tsx scripts/seed-defaults.ts",
     "db:test:setup": "npm run prisma:generate && npm run schema:generate && node scripts/setup-sqlite.mjs prisma/test.db --reset && DATABASE_URL=\"file:./prisma/test.db\" tsx scripts/seed-defaults.ts",

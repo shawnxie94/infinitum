@@ -175,7 +175,7 @@ async function enqueueScheduledItemCleanupIfDue(now: Date) {
 
 export async function recoverStaleTaskRuns(
   now = new Date(),
-  options?: { recoverInterruptedRuns?: boolean },
+  options?: { recoverInterruptedRuns?: boolean; cancellationRequestsOnly?: boolean },
 ) {
   const staleBefore = new Date(now.getTime() - DEFAULT_TASK_STALE_MS);
   const staleReason = "Worker exited before completing the task.";
@@ -192,23 +192,25 @@ export async function recoverStaleTaskRuns(
       id: true,
     },
   });
-  const staleRuns = await prisma.backgroundTaskRun.findMany({
-    where: {
-      status: "running",
-      cancelRequestedAt: null,
-      ...(recoverInterruptedRuns
-        ? {}
-        : {
-            startedAt: {
-              lt: staleBefore,
-            },
-          }),
-      finishedAt: null,
-    },
-    select: {
-      id: true,
-    },
-  });
+  const staleRuns = options?.cancellationRequestsOnly
+    ? []
+    : await prisma.backgroundTaskRun.findMany({
+        where: {
+          status: "running",
+          cancelRequestedAt: null,
+          ...(recoverInterruptedRuns
+            ? {}
+            : {
+                startedAt: {
+                  lt: staleBefore,
+                },
+              }),
+          finishedAt: null,
+        },
+        select: {
+          id: true,
+        },
+      });
 
   const cancellationRequestedTaskRunIds = cancellationRequestedRuns.map((run) => run.id);
   const staleTaskRunIds = staleRuns.map((run) => run.id);
@@ -333,16 +335,30 @@ export async function runWorkerCycle(options?: {
   };
 }
 
+export async function recoverWorkerStartupTasks(
+  now = new Date(),
+  restartActiveRuns: () => Promise<void> = restartActiveAiWorkflowRuns,
+) {
+  // Honor cross-process cancellation before resuming any persisted workflow.
+  await recoverStaleTaskRuns(now, { cancellationRequestsOnly: true });
+  // Mastra restart awaits each active workflow. Keep its BackgroundTaskRun in
+  // running while it resumes; otherwise the lifecycle sink correctly preserves
+  // the prematurely projected failed state and business work can disagree with
+  // the monitor row.
+  await restartActiveRuns();
+  // Only stale rows still running after Mastra has resumed are orphans. Keep the
+  // same grace window as regular reconciliation so another live worker's recent
+  // claim is not failed merely because this process started.
+  return recoverStaleTaskRuns(new Date());
+}
+
 export async function startWorkerLoop(options?: {
   pollIntervalMs?: number;
   executeTaskRun?: (taskRun: BackgroundTaskRun) => Promise<void>;
 }) {
-  // Worker 进程 = 内嵌 Mastra 实例薄壳（D11）。顺序敏感：先做队列侧 stale
-  // 回收（把崩溃进程遗留的 running 行置 failed），再 restartAllActiveWorkflowRuns
-  // 重新拉起 workflow（业务体把行翻回 running 并按检查点续跑），避免回收误伤刚续跑的行。
-  // On worker startup, any persisted running task belongs to a process that no longer exists.
-  await recoverStaleTaskRuns(new Date(), { recoverInterruptedRuns: true });
-  await restartActiveAiWorkflowRuns();
+  // Compose currently runs one worker process; it owns startup recovery for the
+  // shared Mastra/SQLite store before normal queue polling begins.
+  await recoverWorkerStartupTasks();
 
   while (true) {
     await runWorkerCycle({

@@ -46,6 +46,48 @@ describe("Mastra staged task workflows", () => {
     expect(stored.progressLabel).toContain("cluster_finalize");
   });
 
+  it("does not resume a terminal task row through a Mastra workflow", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "item_cleanup",
+        triggerType: "manual",
+        status: "failed",
+        label: "已失败任务",
+        progressLabel: "已结束",
+        errorSummary: "prior failure",
+        finishedAt: new Date(),
+      },
+    });
+
+    const result = await triggerTaskWorkflow("item_cleanup", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+
+    expect(result.status).toBe("failed");
+    expect(stored.status).toBe("failed");
+    expect(stored.progressLabel).toBe("已结束");
+    expect(stored.errorSummary).toBe("prior failure");
+    expect(stored.pipelineCheckpointJson).toBeNull();
+  });
+
+  it("does not resume a terminal staged daily report task", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "cancelled",
+        label: "已取消日报",
+        finishedAt: new Date(),
+      },
+    });
+
+    const result = await triggerTaskWorkflow("daily_report_generate", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+
+    expect(result.status).toBe("cancelled");
+    expect(stored.status).toBe("cancelled");
+    expect(stored.pipelineCheckpointJson).toBeNull();
+  });
+
   it("persists cancellation for a queued staged task before business side effects", async () => {
     const taskRun = await prisma.backgroundTaskRun.create({
       data: {

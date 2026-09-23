@@ -46,6 +46,22 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function nextAttemptFromCheckpoint(row: TaskRunSnapshot, stepId: string): number {
+  if (!row.pipelineCheckpointJson) return 1;
+  try {
+    const checkpoint = JSON.parse(row.pipelineCheckpointJson) as {
+      __mastra?: { step?: { stepId?: unknown; attempt?: unknown } };
+    };
+    const step = checkpoint.__mastra?.step;
+    if (step?.stepId === stepId && typeof step.attempt === "number" && Number.isFinite(step.attempt)) {
+      return Math.max(1, step.attempt + 1);
+    }
+  } catch {
+    // A malformed/legacy business checkpoint must not prevent task execution.
+  }
+  return 1;
+}
+
 function createAbortController(signal?: AbortSignal): AbortController {
   const controller = new AbortController();
   if (!signal) return controller;
@@ -76,9 +92,11 @@ export async function runTaskWithLifecycle(input: {
   startLifecycle?: boolean;
   finishLifecycle?: boolean;
 }): Promise<{ status: "succeeded" | "failed" | "partial" | "cancelled"; failureKind?: TaskFailureKind }> {
-  const attempt = input.attempt ?? 1;
   const retryCount = input.retryCount ?? 0;
   const stepId = input.stepId ?? `${input.row.kind}-task`;
+  // A Mastra restart can re-enter a step after its side effect ran but before
+  // the framework checkpoint was committed. Give that replay a new usage identity.
+  const attempt = input.attempt ?? nextAttemptFromCheckpoint(input.row, stepId);
   const controller = createAbortController(input.signal);
   const stepStartedAt = new Date().toISOString();
   let pollTimer: ReturnType<typeof setInterval> | undefined;

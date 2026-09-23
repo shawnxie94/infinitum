@@ -1,11 +1,9 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { buildDailyReportStageIdentity, DAILY_REPORT_WORKFLOW_STAGES, executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
-import { WORKFLOW_TASK_DEFINITIONS } from "@/lib/tasks/domain-bodies";
-import { TASK_DEFINITIONS } from "@/lib/tasks/definitions";
+import { WORKFLOW_TASK_DEFINITIONS } from "@/lib/workflows/catalog";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
-import { createStagedTaskRunWorkflow, type WorkflowTaskSink } from "@infinitum/ai/orchestration/workflow-factory";
+import type { WorkflowTaskSink } from "@infinitum/ai/orchestration/types";
 import { createDomainTaskRunWorkflow } from "@infinitum/ai/orchestration/task-definition";
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
 import type { TaskStepIdentity, TaskStepLifecycleEvent } from "@infinitum/ai/orchestration/types";
@@ -20,7 +18,7 @@ import type { TaskAiCallBreakdownSnapshot, TaskStageTimingSnapshot } from "@/lib
 
 type WorkflowKind = BackgroundTaskRun["kind"];
 
-const WORKFLOW_KINDS: readonly WorkflowKind[] = TASK_DEFINITIONS.map((definition) => definition.kind);
+const WORKFLOW_KINDS: readonly WorkflowKind[] = Object.keys(WORKFLOW_TASK_DEFINITIONS) as WorkflowKind[];
 
 type CheckpointRecord = Record<string, unknown>;
 
@@ -385,36 +383,6 @@ export function getAiRuntime(): AiRuntime {
   if (!runtimeSingleton) {
     const workflows = Object.fromEntries(
       WORKFLOW_KINDS.map((kind) => {
-        if (kind === "daily_report_generate") {
-          return [
-            kind,
-            createStagedTaskRunWorkflow({
-              id: kind,
-              description: `Infinitum ${kind} (Mastra staged workflow)`,
-              stages: DAILY_REPORT_WORKFLOW_STAGES.map((stage) => ({
-                id: stage,
-                body: async (row, context) => {
-                  const identity = buildDailyReportStageIdentity(row.id, context);
-                  return executeDailyReportWorkflowStage(
-                    row as unknown as BackgroundTaskRun,
-                    stage,
-                    {
-                      onCheckpoint: async (checkpoint) => sink.projectCheckpoint?.(row.id, checkpoint),
-                      onProgress: async (label) => sink.projectProgress?.(row.id, label),
-                      onAiUsage: async (usage) => sink.projectAiUsage?.(row.id, usage, {
-                        ...identity,
-                        attempt: context.attempt,
-                        retryCount: context.retryCount,
-                      }),
-                    },
-                    identity,
-                  );
-                },
-              })),
-              sink,
-            }),
-          ];
-        }
         const definition = WORKFLOW_TASK_DEFINITIONS[kind];
         if (!definition) throw new Error(`No declarative workflow definition registered for ${kind}.`);
         return [kind, createDomainTaskRunWorkflow({ definition, sink })];

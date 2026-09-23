@@ -2,12 +2,15 @@
  * 任务 workflow 编排类型：主仓业务体通过注入接入 Mastra（依赖倒置，
  * packages/ai 不 import 主仓模块——D9 所有权边界）。
  */
-/* eslint-disable @typescript-eslint/no-explicit-any -- Mastra Workflow 占位泛型，P1a 定型后收敛 */
-import type { Workflow } from "@mastra/core/workflows";
-
 import type { TaskExecutionContext, TaskLifecycleEvent } from "./lifecycle";
 
 export type TaskStepStatus = "running" | "succeeded" | "failed" | "partial" | "cancelled";
+
+const TERMINAL_TASK_STATUSES = new Set(["succeeded", "failed", "partial", "cancelled"]);
+
+export function isTerminalTaskStatus(status: string | null | undefined): boolean {
+  return status != null && TERMINAL_TASK_STATUSES.has(status);
+}
 
 /** Durable step identity shared by Mastra, task lifecycle and provider usage audit. */
 export type TaskStepIdentity = {
@@ -71,5 +74,3 @@ export type WorkflowTaskSink = {
   projectProgress?(taskRunId: string, label: string): Promise<void>;
   projectAiUsage?(taskRunId: string, usage: unknown, identity?: TaskStepIdentity & { attempt: number; retryCount: number }): Promise<void>;
 };
-
-export type TaskWorkflow = Workflow<any, any, any, any, any, any, any>;
