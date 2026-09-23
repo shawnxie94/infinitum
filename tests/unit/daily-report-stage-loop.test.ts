@@ -107,9 +107,9 @@ describe("daily report stage loop", () => {
     }));
   });
 
-  it("skips same-context repair for an explicitly non-repairable violation", async () => {
+  it("skips same-context repair for an explicitly non-repairable violation and surfaces it in the message", async () => {
     let calls = 0;
-    await expect(runDailyReportStageLoop({
+    const error = await runDailyReportStageLoop({
       stage: "plan",
       run: async () => {
         calls += 1;
@@ -123,7 +123,13 @@ describe("daily report stage loop", () => {
       isRepairable: (violations) => !violations.some(
         (violation) => violation.code === "insufficient_required_candidates",
       ),
-    })).rejects.toMatchObject({ name: "DailyReportStageLoopError", cleanRetryCount: 1 });
+    }).catch((loopError) => loopError);
+
+    expect(error.name).toBe("DailyReportStageLoopError");
+    expect(error.cleanRetryCount).toBe(1);
+    // 错误消息必须携带违规详情，任务摘要不能只有笼统的"PLAN 校验失败。"
+    expect(error.message).toContain("PLAN 校验失败。");
+    expect(error.message).toContain("候选不足");
     expect(calls).toBe(2);
   });
 

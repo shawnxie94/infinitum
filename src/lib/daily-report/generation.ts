@@ -20,7 +20,7 @@ import { renderDailyReportMarkdown } from "@/lib/daily-report/renderer";
 import { persistDailyReport } from "@/lib/daily-report/persistence";
 import { DAILY_REPORT_TIMEZONE, type DailyReportCandidateAssessment, type DailyReportDraft, type DailyReportModelDraft, type DailyReportPlan, type DailyReportPlanningAudit, type DailyReportPlanningCandidate, type DailyReportContent, type DailyReportReviewFeedback, type DailyReportReviewStatus, type DailyReportReviewViolation } from "@/lib/daily-report/types";
 import { isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
-import { applyDailyReportRepairPatches, buildDailyReportCandidateBriefs, buildDailyReportSelectedTopics, attachDailyReportTopicSources, getDailyReportPlanCandidateIds, getDailyReportPlanTopics, materializeDailyReportPlan, normalizeDailyReportDraftForTemplate, omitInvalidOptionalDailyReportTopics, orderAndLimitDailyReportPlanWithAudit, orderDailyReportDraft, splitDailyReportCandidates, toDailyReportModelDraft, toDailyReportPlanningCandidate, validateDailyReportAssessments, validateDailyReportDraft, validateDailyReportPlan, validateDailyReportPlanSectionQuantities } from "@/lib/daily-report/planning";
+import { applyDailyReportRepairPatches, buildDailyReportCandidateBriefs, buildDailyReportSelectedTopics, attachDailyReportTopicSources, getDailyReportPlanCandidateIds, getDailyReportPlanTopics, getDailyReportRequiredCandidateMinimum, materializeDailyReportPlan, normalizeDailyReportDraftForTemplate, omitInvalidOptionalDailyReportTopics, orderAndLimitDailyReportPlanWithAudit, orderDailyReportDraft, splitDailyReportCandidates, toDailyReportModelDraft, toDailyReportPlanningCandidate, validateDailyReportAssessments, validateDailyReportDraft, validateDailyReportPlan, validateDailyReportPlanSectionQuantities } from "@/lib/daily-report/planning";
 import { DEFAULT_DAILY_REPORT_TEMPLATE, classifyDailyReportTemplateMigration, getDailyReportTemplateSignature, normalizeDailyReportTemplateConfig, parseDailyReportTemplateJson } from "@/lib/daily-report/template";
 import { resolveDailyReportChannelSourceGroupIds } from "@/lib/events/service";
 import { getIngestionRuntimeConfig } from "@/lib/settings/runtime-service";
@@ -226,6 +226,35 @@ export async function generateDailyReportInternal(input: {
       report: null,
       skipped: true,
       reason: `候选内容不足 ${MIN_CANDIDATE_COUNT} 条，已跳过生成。`,
+      candidateCount: candidates.length,
+      selectedCount: 0,
+      planningCandidateCount: 0,
+      mergedTopicCount: 0,
+      planSectionCount: 0,
+      planTopicCount: 0,
+      planSelectedCount: 0,
+      planViolationCount: 0,
+      repairCount: 0,
+      writeRetryCount: 0,
+      partial: false,
+      omittedTopicIds: [],
+      historyFilteredCount: 0,
+      batchCount: 0,
+      batchSize: schedule.dailyReportPlanningBatchSize ?? null,
+      reviewStatus: "disabled" as const,
+      reviewAttempts: 0,
+      aiUsage: { actual: 0, estimated: 0, breakdown: [] },
+    };
+  }
+
+  // 模型无法修复候选量缺口（必需栏目 minItems 之和是硬下界）：在进入
+  // 评估/规划前直接优雅跳过，避免烧掉整轮 AI 调用后仍以失败告终。
+  const requiredCandidateMinimum = getDailyReportRequiredCandidateMinimum(template);
+  if (candidates.length < requiredCandidateMinimum) {
+    return {
+      report: null,
+      skipped: true,
+      reason: `候选仅 ${candidates.length} 条，无法满足必需栏目最少 ${requiredCandidateMinimum} 条，已跳过生成。`,
       candidateCount: candidates.length,
       selectedCount: 0,
       planningCandidateCount: 0,

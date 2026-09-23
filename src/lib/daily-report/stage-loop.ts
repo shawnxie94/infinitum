@@ -25,7 +25,19 @@ export class DailyReportStageLoopError extends Error {
     cleanRetryCount: number,
     cause?: unknown,
   ) {
-    super(cause instanceof Error ? cause.message : `${stage.toUpperCase()} 阶段修复失败。`);
+    // 错误摘要会直接展示在任务详情里：附上 top 违规，避免只剩
+    // "PLAN 校验失败。"这类不可诊断的笼统消息。
+    const base = cause instanceof Error ? cause.message : `${stage.toUpperCase()} 阶段修复失败。`;
+    const violationSummary = violations
+      .map((violation) => violation.message)
+      .filter(Boolean)
+      .slice(0, 3)
+      .join("；");
+    super(
+      violationSummary
+        ? `${base}${base.endsWith("。") ? "" : "。"}${violationSummary}`
+        : base,
+    );
     this.name = "DailyReportStageLoopError";
     this.stage = stage;
     this.context = context;

@@ -298,6 +298,12 @@ function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
     }
   }
 
+  if (label === "总候选数" && Array.isArray(checkpoint.candidateSnapshot)) {
+    return checkpoint.candidateSnapshot.length;
+  }
+  if (label === "批次数" && Array.isArray(checkpoint.assessmentBatches)) {
+    return checkpoint.assessmentBatches.length;
+  }
   if (label === "可规划候选" && Array.isArray(checkpoint.planningCandidateBriefs)) {
     return checkpoint.planningCandidateBriefs.length;
   }
@@ -483,7 +489,7 @@ function appendTimelineDetail(primary: string, secondary: string) {
 function getSafeFinishedProgressLabel(task: TaskRunSnapshot) {
   if (task.status !== "succeeded" && task.status !== "partial" && task.status !== "failed" && task.status !== "cancelled") return "";
   const label = task.progressLabel?.trim();
-  if (!label || /^步骤\s+[^：:]+[：:]/.test(label) || label === "编排运行中") return "";
+  if (!label || /^步骤\s+[^：:]+[：:]/.test(label) || /^日报阶段：/.test(label) || label === "编排运行中") return "";
   return label;
 }
 
@@ -554,7 +560,21 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
   if (!SINGLE_NODE_TIMELINE_KINDS.has(task.kind) || sorted.length <= 1) {
     return sorted;
   }
-  const details = [...new Set(sorted.map((node) => node.detail).filter(Boolean))];
+  // 各阶段的 "AI 调用 N 次" 汇总为一条，其余细节按原顺序去重拼接
+  let aiCallTotal = 0;
+  let hasAiUsage = false;
+  const rawDetails = sorted
+    .map((node) => node.detail)
+    .filter(Boolean)
+    .map((detail) => detail.replace(/AI 调用 (\d+) 次/g, (_, count: string) => {
+      hasAiUsage = true;
+      aiCallTotal += Number(count);
+      return "";
+    }).split("·").map((part) => part.trim()).filter(Boolean).join(" · "));
+  const details = [
+    ...(hasAiUsage ? [`AI 调用 ${aiCallTotal} 次`] : []),
+    ...rawDetails,
+  ];
   const totalDurationMs = sorted.some((node) => node.durationMs !== null)
     ? sorted.reduce((sum, node) => sum + (node.durationMs ?? 0), 0)
     : null;
@@ -562,7 +582,7 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
     key: "simple_processing",
     title: "处理",
     time: sorted.map((node) => node.time).filter(Boolean).at(-1) ?? null,
-    detail: details.join(" · "),
+    detail: [...new Set(details.filter(Boolean))].join(" · "),
     durationMs: totalDurationMs,
     isActive: sorted.some((node) => node.isActive),
   }];

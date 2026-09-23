@@ -664,6 +664,13 @@ function sectionBlocks(template: NormalizedDailyReportTemplate) {
   return template.blocks.filter((block): block is DailyReportTemplateSectionBlock => block.type === "section");
 }
 
+/** 必需栏目 minItems 之和：低于该值的候选量在结构上无法产出合法日报计划。 */
+export function getDailyReportRequiredCandidateMinimum(template: NormalizedDailyReportTemplate) {
+  return sectionBlocks(template)
+    .filter((block) => block.required)
+    .reduce((total, block) => total + (block.minItems ?? 0), 0);
+}
+
 function normalizeTopicSignal(value: string | null | undefined) {
   return value?.trim().toLocaleLowerCase() ?? "";
 }

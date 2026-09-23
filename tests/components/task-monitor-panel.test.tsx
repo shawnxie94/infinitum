@@ -1151,6 +1151,103 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).queryByText("持久化/发布完成")).not.toBeInTheDocument();
   });
 
+  it("sums per-stage AI call counts into one segment in the merged node", async () => {
+    const task = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "task-reanalyze-ai-sum",
+      kind: "item_reanalyze" as const,
+      label: "重新 AI 判定",
+      status: "succeeded" as const,
+      taskTimeline: [],
+      stageTimings: [
+        {
+          key: "ai_call",
+          label: "AI 分析",
+          startedAt: "2026-04-21T00:00:00.000Z",
+          finishedAt: "2026-04-21T00:00:01.000Z",
+          durationMs: 1_000,
+          status: "succeeded" as const,
+          detail: "AI 调用 1 次",
+        },
+        {
+          key: "writeback",
+          label: "结果写回",
+          startedAt: "2026-04-21T00:00:01.000Z",
+          finishedAt: "2026-04-21T00:00:02.000Z",
+          durationMs: 1_000,
+          status: "succeeded" as const,
+          detail: "AI 调用 2 次 · 重判定：聚合 · 拆分 2 个子事件 · 已写回",
+        },
+      ],
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[task]} initialFocusTaskId={task.id} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(
+      within(dialog).getByText("AI 调用 3 次 · 重判定：聚合 · 拆分 2 个子事件 · 已写回"),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByText(/AI 调用 1 次 · AI 调用 2 次/)).not.toBeInTheDocument();
+  });
+
+  it("hides pipeline progress labels and restores checkpoint metrics for failed daily reports", async () => {
+    const task = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "daily-report-plan-shortage",
+      kind: "daily_report_generate" as const,
+      label: "AI 日报生成 2026-09-23 (重新触发)",
+      status: "failed" as const,
+      progressLabel: "日报阶段：plan",
+      errorSummary: "[business] PLAN 校验失败。可规划候选仅 2 条，无法满足必需栏目最少 5 条，任务不能发布。",
+      taskTimeline: [],
+      pipelineCheckpoint: {
+        version: 1 as const,
+        pipelineVersion: "daily-report-topic-first-review-v1",
+        stage: "plan",
+        completedStages: ["prepare", "assess", "merge"],
+        inputHash: "input",
+        templateSignature: "template",
+        candidateSnapshotHash: "hash",
+        resumeEligible: false,
+        candidateSnapshot: [
+          { id: 1, title: "候选一" },
+          { id: 2, title: "候选二" },
+        ],
+        assessmentBatches: [{ index: 0, candidateIds: [1, 2], status: "succeeded" as const, attempt: 1 }],
+        planningCandidateBriefs: [{ candidateId: 1 }, { candidateId: 2 }],
+      },
+      stageTimings: [
+        {
+          key: "prepare",
+          label: "prepare",
+          startedAt: "2026-09-23T17:11:53.000Z",
+          finishedAt: "2026-09-23T17:11:53.067Z",
+          durationMs: 67,
+          status: "succeeded" as const,
+        },
+        {
+          key: "merge",
+          label: "merge",
+          startedAt: "2026-09-23T17:11:55.000Z",
+          finishedAt: "2026-09-23T17:11:55.194Z",
+          durationMs: 194,
+          status: "succeeded" as const,
+        },
+      ],
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[task]} initialFocusTaskId={task.id} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(within(dialog).queryByText("日报阶段：plan")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("候选快照 2")).toBeInTheDocument();
+    expect(within(dialog).getByText("准备 2 个候选供全局规划")).toBeInTheDocument();
+  });
+
   it("shows the review retry failure reason for historical daily report tasks", async () => {
     const dailyReportTask = {
       ...buildMonitorSnapshot().runningTasks[0],
