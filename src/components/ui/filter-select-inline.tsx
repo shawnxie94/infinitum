@@ -1,5 +1,5 @@
 import { FilterControl } from "@/components/ui/filter-control";
-import { SelectField } from "@/components/ui/select-field";
+import { SelectNative } from "@/components/ui/select-native";
 
 type FilterSelectInlineOption = {
   value: string;
@@ -28,21 +28,19 @@ export function FilterSelectInline({
   id,
   className = "",
   selectClassName = "w-28",
-  showSearch,
   ariaLabel,
 }: FilterSelectInlineProps) {
   const selectId = id || `filter-select-inline-${label}`;
 
   return (
     <FilterControl label={label} htmlFor={selectId} layout="inline" className={className} controlClassName={selectClassName}>
-      <SelectField
+      <SelectNative
         id={selectId}
         aria-label={ariaLabel ?? label.replace(/[：:]\s*$/, "").trim()}
         value={value}
         onChange={(nextValue) => onChange(String(nextValue ?? ""))}
         options={options}
         placeholder={placeholder}
-        showSearch={showSearch}
         className="w-full"
       />
     </FilterControl>

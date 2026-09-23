@@ -134,7 +134,7 @@ const availableSources: FeedSourceOption[] = [
 ];
 
 function getSelectRoot(name: string) {
-  return screen.getByRole("combobox", { name }).closest(".select-modern-antd");
+  return screen.getByRole("combobox", { name }).closest(".select-modern");
 }
 
 function getFetchUrl(input: RequestInfo | URL) {
@@ -580,8 +580,8 @@ describe("FeedPanel", () => {
     });
 
     expect(screen.getAllByText(/创建时间/).length).toBeGreaterThan(0);
-    expect(screen.getAllByPlaceholderText("开始日期")).toHaveLength(2);
-    expect(screen.getAllByPlaceholderText("结束日期")).toHaveLength(2);
+    expect(screen.getAllByLabelText("开始日期")).toHaveLength(2);
+    expect(screen.getAllByLabelText("结束日期")).toHaveLength(2);
     expect(screen.queryByRole("combobox", { name: "分组" })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("全文搜索"), "Agent");
@@ -881,10 +881,10 @@ describe("FeedPanel", () => {
     expect(advancedToggle.className).toContain("px-4");
     expect(advancedToggle.className).toContain("py-1");
     expect(refreshButton).toBeNull();
-    expect(rangeSelect?.className).toContain("select-modern-antd");
+    expect(rangeSelect?.className).toContain("select-modern");
     expect(rangeSelect?.className).toContain("h-9");
     expect(screen.getByRole("combobox", { name: "排序方式" })).toBeInTheDocument();
-    expect(getSelectRoot("排序方式")?.className).toContain("select-modern-antd");
+    expect(getSelectRoot("排序方式")?.className).toContain("select-modern");
     expect(clearButton.className).toContain("ml-auto");
     expect(clearButton.className).toContain("px-3");
     expect(clearButton.className).toContain("py-1");
@@ -1053,7 +1053,7 @@ describe("FeedPanel", () => {
     expect(filterRegion.className).toContain("rounded-sm");
     expect(filterRegion.className).toContain("border");
     expect(container.querySelector(".panel-raised")).not.toBeNull();
-    expect(container.querySelector(".select-modern-antd")).not.toBeNull();
+    expect(container.querySelector(".select-modern")).not.toBeNull();
     expect(container.querySelector(".filter-chip")).not.toBeNull();
   });
 

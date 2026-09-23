@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { SelectField } from "@/components/ui/select-field";
+import { SelectNative } from "@/components/ui/select-native";
 import { TextInput } from "@/components/ui/text-input";
 import { cx } from "@/lib/ui/cx";
 
@@ -48,14 +48,13 @@ export function PaginationControls({
     <div className={cx("flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between", className)}>
       <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--muted)]">
         <span>每页显示</span>
-        <SelectField
+        <SelectNative
           aria-label="每页显示"
           value={pageSize}
           onChange={(value) => onPageSizeChange(Number(value))}
           style={{ width: 80 }}
           compact
           disabled={disabled}
-          showSearch={false}
           options={pageSizeOptions.map((option) => ({
             value: option,
             label: String(option),

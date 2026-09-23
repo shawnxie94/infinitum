@@ -16,7 +16,7 @@ import { StatusBanner } from "@/components/ui/status-banner";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { FilterControl } from "@/components/ui/filter-control";
 import { FilterInput } from "@/components/ui/filter-input";
-import { FilterSelect } from "@/components/ui/filter-select";
+import { FilterSelectNative } from "@/components/ui/filter-select-native";
 import { FilterSelectInline } from "@/components/ui/filter-select-inline";
 import { FilterSummary } from "@/components/ui/filter-summary";
 import { FormField } from "@/components/ui/form-field";
@@ -1391,7 +1391,7 @@ export function FeedPanel({
                       placeholder="输入搜索关键词"
                     />
 
-                    <FilterSelect
+                    <FilterSelectNative
                       id="feed-source-filter-wide"
                       label="信息源"
                       ariaLabel="信息源"
@@ -1599,7 +1599,7 @@ export function FeedPanel({
               <div className="rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 py-3 sm:px-4">
                 <div className="grid gap-3">
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FilterSelect
+                    <FilterSelectNative
                       id="feed-sort-filter-narrow"
                       label="排序"
                       ariaLabel="排序方式"
@@ -1625,7 +1625,7 @@ export function FeedPanel({
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <FilterSelect
+                    <FilterSelectNative
                       id="feed-source-filter-narrow"
                       label="信息源"
                       ariaLabel="信息源"

@@ -44,6 +44,7 @@
   --success-ink: #047857;
   --shadow-sm: 0 8px 24px rgba(17, 24, 39, 0.05);
   --shadow-lg: 0 24px 56px rgba(17, 24, 39, 0.1);
+  --font-brand: "LXGW WenKai Mono";
   --font-body: var(--font-brand), "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-display: var(--font-body);
   --font-mono: var(--font-brand), "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;

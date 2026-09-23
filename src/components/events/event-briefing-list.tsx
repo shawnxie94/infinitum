@@ -12,7 +12,7 @@ import { EventBriefingDetailModal } from "@/components/events/event-briefing-det
 import { EventBriefingPagination } from "@/components/events/event-briefing-pagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IconChevronLeft, IconChevronRight } from "@/components/ui/icons";
-import { SelectField } from "@/components/ui/select-field";
+import { SelectNative } from "@/components/ui/select-native";
 import { useToast } from "@/components/ui/toast";
 import { useClientAdminSession } from "@/components/ui/use-client-admin-session";
 import { getTodayDailyReportDate } from "@/lib/daily-report/date";
@@ -94,12 +94,11 @@ function EventTagSelect({ briefing, pageSize }: { briefing: EventBriefingDTO; pa
 
   return (
     <div className="h-8 w-28">
-      <SelectField
+      <SelectNative
         id="event-tag-filter"
         aria-label="事件标签"
         className="event-tag-filter"
         compact
-        showSearch={false}
         value={briefing.tag}
         options={EVENT_BRIEFING_TAG_OPTIONS}
         onChange={(value) => {

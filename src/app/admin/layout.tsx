@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 
+import { AntdRegistry } from "@ant-design/nextjs-registry";
+
 import { PRIVATE_ROBOTS, SITE_NAME } from "@/lib/seo/metadata";
 
 export const metadata: Metadata = {
@@ -18,5 +20,5 @@ export default function AdminLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return children;
+  return <AntdRegistry>{children}</AntdRegistry>;
 }

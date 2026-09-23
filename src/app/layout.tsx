@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { AntdRegistry } from "@ant-design/nextjs-registry";
-import localFont from "next/font/local";
 
 import { ToastProvider } from "@/components/ui/toast";
 import {
@@ -15,15 +13,8 @@ import {
 } from "@/lib/seo/metadata";
 
 import "./globals.css";
-
-const brandFont = localFont({
-  src: "./fonts/LXGWWenKaiMono.ttf",
-  weight: "400",
-  style: "normal",
-  display: "swap",
-  fallback: ["system-ui", "sans-serif"],
-  variable: "--font-brand",
-});
+// 品牌字体经 scripts/subset-brand-font.mjs 切片为 unicode-range 分片（public/fonts/lxgw-wenkai-mono），
+// 浏览器按页面实际字形按需下载；改字体后需重跑 npm run fonts:subset。
 
 export const metadata: Metadata = {
   metadataBase: getMetadataBase(),
@@ -78,11 +69,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html className={brandFont.variable} lang="zh-CN">
+    <html lang="zh-CN">
+      <head>
+        {/* 字体 CSS 独立于应用 CSS 打包，以获得与分片解耦的 immutable 缓存（见 next.config headers）。 */}
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" href="/fonts/lxgw/index.css" />
+      </head>
       <body>
-        <AntdRegistry>
-          <ToastProvider>{children}</ToastProvider>
-        </AntdRegistry>
+        <ToastProvider>{children}</ToastProvider>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(buildOrganizationJsonLd()) }}
