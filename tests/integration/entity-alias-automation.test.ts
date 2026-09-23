@@ -6,6 +6,7 @@ import { precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
 import {
   autoNormalizeEntityAliases,
+  persistEntitySuggestionCandidates,
   precomputeEntitySuggestionCandidates,
 } from "@/lib/entities/service";
 import { loadMentionResolver, resetMentionResolverCache } from "@/lib/entities/mention-resolution";
@@ -90,7 +91,8 @@ function fakeProvider(
 afterEach(async () => {
   resetMentionResolverCache();
   await prisma.entityAlias.deleteMany({ where: { createdBy: "auto-llm" } });
-  await prisma.entity.deleteMany({ where: { normalized: { in: ["智谱", "z.ai"] } } });
+  await prisma.entitySuggestionDecision.deleteMany({ where: { decidedBy: "auto-llm" } });
+  await prisma.entity.deleteMany({ where: { normalized: { in: ["智谱", "z.ai", "alphagrid", "alpha grid"] } } });
   await prisma.item.deleteMany({ where: { id: { in: created.items } } });
   await prisma.contentCluster.deleteMany({ where: { id: { in: created.clusters } } });
   await prisma.source.deleteMany({ where: { id: { in: created.sources } } });
@@ -169,7 +171,9 @@ describe("autoNormalizeEntityAliases", () => {
     const { result, mediumRecords } = await autoNormalizeEntityAliases(NOW, provider);
 
     expect(result.autoMergedAliases).toBe(0);
-    expect(mediumRecords).toHaveLength(1);
+    // 扫描通道的封顶建议不计入共现通道断言
+    const voteRecords = mediumRecords.filter((record) => record.reason === "auto_alias_vote");
+    expect(voteRecords).toHaveLength(1);
     expect(await prisma.entityAlias.count({ where: { entityId: { in: [zhipu.id, zai.id] } } })).toBe(0);
   });
 
@@ -183,7 +187,8 @@ describe("autoNormalizeEntityAliases", () => {
       canonicalName: "智谱",
     }));
     const { mediumRecords } = await autoNormalizeEntityAliases(NOW, provider);
-    expect(mediumRecords).toHaveLength(1);
+    const voteRecords = mediumRecords.filter((record) => record.reason === "auto_alias_vote");
+    expect(voteRecords).toHaveLength(1);
     // 只断言本测试的实体对没有写别名：并行套件共享 DB，全局计数会看到其他文件的行
     expect(
       await prisma.entityAlias.count({
@@ -208,6 +213,108 @@ describe("autoNormalizeEntityAliases", () => {
         where: { reason: "auto_alias_vote" },
       }),
     ).toBe(1);
+  });
+});
+
+describe("autoNormalizeEntityAliases 扫描通道保守闸门", () => {
+  async function seedSimilarNameEntities() {
+    // "AlphaGrid" vs "alpha grid"：compact 相同 → punctuation_match 0.99，
+    // 但无任何聚类共现证据，只能由名字相似度扫描提名。
+    const a = await prisma.entity.create({ data: { name: "AlphaGrid", normalized: "alphagrid" } });
+    const b = await prisma.entity.create({ data: { name: "alpha grid", normalized: "alpha grid" } });
+    return { a, b };
+  }
+
+  function scanAwareProvider(
+    decide: () => EntityAliasCheckDecision,
+    calls?: Array<Array<{ aName: string; bName: string }>>,
+  ): AiProvider {
+    return {
+      assessEntityAliasPairs: async (input: { pairs: Array<{ aName: string; bName: string }> }) => {
+        calls?.push(input.pairs);
+        return input.pairs.map(() => decide());
+      },
+    } as unknown as AiProvider;
+  }
+
+  it("forces AI high-confidence scan pairs into governance suggestions without auto-merge", async () => {
+    await seedSimilarNameEntities();
+
+    const provider = scanAwareProvider(() => ({
+      isSameEntity: true,
+      confidence: "high",
+      canonicalName: "AlphaGrid",
+    }));
+    const { result, mediumRecords } = await autoNormalizeEntityAliases(NOW, provider);
+
+    expect(result.autoMergedAliases).toBe(0);
+    expect(result.scanCandidates).toBeGreaterThanOrEqual(1);
+    expect(result.scanSuggestions).toBeGreaterThanOrEqual(1);
+    expect(result.scanRejected).toBe(0);
+    const scanRecord = mediumRecords.find((record) =>
+      record.reason === "auto_alias_scan"
+      && record.sourceEntityNormalized === "alpha grid"
+      && record.targetEntityNormalized === "alphagrid",
+    );
+    expect(scanRecord).toBeDefined();
+    expect(await prisma.entityAlias.count({ where: { createdBy: "auto-llm" } })).toBe(0);
+
+    await persistEntitySuggestionCandidates(NOW, mediumRecords);
+    const suggestion = await prisma.entitySuggestionCandidate.findFirstOrThrow({
+      where: {
+        reason: "auto_alias_scan",
+        sourceEntityNormalized: "alpha grid",
+        targetEntityNormalized: "alphagrid",
+      },
+    });
+    expect(suggestion.sourceEntityId).toBe(scanRecord!.sourceEntityId);
+  });
+
+  it("persists AI rejections of scan pairs and skips re-nomination next round", async () => {
+    const { a, b } = await seedSimilarNameEntities();
+    // 预置一条手动刷新留下的 active 建议（方向按 compareCanonicalPreference：
+    // 短名 "AlphaGrid" 为 target）；AI 否决后应被一并清理
+    await prisma.entitySuggestionCandidate.create({
+      data: {
+        pairKey: `${a.id}:${b.id}`,
+        sourceEntityId: b.id,
+        targetEntityId: a.id,
+        sourceEntityNormalized: b.normalized,
+        targetEntityNormalized: a.normalized,
+        confidence: 0.9,
+        affectedItemCount: 0,
+        sharedItemCount: 0,
+        reason: "punctuation_match",
+        status: "active",
+        expiresAt: new Date(NOW.getTime() + 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const rejectingProvider = scanAwareProvider(() => ({
+      isSameEntity: false,
+      confidence: "high",
+      canonicalName: null,
+    }));
+    const firstRound = await autoNormalizeEntityAliases(NOW, rejectingProvider);
+    expect(firstRound.result.scanRejected).toBeGreaterThanOrEqual(1);
+    const decision = await prisma.entitySuggestionDecision.findFirstOrThrow({
+      where: { sourceEntityNormalized: "alpha grid", targetEntityNormalized: "alphagrid" },
+    });
+    expect(decision.decidedBy).toBe("auto-llm");
+    expect(decision.decision).toBe("kept");
+    expect(await prisma.entitySuggestionCandidate.count({
+      where: { sourceEntityNormalized: "alpha grid", targetEntityNormalized: "alphagrid" },
+    })).toBe(0);
+
+    const secondRoundCalls: Array<Array<{ aName: string; bName: string }>> = [];
+    const secondRound = await autoNormalizeEntityAliases(
+      NOW,
+      scanAwareProvider(() => ({ isSameEntity: false, confidence: "high", canonicalName: null }), secondRoundCalls),
+    );
+    const nominatedNames = secondRoundCalls.flat().flatMap((pair) => [pair.aName, pair.bName]);
+    expect(nominatedNames).not.toContain("AlphaGrid");
+    expect(nominatedNames).not.toContain("alpha grid");
+    expect(secondRound.result.scanSuggestions).toBe(0);
   });
 });
 

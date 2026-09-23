@@ -4,7 +4,8 @@ export type EntitySimilarityReason =
   | "punctuation_match"
   | "token_overlap"
   | "edit_distance"
-  | "auto_alias_vote";
+  | "auto_alias_vote"
+  | "auto_alias_scan";
 
 export type EntitySimilarityResult = {
   confidence: number;

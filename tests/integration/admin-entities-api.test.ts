@@ -447,7 +447,7 @@ describe("/api/admin/settings/entities", () => {
     });
   });
 
-  it("runs generic precompute tasks and stores entity governance candidates", async () => {
+  it("runs generic precompute tasks without direct scan suggestions; manual refresh stores them", async () => {
     await createSourceAndItems();
     const canonical = await prisma.entity.create({
       data: {
@@ -484,6 +484,20 @@ describe("/api/admin/settings/entities", () => {
 
     await triggerTaskWorkflow("precompute", taskRun.id);
 
+    // 扫描通道必须经 LLM 仲裁：无 AI provider 的预计算工作流不直通写建议
+    await expect(prisma.entitySuggestionCandidate.findMany()).resolves.toEqual([]);
+    await expect(prisma.backgroundTaskRun.findUnique({
+      where: { id: taskRun.id },
+    })).resolves.toMatchObject({ status: "succeeded" });
+
+    // 手动刷新是显式人工动作，保留全量相似度扫描
+    const { POST } = await import("@/app/api/admin/settings/entities/suggestions/route");
+    const response = await POST(new Request("http://localhost/api/admin/settings/entities/suggestions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "precompute" }),
+    }));
+    expect(response.status).toBe(200);
     await expect(prisma.entitySuggestionCandidate.findMany()).resolves.toEqual([
       expect.objectContaining({
         sourceEntityId: variant.id,
@@ -492,9 +506,6 @@ describe("/api/admin/settings/entities", () => {
         affectedItemCount: 1,
       }),
     ]);
-    await expect(prisma.backgroundTaskRun.findUnique({
-      where: { id: taskRun.id },
-    })).resolves.toMatchObject({ status: "succeeded" });
   });
 
   it("keeps entity governance suggestion scans bounded for large entity sets", async () => {

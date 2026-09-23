@@ -120,7 +120,7 @@ type EntitySuggestionDraft = {
   reason: EntitySimilarityReason;
 };
 
-type EntitySuggestionCandidateRecord = {
+export type EntitySuggestionCandidateRecord = {
   pairKey: string;
   sourceEntityId: string;
   targetEntityId: string;
@@ -217,7 +217,9 @@ function getSimilarityReasonLabel(reason: EntitySimilarityReason) {
     case "edit_distance":
       return "拼写距离接近";
     case "auto_alias_vote":
-      return "人工确认合并中的主体别名候选";
+      return "同聚类共现的 AI 复核候选";
+    case "auto_alias_scan":
+      return "名称相似，AI 复核通过（无共现证据）";
     default:
       return "实体表达接近";
   }
@@ -1167,24 +1169,12 @@ async function buildEntitySuggestionCandidateRecords(now: Date): Promise<{
   };
 }
 
-export async function precomputeEntitySuggestionCandidates(
-  now = new Date(),
-  options?: { additionalRecords?: EntitySuggestionCandidateRecord[] },
-): Promise<EntitySuggestionPrecomputeResult> {
-  const startedAt = Date.now();
-  const { entities, scannedPairs, records } = await buildEntitySuggestionCandidateRecords(now);
-
-  // 非破坏性重建：相似度草稿 + 外部来源草稿（如自动别名闭环的中置信候选）按 pairKey
-  // upsert；只清除过期与被 admin 否决的候选，未被再产出的历史建议保留至过期。
-  const additionalRecords = (options?.additionalRecords ?? []).filter(
-    (draft) => !records.some((record) => record.pairKey === draft.pairKey),
-  );
-  const allRecords = [...records, ...additionalRecords];
+async function persistEntitySuggestionCandidateRecords(now: Date, records: EntitySuggestionCandidateRecord[]) {
   const suppressedPairs = await loadSuppressedEntitySuggestionPairs();
 
   await prisma.$transaction(async (tx) => {
-    for (let start = 0; start < allRecords.length; start += ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE) {
-      for (const record of allRecords.slice(start, start + ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE)) {
+    for (let start = 0; start < records.length; start += ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE) {
+      for (const record of records.slice(start, start + ENTITY_SUGGESTION_CANDIDATE_CREATE_BATCH_SIZE)) {
         await tx.entitySuggestionCandidate.upsert({
           where: { pairKey: record.pairKey },
           create: { ...record },
@@ -1217,6 +1207,34 @@ export async function precomputeEntitySuggestionCandidates(
       });
     }
   });
+}
+
+/**
+ * 预计算工作流的建议落库：只写入上游 AI 仲裁产出的中置信记录并做
+ * 过期/否决清理，不做相似度直通扫描（扫描通道必须先过 LLM 仲裁）。
+ */
+export async function persistEntitySuggestionCandidates(
+  now = new Date(),
+  records: EntitySuggestionCandidateRecord[] = [],
+): Promise<{ storedCandidates: number }> {
+  await persistEntitySuggestionCandidateRecords(now, records);
+  return { storedCandidates: records.length };
+}
+
+export async function precomputeEntitySuggestionCandidates(
+  now = new Date(),
+  options?: { additionalRecords?: EntitySuggestionCandidateRecord[] },
+): Promise<EntitySuggestionPrecomputeResult> {
+  const startedAt = Date.now();
+  const { entities, scannedPairs, records } = await buildEntitySuggestionCandidateRecords(now);
+
+  // 非破坏性重建：相似度草稿 + 外部来源草稿（如自动别名闭环的中置信候选）按 pairKey
+  // upsert；只清除过期与被 admin 否决的候选，未被再产出的历史建议保留至过期。
+  const additionalRecords = (options?.additionalRecords ?? []).filter(
+    (draft) => !records.some((record) => record.pairKey === draft.pairKey),
+  );
+  const allRecords = [...records, ...additionalRecords];
+  await persistEntitySuggestionCandidateRecords(now, allRecords);
 
   return {
     entityCount: entities.length,
@@ -1232,6 +1250,20 @@ export type AutoAliasNormalizationResult = {
   adjudicatedPairs: number;
   autoMergedAliases: number;
   mediumSuggestions: number;
+  scanCandidates: number;
+  scanSuggestions: number;
+  scanRejected: number;
+};
+
+type AliasArbitrationSource = "cooccurrence" | "similarity_scan";
+
+type AliasArbitrationCandidate = {
+  left: EntityCandidate;
+  right: EntityCandidate;
+  evidence: string[];
+  source: AliasArbitrationSource;
+  /** 扫描通道的名称相似度；共现通道不使用。 */
+  baseConfidence: number;
 };
 
 type AliasEvidencePair = {
@@ -1280,7 +1312,15 @@ export async function autoNormalizeEntityAliases(
 ): Promise<{ result: AutoAliasNormalizationResult; mediumRecords: EntitySuggestionCandidateRecord[] }> {
   const maxPairs = options?.maxPairsPerRound ?? 30;
   const empty = {
-    result: { candidatePairs: 0, adjudicatedPairs: 0, autoMergedAliases: 0, mediumSuggestions: 0 },
+    result: {
+      candidatePairs: 0,
+      adjudicatedPairs: 0,
+      autoMergedAliases: 0,
+      mediumSuggestions: 0,
+      scanCandidates: 0,
+      scanSuggestions: 0,
+      scanRejected: 0,
+    },
     mediumRecords: [] as EntitySuggestionCandidateRecord[],
   };
 
@@ -1362,16 +1402,13 @@ export async function autoNormalizeEntityAliases(
     : [];
   const entityByNormalized = new Map(entityRows.map((row) => [row.normalized, row]));
 
-  const candidates = [...pairs.values()]
+  const cooccurrenceCandidates = [...pairs.values()]
     .map((pair) => {
       const [minKey, maxKey] = pair.key.split("\u0000");
       const left = entityByNormalized.get(minKey!);
       const right = entityByNormalized.get(maxKey!);
       if (!left || !right || left.id === right.id) return null;
-      const alreadyAliased =
-        left.aliases.some((alias) => alias.aliasNormalized === right.normalized) ||
-        right.aliases.some((alias) => alias.aliasNormalized === left.normalized);
-      if (alreadyAliased) return null;
+      if (isAlreadyAliased(left, right)) return null;
       if (
         suppressed.has(buildSuppressedPairKey(left.normalized, right.normalized)) ||
         suppressed.has(buildSuppressedPairKey(right.normalized, left.normalized))
@@ -1383,6 +1420,57 @@ export async function autoNormalizeEntityAliases(
     .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
     .sort((a, b) => b.votes - a.votes || a.left.normalized.localeCompare(b.left.normalized))
     .slice(0, maxPairs);
+
+  // 源 3：全量名字相似度扫描（无共现证据）。与共现候选合并进同一轮 LLM 仲裁；
+  // 共现通道优先占预算，扫描对填剩余名额，裁决结果封顶 medium（保守闸门，
+  // 不自动合并），AI 否决则持久化压制避免每轮重复提名。
+  const remainingSlots = maxPairs - cooccurrenceCandidates.length;
+  const cooccurrencePairIds = new Set(
+    cooccurrenceCandidates.map((candidate) => canonicalEntityPairId(candidate.left, candidate.right)),
+  );
+  const scanCandidates: AliasArbitrationCandidate[] = [];
+  if (remainingSlots > 0) {
+    const scanEntities = await loadEntitySuggestionPrecomputeInputs();
+    const passingDrafts = buildEntitySuggestionCandidatePairs(scanEntities, "")
+      .flatMap(({ left, right }) => {
+        if (cooccurrencePairIds.has(canonicalEntityPairId(left, right))) return [];
+        if (isAlreadyAliased(left, right)) return [];
+        if (
+          suppressed.has(buildSuppressedPairKey(left.normalized, right.normalized)) ||
+          suppressed.has(buildSuppressedPairKey(right.normalized, left.normalized))
+        ) {
+          return [];
+        }
+        const similarity = getBestEntitySimilarity(left, right);
+        if (!similarity || similarity.confidence < SUGGESTION_CONFIDENCE_THRESHOLD) return [];
+        return [{ left, right, similarity }];
+      })
+      .sort((a, b) =>
+        b.similarity.confidence - a.similarity.confidence
+        || canonicalEntityPairId(a.left, a.right).localeCompare(canonicalEntityPairId(b.left, b.right)),
+      )
+      .slice(0, remainingSlots);
+    for (const { left, right, similarity } of passingDrafts) {
+      scanCandidates.push({
+        left,
+        right,
+        evidence: [getSimilarityReasonLabel(similarity.reason)],
+        source: "similarity_scan",
+        baseConfidence: similarity.confidence,
+      });
+    }
+  }
+
+  const candidates: AliasArbitrationCandidate[] = [
+    ...cooccurrenceCandidates.map((candidate) => ({
+      left: candidate.left,
+      right: candidate.right,
+      evidence: candidate.evidence,
+      source: "cooccurrence" as const,
+      baseConfidence: 0,
+    })),
+    ...scanCandidates,
+  ];
 
   if (candidates.length === 0) {
     return empty;
@@ -1397,17 +1485,47 @@ export async function autoNormalizeEntityAliases(
   });
 
   let autoMergedAliases = 0;
+  let scanSuggestions = 0;
+  let scanRejected = 0;
   const mediumRecords: EntitySuggestionCandidateRecord[] = [];
   for (let index = 0; index < decisions.length; index += 1) {
     const decision = decisions[index]!;
     const candidate = candidates[index]!;
-    if (!decision.isSameEntity) continue;
+    if (!decision.isSameEntity) {
+      // 扫描对被 AI 判为不同主体：持久化否决，后续轮次不再重复提名与仲裁
+      if (candidate.source === "similarity_scan") {
+        await suppressScanPairAfterAiRejection(candidate.left, candidate.right);
+        scanRejected += 1;
+      }
+      continue;
+    }
 
     const { targetEntity, sourceEntity, canonicalNameMatched } = resolveAutoAliasDirection(
       candidate.left,
       candidate.right,
       decision.canonicalName,
     );
+
+    // 保守闸门：扫描通道没有共现证据，即使 AI 高置信也不自动合并，
+    // 一律降级为治理建议交给人工裁决。
+    if (candidate.source === "similarity_scan") {
+      mediumRecords.push({
+        pairKey: buildSuggestionId(sourceEntity, targetEntity),
+        sourceEntityId: sourceEntity.id,
+        targetEntityId: targetEntity.id,
+        sourceEntityNormalized: sourceEntity.normalized,
+        targetEntityNormalized: targetEntity.normalized,
+        confidence: getSuggestionConfidence(candidate.baseConfidence),
+        affectedItemCount: sourceEntity._count.items,
+        sharedItemCount: 0,
+        reason: "auto_alias_scan",
+        status: "active",
+        expiresAt: new Date(now.getTime() + ENTITY_SUGGESTION_CANDIDATE_TTL_MS),
+      });
+      scanSuggestions += 1;
+      continue;
+    }
+
     const shouldAutoAlias = decision.confidence === "high" && canonicalNameMatched;
     if (shouldAutoAlias) {
       try {
@@ -1456,9 +1574,46 @@ export async function autoNormalizeEntityAliases(
       adjudicatedPairs: decisions.length,
       autoMergedAliases,
       mediumSuggestions: mediumRecords.length,
+      scanCandidates: scanCandidates.length,
+      scanSuggestions,
+      scanRejected,
     },
     mediumRecords,
   };
+}
+
+function canonicalEntityPairId(left: EntityCandidate, right: EntityCandidate) {
+  return left.id < right.id ? `${left.id}:${right.id}` : `${right.id}:${left.id}`;
+}
+
+function isAlreadyAliased(left: EntityCandidate, right: EntityCandidate) {
+  return (left.aliases ?? []).some((alias) => alias.aliasNormalized === right.normalized) ||
+    (right.aliases ?? []).some((alias) => alias.aliasNormalized === left.normalized);
+}
+
+async function suppressScanPairAfterAiRejection(left: EntityCandidate, right: EntityCandidate) {
+  const { sourceEntity, targetEntity } = resolveSuggestionDirection(left, right);
+  await prisma.entitySuggestionDecision.upsert({
+    where: {
+      sourceEntityNormalized_targetEntityNormalized: {
+        sourceEntityNormalized: sourceEntity.normalized,
+        targetEntityNormalized: targetEntity.normalized,
+      },
+    },
+    update: { decision: "kept", decidedBy: "auto-llm" },
+    create: {
+      sourceEntityNormalized: sourceEntity.normalized,
+      targetEntityNormalized: targetEntity.normalized,
+      decision: "kept",
+      decidedBy: "auto-llm",
+    },
+  });
+  await prisma.entitySuggestionCandidate.deleteMany({
+    where: {
+      sourceEntityNormalized: sourceEntity.normalized,
+      targetEntityNormalized: targetEntity.normalized,
+    },
+  });
 }
 
 export async function listAdminEntitySuggestions(input?: {

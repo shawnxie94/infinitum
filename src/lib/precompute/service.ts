@@ -5,11 +5,11 @@ import { precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
 import {
   autoNormalizeEntityAliases,
-  precomputeEntitySuggestionCandidates,
+  persistEntitySuggestionCandidates,
 } from "@/lib/entities/service";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/ai-usage";
-import { enqueueTaskRun, updateTaskRun } from "@/lib/tasks/service";
+import { enqueueTaskRun } from "@/lib/tasks/service";
 
 type PrecomputeStageResult = {
   key: "cluster_merge_clean_pairs" | "entity_alias_check" | "entity_suggestion_candidates";
@@ -117,10 +117,11 @@ export async function executePrecomputeWorkflowStage(
       if (stage === "entity_alias_check") {
         const value = await autoNormalizeEntityAliases(new Date(), trackedAiProvider);
         stageAliasMediumRecords = value.mediumRecords;
-        return `别名候选 ${value.result.candidatePairs}，仲裁 ${value.result.adjudicatedPairs}，自动合并 ${value.result.autoMergedAliases}，建议 ${value.result.mediumSuggestions}`;
+        const scanPart = value.result.scanCandidates > 0 ? `，扫描提名 ${value.result.scanCandidates}` : "";
+        return `别名候选 ${value.result.candidatePairs}，仲裁 ${value.result.adjudicatedPairs}，自动合并 ${value.result.autoMergedAliases}，建议 ${value.result.mediumSuggestions}${scanPart}`;
       }
-      const value = await precomputeEntitySuggestionCandidates(new Date(), { additionalRecords: currentPayload.aliasMediumRecords });
-      return `实体候选 ${value.storedCandidates} 个，扫描 ${value.scannedPairs} 对`;
+      const value = await persistEntitySuggestionCandidates(new Date(), currentPayload.aliasMediumRecords);
+      return `实体候选 ${value.storedCandidates} 个`;
     },
   );
   if (aiUsage) await options?.onAiUsage?.(aiUsage.snapshot());
