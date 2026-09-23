@@ -228,27 +228,7 @@ function parseAiUsageProjection(value: unknown): AiUsageProjection | null {
 function summarizeAiUsageForStage(projection: AiUsageProjection) {
   const entries = projection.breakdown.filter((entry) => entry.actual > 0 || entry.totalTokens !== undefined);
   if (entries.length === 0) return null;
-  const hasTokenUsage = entries.some((entry) => entry.promptTokens !== undefined
-    || entry.completionTokens !== undefined
-    || entry.totalTokens !== undefined);
-  const promptTokens = entries.reduce((sum, entry) => sum + (entry.promptTokens ?? 0), 0);
-  const completionTokens = entries.reduce((sum, entry) => sum + (entry.completionTokens ?? 0), 0);
-  const cachedTokens = entries.reduce((sum, entry) => sum + (entry.cachedTokens ?? 0), 0);
-  const statuses = entries.map((entry) => entry.cachedTokensStatus ?? "unavailable");
-  const cachedTokensStatus = statuses.every((status) => status === "provider")
-    ? "provider"
-    : statuses.every((status) => status === "unavailable")
-      ? "unavailable"
-      : "partial";
-  const cachedDetail = cachedTokensStatus === "provider"
-    ? `缓存 ${cachedTokens} tokens`
-    : cachedTokensStatus === "partial"
-      ? `缓存 ${cachedTokens} tokens（部分返回）`
-      : "缓存 tokens 未提供";
-  const tokenDetail = hasTokenUsage
-    ? `输入 ${promptTokens} tokens · 输出 ${completionTokens} tokens`
-    : "tokens 未提供";
-  return `AI 调用 ${entries.reduce((sum, entry) => sum + entry.actual, 0)} 次 · ${tokenDetail} · ${cachedDetail}`;
+  return `AI 调用 ${entries.reduce((sum, entry) => sum + entry.actual, 0)} 次`;
 }
 
 function mergeStageDetail(existing: string | undefined, detail: string) {

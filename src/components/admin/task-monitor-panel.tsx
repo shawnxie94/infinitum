@@ -464,17 +464,12 @@ function getStageTimingStatus(timing: TaskStageTimingSnapshot): TaskTimelineNode
 }
 
 function formatStageTimingDetail(timing: TaskStageTimingSnapshot) {
-  const status = getStageTimingStatus(timing);
-  const state = status === "failed" ? "失败"
-    : status === "partial" ? "部分完成"
-      : status === "cancelled" ? "已取消"
-        : status === "skipped" ? "已跳过"
-          : status === "running" ? "进行中"
-            : "已完成";
-  if (timing.detail) {
-    return `${timing.detail}${timing.finishedAt ? ` · 耗时 ${formatDuration(timing.durationMs)}` : ` · ${state}`}`;
-  }
-  return timing.finishedAt ? `${state} · 耗时 ${formatDuration(timing.durationMs)}` : state;
+  return timing.detail ?? "";
+}
+
+function appendTimelineDetail(primary: string, secondary: string) {
+  if (!secondary) return primary;
+  return primary ? `${primary} · ${secondary}` : secondary;
 }
 
 function getSafeFinishedProgressLabel(task: TaskRunSnapshot) {
@@ -490,6 +485,7 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
     title: string;
     time: string | null;
     detail: string;
+    durationMs: number | null;
     isActive: boolean;
   }> = (task.taskTimeline ?? [])
     .filter((node) => node.key !== "task_finished" && node.key !== "daily_report_generate")
@@ -498,6 +494,7 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
     title: formatTaskTimelineTitle(node),
     time: node.finishedAt ?? node.startedAt,
     detail: formatTaskTimelineDetail(task, node),
+    durationMs: node.durationMs,
     isActive: node.status === "running",
   }));
 
@@ -511,8 +508,9 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
     const timingDetail = formatStageTimingDetail(stageTiming);
     if (existing) {
       for (const matchedNode of matchingNodes) {
-        if (!matchedNode.detail.includes(timingDetail)) matchedNode.detail = `${matchedNode.detail} · ${timingDetail}`;
+        if (timingDetail && !matchedNode.detail.includes(timingDetail)) matchedNode.detail = appendTimelineDetail(matchedNode.detail, timingDetail);
         matchedNode.time = stageTiming.finishedAt ?? stageTiming.startedAt ?? matchedNode.time;
+        matchedNode.durationMs = stageTiming.durationMs;
         matchedNode.isActive = getStageTimingStatus(stageTiming) === "running";
       }
       continue;
@@ -533,7 +531,8 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
       key: dailyReportKey ?? `mastra:${stageTiming.key}`,
       title: dailyReportKey ? DAILY_REPORT_STAGE_LABELS[stageTiming.key] ?? stageTiming.label : stageTiming.label,
       time: stageTiming.finishedAt ?? stageTiming.startedAt,
-      detail: dailyReportDetail ? `${dailyReportDetail} · ${timingDetail}` : timingDetail,
+      detail: dailyReportDetail ? appendTimelineDetail(dailyReportDetail, timingDetail) : timingDetail,
+      durationMs: stageTiming.durationMs,
       isActive: getStageTimingStatus(stageTiming) === "running",
     });
   }
@@ -813,16 +812,25 @@ function TaskDetailModal({
                 </div>
                 <div className="min-w-0 flex-1 rounded-md border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium text-[var(--text-1)]">
-                      {entry.title}
-                    </span>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-medium text-[var(--text-1)]">
+                        {entry.title}
+                      </span>
+                      {entry.durationMs !== null ? (
+                        <span className="shrink-0 text-xs text-[var(--text-3)]">
+                          耗时 {formatDuration(entry.durationMs)}
+                        </span>
+                      ) : null}
+                    </div>
                     <span className="shrink-0 text-xs text-[var(--text-3)]">
                       {formatDateTime(entry.time)}
                     </span>
                   </div>
-                  <div className="mt-1 text-sm text-[var(--text-2)]">
-                    {entry.detail}
-                  </div>
+                  {entry.detail ? (
+                    <div className="mt-1 text-sm text-[var(--text-2)]">
+                      {entry.detail}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}

@@ -403,7 +403,7 @@ describe("Mastra staged task workflows", () => {
     });
     expect(timings.find((timing) => timing.key === "entity_alias_check")).toMatchObject({
       status: "succeeded",
-      detail: expect.stringContaining("输入 640 tokens"),
+      detail: expect.stringContaining("AI 调用 1 次"),
     });
     expect(timings.find((timing) => timing.key === "entity_alias_check")?.detail).toContain("别名候选 1");
   });
@@ -492,7 +492,7 @@ describe("Mastra staged task workflows", () => {
     const stageTimings = JSON.parse(stored.stageTimingsJson ?? "[]") as Array<{ key: string; status?: string; detail?: string }>;
     expect(stageTimings.find((timing) => timing.key === "ai_call")).toMatchObject({
       status: "succeeded",
-      detail: expect.stringContaining("输入 420 tokens"),
+      detail: expect.stringContaining("AI 调用 1 次"),
     });
     expect(stageTimings.find((timing) => timing.key === "read")?.detail).toBe("聚类数据已读取");
     expect(stageTimings.find((timing) => timing.key === "writeback")?.detail).toBe("聚类摘要已写回");

@@ -250,7 +250,9 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).queryByText("AI 调用")).not.toBeInTheDocument();
     expect(within(dialog).getByText("信息抓取")).toBeInTheDocument();
     expect(within(dialog).queryByText("内容处理")).not.toBeInTheDocument();
-    expect(within(dialog).getAllByText(/处理 2\/10 条 · 进行中/).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/处理 2\/10 条/).length).toBeGreaterThan(0);
+    expect(within(dialog).getByText("耗时 8.0s")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/· 进行中/)).not.toBeInTheDocument();
     expect(within(dialog).getAllByText("规则过滤").length).toBeGreaterThan(0);
     expect(within(dialog).getByText("条目理解", { selector: ".text-sm.font-medium" })).toBeInTheDocument();
     expect(within(dialog).getByText("归组决策", { selector: ".text-sm.font-medium" })).toBeInTheDocument();
@@ -279,6 +281,34 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).getByText(/指纹命中 1 · 本地直连 2 · AI归组 1 · 跳过 0 · 新建 1/)).toBeInTheDocument();
     expect(within(dialog).getByText(/候选 12\/18 · Dirty 5 · Hash跳过 4 · AI返回 2 · 移动 6 · 失败 1 · 已合并 · 合并后 9 组/)).toBeInTheDocument();
     expect(within(dialog).getByText(/参与重算 2 · 完成更新 2 · 摘要完成 1 · 摘要失败 0 · 已删除 0/)).toBeInTheDocument();
+  });
+
+  it("hides token details from timeline nodes while keeping summary usage", async () => {
+    const task = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "stage-timing-token-hidden",
+      kind: "precompute" as const,
+      status: "succeeded" as const,
+      taskTimeline: [],
+      stageTimings: [{
+        key: "entity_alias_check",
+        label: "实体别名判定",
+        startedAt: "2026-04-21T00:00:00.000Z",
+        finishedAt: "2026-04-21T00:00:01.000Z",
+        durationMs: 1_000,
+        status: "succeeded" as const,
+        detail: "AI 调用 1 次 · 别名候选 8",
+      }],
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[task]} initialFocusTaskId={task.id} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(within(dialog).getByText("实体别名判定")).toBeInTheDocument();
+    expect(within(dialog).getByText("AI 调用 1 次 · 别名候选 8")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/输入 595 tokens/)).not.toBeInTheDocument();
   });
 
   it("keeps finished ingestion summaries closed when reused items include filtered records", async () => {
