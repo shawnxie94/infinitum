@@ -57,10 +57,9 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
       {
         id: "read",
         replayPolicy: "replay_safe",
-        execute: async (input, context) => {
+        execute: async (input) => {
           const taskRun = asBackgroundTaskRun(input);
           if (!taskRun.entityId) throw new Error("Task entityId is required.");
-          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n目标内容已读取`);
           return { itemId: taskRun.entityId };
         },
       },
@@ -81,10 +80,9 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
       {
         id: "validate",
         replayPolicy: "replay_safe",
-        execute: async (input, context) => {
+        execute: async (input) => {
           const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
           if (!payload.understanding?.diagnostics) throw new Error("Item reanalysis result is missing diagnostics.");
-          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n结果校验通过`);
           return payload;
         },
       },
@@ -102,7 +100,11 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
             precomputedUnderstanding: payload.understanding,
           });
           await context.projectAiUsage?.(aiUsage.snapshot());
-          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n重判定结果已写回`);
+          const aggregation = payload.understanding.aggregation;
+          const verdict = aggregation.isAggregation
+            ? `聚合 · 拆分 ${aggregation.events.length} 个子事件`
+            : "非聚合";
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n重判定：${verdict} · 已写回`);
           return { ...payload, result };
         },
       },
@@ -164,11 +166,10 @@ export function createItemRegenerationWorkflowDefinition(
       {
         id: "read",
         replayPolicy: "replay_safe",
-        execute: async (input, context) => {
+        execute: async (input) => {
           const taskRun = asBackgroundTaskRun(input);
           if (!taskRun.entityId) throw new Error("Task entityId is required.");
           const item = await readItemForRegeneration(taskRun.entityId);
-          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n目标内容已读取`);
           return { item } satisfies ItemRegenerationStagePayload;
         },
       },
@@ -189,13 +190,12 @@ export function createItemRegenerationWorkflowDefinition(
       {
         id: "validate",
         replayPolicy: "replay_safe",
-        execute: async (input, context) => {
+        execute: async (input) => {
           const payload = input as ItemRegenerationStagePayload;
           if (!payload.understanding) throw new Error("Item regeneration AI result is missing.");
           if (target === "summary" && (!payload.understanding.diagnostics.summaryValid || !payload.understanding.summary)) {
             throw new Error("Item understanding returned an invalid summary");
           }
-          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n结果校验通过`);
           return payload;
         },
       },

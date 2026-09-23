@@ -200,6 +200,9 @@ export async function executeRecoveryWorkflowStage(
       invalidateFeedCache();
       invalidateDailyReportCache();
     }
+    await context.projectProgress?.(
+      `__mastra_stage_summary__${context.stepId}\n重算聚类 ${previous.affectedClusterIds.length} 个，缓存已刷新`,
+    );
     const finalStatus =
       previous.issues.length > 0 && previous.recoveredCount === 0 && previous.degradedCount === 0
         ? "failed"
@@ -231,6 +234,7 @@ export async function executeRecoveryWorkflowStage(
       progressTotal: 0,
       progressLabel: "无需补偿的失败条目",
     });
+    await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n无需补偿的失败条目`);
     return empty;
   }
 
@@ -306,6 +310,9 @@ export async function executeRecoveryWorkflowStage(
   }
 
   const snapshot = aiUsage.snapshot();
+  await context.projectProgress?.(
+    `__mastra_stage_summary__${context.stepId}\n补偿 ${processedCount} 条（${roundsCompleted} 轮），恢复 ${recoveredCount}，降级 ${degradedCount}，重归组 ${reassignedCount}${issues.length > 0 ? `，失败 ${issues.length}` : ""}`,
+  );
   return {
     now: now.toISOString(),
     processedCount,

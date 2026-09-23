@@ -1059,6 +1059,98 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).queryByText("AI 日报生成", { selector: ".text-sm.font-medium" })).not.toBeInTheDocument();
   });
 
+  it("collapses simple single-AI-call tasks into one processing node", async () => {
+    const task = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "task-reanalyze-collapse",
+      kind: "item_reanalyze" as const,
+      label: "重新 AI 判定",
+      status: "succeeded" as const,
+      startedAt: "2026-04-21T00:00:00.000Z",
+      finishedAt: "2026-04-21T00:00:22.000Z",
+      taskTimeline: [],
+      stageTimings: [
+        {
+          key: "read",
+          label: "读取数据",
+          startedAt: "2026-04-21T00:00:00.000Z",
+          finishedAt: "2026-04-21T00:00:00.009Z",
+          durationMs: 9,
+          status: "succeeded" as const,
+        },
+        {
+          key: "ai_call",
+          label: "AI 分析",
+          startedAt: "2026-04-21T00:00:00.009Z",
+          finishedAt: "2026-04-21T00:00:21.309Z",
+          durationMs: 21_300,
+          status: "succeeded" as const,
+          detail: "AI 调用 1 次",
+        },
+        {
+          key: "validate",
+          label: "结果校验",
+          startedAt: "2026-04-21T00:00:21.309Z",
+          finishedAt: "2026-04-21T00:00:21.314Z",
+          durationMs: 5,
+          status: "succeeded" as const,
+        },
+        {
+          key: "writeback",
+          label: "结果写回",
+          startedAt: "2026-04-21T00:00:21.314Z",
+          finishedAt: "2026-04-21T00:00:21.343Z",
+          durationMs: 29,
+          status: "succeeded" as const,
+          detail: "重判定：聚合 · 拆分 2 个子事件 · 已写回",
+        },
+      ],
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[task]} initialFocusTaskId={task.id} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(within(dialog).getByText("处理", { selector: ".text-sm.font-medium" })).toBeInTheDocument();
+    expect(within(dialog).queryByText("读取数据", { selector: ".text-sm.font-medium" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("结果校验", { selector: ".text-sm.font-medium" })).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByText("AI 调用 1 次 · 重判定：聚合 · 拆分 2 个子事件 · 已写回"),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText("耗时 21.3s")).toBeInTheDocument();
+  });
+
+  it("shows selected item count instead of a generic completion note for daily report persist", async () => {
+    const task = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "daily-report-persist-count",
+      kind: "daily_report_generate" as const,
+      label: "AI 日报生成",
+      status: "succeeded" as const,
+      taskTimeline: [
+        {
+          key: "daily_report_persist_publish" as const,
+          label: "持久化/发布",
+          status: "succeeded" as const,
+          startedAt: "2026-04-21T00:00:00.000Z",
+          finishedAt: "2026-04-21T00:00:02.000Z",
+          durationMs: 2_000,
+          metrics: [{ label: "入选数", value: 12 }],
+        },
+      ],
+      stageTimings: [],
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[task]} initialFocusTaskId={task.id} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(within(dialog).getByText("入选 12 条")).toBeInTheDocument();
+    expect(within(dialog).queryByText("持久化/发布完成")).not.toBeInTheDocument();
+  });
+
   it("shows the review retry failure reason for historical daily report tasks", async () => {
     const dailyReportTask = {
       ...buildMonitorSnapshot().runningTasks[0],

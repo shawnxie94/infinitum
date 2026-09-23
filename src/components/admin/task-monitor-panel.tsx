@@ -365,7 +365,7 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
         ? "无违规，跳过语义修复"
         : `语义修复 ${getValue("修复次数")} 次`;
     case "daily_report_persist_publish":
-      return `持久化/发布完成`;
+      return `入选 ${getValue("入选数")} 条`;
     case "task_finished":
       return `最后入选数 ${getValue("最后入选数")}`;
     case "source_fetch": {
@@ -458,6 +458,14 @@ const INGESTION_STAGE_NODE_KEYS: Record<string, string[]> = {
   cluster_finalize: ["cluster_finalize"],
 };
 
+// 单次 AI 调用的简单任务：时间线合并为一个节点，只保留关键处理信息
+const SINGLE_NODE_TIMELINE_KINDS = new Set<string>([
+  "item_reanalyze",
+  "item_regenerate_summary",
+  "item_regenerate_translation",
+  "cluster_regenerate_summary",
+]);
+
 function getStageTimingStatus(timing: TaskStageTimingSnapshot): TaskTimelineNodeStatus {
   if (timing.status) return timing.status;
   return timing.finishedAt ? "succeeded" : "running";
@@ -537,11 +545,27 @@ function buildTaskTimeline(task: TaskRunSnapshot) {
     });
   }
 
-  return timeline.sort((left, right) => {
+  const sorted = timeline.sort((left, right) => {
     if (!left.time) return right.time ? 1 : 0;
     if (!right.time) return -1;
     return new Date(left.time).getTime() - new Date(right.time).getTime();
   });
+
+  if (!SINGLE_NODE_TIMELINE_KINDS.has(task.kind) || sorted.length <= 1) {
+    return sorted;
+  }
+  const details = [...new Set(sorted.map((node) => node.detail).filter(Boolean))];
+  const totalDurationMs = sorted.some((node) => node.durationMs !== null)
+    ? sorted.reduce((sum, node) => sum + (node.durationMs ?? 0), 0)
+    : null;
+  return [{
+    key: "simple_processing",
+    title: "处理",
+    time: sorted.map((node) => node.time).filter(Boolean).at(-1) ?? null,
+    detail: details.join(" · "),
+    durationMs: totalDurationMs,
+    isActive: sorted.some((node) => node.isActive),
+  }];
 }
 
 function getStatusTone(status: BackgroundTaskRunStatus) {

@@ -494,7 +494,7 @@ describe("Mastra staged task workflows", () => {
       status: "succeeded",
       detail: expect.stringContaining("AI 调用 1 次"),
     });
-    expect(stageTimings.find((timing) => timing.key === "read")?.detail).toBe("聚类数据已读取");
+    expect(stageTimings.find((timing) => timing.key === "read")?.detail).toBeUndefined();
     expect(stageTimings.find((timing) => timing.key === "writeback")?.detail).toBe("聚类摘要已写回");
 
     await prisma.contentCluster.deleteMany({ where: { id: clusterId } });

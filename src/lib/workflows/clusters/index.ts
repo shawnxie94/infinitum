@@ -21,11 +21,7 @@ export function createClusterSummaryWorkflowDefinition(): DomainTaskDefinition {
       {
         id: "read",
         replayPolicy: "replay_safe",
-        execute: async (input, context) => {
-          const payload = await readClusterSummaryWorkflow(asBackgroundTaskRun(input).entityId ?? "");
-          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n聚类数据已读取`);
-          return payload;
-        },
+        execute: async (input) => readClusterSummaryWorkflow(asBackgroundTaskRun(input).entityId ?? ""),
       },
       {
         id: "ai_call",
