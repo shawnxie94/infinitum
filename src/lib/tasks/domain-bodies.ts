@@ -5,6 +5,7 @@ import {
   executeClusterMergeCleanPairWorkflow,
   generateClusterSummaryWorkflow,
   persistClusterSummaryWorkflow,
+  resolveClusterSummaryProvider,
   readClusterSummaryWorkflow,
   type ClusterSummaryWorkflowPayload,
 } from "@/lib/clusters/service";
@@ -166,7 +167,18 @@ function createClusterSummaryDefinition(): DomainTaskDefinition {
     kind: "cluster_regenerate_summary",
     stages: [
       { id: "read", execute: async (input) => readClusterSummaryWorkflow(asBackgroundTaskRun(input).entityId ?? "") },
-      { id: "ai_call", execute: async (input) => generateClusterSummaryWorkflow(input as ClusterSummaryWorkflowPayload) },
+      {
+        id: "ai_call",
+        execute: async (input, context) => {
+          const payload = input as ClusterSummaryWorkflowPayload;
+          const aiUsage = createTaskAiUsageTracker(1, "cluster_summary");
+          const resolved = await resolveClusterSummaryProvider();
+          const aiProvider = resolved ? aiUsage.wrapProvider(resolved, { summarizeClusterEstimated: false }) : undefined;
+          const next = await generateClusterSummaryWorkflow(payload, aiProvider);
+          await context.projectAiUsage?.(aiUsage.snapshot());
+          return next;
+        },
+      },
       { id: "writeback", execute: async (input) => persistClusterSummaryWorkflow(input as ClusterSummaryWorkflowPayload) },
     ],
     effects: ["cluster_write"],

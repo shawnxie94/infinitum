@@ -1013,23 +1013,23 @@ export async function readClusterSummaryWorkflow(clusterId: string): Promise<Clu
   return { clusterId, summaryInputHash: buildClusterSummaryInputHash(cluster.items) };
 }
 
+export async function resolveClusterSummaryProvider(): Promise<AiProvider | undefined> {
+  const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
+  if (!runtimeConfig) return undefined;
+  return createAiProvider(runtimeConfig.modelApi, {
+    itemUnderstanding: runtimeConfig.selectedPromptConfigs?.itemUnderstanding,
+    clusterSummary: runtimeConfig.selectedPromptConfigs?.clusterSummary,
+    clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
+  }, undefined, { aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents, embedding: runtimeConfig.embedding });
+}
+
 export async function generateClusterSummaryWorkflow(
   payload: ClusterSummaryWorkflowPayload,
   aiProvider?: AiProvider,
 ): Promise<ClusterSummaryWorkflowPayload> {
   const cluster = await getClusterWithItems(payload.clusterId);
   if (!cluster || cluster.items.length === 0) return payload;
-  let resolvedProvider = aiProvider;
-  if (!resolvedProvider) {
-    const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
-    if (runtimeConfig) {
-      resolvedProvider = createAiProvider(runtimeConfig.modelApi, {
-        itemUnderstanding: runtimeConfig.selectedPromptConfigs?.itemUnderstanding,
-        clusterSummary: runtimeConfig.selectedPromptConfigs?.clusterSummary,
-        clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
-      }, undefined, { aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents, embedding: runtimeConfig.embedding });
-    }
-  }
+  const resolvedProvider = aiProvider ?? await resolveClusterSummaryProvider();
   const presentation = await generateClusterPresentation(cluster.items, cluster.title, resolvedProvider, { preferEventTitleFallback: true });
   return { ...payload, presentation };
 }

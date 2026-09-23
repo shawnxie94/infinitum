@@ -5,6 +5,13 @@ vi.mock("@/lib/ai/provider-next", async (importOriginal) => ({
   createAiProvider: () => new Proxy({}, { get: () => vi.fn(async () => null) }),
 }));
 
+// vitest 环境下 Mastra step 内读取 settings 会悬挂（真实 worker 无此问题），
+// cluster 摘要用例改为注入 stub provider，只验证 tracker + 用量投影接线。
+vi.mock("@/lib/clusters/service", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  resolveClusterSummaryProvider: vi.fn(async () => ({ summarizeCluster: vi.fn(async () => null) })),
+}));
+
 import { prisma } from "@/lib/db";
 import { triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
 
@@ -96,5 +103,75 @@ describe("Mastra staged task workflows", () => {
     expect(stored.status).toBe("succeeded");
     expect(fetchRun?.status).toBe("succeeded");
     expect(JSON.parse(stored.pipelineCheckpointJson ?? "{}").__mastra.step.stepId).toBe("ingestion-cluster_finalize");
+  });
+
+  it("projects cluster summary AI usage onto the task run", async () => {
+    const clusterId = "staged-cluster-summary-usage";
+    const publishedAt = new Date("2026-06-30T00:00:00.000Z");
+    await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
+    const source = await prisma.source.create({
+      data: {
+        id: `${clusterId}-source`,
+        name: clusterId,
+        rssUrl: `https://staged.example.com/${clusterId}/rss`,
+        siteUrl: `https://staged.example.com/${clusterId}`,
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    await prisma.contentCluster.create({
+      data: {
+        id: clusterId,
+        kind: "topic",
+        title: "staged 聚类摘要",
+        summary: "staged 聚类摘要备选",
+        score: 60,
+        itemCount: 2,
+        latestPublishedAt: publishedAt,
+        createdAt: publishedAt,
+        updatedAt: publishedAt,
+        status: "active",
+        fingerprint: `fp-${clusterId}`,
+      },
+    });
+    await prisma.item.createMany({
+      data: [0, 1].map((index) => ({
+        id: `${clusterId}-item-${index}`,
+        sourceId: source.id,
+        clusterId,
+        originalUrl: `https://staged.example.com/${clusterId}/item-${index}`,
+        canonicalUrl: `https://staged.example.com/${clusterId}/item-${index}`,
+        urlHash: `${clusterId}-item-${index}-hash`,
+        originalTitle: `staged 聚类条目 ${index + 1}`,
+        status: "processed",
+        moderationStatus: "allowed",
+        publishedAt,
+        createdAt: publishedAt,
+      })),
+    });
+
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "cluster_regenerate_summary",
+        triggerType: "manual",
+        status: "queued",
+        label: "重新生成聚类摘要",
+        entityId: clusterId,
+      },
+    });
+
+    const result = await triggerTaskWorkflow("cluster_regenerate_summary", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+
+    expect(result.status).toBe("succeeded");
+    expect(stored.status).toBe("succeeded");
+    // mock provider 返回 null 也完成了 summarizeCluster 委派——计数必须在委派前记录
+    expect(stored.aiCallCountActual).toBe(1);
+    expect(stored.aiCallCountEstimated).toBe(1);
+    const breakdown = JSON.parse(stored.aiCallBreakdownJson ?? "[]") as Array<{ key: string; actual: number }>;
+    expect(breakdown.find((entry) => entry.key === "cluster_summary")?.actual).toBe(1);
+
+    await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
   });
 });
