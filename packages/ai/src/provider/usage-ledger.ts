@@ -8,12 +8,14 @@ export type UsageLedgerTokenSnapshot = {
   completionTokens: number;
   totalTokens: number;
   cachedTokens: number;
+  cachedTokensStatus: "provider" | "partial" | "unavailable";
   tokenUsageSource: "provider" | "estimated" | "mixed" | null;
 };
 
 export type UsageLedgerBreakdown = UsageLedgerDefinition & {
   actual: number;
   estimated: number;
+  modelNames?: string[];
   tokens: UsageLedgerTokenSnapshot;
 };
 
@@ -24,14 +26,19 @@ export type UsageLedgerSnapshot = {
   attempts: Record<string, number>;
 };
 
-type Entry = UsageLedgerBreakdown;
+type Entry = UsageLedgerBreakdown & {
+  usageReportCount: number;
+  cachedTokenReportCount: number;
+};
 
 type UsageInput = {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
   cachedTokens?: number;
+  cachedTokensReported?: boolean;
   tokenUsageSource?: "provider" | "estimated" | "mixed";
+  model?: string;
 };
 
 export function createUsageLedger(definitions: readonly UsageLedgerDefinition[]) {
@@ -51,8 +58,12 @@ export function createUsageLedger(definitions: readonly UsageLedgerDefinition[])
         completionTokens: 0,
         totalTokens: 0,
         cachedTokens: 0,
+        cachedTokensStatus: "unavailable",
         tokenUsageSource: null,
       },
+      modelNames: [],
+      usageReportCount: 0,
+      cachedTokenReportCount: 0,
     });
   }
 
@@ -85,10 +96,21 @@ export function createUsageLedger(definitions: readonly UsageLedgerDefinition[])
     },
     recordUsage(key: string, usage: UsageInput) {
       const entry = entryFor(key);
+      const model = usage.model?.trim();
+      if (model && !entry.modelNames?.includes(model)) {
+        entry.modelNames = [...(entry.modelNames ?? []), model];
+      }
       entry.tokens.promptTokens += Math.max(0, usage.promptTokens);
       entry.tokens.completionTokens += Math.max(0, usage.completionTokens);
       entry.tokens.totalTokens += Math.max(0, usage.totalTokens);
       entry.tokens.cachedTokens += Math.max(0, usage.cachedTokens ?? 0);
+      entry.usageReportCount += 1;
+      if (usage.cachedTokensReported) entry.cachedTokenReportCount += 1;
+      entry.tokens.cachedTokensStatus = entry.cachedTokenReportCount === 0
+        ? "unavailable"
+        : entry.cachedTokenReportCount === entry.usageReportCount
+          ? "provider"
+          : "partial";
       const source = usage.tokenUsageSource ?? "estimated";
       entry.tokens.tokenUsageSource = entry.tokens.tokenUsageSource === null || entry.tokens.tokenUsageSource === source
         ? source
@@ -100,7 +122,11 @@ export function createUsageLedger(definitions: readonly UsageLedgerDefinition[])
     },
     snapshot(): UsageLedgerSnapshot {
       const breakdown = [...entries.values()].map((entry) => ({
-        ...entry,
+        key: entry.key,
+        label: entry.label,
+        actual: entry.actual,
+        estimated: entry.estimated,
+        ...(entry.modelNames && entry.modelNames.length > 0 ? { modelNames: [...entry.modelNames] } : {}),
         tokens: { ...entry.tokens },
       }));
       return {

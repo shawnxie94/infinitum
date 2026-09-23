@@ -1,6 +1,6 @@
 import { createEmbedTexts } from "@/lib/ai/embeddings";
 import { createAiProvider } from "@/lib/ai/provider-next";
-import { type AiProvider } from "@/lib/ai/provider-types";
+import { type AiCallUsage, type AiProvider } from "@/lib/ai/provider-types";
 import { precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
 import {
@@ -8,7 +8,7 @@ import {
   precomputeEntitySuggestionCandidates,
 } from "@/lib/entities/service";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
-import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
+import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/ai-usage";
 import { enqueueTaskRun, updateTaskRun } from "@/lib/tasks/service";
 
 type PrecomputeStageResult = {
@@ -84,15 +84,27 @@ function isPrecomputeWorkflowPayload(value: unknown): value is PrecomputeWorkflo
 export async function executePrecomputeWorkflowStage(
   stage: PrecomputeWorkflowStage,
   payload?: PrecomputeWorkflowPayload,
+  options?: {
+    onAiUsage?: (usage: TaskAiUsageSnapshot) => Promise<void>;
+  },
 ): Promise<PrecomputeWorkflowPayload> {
   const currentPayload = isPrecomputeWorkflowPayload(payload)
     ? payload
     : { stages: [], aliasMediumRecords: [] } satisfies PrecomputeWorkflowPayload;
   const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
   const embedTexts = runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null;
+  const aiUsage = stage === "entity_alias_check" ? createTaskAiUsageTracker() : null;
   const aiProvider: AiProvider | undefined = runtimeConfig
-    ? createAiProvider(runtimeConfig.modelApi, undefined, undefined, { embedding: runtimeConfig.embedding })
+    ? createAiProvider(runtimeConfig.modelApi, undefined, undefined, {
+        embedding: runtimeConfig.embedding,
+        ...(aiUsage
+          ? { onUsage: (usage: AiCallUsage, usageKey?: string) => aiUsage.addUsageByKey(usageKey, usage) }
+          : {}),
+      })
     : undefined;
+  const trackedAiProvider = aiProvider && aiUsage
+    ? aiUsage.wrapProvider(aiProvider)
+    : aiProvider;
   let stageAliasMediumRecords: AliasMediumRecords = [];
   const result = await runPrecomputeStage(
     stage,
@@ -103,7 +115,7 @@ export async function executePrecomputeWorkflowStage(
         return `聚合候选 ${value.storedPairs}/${value.candidatePairs} 个（向量提名 ${value.vectorAdmittedPairs}），扫描 ${value.scoredPairs} 对`;
       }
       if (stage === "entity_alias_check") {
-        const value = await autoNormalizeEntityAliases(new Date(), aiProvider);
+        const value = await autoNormalizeEntityAliases(new Date(), trackedAiProvider);
         stageAliasMediumRecords = value.mediumRecords;
         return `别名候选 ${value.result.candidatePairs}，仲裁 ${value.result.adjudicatedPairs}，自动合并 ${value.result.autoMergedAliases}，建议 ${value.result.mediumSuggestions}`;
       }
@@ -111,95 +123,7 @@ export async function executePrecomputeWorkflowStage(
       return `实体候选 ${value.storedCandidates} 个，扫描 ${value.scannedPairs} 对`;
     },
   );
+  if (aiUsage) await options?.onAiUsage?.(aiUsage.snapshot());
   const aliasMediumRecords = stage === "entity_alias_check" ? stageAliasMediumRecords : currentPayload.aliasMediumRecords;
   return { stages: [...currentPayload.stages, result], aliasMediumRecords };
-}
-
-export async function executePrecomputeTask(taskRun: { id: string }) {
-  await updateTaskRun(taskRun.id, {
-    status: "running",
-    progressCurrent: 0,
-    progressTotal: 3,
-    progressLabel: "正在执行预计算",
-  });
-
-  // 配置缺失时降级：合并预筛退纯规则、别名阶段跳过仲裁，任务不阻断
-  const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
-  const embedTexts = runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null;
-  const aiUsage = createTaskAiUsageTracker();
-  const aiProvider: AiProvider | undefined = runtimeConfig
-    ? aiUsage.wrapProvider(
-        createAiProvider(runtimeConfig.modelApi, undefined, undefined, {
-          embedding: runtimeConfig.embedding,
-          onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
-        }),
-      )
-    : undefined;
-
-  let aliasMediumRecords: AliasMediumRecords = [];
-  const clusterStage = await runPrecomputeStage(
-    "cluster_merge_clean_pairs",
-    "聚合合并候选",
-    async () => {
-      const result = await precomputeClusterMergeCleanPairs(new Date(), { embedTexts });
-      return `聚合候选 ${result.storedPairs}/${result.candidatePairs} 个（向量提名 ${result.vectorAdmittedPairs}），扫描 ${result.scoredPairs} 对`;
-    },
-  );
-  await updateTaskRun(taskRun.id, {
-    status: "running",
-    progressCurrent: 1,
-    progressTotal: 3,
-    progressLabel: clusterStage.summary,
-  });
-
-  const aliasStage = await runPrecomputeStage(
-    "entity_alias_check",
-    "实体别名自动化",
-    async () => {
-      const aliasOutcome = await autoNormalizeEntityAliases(new Date(), aiProvider);
-      aliasMediumRecords = aliasOutcome.mediumRecords;
-      const { result } = aliasOutcome;
-      return `别名候选 ${result.candidatePairs}，仲裁 ${result.adjudicatedPairs}，自动合并 ${result.autoMergedAliases}，建议 ${result.mediumSuggestions}`;
-    },
-  );
-
-  // 中置信的别名候选以补充草稿进入实体治理建议（非破坏性 upsert）
-  const entityStage = await runPrecomputeStage(
-    "entity_suggestion_candidates",
-    "实体治理候选",
-    async () => {
-      const result = await precomputeEntitySuggestionCandidates(new Date(), {
-        additionalRecords: aliasMediumRecords,
-      });
-      return `实体候选 ${result.storedCandidates} 个，扫描 ${result.scannedPairs} 对`;
-    },
-  );
-
-  const stages = [clusterStage, aliasStage, entityStage];
-  const failedStages = stages.filter((stage) => !stage.ok);
-  const status = failedStages.length === 0 ? "succeeded" : failedStages.length === stages.length ? "failed" : "partial";
-  const progressLabel = stages.map((stage) => stage.summary).join("；");
-  const errorSummary = failedStages.map((stage) => `${stage.label}: ${stage.error}`).join("；") || null;
-
-  const aiUsageSnapshot = aiUsage.snapshot();
-  await updateTaskRun(taskRun.id, {
-    status,
-    progressCurrent: 3,
-    progressTotal: 3,
-    progressLabel,
-    errorSummary,
-    finishedAt: new Date(),
-    aiCallCountActual: aiUsageSnapshot.actual,
-    aiCallCountEstimated: aiUsageSnapshot.estimated,
-    aiCallBreakdown: aiUsageSnapshot.breakdown,
-  });
-
-  if (status === "failed") {
-    throw new Error(errorSummary ?? "预计算失败");
-  }
-
-  return {
-    status,
-    stages,
-  };
 }

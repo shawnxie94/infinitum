@@ -1,28 +1,153 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const mockState = vi.hoisted(() => ({ runtimeConfig: null as unknown, rssItems: [] as unknown[] }));
+
 vi.mock("@/lib/ai/provider-next", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  createAiProvider: () => new Proxy({}, { get: () => vi.fn(async () => null) }),
+  createAiProvider: (_config: unknown, _prompts: unknown, _client: unknown, options?: {
+    onUsage?: (usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      cachedTokens: number;
+      cachedTokensReported: boolean;
+      tokenUsageSource: "provider";
+    }, usageKey?: string) => void;
+  }) => new Proxy({}, {
+    get: (_target, property) => {
+      if (property === "assessEntityAliasPairs") {
+        return async (input: { pairs: Array<{ aName: string; bName: string }> }) => {
+          options?.onUsage?.({
+            promptTokens: 640,
+            completionTokens: 90,
+            totalTokens: 730,
+            cachedTokens: 0,
+            cachedTokensReported: false,
+            tokenUsageSource: "provider",
+          }, "entity_alias_check");
+          return input.pairs.map(() => ({ isSameEntity: false, confidence: "high", canonicalName: null }));
+        };
+      }
+      return vi.fn(async () => null);
+    },
+  }),
+}));
+
+vi.mock("@/lib/items/service", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  resolveAiProvider: vi.fn(async (_provider: unknown, options?: {
+    onUsage?: (usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      cachedTokens: number;
+      cachedTokensReported: boolean;
+      tokenUsageSource: "provider";
+    }, usageKey?: string) => void;
+  }) => ({
+    understandItem: vi.fn(async () => {
+      options?.onUsage?.({
+        promptTokens: 310,
+        completionTokens: 70,
+        totalTokens: 380,
+        cachedTokens: 12,
+        cachedTokensReported: true,
+        tokenUsageSource: "provider",
+      }, "item_understanding");
+      return {
+        summary: "测试摘要",
+        translatedTitle: "测试中文标题",
+        moderationStatus: "allowed",
+        moderationReason: null,
+        moderationDetail: null,
+        qualityScore: 80,
+        qualityRationale: "测试",
+        eventSignature: { eventType: null, eventSubject: null, eventAction: null, eventObject: null, eventDate: null },
+        aggregation: { isAggregation: false, mainEvent: null, events: [] },
+        diagnostics: { summaryValid: true, analysisValid: true, aggregationValid: true },
+      };
+    }),
+  })),
+  generateItemReanalysisUnderstanding: vi.fn(async (_itemId: string, options: { aiProvider: { understandItem: () => Promise<unknown> } }) =>
+    options.aiProvider.understandItem()),
+  generateItemRegenerationUnderstanding: vi.fn(async (_item: unknown, options: { aiProvider: { understandItem: () => Promise<unknown> } }) =>
+    options.aiProvider.understandItem()),
+}));
+
+vi.mock("@/lib/ingestion/parser", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  createRssParser: () => ({ parseURL: vi.fn(async () => ({ items: mockState.rssItems })) }),
+}));
+
+vi.mock("@/lib/settings/service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/settings/service")>();
+  return {
+    ...actual,
+    getIngestionRuntimeConfig: vi.fn(async () => mockState.runtimeConfig
+      ?? actual.getIngestionRuntimeConfig()),
+  };
+});
+
+vi.mock("@/lib/entities/service", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  autoNormalizeEntityAliases: vi.fn(async (_now: Date, aiProvider?: {
+    assessEntityAliasPairs?: (input: { pairs: Array<{ aName: string; bName: string; evidence: string[] }> }) => Promise<unknown>;
+  }) => {
+    await aiProvider?.assessEntityAliasPairs?.({ pairs: [{ aName: "A", bName: "B", evidence: [] }] });
+    return {
+      result: { candidatePairs: 1, adjudicatedPairs: 1, autoMergedAliases: 0, mediumSuggestions: 0 },
+      mediumRecords: [],
+    };
+  }),
 }));
 
 // vitest 环境下 Mastra step 内读取 settings 会悬挂（真实 worker 无此问题），
 // cluster 摘要用例改为注入 stub provider，只验证 tracker + 用量投影接线。
 vi.mock("@/lib/clusters/service", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  resolveClusterSummaryProvider: vi.fn(async () => ({ summarizeCluster: vi.fn(async () => null) })),
+  resolveClusterSummaryProvider: vi.fn(async (options?: {
+    onUsage?: (usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      cachedTokens: number;
+      cachedTokensReported: boolean;
+      tokenUsageSource: "provider";
+    }, usageKey?: string) => void;
+  }) => ({
+    summarizeCluster: vi.fn(async () => {
+      options?.onUsage?.({
+        promptTokens: 420,
+        completionTokens: 80,
+        totalTokens: 500,
+        cachedTokens: 0,
+        cachedTokensReported: false,
+        tokenUsageSource: "provider",
+      }, "cluster_summary");
+      return null;
+    }),
+  })),
 }));
 
 import { prisma } from "@/lib/db";
 import { triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
+import {
+  createItemReanalyzeWorkflowDefinition,
+  createItemRegenerationWorkflowDefinition,
+} from "@/lib/workflows/items";
 
 describe("Mastra staged task workflows", () => {
   beforeEach(async () => {
+    mockState.runtimeConfig = null;
+    mockState.rssItems = [];
     await prisma.item.deleteMany();
     await prisma.fetchRun.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();
     await prisma.source.deleteMany();
     await prisma.sourceGroup.deleteMany();
     await prisma.taskSchedule.deleteMany();
+    await prisma.clusterMergeCleanPairCandidate.deleteMany();
+    await prisma.entitySuggestionCandidate.deleteMany();
   });
 
   it("executes every item-cleanup stage and persists the framework checkpoint", async () => {
@@ -43,7 +168,10 @@ describe("Mastra staged task workflows", () => {
     expect(stored.status).toBe("succeeded");
     expect(checkpoint.__mastra.step.stepId).toBe("item_cleanup-cluster_finalize");
     expect(checkpoint.__mastra.lifecycle.event).toBe("finish");
-    expect(stored.progressLabel).toContain("cluster_finalize");
+    expect(stored.progressLabel).toBe("编排运行中");
+    const stageTimings = JSON.parse(stored.stageTimingsJson ?? "[]") as Array<{ key: string; status?: string }>;
+    expect(stageTimings).toHaveLength(3);
+    expect(stageTimings.every((timing) => timing.status === "succeeded")).toBe(true);
   });
 
   it("does not resume a terminal task row through a Mastra workflow", async () => {
@@ -145,6 +273,139 @@ describe("Mastra staged task workflows", () => {
     expect(stored.status).toBe("succeeded");
     expect(fetchRun?.status).toBe("succeeded");
     expect(JSON.parse(stored.pipelineCheckpointJson ?? "{}").__mastra.step.stepId).toBe("ingestion-cluster_finalize");
+    const timeline = JSON.parse(stored.taskTimelineJson ?? "[]") as Array<{
+      key: string;
+      metrics: Array<{ label: string; value: number }>;
+    }>;
+    expect(timeline.map((node) => node.key)).toEqual([
+      "source_fetch",
+      "rule_filter",
+      "item_understanding",
+      "cluster_assignment",
+      "cluster_merge",
+      "cluster_finalize",
+    ]);
+    expect(timeline.every((node) => node.metrics.length > 0)).toBe(true);
+    expect(stored.progressLabel).not.toContain("步骤 ingestion-");
+  });
+
+  it("projects per-node ingestion counters through the Mastra workflow", async () => {
+    mockState.runtimeConfig = {
+      modelApi: { apiKey: "", baseURL: "https://example.invalid/v1", model: "test-model", customHeaders: {} },
+      selectedPromptConfigs: {},
+      embedding: null,
+      rssSources: [{
+        name: "Mastra test source",
+        rssUrl: "https://mastra-test.example/rss",
+        siteUrl: "https://mastra-test.example",
+        enabled: true,
+        aiParsingEnabled: false,
+        aggregationEnabled: false,
+        aggregationDetectionEnabled: false,
+      }],
+      ingestion: {
+        sourceConcurrency: 1,
+        itemConcurrency: 1,
+        fullTextFetchThreshold: 80,
+        perSourceItemLimit: 10,
+        maxFeedItemsToScan: 10,
+        aggregationSplitMaxEvents: 20,
+      },
+      contentExtraction: { jinaEnabled: false, jinaBaseUrl: "https://r.jina.ai/", jinaApiKey: null, timeoutMs: 1000, concurrency: 1, rpmLimit: 10, maxPerRun: 10, minChars: 500, maxChars: 2000 },
+    };
+    mockState.rssItems = [{
+      title: "Mastra ingestion timeline fixture",
+      link: "https://mastra-test.example/story/1",
+      pubDate: "2026-09-22T12:00:00.000Z",
+      contentSnippet: "This is a sufficiently long fixture body for the ingestion timeline test. ".repeat(3),
+    }];
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: { kind: "ingestion", triggerType: "manual", status: "queued", label: "抓取任务" },
+    });
+
+    const result = await triggerTaskWorkflow("ingestion", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const timeline = JSON.parse(stored.taskTimelineJson ?? "[]") as Array<{
+      key: string;
+      metrics: Array<{ label: string; value: number }>;
+    }>;
+    const sourceFetch = timeline.find((node) => node.key === "source_fetch");
+
+    expect(result.status).toBe("succeeded");
+    expect(sourceFetch?.metrics).toContainEqual({ label: "抓取源", value: 1 });
+    expect(sourceFetch?.metrics).toContainEqual({ label: "抓取内容", value: 1 });
+    expect(timeline).toHaveLength(6);
+    expect(timeline.every((node) => node.metrics.length > 0)).toBe(true);
+  });
+
+  it("tracks item reanalysis and regeneration usage with fake providers", async () => {
+    const definitions = [
+      { definition: createItemReanalyzeWorkflowDefinition(), input: { itemId: "item-1" } },
+      {
+        definition: createItemRegenerationWorkflowDefinition("item_regenerate_translation", "translation"),
+        input: { item: {} },
+      },
+      {
+        definition: createItemRegenerationWorkflowDefinition("item_regenerate_summary", "summary"),
+        input: { item: {} },
+      },
+    ];
+
+    for (const { definition, input } of definitions) {
+      const projection = vi.fn(async () => undefined);
+      const aiStage = definition.stages.find((stage) => stage.id === "ai_call");
+      expect(aiStage).toBeDefined();
+      await aiStage!.execute(input, { projectAiUsage: projection } as never);
+      expect(projection).toHaveBeenCalledWith(expect.objectContaining({
+        actual: 1,
+        breakdown: expect.arrayContaining([expect.objectContaining({
+          key: "item_understanding",
+          actual: 1,
+          promptTokens: 310,
+          completionTokens: 70,
+          totalTokens: 380,
+          cachedTokens: 12,
+          cachedTokensStatus: "provider",
+        })]),
+      }));
+    }
+  });
+
+  it("projects precompute entity-alias AI usage onto its Mastra stage", async () => {
+    mockState.runtimeConfig = {
+      modelApi: { apiKey: "test-key", baseURL: "https://example.test/v1", model: "test-model" },
+      ingestion: { aggregationSplitMaxEvents: 20 },
+      embedding: null,
+    };
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: { kind: "precompute", triggerType: "manual", status: "queued", label: "预计算" },
+    });
+
+    const result = await triggerTaskWorkflow("precompute", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const breakdown = JSON.parse(stored.aiCallBreakdownJson ?? "[]") as Array<{
+      key: string;
+      actual: number;
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      cachedTokensStatus?: string;
+    }>;
+    const timings = JSON.parse(stored.stageTimingsJson ?? "[]") as Array<{ key: string; status?: string; detail?: string }>;
+
+    expect(result.status).toBe("succeeded");
+    expect(breakdown.find((entry) => entry.key === "entity_alias_check")).toMatchObject({
+      actual: 1,
+      promptTokens: 640,
+      completionTokens: 90,
+      totalTokens: 730,
+      cachedTokensStatus: "unavailable",
+    });
+    expect(timings.find((timing) => timing.key === "entity_alias_check")).toMatchObject({
+      status: "succeeded",
+      detail: expect.stringContaining("输入 640 tokens"),
+    });
+    expect(timings.find((timing) => timing.key === "entity_alias_check")?.detail).toContain("别名候选 1");
   });
 
   it("projects cluster summary AI usage onto the task run", async () => {
@@ -211,8 +472,30 @@ describe("Mastra staged task workflows", () => {
     // mock provider 返回 null 也完成了 summarizeCluster 委派——计数必须在委派前记录
     expect(stored.aiCallCountActual).toBe(1);
     expect(stored.aiCallCountEstimated).toBe(1);
-    const breakdown = JSON.parse(stored.aiCallBreakdownJson ?? "[]") as Array<{ key: string; actual: number }>;
-    expect(breakdown.find((entry) => entry.key === "cluster_summary")?.actual).toBe(1);
+    const breakdown = JSON.parse(stored.aiCallBreakdownJson ?? "[]") as Array<{
+      key: string;
+      actual: number;
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      cachedTokens?: number;
+      cachedTokensStatus?: string;
+    }>;
+    expect(breakdown.find((entry) => entry.key === "cluster_summary")).toMatchObject({
+      actual: 1,
+      promptTokens: 420,
+      completionTokens: 80,
+      totalTokens: 500,
+      cachedTokens: 0,
+      cachedTokensStatus: "unavailable",
+    });
+    const stageTimings = JSON.parse(stored.stageTimingsJson ?? "[]") as Array<{ key: string; status?: string; detail?: string }>;
+    expect(stageTimings.find((timing) => timing.key === "ai_call")).toMatchObject({
+      status: "succeeded",
+      detail: expect.stringContaining("输入 420 tokens"),
+    });
+    expect(stageTimings.find((timing) => timing.key === "read")?.detail).toBe("聚类数据已读取");
+    expect(stageTimings.find((timing) => timing.key === "writeback")?.detail).toBe("聚类摘要已写回");
 
     await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
   });

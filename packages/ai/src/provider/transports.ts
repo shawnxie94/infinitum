@@ -24,10 +24,10 @@ export class InvalidJsonModelResponse extends Error {
 }
 
 type WireUsage = {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-  prompt_tokens_details?: { cached_tokens?: number };
+  prompt_tokens?: number | null;
+  completion_tokens?: number | null;
+  total_tokens?: number | null;
+  prompt_tokens_details?: { cached_tokens?: number | null } | null;
 };
 
 export type WireCompletionResponse = {
@@ -49,13 +49,31 @@ function normalizeUsage(
   messages: Array<{ content: string }>,
   outputText: string,
   config: ModelApiConfig,
-  aiSdkUsage?: { inputTokens?: number | null; outputTokens?: number | null; totalTokens?: number | null },
+  aiSdkUsage?: {
+    inputTokens?: number | null;
+    outputTokens?: number | null;
+    totalTokens?: number | null;
+    inputTokenDetails?: { cacheReadTokens?: number | null };
+    raw?: unknown;
+  },
 ): UsageSnapshot {
   const estimates = estimateTokens(messages, outputText);
   const promptTokens = rawUsage?.prompt_tokens ?? aiSdkUsage?.inputTokens ?? estimates.promptTokens;
   const completionTokens = rawUsage?.completion_tokens ?? aiSdkUsage?.outputTokens ?? estimates.completionTokens;
   const totalTokens = rawUsage?.total_tokens ?? aiSdkUsage?.totalTokens ?? promptTokens + completionTokens;
-  const cachedTokens = rawUsage?.prompt_tokens_details?.cached_tokens ?? 0;
+  const sdkRawUsage = aiSdkUsage?.raw && typeof aiSdkUsage.raw === "object"
+    ? aiSdkUsage.raw as WireUsage
+    : undefined;
+  const rawCachedTokens = rawUsage?.prompt_tokens_details?.cached_tokens
+    ?? sdkRawUsage?.prompt_tokens_details?.cached_tokens;
+  const sdkCacheReadTokens = aiSdkUsage?.inputTokenDetails?.cacheReadTokens;
+  const cachedTokensReported = typeof rawCachedTokens === "number"
+    || (typeof sdkCacheReadTokens === "number" && sdkCacheReadTokens > 0);
+  const cachedTokens = typeof rawCachedTokens === "number"
+    ? rawCachedTokens
+    : typeof sdkCacheReadTokens === "number" && sdkCacheReadTokens > 0
+      ? sdkCacheReadTokens
+      : 0;
   const hasPrompt = typeof rawUsage?.prompt_tokens === "number" || typeof aiSdkUsage?.inputTokens === "number";
   const hasCompletion = typeof rawUsage?.completion_tokens === "number" || typeof aiSdkUsage?.outputTokens === "number";
   const hasTotal = typeof rawUsage?.total_tokens === "number" || typeof aiSdkUsage?.totalTokens === "number";
@@ -65,6 +83,7 @@ function normalizeUsage(
     completionTokens,
     totalTokens,
     cachedTokens,
+    cachedTokensReported,
     tokenUsageSource: providerFieldCount === 3 ? "provider" : providerFieldCount === 0 ? "estimated" : "mixed",
     model: config.model,
   };
@@ -195,6 +214,8 @@ export function createAiSdkTransport(options?: {
             inputTokens: result.usage?.inputTokens ?? null,
             outputTokens: result.usage?.outputTokens ?? null,
             totalTokens: result.usage?.totalTokens ?? null,
+            inputTokenDetails: result.usage?.inputTokenDetails,
+            raw: result.usage?.raw,
           }),
         };
       } catch (error) {
@@ -223,6 +244,8 @@ export function createAiSdkTransport(options?: {
       inputTokens: result.usage?.inputTokens ?? null,
       outputTokens: result.usage?.outputTokens ?? null,
       totalTokens: result.usage?.totalTokens ?? null,
+      inputTokenDetails: result.usage?.inputTokenDetails,
+      raw: result.usage?.raw,
     });
     return {
       text: result.text ?? "",

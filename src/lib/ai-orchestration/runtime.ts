@@ -111,14 +111,17 @@ async function projectTaskStepTiming(event: TaskStepLifecycleEvent) {
     ? Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime())
     : null;
   const timings = parseStageTimings(current?.stageTimingsJson ?? null);
+  const existingIndex = timings.findIndex((timing) => timing.key === key);
+  const previous = existingIndex >= 0 ? timings[existingIndex] : undefined;
   const nextTiming: TaskStageTimingSnapshot = {
     key,
     label: stageLabel(key),
     startedAt,
     finishedAt,
     durationMs,
+    status: event.status,
+    ...(previous?.detail ? { detail: previous.detail } : {}),
   };
-  const existingIndex = timings.findIndex((timing) => timing.key === key);
   if (existingIndex >= 0) timings[existingIndex] = nextTiming;
   else timings.push(nextTiming);
   await prisma.backgroundTaskRun.updateMany({
@@ -148,6 +151,17 @@ function compactAiBreakdown(entries: TaskAiCallBreakdownSnapshot[]) {
   return entries.filter((entry) => entry.actual > 0 || entry.estimated > 0 || (entry.totalTokens ?? 0) > 0);
 }
 
+function mergeCachedTokensStatus(
+  previous: TaskAiCallBreakdownSnapshot["cachedTokensStatus"],
+  next: TaskAiCallBreakdownSnapshot["cachedTokensStatus"],
+): TaskAiCallBreakdownSnapshot["cachedTokensStatus"] {
+  const previousStatus = previous ?? "unavailable";
+  const nextStatus = next ?? "unavailable";
+  if (previousStatus === nextStatus) return previousStatus;
+  if (previousStatus === "unavailable" && nextStatus === "unavailable") return "unavailable";
+  return "partial";
+}
+
 function mergeAiBreakdowns(groups: TaskAiCallBreakdownSnapshot[][]) {
   const merged = new Map<string, TaskAiCallBreakdownSnapshot>();
   for (const group of groups) {
@@ -157,6 +171,9 @@ function mergeAiBreakdowns(groups: TaskAiCallBreakdownSnapshot[][]) {
       const nextSource = entry.tokenUsageSource;
       merged.set(entry.key, {
         ...entry,
+        ...((previous?.modelNames?.length ?? 0) > 0 || (entry.modelNames?.length ?? 0) > 0
+          ? { modelNames: [...new Set([...(previous?.modelNames ?? []), ...(entry.modelNames ?? [])])] }
+          : {}),
         actual: (previous?.actual ?? 0) + entry.actual,
         estimated: (previous?.estimated ?? 0) + entry.estimated,
         ...(entry.promptTokens !== undefined || previous?.promptTokens !== undefined
@@ -170,6 +187,10 @@ function mergeAiBreakdowns(groups: TaskAiCallBreakdownSnapshot[][]) {
           : {}),
         ...(entry.cachedTokens !== undefined || previous?.cachedTokens !== undefined
           ? { cachedTokens: (previous?.cachedTokens ?? 0) + (entry.cachedTokens ?? 0) }
+          : {}),
+        ...(entry.cachedTokensStatus !== undefined || previous?.cachedTokensStatus !== undefined
+          || entry.cachedTokens !== undefined || previous?.cachedTokens !== undefined
+          ? { cachedTokensStatus: mergeCachedTokensStatus(previous?.cachedTokensStatus, entry.cachedTokensStatus) }
           : {}),
         ...(previousSource && nextSource && previousSource !== nextSource
           ? { tokenUsageSource: "mixed" as const }
@@ -204,6 +225,71 @@ function parseAiUsageProjection(value: unknown): AiUsageProjection | null {
   return { actual, estimated, breakdown };
 }
 
+function summarizeAiUsageForStage(projection: AiUsageProjection) {
+  const entries = projection.breakdown.filter((entry) => entry.actual > 0 || entry.totalTokens !== undefined);
+  if (entries.length === 0) return null;
+  const hasTokenUsage = entries.some((entry) => entry.promptTokens !== undefined
+    || entry.completionTokens !== undefined
+    || entry.totalTokens !== undefined);
+  const promptTokens = entries.reduce((sum, entry) => sum + (entry.promptTokens ?? 0), 0);
+  const completionTokens = entries.reduce((sum, entry) => sum + (entry.completionTokens ?? 0), 0);
+  const cachedTokens = entries.reduce((sum, entry) => sum + (entry.cachedTokens ?? 0), 0);
+  const statuses = entries.map((entry) => entry.cachedTokensStatus ?? "unavailable");
+  const cachedTokensStatus = statuses.every((status) => status === "provider")
+    ? "provider"
+    : statuses.every((status) => status === "unavailable")
+      ? "unavailable"
+      : "partial";
+  const cachedDetail = cachedTokensStatus === "provider"
+    ? `缓存 ${cachedTokens} tokens`
+    : cachedTokensStatus === "partial"
+      ? `缓存 ${cachedTokens} tokens（部分返回）`
+      : "缓存 tokens 未提供";
+  const tokenDetail = hasTokenUsage
+    ? `输入 ${promptTokens} tokens · 输出 ${completionTokens} tokens`
+    : "tokens 未提供";
+  return `AI 调用 ${entries.reduce((sum, entry) => sum + entry.actual, 0)} 次 · ${tokenDetail} · ${cachedDetail}`;
+}
+
+function mergeStageDetail(existing: string | undefined, detail: string) {
+  const normalized = detail.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 240);
+  if (!normalized || existing?.includes(normalized)) return existing;
+  return [existing, normalized].filter(Boolean).join(" · ").slice(0, 300);
+}
+
+function withStageUsageDetail(
+  value: string | null,
+  identity: AiUsageIdentity,
+  detail: string,
+): string | null {
+  const prefix = identity.workflowId ? `${identity.workflowId}-` : "";
+  const key = identity.stepId.startsWith(prefix) ? identity.stepId.slice(prefix.length) : identity.stepId;
+  const timings = parseStageTimings(value);
+  const index = timings.findIndex((timing) => timing.key === key);
+  if (index < 0) return null;
+  timings[index] = { ...timings[index], detail: mergeStageDetail(timings[index].detail, detail) };
+  return JSON.stringify(timings);
+}
+
+async function projectTaskStageDetail(taskRunId: string, stepId: string, detail: string) {
+  const current = await prisma.backgroundTaskRun.findUnique({
+    where: { id: taskRunId },
+    select: { stageTimingsJson: true },
+  });
+  const workflowId = Object.keys(WORKFLOW_TASK_DEFINITIONS).find((kind) => stepId.startsWith(`${kind}-`));
+  const key = workflowId ? stepId.slice(workflowId.length + 1) : stepId;
+  const timings = parseStageTimings(current?.stageTimingsJson ?? null);
+  const index = timings.findIndex((timing) => timing.key === key);
+  if (index < 0) return;
+  const mergedDetail = mergeStageDetail(timings[index].detail, detail);
+  if (!mergedDetail) return;
+  timings[index] = { ...timings[index], detail: mergedDetail };
+  await prisma.backgroundTaskRun.updateMany({
+    where: { id: taskRunId },
+    data: { stageTimingsJson: JSON.stringify(timings) },
+  });
+}
+
 async function projectTaskAiUsage(taskRunId: string, value: unknown, identity?: AiUsageIdentity) {
   const projection = parseAiUsageProjection(value);
   if (!projection || (projection.actual === 0 && projection.estimated === 0 && projection.breakdown.length === 0)) return;
@@ -214,6 +300,7 @@ async function projectTaskAiUsage(taskRunId: string, value: unknown, identity?: 
       aiCallCountEstimated: true,
       aiCallBreakdownJson: true,
       pipelineCheckpointJson: true,
+      stageTimingsJson: true,
     },
   });
   if (!current) return;
@@ -230,6 +317,10 @@ async function projectTaskAiUsage(taskRunId: string, value: unknown, identity?: 
     ? [identity.workflowRunId ?? "unknown-run", identity.stepId, identity.attempt, identity.retryCount].join(":")
     : null;
   if (usageKey && Object.prototype.hasOwnProperty.call(rawByStep, usageKey)) return;
+  const stageDetail = identity ? summarizeAiUsageForStage(projection) : null;
+  const stageTimingsJson = identity && stageDetail
+    ? withStageUsageDetail(current.stageTimingsJson, identity, stageDetail)
+    : null;
 
   if (!identity) {
     const existing = parseAiBreakdown(current.aiCallBreakdownJson);
@@ -273,6 +364,7 @@ async function projectTaskAiUsage(taskRunId: string, value: unknown, identity?: 
       aiCallCountEstimated: base.estimated + projections.reduce((sum, entry) => sum + entry.estimated, 0),
       aiCallBreakdownJson: JSON.stringify(mergeAiBreakdowns(allBreakdowns)),
       pipelineCheckpointJson: JSON.stringify(nextCheckpoint),
+      ...(stageTimingsJson ? { stageTimingsJson } : {}),
     },
   });
 }
@@ -319,20 +411,12 @@ const sink: WorkflowTaskSink = {
     });
   },
   async projectStep(event: TaskStepLifecycleEvent) {
-    const statusLabel = {
-      running: "运行中",
-      succeeded: "已完成",
-      failed: "失败",
-      partial: "部分完成",
-      cancelled: "已取消",
-    }[event.status];
-    await prisma.backgroundTaskRun.updateMany({
-      where: { id: event.taskRunId },
-      data: {
-        progressLabel: `步骤 ${event.stepId}：${statusLabel}`,
-        ...(event.errorMessage ? { errorSummary: `[${event.failureKind ?? "unknown"}] ${event.errorMessage}`.slice(0, 500) } : {}),
-      },
-    });
+    if (event.errorMessage) {
+      await prisma.backgroundTaskRun.updateMany({
+        where: { id: event.taskRunId },
+        data: { errorSummary: `[${event.failureKind ?? "unknown"}] ${event.errorMessage}`.slice(0, 500) },
+      });
+    }
     await projectTaskStepTiming(event);
     if (!event.taskRunId) return;
     await mergeTaskCheckpoint(event.taskRunId, {
@@ -347,6 +431,18 @@ const sink: WorkflowTaskSink = {
     await mergeTaskCheckpoint(taskRunId, checkpoint);
   },
   async projectProgress(taskRunId, label) {
+    const stageSummaryPrefix = "__mastra_stage_summary__";
+    if (label.startsWith(stageSummaryPrefix)) {
+      const separator = label.indexOf("\n", stageSummaryPrefix.length);
+      if (separator > stageSummaryPrefix.length) {
+        await projectTaskStageDetail(
+          taskRunId,
+          label.slice(stageSummaryPrefix.length, separator),
+          label.slice(separator + 1),
+        );
+        return;
+      }
+    }
     await prisma.backgroundTaskRun.updateMany({
       where: { id: taskRunId, status: { in: ["queued", "running"] } },
       data: { progressLabel: label },

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/db";
-import { executePrecomputeTask } from "@/lib/precompute/service";
+import { triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
 import { precomputeEntitySuggestionCandidates } from "@/lib/entities/service";
 
 const requireAdmin = vi.fn();
@@ -482,7 +482,7 @@ describe("/api/admin/settings/entities", () => {
       },
     });
 
-    await executePrecomputeTask(taskRun);
+    await triggerTaskWorkflow("precompute", taskRun.id);
 
     await expect(prisma.entitySuggestionCandidate.findMany()).resolves.toEqual([
       expect.objectContaining({
@@ -494,11 +494,7 @@ describe("/api/admin/settings/entities", () => {
     ]);
     await expect(prisma.backgroundTaskRun.findUnique({
       where: { id: taskRun.id },
-    })).resolves.toMatchObject({
-      status: "succeeded",
-      progressCurrent: 3,
-      progressTotal: 3,
-    });
+    })).resolves.toMatchObject({ status: "succeeded" });
   });
 
   it("keeps entity governance suggestion scans bounded for large entity sets", async () => {

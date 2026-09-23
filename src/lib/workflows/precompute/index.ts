@@ -10,7 +10,18 @@ export function createPrecomputeWorkflowDefinition(): DomainTaskDefinition {
     stages: stages.map((id) => ({
       id,
       replayPolicy: "at_least_once",
-      execute: async (input) => executePrecomputeWorkflowStage(id, (input as PrecomputeWorkflowPayload | undefined) ?? undefined),
+      execute: async (input, context) => {
+        const result = await executePrecomputeWorkflowStage(
+          id,
+          (input as PrecomputeWorkflowPayload | undefined) ?? undefined,
+          { onAiUsage: (usage) => context.projectAiUsage?.(usage) ?? Promise.resolve() },
+        );
+        const stageResult = result.stages.at(-1);
+        if (stageResult) {
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n${stageResult.summary}`);
+        }
+        return result;
+      },
     })),
     effects: ["entity_write", "embedding_write"],
     checkpoint: "pipelineCheckpointJson",

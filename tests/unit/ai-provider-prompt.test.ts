@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAiProvider } from "@/lib/ai/provider-next";
+import { createAiSdkTransport, normalizeUsage } from "@infinitum/ai/provider/transports";
 import { ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE } from "@/config/prompts";
 import {
   DEFAULT_QUALITY_RUBRIC,
@@ -41,6 +42,71 @@ function buildUnderstandingContent(overrides: Record<string, unknown> = {}) {
 }
 
 const modelApiConfig = { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" };
+
+describe("provider cached token usage normalization", () => {
+  const config = { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" };
+  const messages = [{ content: "request" }];
+
+  it("extracts cached tokens through the AI SDK transport from its raw provider usage", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({
+      id: "chatcmpl-test",
+      choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: '{"ok":true}' } }],
+      usage: {
+        prompt_tokens: 12,
+        completion_tokens: 3,
+        total_tokens: 15,
+        prompt_tokens_details: { cached_tokens: 4 },
+      },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const transport = createAiSdkTransport({ fetch: fetch as unknown as typeof globalThis.fetch, maxRetries: 0 });
+
+    const result = await transport({ messages: [{ role: "user", content: "request" }] }, config);
+
+    expect(result.usage).toMatchObject({ cachedTokens: 4, cachedTokensReported: true });
+  });
+
+  it("reads cached tokens from AI SDK raw usage instead of its normalized zero default", () => {
+    const usage = normalizeUsage(undefined, messages, "response", config, {
+      inputTokens: 12,
+      outputTokens: 3,
+      totalTokens: 15,
+      raw: { prompt_tokens_details: { cached_tokens: 4 } },
+    });
+
+    expect(usage).toMatchObject({ cachedTokens: 4, cachedTokensReported: true, tokenUsageSource: "provider" });
+  });
+
+  it("distinguishes a provider-reported zero from a missing cached-token field", () => {
+    const reportedZero = normalizeUsage(undefined, messages, "response", config, {
+      inputTokens: 12,
+      outputTokens: 3,
+      totalTokens: 15,
+      raw: { prompt_tokens_details: { cached_tokens: 0 } },
+    });
+    const missing = normalizeUsage(undefined, messages, "response", config, {
+      inputTokens: 12,
+      outputTokens: 3,
+      totalTokens: 15,
+      raw: {},
+    });
+    const compatWire = normalizeUsage({ prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 }, messages, "response", config);
+
+    expect(reportedZero).toMatchObject({ cachedTokens: 0, cachedTokensReported: true });
+    expect(missing).toMatchObject({ cachedTokens: 0, cachedTokensReported: false });
+    expect(compatWire).toMatchObject({ cachedTokens: 0, cachedTokensReported: false });
+  });
+
+  it("keeps the compat wire cached token field", () => {
+    const usage = normalizeUsage({
+      prompt_tokens: 12,
+      completion_tokens: 3,
+      total_tokens: 15,
+      prompt_tokens_details: { cached_tokens: 5 },
+    }, messages, "response", config);
+
+    expect(usage).toMatchObject({ cachedTokens: 5, cachedTokensReported: true });
+  });
+});
 
 describe("ai provider quality rubric integration", () => {
   it("computes the total score from qualityBreakdown when it matches the configured rubric", async () => {

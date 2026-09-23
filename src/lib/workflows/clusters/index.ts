@@ -2,7 +2,6 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { createDomainTask, type DomainTaskDefinition } from "@infinitum/ai/orchestration/task-definition";
 import {
-  executeClusterMergeCleanPairWorkflow,
   generateClusterSummaryWorkflow,
   persistClusterSummaryWorkflow,
   readClusterSummaryWorkflow,
@@ -22,7 +21,11 @@ export function createClusterSummaryWorkflowDefinition(): DomainTaskDefinition {
       {
         id: "read",
         replayPolicy: "replay_safe",
-        execute: async (input) => readClusterSummaryWorkflow(asBackgroundTaskRun(input).entityId ?? ""),
+        execute: async (input, context) => {
+          const payload = await readClusterSummaryWorkflow(asBackgroundTaskRun(input).entityId ?? "");
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n聚类数据已读取`);
+          return payload;
+        },
       },
       {
         id: "ai_call",
@@ -30,7 +33,9 @@ export function createClusterSummaryWorkflowDefinition(): DomainTaskDefinition {
         execute: async (input, context) => {
           const payload = input as ClusterSummaryWorkflowPayload;
           const aiUsage = createTaskAiUsageTracker(1, "cluster_summary");
-          const resolved = await resolveClusterSummaryProvider();
+          const resolved = await resolveClusterSummaryProvider({
+            onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+          });
           const aiProvider = resolved ? aiUsage.wrapProvider(resolved, { summarizeClusterEstimated: false }) : undefined;
           const next = await generateClusterSummaryWorkflow(payload, aiProvider);
           await context.projectAiUsage?.(aiUsage.snapshot());
@@ -40,7 +45,11 @@ export function createClusterSummaryWorkflowDefinition(): DomainTaskDefinition {
       {
         id: "writeback",
         replayPolicy: "at_least_once",
-        execute: async (input) => persistClusterSummaryWorkflow(input as ClusterSummaryWorkflowPayload),
+        execute: async (input, context) => {
+          const result = await persistClusterSummaryWorkflow(input as ClusterSummaryWorkflowPayload);
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n聚类摘要已写回`);
+          return result;
+        },
       },
     ],
     effects: ["cluster_write"],
@@ -48,20 +57,6 @@ export function createClusterSummaryWorkflowDefinition(): DomainTaskDefinition {
   });
 }
 
-export function createClusterMergeCleanPairWorkflowDefinition(): DomainTaskDefinition {
-  return createDomainTask({
-    kind: "cluster_merge_precompute_clean_pairs",
-    stages: [
-      { id: "read", replayPolicy: "replay_safe", execute: async () => ({ preparedAt: new Date().toISOString() }) },
-      { id: "compute", replayPolicy: "at_least_once", execute: async () => executeClusterMergeCleanPairWorkflow() },
-      { id: "writeback", replayPolicy: "at_least_once", execute: async (input) => input },
-    ],
-    effects: ["embedding_write"],
-    checkpoint: "pipelineCheckpointJson",
-  });
-}
-
 export const CLUSTER_WORKFLOW_DEFINITIONS: Partial<Record<BackgroundTaskRun["kind"], DomainTaskDefinition>> = {
   cluster_regenerate_summary: createClusterSummaryWorkflowDefinition(),
-  cluster_merge_precompute_clean_pairs: createClusterMergeCleanPairWorkflowDefinition(),
 };

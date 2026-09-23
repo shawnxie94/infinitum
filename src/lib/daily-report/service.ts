@@ -8,4 +8,4 @@ export {
 export { buildDailyReportSourceRegistryFromRows, getDailyReportSourceRegistry } from "@/lib/daily-report/source-registry";
 export { enqueueDailyReportGeneration } from "@/lib/daily-report/report-lifecycle";
 export { publishDailyReport, unpublishDailyReport, deleteDailyReport } from "@/lib/daily-report/report-lifecycle";
-export { generateDailyReport, executeDailyReportTask } from "@/lib/daily-report/generation";
+export { generateDailyReport } from "@/lib/daily-report/generation";

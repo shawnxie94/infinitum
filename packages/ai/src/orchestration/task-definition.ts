@@ -66,62 +66,6 @@ export function createDomainTask(definition: DomainTaskDefinition): DomainTaskDe
 }
 
 /**
- * Legacy framework-only adapter retained for package API compatibility.
- * Application task execution uses createDomainTaskRunWorkflow so lifecycle and
- * task-row ownership are always routed through the host sink.
- */
-export function createDomainTaskWorkflow(definition: DomainTaskDefinition) {
-  const task = createDomainTask(definition);
-  const inputSchema = z.object({ taskRunId: z.string(), payload: z.unknown() });
-  let workflow = createWorkflow({
-    id: task.kind,
-    description: `Infinitum domain task ${task.kind}`,
-    inputSchema,
-    outputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
-    retryConfig: { attempts: 1 },
-  });
-
-  for (const stage of task.stages) {
-    const step = createStep({
-      id: `${task.kind}-${stage.id}`,
-      inputSchema,
-      outputSchema: z.object({ taskRunId: z.string(), payload: z.unknown() }),
-      execute: async ({ inputData, abortSignal, runId, retryCount }) => {
-        const stepId = `${task.kind}-${stage.id}`;
-        const context: DomainTaskContext = {
-          signal: abortSignal ?? new AbortController().signal,
-          taskRunId: inputData.taskRunId,
-          workflowId: task.kind,
-          runId,
-          stepId,
-          retryCount: retryCount ?? 0,
-          attempt: 1,
-          checkpoint: {
-            version: 1,
-            taskRunId: inputData.taskRunId,
-            workflowId: task.kind,
-            workflowRunId: runId,
-            stepId,
-            attempt: 1,
-            retryCount: retryCount ?? 0,
-            status: "running",
-            startedAt: new Date().toISOString(),
-          },
-          checkCancellation: async () => {
-            if (abortSignal?.aborted) throw new Error("Task aborted");
-          },
-        };
-        const payload = await stage.execute(inputData.payload, context);
-        return { taskRunId: inputData.taskRunId, payload };
-      },
-    });
-    workflow = workflow.then(step) as typeof workflow;
-  }
-
-  return workflow.commit();
-}
-
-/**
  * Host adapter for domain declarations backed by a BackgroundTaskRun. Each
  * declared stage is a persisted Mastra step; the sink/lifecycle wrapper owns
  * cancellation and terminal projection, while the domain stage owns effects.

@@ -20,7 +20,16 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/m
     if (!originalTask) {
       throw new Error("Task not found");
     }
+    if (originalTask.kind === "item_reparse_aggregations") {
+      return Response.json({ error: "聚合内容重拆功能已下线，无法重新触发。" }, { status: 410 });
+    }
 
+    const retryKind = originalTask.kind === "cluster_merge_precompute_clean_pairs"
+      ? "precompute"
+      : originalTask.kind;
+    const retryLabel = originalTask.kind === "cluster_merge_precompute_clean_pairs"
+      ? "预计算（旧版聚合合并缓存任务重试）"
+      : `${originalTask.label} (重新触发)`;
     const checkpoint = originalTask.pipelineCheckpointJson
       ? (() => {
           try {
@@ -37,9 +46,9 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/m
     let newTask;
     if (body.retryFrom === "all") {
       newTask = await enqueueTaskRun({
-        kind: originalTask.kind,
+        kind: retryKind,
         triggerType: "admin_action",
-        label: `${originalTask.label} (重新触发)`,
+        label: retryLabel,
         entityId: originalTask.entityId,
       });
     } else if (body.retryFrom && originalTask.kind === "daily_report_generate") {
@@ -48,9 +57,9 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/m
       newTask = await resumeTaskRun(id);
     } else {
       newTask = await enqueueTaskRun({
-        kind: originalTask.kind,
+        kind: retryKind,
         triggerType: "admin_action",
-        label: `${originalTask.label} (重新触发)`,
+        label: retryLabel,
         entityId: originalTask.entityId,
       });
     }

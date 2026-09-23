@@ -23,6 +23,9 @@ import type {
   BackgroundTaskRunStatus,
   DailyReportRecoveryStage,
   TaskRunSnapshot,
+  TaskStageTimingSnapshot,
+  TaskTimelineNodeKey,
+  TaskTimelineNodeStatus,
 } from "@/lib/tasks/types";
 import { cx } from "@/lib/ui/cx";
 
@@ -66,10 +69,10 @@ const kindLabels: Record<TaskRunSnapshot["kind"], string> = {
   item_regenerate_summary: "摘要重生成",
   item_regenerate_translation: "译文重生成",
   cluster_regenerate_summary: "聚合摘要重生成",
-  cluster_merge_precompute_clean_pairs: "合并候选预计算",
+  cluster_merge_precompute_clean_pairs: "旧版聚合合并缓存预计算",
   daily_report_generate: "AI 日报生成",
   item_cleanup: "文章自动清理",
-  item_reparse_aggregations: "聚合内容重拆",
+  item_reparse_aggregations: "旧版聚合内容重拆",
 };
 
 const kindOptions: Array<{ value: TaskKindFilter; label: string }> = [
@@ -400,12 +403,12 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
     case "cluster_finalize":
       return `参与重算 ${getValue("参与重算")} · 完成更新 ${getValue("完成更新")} · 摘要完成 ${getValue("摘要完成")} · 摘要失败 ${getValue("摘要失败")} · 已删除 ${getValue("已删除")}`;
     default:
-      return task.progressLabel ?? statusLabels[task.status];
+      return statusLabels[task.status];
   }
 }
 
 function formatTaskTimelineTitle(node: NonNullable<TaskRunSnapshot["taskTimeline"]>[number]) {
-  return node.modelName ? `${node.label} · 模型 ${node.modelName}` : node.label;
+  return node.label;
 }
 
 function formatTokenCount(value: number) {
@@ -418,64 +421,128 @@ function formatTokenCount(value: number) {
   return String(value);
 }
 
-function buildTaskTimeline(task: TaskRunSnapshot) {
-  if (task.taskTimeline && task.taskTimeline.length > 0) {
-    return task.taskTimeline.map((node) => ({
-      key: node.key,
-      title: formatTaskTimelineTitle(node),
-      time: node.finishedAt ?? node.startedAt,
-      detail: formatTaskTimelineDetail(task, node),
-      isActive: node.status === "running",
-    }));
-  }
+function formatCachedTokenCount(entry: NonNullable<TaskRunSnapshot["aiCallBreakdown"]>[number]) {
+  return formatTokenCount(entry.cachedTokens ?? 0);
+}
 
+const DAILY_REPORT_STAGE_KEYS: Record<string, TaskTimelineNodeKey> = {
+  prepare: "daily_report_prepare",
+  assess: "daily_report_assess",
+  merge: "daily_report_merge",
+  plan: "daily_report_plan",
+  plan_validate: "daily_report_plan",
+  write: "daily_report_write",
+  validate: "daily_report_write",
+  repair: "daily_report_write",
+  review: "daily_report_review",
+  persist_publish: "daily_report_persist_publish",
+};
+
+const DAILY_REPORT_STAGE_LABELS: Record<string, string> = {
+  prepare: "准备候选",
+  assess: "评估",
+  merge: "准备规划输入",
+  plan: "规划",
+  plan_validate: "规划",
+  write: "写作",
+  validate: "写作",
+  repair: "写作",
+  review: "审核",
+  persist_publish: "持久化/发布",
+};
+
+const INGESTION_STAGE_NODE_KEYS: Record<string, string[]> = {
+  source_sync: ["source_fetch"],
+  item_processing: ["rule_filter", "item_understanding", "cluster_assignment"],
+  cluster_merge: ["cluster_merge"],
+  cluster_finalize: ["cluster_finalize"],
+};
+
+function getStageTimingStatus(timing: TaskStageTimingSnapshot): TaskTimelineNodeStatus {
+  if (timing.status) return timing.status;
+  return timing.finishedAt ? "succeeded" : "running";
+}
+
+function formatStageTimingDetail(timing: TaskStageTimingSnapshot) {
+  const status = getStageTimingStatus(timing);
+  const state = status === "failed" ? "失败"
+    : status === "partial" ? "部分完成"
+      : status === "cancelled" ? "已取消"
+        : status === "skipped" ? "已跳过"
+          : status === "running" ? "进行中"
+            : "已完成";
+  if (timing.detail) {
+    return `${timing.detail}${timing.finishedAt ? ` · 耗时 ${formatDuration(timing.durationMs)}` : ` · ${state}`}`;
+  }
+  return timing.finishedAt ? `${state} · 耗时 ${formatDuration(timing.durationMs)}` : state;
+}
+
+function getSafeFinishedProgressLabel(task: TaskRunSnapshot) {
+  if (task.status !== "succeeded" && task.status !== "partial" && task.status !== "failed" && task.status !== "cancelled") return "";
+  const label = task.progressLabel?.trim();
+  if (!label || /^步骤\s+[^：:]+[：:]/.test(label) || label === "编排运行中") return "";
+  return label;
+}
+
+function buildTaskTimeline(task: TaskRunSnapshot) {
   const timeline: Array<{
     key: string;
     title: string;
     time: string | null;
     detail: string;
     isActive: boolean;
-  }> = [];
-
-  if (task.startedAt) {
-    timeline.push({
-      key: "task_started",
-      title: getTaskKindLabel(task.kind),
-      time: task.startedAt,
-      detail: "开始",
-      isActive: task.status === "running" && task.stageTimings.length === 0,
-    });
-  }
+  }> = (task.taskTimeline ?? [])
+    .filter((node) => node.key !== "task_finished" && node.key !== "daily_report_generate")
+    .map((node) => ({
+    key: node.key,
+    title: formatTaskTimelineTitle(node),
+    time: node.finishedAt ?? node.startedAt,
+    detail: formatTaskTimelineDetail(task, node),
+    isActive: node.status === "running",
+  }));
 
   for (const stageTiming of task.stageTimings) {
+    const dailyReportKey = task.kind === "daily_report_generate" ? DAILY_REPORT_STAGE_KEYS[stageTiming.key] : undefined;
+    const timelineKeys = task.kind === "ingestion"
+      ? INGESTION_STAGE_NODE_KEYS[stageTiming.key] ?? [stageTiming.key]
+      : [dailyReportKey ?? stageTiming.key];
+    const matchingNodes = timeline.filter((node) => timelineKeys.includes(node.key));
+    const existing = matchingNodes[0];
+    const timingDetail = formatStageTimingDetail(stageTiming);
+    if (existing) {
+      for (const matchedNode of matchingNodes) {
+        if (!matchedNode.detail.includes(timingDetail)) matchedNode.detail = `${matchedNode.detail} · ${timingDetail}`;
+        matchedNode.time = stageTiming.finishedAt ?? stageTiming.startedAt ?? matchedNode.time;
+        matchedNode.isActive = getStageTimingStatus(stageTiming) === "running";
+      }
+      continue;
+    }
+
+    const dailyReportDetail = dailyReportKey
+      ? formatTaskTimelineDetail(task, {
+          key: dailyReportKey,
+          label: stageTiming.label,
+          status: getStageTimingStatus(stageTiming),
+          startedAt: stageTiming.startedAt,
+          finishedAt: stageTiming.finishedAt,
+          durationMs: stageTiming.durationMs,
+          metrics: [],
+        })
+      : "";
     timeline.push({
-      key: stageTiming.key,
-      title: stageTiming.label,
+      key: dailyReportKey ?? `mastra:${stageTiming.key}`,
+      title: dailyReportKey ? DAILY_REPORT_STAGE_LABELS[stageTiming.key] ?? stageTiming.label : stageTiming.label,
       time: stageTiming.finishedAt ?? stageTiming.startedAt,
-      detail: stageTiming.finishedAt ? `耗时 ${formatDuration(stageTiming.durationMs)}` : "进行中",
-      isActive: !stageTiming.finishedAt,
+      detail: dailyReportDetail ? `${dailyReportDetail} · ${timingDetail}` : timingDetail,
+      isActive: getStageTimingStatus(stageTiming) === "running",
     });
   }
 
-  if (task.finishedAt) {
-    const issueSummary = getDailyReportTaskIssueSummary(task);
-    timeline.push({
-      key: "task_finished",
-      title:
-        task.status === "cancelled"
-          ? "已取消"
-          : task.status === "failed"
-            ? "失败"
-            : task.status === "partial"
-              ? "部分成功"
-              : "已完成",
-      time: task.finishedAt,
-      detail: task.errorSummary?.trim() || issueSummary || task.progressLabel || statusLabels[task.status],
-      isActive: false,
-    });
-  }
-
-  return timeline;
+  return timeline.sort((left, right) => {
+    if (!left.time) return right.time ? 1 : 0;
+    if (!right.time) return -1;
+    return new Date(left.time).getTime() - new Date(right.time).getTime();
+  });
 }
 
 function getStatusTone(status: BackgroundTaskRunStatus) {
@@ -569,7 +636,7 @@ function TaskDetailModal({
 }: TaskDetailModalProps) {
   if (!task) return null;
 
-  const summaryDetail = buildIngestionSummaryDetail(task);
+  const summaryDetail = buildIngestionSummaryDetail(task) || getSafeFinishedProgressLabel(task);
   const issueSummary = task.errorSummary?.trim() || getDailyReportTaskIssueSummary(task);
 
   return (
@@ -667,6 +734,7 @@ function TaskDetailModal({
                   <thead>
                     <tr className="border-b border-[color:var(--line)] text-xs text-[var(--text-3)]">
                       <th className="px-3 py-2 font-medium">用途</th>
+                      <th className="px-3 py-2 font-medium">模型</th>
                       <th className="px-3 py-2 font-medium">调用</th>
                       <th className="px-3 py-2 font-medium">输入 tokens</th>
                       <th className="px-3 py-2 font-medium">输出 tokens</th>
@@ -681,12 +749,13 @@ function TaskDetailModal({
                       .map((entry) => (
                         <tr key={entry.key} className="border-b border-[color:var(--line)] last:border-0">
                           <td className="px-3 py-2 text-[var(--text-1)]">{entry.label}</td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">{entry.modelNames?.join("、") || "未提供"}</td>
                           <td className="px-3 py-2 text-[var(--text-2)]">
                             {entry.estimated > 0 ? `${entry.actual} / ${entry.estimated}` : entry.actual}
                           </td>
                           <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.promptTokens ?? 0)}</td>
                           <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.completionTokens ?? 0)}</td>
-                          <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.cachedTokens ?? 0)}</td>
+                          <td className="px-3 py-2 text-[var(--text-2)]">{formatCachedTokenCount(entry)}</td>
                           <td className="px-3 py-2 text-[var(--text-2)]">{formatTokenCount(entry.totalTokens ?? 0)}</td>
                           <td className="px-3 py-2 text-[var(--text-2)]">
                             {entry.tokenUsageSource === "provider"

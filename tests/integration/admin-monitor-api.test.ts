@@ -5,6 +5,9 @@ const getBackgroundTaskMonitorSnapshot = vi.fn();
 const getSourceMonitorSnapshot = vi.fn();
 const updateDefaultIngestionSchedule = vi.fn();
 const requestTaskRunCancellation = vi.fn();
+const getTaskRun = vi.fn();
+const attachTaskEntityTitles = vi.fn();
+const enqueueTaskRun = vi.fn();
 
 vi.mock("@/lib/admin/session", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/admin/session")>();
@@ -21,6 +24,9 @@ vi.mock("@/lib/tasks/service", async (importOriginal) => {
   return {
     ...actual,
     getBackgroundTaskMonitorSnapshot,
+    getTaskRun,
+    attachTaskEntityTitles,
+    enqueueTaskRun,
     updateDefaultIngestionSchedule,
     requestTaskRunCancellation,
   };
@@ -213,6 +219,118 @@ describe("/api/admin/monitor", () => {
     expect(json.schedule.sourceConcurrency).toBe(4);
     expect(json.schedule.fullTextFetchThreshold).toBe(120);
     expect(json.schedule.aggregationSplitMaxEvents).toBe(12);
+  });
+
+  it("attaches the target title to task detail responses", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+    const taskRun = {
+      id: "task-item-1",
+      kind: "item_reanalyze",
+      triggerType: "admin_action",
+      status: "succeeded",
+      label: "内容重分析",
+      entityId: "item-1",
+      progressCurrent: 1,
+      progressTotal: 1,
+      progressLabel: "已完成",
+      itemsAdded: 0,
+      fullTextFetchedCount: 0,
+      aiCallCountActual: 1,
+      aiCallCountEstimated: 0,
+      aiCallBreakdownJson: "[]",
+      cancelRequestedAt: null,
+      startedAt: new Date("2026-04-12T00:30:00.000Z"),
+      finishedAt: new Date("2026-04-12T00:31:00.000Z"),
+      errorSummary: null,
+      stageTimingsJson: "[]",
+      taskTimelineJson: "[]",
+    };
+    getTaskRun.mockResolvedValue(taskRun);
+    attachTaskEntityTitles.mockImplementation(async ([task]) => [{ ...task, entityTitle: "目标条目标题" }]);
+
+    const { GET } = await import("@/app/api/admin/monitor/tasks/[id]/route");
+    const response = await GET(new Request("http://localhost/api/admin/monitor/tasks/task-item-1"), {
+      params: Promise.resolve({ id: "task-item-1" }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(attachTaskEntityTitles).toHaveBeenCalledWith([expect.objectContaining({ entityId: "item-1" })]);
+    expect(json.task.entityTitle).toBe("目标条目标题");
+  });
+
+  it("retries a historical standalone merge precompute using the unified precompute task", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+    getTaskRun.mockResolvedValue({
+      id: "legacy-precompute-1",
+      kind: "cluster_merge_precompute_clean_pairs",
+      status: "failed",
+      label: "旧版聚合合并缓存预计算",
+      entityId: null,
+      pipelineCheckpointJson: null,
+    });
+    enqueueTaskRun.mockResolvedValue({
+      id: "precompute-retry-1",
+      kind: "precompute",
+      triggerType: "admin_action",
+      status: "queued",
+      label: "预计算（旧版聚合合并缓存任务重试）",
+      entityId: null,
+      progressCurrent: 0,
+      progressTotal: 0,
+      progressLabel: null,
+      itemsAdded: 0,
+      fullTextFetchedCount: 0,
+      aiCallCountActual: 0,
+      aiCallCountEstimated: 0,
+      aiCallBreakdownJson: "[]",
+      cancelRequestedAt: null,
+      startedAt: null,
+      finishedAt: null,
+      errorSummary: null,
+      stageTimingsJson: "[]",
+      taskTimelineJson: "[]",
+      pipelineCheckpointJson: null,
+    });
+
+    const { POST } = await import("@/app/api/admin/monitor/tasks/[id]/retrigger/route");
+    const response = await POST(new Request("http://localhost/api/admin/monitor/tasks/legacy-precompute-1/retrigger", {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: { "content-type": "application/json" },
+    }), { params: Promise.resolve({ id: "legacy-precompute-1" }) });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(enqueueTaskRun).toHaveBeenCalledWith({
+      kind: "precompute",
+      triggerType: "admin_action",
+      label: "预计算（旧版聚合合并缓存任务重试）",
+      entityId: null,
+    });
+    expect(json.task.kind).toBe("precompute");
+  });
+
+  it("does not recreate a retired aggregation reparse task", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+    getTaskRun.mockResolvedValue({
+      id: "legacy-reparse-1",
+      kind: "item_reparse_aggregations",
+      status: "failed",
+      label: "旧版聚合内容重拆",
+      entityId: null,
+      pipelineCheckpointJson: null,
+    });
+
+    const { POST } = await import("@/app/api/admin/monitor/tasks/[id]/retrigger/route");
+    const response = await POST(new Request("http://localhost/api/admin/monitor/tasks/legacy-reparse-1/retrigger", {
+      method: "POST",
+      body: JSON.stringify({}),
+      headers: { "content-type": "application/json" },
+    }), { params: Promise.resolve({ id: "legacy-reparse-1" }) });
+
+    expect(response.status).toBe(410);
+    expect(enqueueTaskRun).not.toHaveBeenCalled();
   });
 
   it("requests cancellation for a running task", async () => {

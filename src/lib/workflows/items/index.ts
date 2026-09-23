@@ -57,9 +57,10 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
       {
         id: "read",
         replayPolicy: "replay_safe",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const taskRun = asBackgroundTaskRun(input);
           if (!taskRun.entityId) throw new Error("Task entityId is required.");
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n目标内容已读取`);
           return { itemId: taskRun.entityId };
         },
       },
@@ -69,7 +70,9 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
         execute: async (input, context) => {
           const payload = input as { itemId: string };
           const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
-          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(), { understandItemEstimated: false });
+          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(undefined, {
+            onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+          }), { understandItemEstimated: false });
           const understanding = await generateItemReanalysisUnderstanding(payload.itemId, { aiProvider });
           await context.projectAiUsage?.(aiUsage.snapshot());
           return { ...payload, understanding };
@@ -78,9 +81,10 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
       {
         id: "validate",
         replayPolicy: "replay_safe",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
           if (!payload.understanding?.diagnostics) throw new Error("Item reanalysis result is missing diagnostics.");
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n结果校验通过`);
           return payload;
         },
       },
@@ -90,12 +94,15 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
         execute: async (input, context) => {
           const payload = input as { itemId: string; understanding: ItemUnderstandingResult };
           const aiUsage = createTaskAiUsageTracker();
-          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider());
+          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(undefined, {
+            onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+          }));
           const result = await reanalyzeItem(payload.itemId, {
             aiProvider,
             precomputedUnderstanding: payload.understanding,
           });
           await context.projectAiUsage?.(aiUsage.snapshot());
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n重判定结果已写回`);
           return { ...payload, result };
         },
       },
@@ -157,10 +164,12 @@ export function createItemRegenerationWorkflowDefinition(
       {
         id: "read",
         replayPolicy: "replay_safe",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const taskRun = asBackgroundTaskRun(input);
           if (!taskRun.entityId) throw new Error("Task entityId is required.");
-          return { item: await readItemForRegeneration(taskRun.entityId) } satisfies ItemRegenerationStagePayload;
+          const item = await readItemForRegeneration(taskRun.entityId);
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n目标内容已读取`);
+          return { item } satisfies ItemRegenerationStagePayload;
         },
       },
       {
@@ -169,7 +178,9 @@ export function createItemRegenerationWorkflowDefinition(
         execute: async (input, context) => {
           const payload = input as ItemRegenerationStagePayload;
           const aiUsage = createTaskAiUsageTracker(1, "item_understanding");
-          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(), { understandItemEstimated: false });
+          const aiProvider = aiUsage.wrapProvider(await resolveAiProvider(undefined, {
+            onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
+          }), { understandItemEstimated: false });
           const understanding = await generateItemRegenerationUnderstanding(payload.item, { aiProvider });
           await context.projectAiUsage?.(aiUsage.snapshot());
           return { ...payload, understanding } satisfies ItemRegenerationStagePayload;
@@ -178,25 +189,25 @@ export function createItemRegenerationWorkflowDefinition(
       {
         id: "validate",
         replayPolicy: "replay_safe",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const payload = input as ItemRegenerationStagePayload;
           if (!payload.understanding) throw new Error("Item regeneration AI result is missing.");
           if (target === "summary" && (!payload.understanding.diagnostics.summaryValid || !payload.understanding.summary)) {
             throw new Error("Item understanding returned an invalid summary");
           }
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n结果校验通过`);
           return payload;
         },
       },
       {
         id: "writeback",
         replayPolicy: "at_least_once",
-        execute: async (input) => {
+        execute: async (input, context) => {
           const payload = input as ItemRegenerationStagePayload;
           if (!payload.understanding) throw new Error("Item regeneration AI result is missing.");
-          return {
-            ...payload,
-            result: await persistItemRegeneration(payload.item, target, payload.understanding),
-          } satisfies ItemRegenerationStagePayload;
+          const result = await persistItemRegeneration(payload.item, target, payload.understanding);
+          await context.projectProgress?.(`__mastra_stage_summary__${context.stepId}\n${target === "translation" ? "译文" : "摘要"}已写回`);
+          return { ...payload, result } satisfies ItemRegenerationStagePayload;
         },
       },
     ],

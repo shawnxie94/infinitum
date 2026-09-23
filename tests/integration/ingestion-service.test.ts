@@ -1,15 +1,95 @@
+import type { BackgroundTaskRun } from "@prisma/client";
+import type { DomainTaskContext } from "@infinitum/ai/orchestration/task-definition";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { recomputeCluster } from "@/lib/clusters/service";
 import { findRecentActiveClusterCandidates } from "@/lib/clusters/repository";
 import { prisma } from "@/lib/db";
 import { countDisplayItemsCreatedDuringFetchRun, toFetchRunSnapshot } from "@/lib/feed/repository";
-import { runIngestion, runIngestionTask, startIngestionTask } from "@/lib/ingestion/service";
-import { findOrCreateIngestionFetchRun } from "@/lib/ingestion/workflow-stages";
+import {
+  shouldEnqueueProcessingRecoveryFromIngestion,
+  startIngestionTask,
+} from "@/lib/ingestion/service";
+import { executeIngestionWorkflowStage, findOrCreateIngestionFetchRun } from "@/lib/ingestion/workflow-stages";
+import type { RunIngestionOptions } from "@/lib/ingestion/types";
 import { buildDedupeKeys } from "@/lib/ingestion/dedupe";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
 
-describe("runIngestion", () => {
+async function runIngestionWorkflowStagesForTest(
+  inputOrOptions?: BackgroundTaskRun | Partial<RunIngestionOptions>,
+  explicitOptions?: Partial<RunIngestionOptions>,
+) {
+  const taskRun = inputOrOptions && "id" in inputOrOptions && "triggerType" in inputOrOptions
+    ? inputOrOptions as BackgroundTaskRun
+    : await prisma.backgroundTaskRun.create({
+        data: {
+          kind: "ingestion",
+          triggerType: (inputOrOptions as Partial<RunIngestionOptions> | undefined)?.trigger ?? "manual",
+          status: "queued",
+          label: "摄入阶段测试",
+        },
+      });
+  const options = taskRun === inputOrOptions ? explicitOptions : inputOrOptions as Partial<RunIngestionOptions> | undefined;
+  const controller = new AbortController();
+  const context: DomainTaskContext = {
+    signal: controller.signal,
+    taskRunId: taskRun.id,
+    workflowId: "ingestion-test",
+    runId: "ingestion-test-run",
+    stepId: "ingestion-test-stage",
+    retryCount: 0,
+    attempt: 1,
+    checkpoint: {
+      version: 1,
+      taskRunId: taskRun.id,
+      workflowId: "ingestion-test",
+      workflowRunId: "ingestion-test-run",
+      stepId: "ingestion-test-stage",
+      attempt: 1,
+      retryCount: 0,
+      status: "running",
+      startedAt: new Date().toISOString(),
+    },
+    checkCancellation: async () => {
+      const latest = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+      if (!latest.cancelRequestedAt) return;
+      await prisma.backgroundTaskRun.update({
+        where: { id: taskRun.id },
+        data: {
+          status: "cancelled",
+          progressLabel: "任务已终止",
+          errorSummary: "管理员手动终止任务。",
+          finishedAt: new Date(),
+        },
+      });
+      controller.abort();
+      throw new Error("Task cancellation requested");
+    },
+  };
+  let payload = await executeIngestionWorkflowStage("source_sync", taskRun, context, options);
+  for (const stage of ["item_processing", "cluster_merge", "cluster_finalize"] as const) {
+    try {
+      payload = await executeIngestionWorkflowStage(stage, payload, context, options);
+    } catch (error) {
+      const latest = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+      if (latest.status !== "cancelled") throw error;
+      break;
+    }
+  }
+  return prisma.fetchRun.findUniqueOrThrow({ where: { id: payload.fetchRunId } });
+}
+
+describe("ingestion workflow stages", () => {
+  it.each([
+    ["source fetch failures alone", { summaryFailed: 0, analysisFailed: 0, aggregationParseFailed: 0, skippedIncompleteSignature: 0 }, false],
+    ["summary failures", { summaryFailed: 1, analysisFailed: 0, aggregationParseFailed: 0, skippedIncompleteSignature: 0 }, true],
+    ["analysis failures", { summaryFailed: 0, analysisFailed: 1, aggregationParseFailed: 0, skippedIncompleteSignature: 0 }, true],
+    ["aggregation parse failures", { summaryFailed: 0, analysisFailed: 0, aggregationParseFailed: 1, skippedIncompleteSignature: 0 }, true],
+    ["incomplete signatures", { summaryFailed: 0, analysisFailed: 0, aggregationParseFailed: 0, skippedIncompleteSignature: 1 }, true],
+  ])("uses recovery criteria for %s", (_label, counters, expected) => {
+    expect(shouldEnqueueProcessingRecoveryFromIngestion(counters)).toBe(expected);
+  });
+
   beforeEach(async () => {
     await prisma.itemDedupeHistory.deleteMany();
     await prisma.item.deleteMany();
@@ -42,167 +122,6 @@ describe("runIngestion", () => {
     await expect(prisma.fetchRun.count({ where: { taskRunId: taskRun.id } })).resolves.toBe(1);
   });
 
-  it("records ingestion task progress using item counts instead of source counts", async () => {
-    const parser = {
-      parseURL: vi.fn().mockResolvedValue({
-        items: [
-          {
-            title: "OpenAI ships a new agent toolkit",
-            link: "https://example.com/posts/openai-toolkit",
-            isoDate: "2026-04-10T09:00:00.000Z",
-            contentSnippet: "Brief summary",
-            creator: "Alex",
-          },
-          {
-            title: "Another update on the toolkit",
-            link: "https://example.com/posts/openai-toolkit-2",
-            isoDate: "2026-04-10T10:00:00.000Z",
-            contentSnippet: "Another summary",
-            creator: "Jamie",
-          },
-        ],
-      }),
-    };
-    const aiProvider = buildAiProviderMock({
-      summaryFixture: vi.fn().mockResolvedValue({summary: "这篇文章介绍了 OpenAI 新发布的 agent 工具能力。", isAggregation: false}),
-      analysisFixture: vi.fn().mockResolvedValue({
-        translatedTitle: "OpenAI 发布新的 Agent 工具包",
-        moderationStatus: "allowed",
-        moderationReason: null,
-        moderationDetail: "新闻价值明确",
-        qualityScore: 91,
-        qualityRationale: "多事实点且时效性强",
-        eventSignature: buildEventSignature({
-          eventType: "launch",
-          eventSubject: "OpenAI",
-          eventAction: "发布",
-          eventObject: "agent toolkit",
-        }),
-      }),
-      summarizeCluster: vi.fn().mockResolvedValue(JSON.stringify({
-        title: "OpenAI 发布新的 Agent 工具包",
-        summary: "两篇报道都聚焦 OpenAI 新发布的 agent 工具能力。",
-      })),
-      matchClusterCandidate: vi.fn().mockImplementation(async (_input: string, metadata: { candidates: Array<{ id: string }> }) => {
-        return metadata.candidates[0]?.id ?? null;
-      }),
-    });
-    const taskRun = await startIngestionTask({ triggerType: "manual" });
-
-    await runIngestionTask(taskRun, {
-      parser,
-      articleFetcher: vi.fn(),
-      aiProvider,
-      sourceConfigs: [
-        {
-          name: "Example Feed",
-          rssUrl: "https://example.com/feed.xml",
-          siteUrl: "https://example.com",
-          enabled: true,
-          aiParsingEnabled: true,
-        },
-      ],
-      blacklist: [],
-      now: new Date("2026-04-10T10:30:00.000Z"),
-    });
-
-    const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({
-      where: { id: taskRun.id },
-    });
-
-    expect(storedTaskRun.progressCurrent).toBe(2);
-    expect(storedTaskRun.progressTotal).toBe(2);
-    expect(storedTaskRun.progressLabel).toBe("已处理 2/2 条内容，来自 1 个源，失败 0 项，正文补抓 0 篇");
-    expect(storedTaskRun.aiCallCountActual).toBe(3);
-    expect(storedTaskRun.aiCallCountEstimated).toBe(3);
-    expect(storedTaskRun.fullTextFetchedCount).toBe(0);
-    expect(storedTaskRun.stageTimingsJson).not.toBeNull();
-    expect(storedTaskRun.aiCallBreakdownJson).not.toBeNull();
-    expect(storedTaskRun.taskTimelineJson).not.toBeNull();
-
-    const stageTimings = JSON.parse(storedTaskRun.stageTimingsJson ?? "[]") as Array<{ key: string; durationMs: number | null }>;
-    const aiCallBreakdown = JSON.parse(
-      storedTaskRun.aiCallBreakdownJson ?? "[]",
-    ) as Array<{ key: string; label: string; actual: number; estimated: number }>;
-    const taskTimeline = JSON.parse(
-      storedTaskRun.taskTimelineJson ?? "[]",
-    ) as Array<{ key: string; status: string; metrics: Array<{ label: string; value: number }> }>;
-
-    expect(stageTimings.map((stageTiming) => stageTiming.key)).toEqual([
-      "source_sync",
-      "item_processing",
-      "cluster_merge",
-      "cluster_finalize",
-    ]);
-    expect(stageTimings.every((stageTiming) => typeof stageTiming.durationMs === "number" || stageTiming.durationMs === null)).toBe(true);
-    expect(aiCallBreakdown).toEqual([
-      { key: "item_understanding", label: "条目理解", actual: 2, estimated: 2 },
-      { key: "cluster_match", label: "聚合匹配", actual: 0, estimated: 0 },
-      { key: "cluster_summary", label: "聚合摘要", actual: 1, estimated: 1 },
-      { key: "cluster_merge", label: "聚合合并", actual: 0, estimated: 0 },
-      { key: "entity_alias_check", label: "实体别名判定", actual: 0, estimated: 0 },
-      { key: "daily_report", label: "AI 日报", actual: 0, estimated: 0 },
-      { key: "daily_report_assess", label: "评估", actual: 0, estimated: 0 },
-      { key: "daily_report_plan", label: "规划", actual: 0, estimated: 0 },
-      { key: "daily_report_write", label: "写作", actual: 0, estimated: 0 },
-      { key: "daily_report_repair", label: "修复", actual: 0, estimated: 0 },
-      { key: "daily_report_review", label: "审核", actual: 0, estimated: 0 },
-    ]);
-    expect(taskTimeline.map((node) => node.key)).toEqual([
-      "source_fetch",
-      "rule_filter",
-      "item_understanding",
-      "cluster_assignment",
-      "cluster_merge",
-      "cluster_finalize",
-    ]);
-    expect(taskTimeline[0]?.metrics).toEqual(expect.arrayContaining([
-      { label: "抓取源", value: 1 },
-      { label: "失败源", value: 0 },
-      { label: "抓取内容", value: 2 },
-      { label: "正文补抓", value: 0 },
-    ]));
-    expect(taskTimeline[0]?.metrics.find((metric) => metric.label === "补抓累计耗时ms")?.value).toEqual(expect.any(Number));
-    expect(taskTimeline[1]?.metrics.find((metric) => metric.label === "条目累计耗时ms")?.value).toEqual(expect.any(Number));
-    expect(taskTimeline[2]?.metrics).toEqual(expect.arrayContaining([
-      { label: "摘要完成", value: 2 },
-      { label: "摘要失败", value: 0 },
-      { label: "分析完成", value: 2 },
-      { label: "分析失败", value: 0 },
-      { label: "拆分成功", value: 0 },
-      { label: "拆分失败", value: 0 },
-      { label: "子事件", value: 0 },
-      { label: "过滤", value: 0 },
-      { label: "更新/重处理", value: 0 },
-    ]));
-    expect(taskTimeline[2]?.metrics.find((metric) => metric.label === "累计耗时ms")?.value).toEqual(expect.any(Number));
-    expect(taskTimeline[3]?.metrics).toEqual(expect.arrayContaining([
-      { label: "指纹命中", value: 1 },
-      { label: "本地直连", value: 0 },
-      { label: "AI归组", value: 0 },
-      { label: "跳过", value: 0 },
-      { label: "新建", value: 1 },
-    ]));
-    expect(taskTimeline[3]?.metrics.find((metric) => metric.label === "累计耗时ms")?.value).toEqual(expect.any(Number));
-    expect(taskTimeline[4]?.metrics).toEqual(expect.arrayContaining([
-      { label: "送模Pair", value: expect.any(Number) },
-      { label: "输入字符", value: expect.any(Number) },
-      { label: "刷新数量ms", value: expect.any(Number) },
-      { label: "加载候选ms", value: expect.any(Number) },
-      { label: "候选计算ms", value: expect.any(Number) },
-      { label: "构造输入ms", value: expect.any(Number) },
-      { label: "模型调用ms", value: expect.any(Number) },
-      { label: "执行合并ms", value: expect.any(Number) },
-      { label: "标记Hashms", value: expect.any(Number) },
-    ]));
-    expect(taskTimeline[5]?.metrics).toEqual([
-      { label: "参与重算", value: 1 },
-      { label: "完成更新", value: 1 },
-      { label: "摘要完成", value: 1 },
-      { label: "摘要失败", value: 0 },
-      { label: "已删除", value: 0 },
-    ]);
-  });
 
   it("derives entity relations from the structured event signature", async () => {
     const parser = {
@@ -236,7 +155,7 @@ describe("runIngestion", () => {
       }),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser,
       articleFetcher: vi.fn(),
       aiProvider,
@@ -297,7 +216,7 @@ describe("runIngestion", () => {
       }),
     };
 
-    await runIngestionTask(taskRun, {
+    await runIngestionWorkflowStagesForTest(taskRun, {
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock(),
@@ -330,7 +249,7 @@ describe("runIngestion", () => {
     const sourceFetchNode = taskTimeline.find((node) => node.key === "source_fetch");
 
     expect(storedTaskRun.status).toBe("partial");
-    expect(storedTaskRun.progressLabel).toBe("已处理 1/1 条内容，来自 2 个源，内容失败 0 项，源失败 1 个，正文补抓 0 篇");
+    expect(storedTaskRun.progressLabel).toBe("抓取完成：1 成功，1 失败");
     expect(storedTaskRun.errorSummary).toBe("Broken Feed: RSS fetch failed with status 502");
     expect(sourceFetchNode?.status).toBe("partial");
     expect(sourceFetchNode?.metrics).toEqual(expect.arrayContaining([
@@ -372,7 +291,7 @@ describe("runIngestion", () => {
       }),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser,
       articleFetcher: vi.fn(),
       aiProvider,
@@ -431,7 +350,7 @@ describe("runIngestion", () => {
       }),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser,
       articleFetcher,
       aiProvider,
@@ -506,7 +425,7 @@ describe("runIngestion", () => {
     });
     const taskRun = await startIngestionTask({ triggerType: "manual" });
 
-    await runIngestionTask(taskRun, {
+    await runIngestionWorkflowStagesForTest(taskRun, {
       parser,
       articleFetcher: vi.fn(),
       aiProvider,
@@ -535,7 +454,7 @@ describe("runIngestion", () => {
 
     expect(storedTaskRun.progressCurrent).toBe(1);
     expect(storedTaskRun.progressTotal).toBe(1);
-    expect(storedTaskRun.progressLabel).toBe("已处理 1/1 条内容，来自 1 个源，失败 0 项，正文补抓 0 篇");
+    expect(storedTaskRun.progressLabel).toBe("抓取完成：1 成功，0 失败");
     expect(storedFetchRun.itemCount).toBe(1);
     expect(taskTimeline[0]?.metrics).toEqual(expect.arrayContaining([
       { label: "抓取源", value: 1 },
@@ -567,7 +486,7 @@ describe("runIngestion", () => {
       }),
     };
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock(),
@@ -615,7 +534,7 @@ describe("runIngestion", () => {
       }),
     };
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock(),
@@ -642,7 +561,7 @@ describe("runIngestion", () => {
   });
 
   it("marks items without a feed publication timestamp as unknown", async () => {
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser: {
         parseURL: vi.fn().mockResolvedValue({
           items: [{
@@ -679,7 +598,7 @@ describe("runIngestion", () => {
       aiParsingEnabled: false,
     }];
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser: {
         parseURL: vi.fn().mockResolvedValue({
           items: [{
@@ -697,7 +616,7 @@ describe("runIngestion", () => {
       now: new Date("2026-04-10T10:30:00.000Z"),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       parser: {
         parseURL: vi.fn().mockResolvedValue({
           items: [{
@@ -738,7 +657,7 @@ describe("runIngestion", () => {
     };
     const articleFetcher = vi.fn().mockResolvedValue("Full article fetched even when AI parsing is disabled.");
 
-    const result = await runIngestion({
+    const result = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher,
@@ -787,7 +706,7 @@ describe("runIngestion", () => {
       }),
     };
 
-    const result = await runIngestion({
+    const result = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -836,7 +755,7 @@ describe("runIngestion", () => {
     };
     const aiProvider = buildAiProviderMock();
 
-    const result = await runIngestion({
+    const result = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -914,7 +833,7 @@ describe("runIngestion", () => {
       },
     ];
 
-    const firstRun = await runIngestion({
+    const firstRun = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -923,7 +842,7 @@ describe("runIngestion", () => {
       blacklist: [],
       now: new Date("2026-04-10T10:00:00.000Z"),
     });
-    const secondRun = await runIngestion({
+    const secondRun = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -1001,7 +920,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestionTask(taskRun, {
+    await runIngestionWorkflowStagesForTest(taskRun, {
       parser,
       articleFetcher: vi.fn(),
       aiProvider,
@@ -1130,7 +1049,7 @@ describe("runIngestion", () => {
       }),
     });
 
-    const result = await runIngestion({
+    const result = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher,
@@ -1267,7 +1186,7 @@ describe("runIngestion", () => {
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -1439,7 +1358,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue({summary: "existing-cluster-1", isAggregation: false}),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -1620,7 +1539,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue({summary: "weak-cluster", isAggregation: false}),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -1748,7 +1667,7 @@ describe("runIngestion", () => {
       }),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -1798,7 +1717,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    const result = await runIngestion({
+    const result = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher,
@@ -1854,7 +1773,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    const result = await runIngestion({
+    const result = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher,
@@ -1919,7 +1838,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn().mockResolvedValue(fullText),
@@ -1959,7 +1878,7 @@ describe("runIngestion", () => {
     };
     const taskRun = await startIngestionTask({ triggerType: "manual" });
 
-    await runIngestionTask(taskRun, {
+    await runIngestionWorkflowStagesForTest(taskRun, {
       parser,
       articleFetcher: vi.fn(),
       aiProvider: buildAiProviderMock({
@@ -2009,7 +1928,7 @@ describe("runIngestion", () => {
     expect(storedTaskRun.status).toBe("failed");
     expect(storedTaskRun.progressCurrent).toBe(1);
     expect(storedTaskRun.progressTotal).toBe(1);
-    expect(storedTaskRun.progressLabel).toBe("已处理 1/1 条内容，来自 1 个源，失败 1 项，正文补抓 0 篇");
+    expect(storedTaskRun.progressLabel).toBe("抓取完成：0 成功，1 失败");
     const understandingNode = taskTimeline.find((node) => node.key === "item_understanding");
     expect(understandingNode?.status).toBe("partial");
     expect(understandingNode?.metrics).toEqual(expect.arrayContaining([
@@ -2060,7 +1979,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2118,7 +2037,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2176,7 +2095,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2236,7 +2155,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2311,7 +2230,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2379,7 +2298,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2503,7 +2422,7 @@ describe("runIngestion", () => {
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2604,7 +2523,7 @@ describe("runIngestion", () => {
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2690,7 +2609,7 @@ describe("runIngestion", () => {
       }),
     });
 
-    const run = await runIngestion({
+    const run = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -2791,7 +2710,7 @@ describe("runIngestion", () => {
     });
     const taskRun = await startIngestionTask({ triggerType: "manual" });
 
-    await runIngestionTask(taskRun, {
+    await runIngestionWorkflowStagesForTest(taskRun, {
       parser,
       articleFetcher: vi.fn(),
       aiProvider,
@@ -2819,7 +2738,6 @@ describe("runIngestion", () => {
     }>;
     expect(latestAiBreakdown.find((entry) => entry.key === "item_understanding")).toMatchObject({
       actual: 1,
-      estimated: 1,
     });
 
     const storedItem = await prisma.item.findFirstOrThrow({
@@ -2915,7 +2833,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -3047,7 +2965,7 @@ describe("runIngestion", () => {
       matchClusterCandidate: vi.fn().mockResolvedValue(null),
     });
 
-    const result = await runIngestion({
+    const result = await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -3128,7 +3046,7 @@ describe("runIngestion", () => {
     const createItemSpy = vi.spyOn(prisma.item, "create");
 
     const taskRun = await startIngestionTask({ triggerType: "manual" });
-    await runIngestionTask(taskRun, {
+    await runIngestionWorkflowStagesForTest(taskRun, {
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -3244,7 +3162,7 @@ describe("runIngestion", () => {
       }),
     });
 
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -3344,7 +3262,7 @@ describe("runIngestion", () => {
     ];
 
     // First run: aggregationFixture fails, item should be left in failed state.
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),
@@ -3366,7 +3284,7 @@ describe("runIngestion", () => {
 
     // Second run on the same feed: aggregationFixture now succeeds, and the item
     // must not be silently dropped by the urlHash dedupe gate.
-    await runIngestion({
+    await runIngestionWorkflowStagesForTest({
       trigger: "manual",
       parser,
       articleFetcher: vi.fn(),

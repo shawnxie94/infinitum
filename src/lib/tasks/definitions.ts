@@ -11,9 +11,14 @@ export type TaskDefinition = {
   checkpoint?: string;
 };
 
-/** UI/monitor projection derived from the executable task catalog. */
+const RETIRED_TASK_KINDS = new Set<BackgroundTaskRunKind>([
+  "cluster_merge_precompute_clean_pairs",
+  "item_reparse_aggregations",
+]);
+
+/** Current task catalog; retired persisted kinds are excluded from new work. */
 export const TASK_DEFINITIONS: readonly TaskDefinition[] = Object.values(WORKFLOW_TASK_DEFINITIONS)
-  .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition))
+  .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition) && !RETIRED_TASK_KINDS.has(definition.kind as BackgroundTaskRunKind))
   .map((definition) => ({
     kind: definition.kind as BackgroundTaskRunKind,
     mode: "workflow",

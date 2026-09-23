@@ -31,9 +31,10 @@ function toTaskBreakdownSnapshot(
   return entries.map((entry) => ({
     key: entry.key as TaskAiCallBreakdownKey,
     label: entry.label,
+    ...(entry.modelNames?.length ? { modelNames: entry.modelNames } : {}),
     actual: entry.actual,
     estimated: entry.estimated,
-    ...(entry.tokens.totalTokens > 0
+    ...(entry.tokens.tokenUsageSource !== null
       ? {
           contractVersion: getAiTaskContract(getContractTypeForUsageKey(entry.key as TaskAiCallBreakdownKey)).contractVersion,
           contractHash: getAiTaskContract(getContractTypeForUsageKey(entry.key as TaskAiCallBreakdownKey)).contractHash,
@@ -41,6 +42,7 @@ function toTaskBreakdownSnapshot(
           completionTokens: entry.tokens.completionTokens,
           totalTokens: entry.tokens.totalTokens,
           cachedTokens: entry.tokens.cachedTokens,
+          cachedTokensStatus: entry.tokens.cachedTokensStatus,
           tokenUsageSource: entry.tokens.tokenUsageSource ?? "estimated",
         }
       : {}),

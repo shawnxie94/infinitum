@@ -170,6 +170,7 @@ export function createAiProvider(
           completionTokens: usage.completionTokens,
           totalTokens: usage.totalTokens,
           cachedTokens: usage.cachedTokens,
+          cachedTokensReported: usage.cachedTokensReported,
           tokenUsageSource: usage.tokenUsageSource,
           model: usage.model,
           attemptType: usage.attemptType === "stage_context" ? "initial" : usage.attemptType,

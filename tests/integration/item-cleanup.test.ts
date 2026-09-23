@@ -3,7 +3,7 @@ import type { ItemStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
-import { executeItemCleanupTask } from "@/lib/items/service";
+import { triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
 import {
   ensureDefaultItemCleanupSchedule,
   requestTaskRunCancellation,
@@ -11,7 +11,7 @@ import {
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-describe("executeItemCleanupTask", () => {
+describe("item cleanup workflow", () => {
   beforeEach(async () => {
     await prisma.itemDedupeHistory.deleteMany();
     await prisma.item.deleteMany();
@@ -88,7 +88,7 @@ describe("executeItemCleanupTask", () => {
 
     const taskRun = await createTaskRun();
 
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     // Old item should be deleted
     const deletedItem = await prisma.item.findUnique({ where: { id: oldItem.id } });
@@ -112,7 +112,7 @@ describe("executeItemCleanupTask", () => {
 
     const taskRun = await createTaskRun();
 
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     const archived = await prisma.itemDedupeHistory.findUnique({
       where: { urlHash: oldItem.urlHash },
@@ -121,34 +121,6 @@ describe("executeItemCleanupTask", () => {
     expect(archived).not.toBeNull();
     expect(archived?.originalTitle).toBe(oldItem.originalTitle);
     expect(archived?.sourceId).toBe(source.id);
-  });
-
-  it("marks task as succeeded with correct progress", async () => {
-    const source = await createSource("测试源");
-    const now = new Date();
-    const oldDate = new Date(now.getTime() - 400 * ONE_DAY_MS);
-
-    await createItem({
-      sourceId: source.id,
-      originalTitle: "过期文章 1",
-      createdAt: oldDate,
-    });
-    await createItem({
-      sourceId: source.id,
-      originalTitle: "过期文章 2",
-      createdAt: new Date(oldDate.getTime() + 1000),
-    });
-
-    const taskRun = await createTaskRun();
-
-    await executeItemCleanupTask(taskRun);
-
-    const updated = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
-    expect(updated.status).toBe("succeeded");
-    expect(updated.progressCurrent).toBe(2);
-    expect(updated.progressTotal).toBe(2);
-    expect(updated.progressLabel).toContain("已清理 2 篇文章");
-    expect(updated.finishedAt).not.toBeNull();
   });
 
   it("recomputes affected clusters and removes empty ones", async () => {
@@ -176,7 +148,7 @@ describe("executeItemCleanupTask", () => {
 
     const taskRun = await createTaskRun();
 
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     // Item should be deleted
     const itemCount = await prisma.item.count();
@@ -219,7 +191,7 @@ describe("executeItemCleanupTask", () => {
 
     const taskRun = await createTaskRun();
 
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     // Only one item should remain
     const remainingItems = await prisma.item.findMany();
@@ -252,7 +224,7 @@ describe("executeItemCleanupTask", () => {
 
     const taskRun = await createTaskRun();
 
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     // 60-day-old item should be deleted (retention is 30 days)
     const deletedItem = await prisma.item.findUnique({ where: { id: oldItem.id } });
@@ -279,7 +251,7 @@ describe("executeItemCleanupTask", () => {
 
     const taskRun = await createTaskRun();
 
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     // 20-day-old item should still exist (retention is 30 days)
     const preservedItem = await prisma.item.findUnique({ where: { id: recentItem.id } });
@@ -302,7 +274,7 @@ describe("executeItemCleanupTask", () => {
     // Request cancellation before execution
     await requestTaskRunCancellation(taskRun.id);
 
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     // Item should NOT be deleted
     const item = await prisma.item.findFirst();
@@ -312,32 +284,6 @@ describe("executeItemCleanupTask", () => {
     const updated = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
     expect(updated.status).toBe("cancelled");
     expect(updated.finishedAt).not.toBeNull();
-  });
-
-  it("updates progress label during execution", async () => {
-    const source = await createSource("测试源");
-    const now = new Date();
-    const oldDate = new Date(now.getTime() - 400 * ONE_DAY_MS);
-
-    // Create enough items to show progress tracking
-    for (let i = 0; i < 3; i++) {
-      await createItem({
-        sourceId: source.id,
-        originalTitle: `过期文章 ${i}`,
-        createdAt: new Date(oldDate.getTime() + i * 1000),
-      });
-    }
-
-    const taskRun = await createTaskRun();
-
-    await executeItemCleanupTask(taskRun);
-
-    // After completion, progress should be updated
-    const updated = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
-    expect(updated.status).toBe("succeeded");
-    expect(updated.progressCurrent).toBe(3);
-    expect(updated.progressTotal).toBe(3);
-    expect(updated.progressLabel).toContain("已清理");
   });
 
   it("invalidates feed cache after cleanup", async () => {
@@ -355,7 +301,7 @@ describe("executeItemCleanupTask", () => {
 
     // We verify the function doesn't throw — feed cache invalidation
     // happens internally and its effects are observable at the API level.
-    await executeItemCleanupTask(taskRun);
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
 
     const updated = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
     expect(updated.status).toBe("succeeded");

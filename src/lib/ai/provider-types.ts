@@ -278,6 +278,7 @@ export type AiCallUsage = {
   completionTokens: number;
   totalTokens: number;
   cachedTokens: number;
+  cachedTokensReported?: boolean;
   tokenUsageSource?: "provider" | "estimated" | "mixed";
   model?: string;
   attemptType?: "initial" | "transient_retry" | "json_retry";

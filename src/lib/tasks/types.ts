@@ -17,9 +17,11 @@ export type BackgroundTaskRunKind =
   | "item_reanalyze"
   | "item_processing_recovery"
   | "cluster_regenerate_summary"
+  /** Historical persisted kind; new work uses the unified precompute task. */
   | "cluster_merge_precompute_clean_pairs"
   | "daily_report_generate"
   | "item_cleanup"
+  /** Historical persisted kind; its API trigger has been retired. */
   | "item_reparse_aggregations";
 
 export type BackgroundTaskRunTrigger = "scheduled" | "manual" | "admin_action";
@@ -41,7 +43,7 @@ export type ScheduleUpdateInput = {
 };
 
 export type EnqueueTaskRunInput = {
-  kind: BackgroundTaskRunKind;
+  kind: Exclude<BackgroundTaskRunKind, "cluster_merge_precompute_clean_pairs" | "item_reparse_aggregations">;
   triggerType: BackgroundTaskRunTrigger;
   label: string;
   entityId?: string | null;
@@ -53,6 +55,8 @@ export type TaskStageTimingSnapshot = {
   startedAt: string | null;
   finishedAt: string | null;
   durationMs: number | null;
+  status?: TaskTimelineNodeStatus;
+  detail?: string;
 };
 
 export type TaskTimelineNodeKey =
@@ -185,12 +189,14 @@ export type TaskAiCallBreakdownSnapshot = {
   label: string;
   contractVersion?: string;
   contractHash?: string;
+  modelNames?: string[];
   actual: number;
   estimated: number;
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
   cachedTokens?: number;
+  cachedTokensStatus?: "provider" | "partial" | "unavailable";
   tokenUsageSource?: TaskAiTokenUsageSource;
 };
 

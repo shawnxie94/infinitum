@@ -117,9 +117,18 @@ function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdo
     || maybeSnapshot.tokenUsageSource === "mixed"
     ? maybeSnapshot.tokenUsageSource
     : undefined;
+  const cachedTokensStatus = maybeSnapshot.cachedTokensStatus === "provider"
+    || maybeSnapshot.cachedTokensStatus === "partial"
+    || maybeSnapshot.cachedTokensStatus === "unavailable"
+    ? maybeSnapshot.cachedTokensStatus
+    : undefined;
+  const modelNames = Array.isArray(maybeSnapshot.modelNames)
+    ? [...new Set(maybeSnapshot.modelNames.filter((model): model is string => typeof model === "string" && model.trim().length > 0).map((model) => model.trim()))]
+    : [];
   return {
     key,
     label: TASK_AI_CALL_BREAKDOWN_LABELS[key],
+    ...(modelNames.length > 0 ? { modelNames } : {}),
     actual:
       typeof maybeSnapshot.actual === "number" && Number.isFinite(maybeSnapshot.actual)
         ? maybeSnapshot.actual
@@ -134,6 +143,7 @@ function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdo
           completionTokens: completionTokens ?? 0,
           totalTokens: totalTokens ?? (promptTokens ?? 0) + (completionTokens ?? 0),
           cachedTokens: cachedTokens ?? 0,
+          ...(cachedTokensStatus ? { cachedTokensStatus } : {}),
           ...(tokenUsageSource ? { tokenUsageSource } : {}),
         }
       : {}),
@@ -197,12 +207,25 @@ function normalizeTaskStageTimingSnapshot(value: unknown): TaskStageTimingSnapsh
       ? maybeSnapshot.durationMs
       : null;
 
+  const status = maybeSnapshot.status === "pending"
+    || maybeSnapshot.status === "running"
+    || maybeSnapshot.status === "succeeded"
+    || maybeSnapshot.status === "failed"
+    || maybeSnapshot.status === "partial"
+    || maybeSnapshot.status === "cancelled"
+    || maybeSnapshot.status === "skipped"
+    ? maybeSnapshot.status
+    : undefined;
+  const detail = typeof maybeSnapshot.detail === "string" ? maybeSnapshot.detail.slice(0, 300) : undefined;
+
   return {
     key: maybeSnapshot.key,
     label: maybeSnapshot.label,
     startedAt,
     finishedAt,
     durationMs,
+    ...(status ? { status } : {}),
+    ...(detail ? { detail } : {}),
   };
 }
 
@@ -542,7 +565,7 @@ function buildTaskCheckpointSummary(taskRun: { pipelineCheckpointJson?: string |
 
 export function toTaskRunSnapshot(taskRun: {
   id: string;
-  kind: EnqueueTaskRunInput["kind"];
+  kind: BackgroundTaskRunKind;
   triggerType: EnqueueTaskRunInput["triggerType"];
   status: "queued" | "running" | "succeeded" | "failed" | "partial" | "cancelled";
   label: string;
@@ -1122,7 +1145,7 @@ function buildBackgroundTaskMonitorWhere(
   };
 }
 
-async function attachTaskEntityTitles(tasks: TaskRunSnapshot[]): Promise<TaskRunSnapshot[]> {
+export async function attachTaskEntityTitles(tasks: TaskRunSnapshot[]): Promise<TaskRunSnapshot[]> {
   const itemIds = Array.from(
     new Set(
       tasks

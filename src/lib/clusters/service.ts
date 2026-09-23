@@ -23,7 +23,7 @@ import {
 
 import { buildClusterMergeGroupsFromDecisions } from "@/lib/ai/protocols/cluster";
 import { createAiProvider } from "@/lib/ai/provider-next";
-import { type AiEventSignature, type AiProvider, type ClusterMergeDecision } from "@/lib/ai/provider-types";
+import { type AiCallUsage, type AiEventSignature, type AiProvider, type ClusterMergeDecision } from "@/lib/ai/provider-types";
 import {
   buildCandidateRange,
   buildCandidateRangeKey,
@@ -985,13 +985,6 @@ export async function enqueueClusterSummaryTask(clusterId: string, label?: strin
   });
 }
 
-export async function executeClusterMergeCleanPairWorkflow() {
-  const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
-  return precomputeClusterMergeCleanPairs(new Date(), {
-    embedTexts: runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null,
-  });
-}
-
 export type ClusterSummaryWorkflowPayload = {
   clusterId: string;
   summaryInputHash: string;
@@ -1013,14 +1006,20 @@ export async function readClusterSummaryWorkflow(clusterId: string): Promise<Clu
   return { clusterId, summaryInputHash: buildClusterSummaryInputHash(cluster.items) };
 }
 
-export async function resolveClusterSummaryProvider(): Promise<AiProvider | undefined> {
+export async function resolveClusterSummaryProvider(options?: {
+  onUsage?: (usage: AiCallUsage, usageKey?: string) => void;
+}): Promise<AiProvider | undefined> {
   const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
   if (!runtimeConfig) return undefined;
   return createAiProvider(runtimeConfig.modelApi, {
     itemUnderstanding: runtimeConfig.selectedPromptConfigs?.itemUnderstanding,
     clusterSummary: runtimeConfig.selectedPromptConfigs?.clusterSummary,
     clusterMatch: runtimeConfig.selectedPromptConfigs?.clusterMatch,
-  }, undefined, { aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents, embedding: runtimeConfig.embedding });
+  }, undefined, {
+    aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents,
+    embedding: runtimeConfig.embedding,
+    ...(options?.onUsage ? { onUsage: options.onUsage } : {}),
+  });
 }
 
 export async function generateClusterSummaryWorkflow(
@@ -1069,84 +1068,6 @@ export async function persistClusterSummaryWorkflow(payload: ClusterSummaryWorkf
     summaryAttempted: payload.presentation.summaryAttempted,
     summarySucceeded: payload.presentation.summarySucceeded,
   };
-}
-
-export async function executeClusterSummaryTask(
-  taskRun: { id: string; entityId: string | null },
-  options?: { aiProvider?: AiProvider },
-) {
-  if (!taskRun.entityId) {
-    throw new Error("Task entityId is required.");
-  }
-
-  const aiUsage = createTaskAiUsageTracker(1, "cluster_summary");
-  const initialAiUsage = aiUsage.snapshot();
-
-  await updateTaskRun(taskRun.id, {
-    status: "running",
-    progressLabel: "正在重新生成聚合摘要",
-    aiCallCountActual: 0,
-    aiCallCountEstimated: initialAiUsage.estimated,
-    aiCallBreakdown: initialAiUsage.breakdown,
-  });
-
-  try {
-    const runtimeConfig = options?.aiProvider ? null : await getIngestionRuntimeConfig();
-    const trackedAiProvider = aiUsage.wrapProvider(
-      options?.aiProvider ??
-        createAiProvider(runtimeConfig!.modelApi, {
-          itemUnderstanding: runtimeConfig!.selectedPromptConfigs?.itemUnderstanding,
-          clusterSummary: runtimeConfig!.selectedPromptConfigs?.clusterSummary,
-          clusterMatch: runtimeConfig!.selectedPromptConfigs?.clusterMatch,
-        }, undefined, {
-          aggregationSplitMaxEvents: runtimeConfig!.ingestion.aggregationSplitMaxEvents,
-          embedding: runtimeConfig!.embedding,
-          onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
-        }),
-      {
-        summarizeClusterEstimated: false,
-      },
-    );
-    const cluster = await recomputeCluster(
-      taskRun.entityId,
-      trackedAiProvider,
-      { forceSummary: true },
-    );
-
-    const progressLabel = cluster.summaryAttempted
-      ? cluster.summarySucceeded
-        ? "已完成聚合摘要重生成（AI生成成功）"
-        : "已完成聚合摘要重生成（AI生成失败，使用回退摘要）"
-      : "已完成聚合摘要重生成（条目不足2条，跳过AI生成）";
-
-    await updateTaskRun(taskRun.id, {
-      status: "succeeded",
-      progressCurrent: 1,
-      progressTotal: 1,
-      progressLabel,
-      aiCallCountActual: aiUsage.snapshot().actual,
-      aiCallCountEstimated: aiUsage.snapshot().estimated,
-      aiCallBreakdown: aiUsage.snapshot().breakdown,
-      finishedAt: new Date(),
-      errorSummary: null,
-    });
-
-    invalidateFeedCache();
-    return cluster;
-  } catch (error) {
-    await updateTaskRun(taskRun.id, {
-      status: "failed",
-      progressCurrent: 1,
-      progressTotal: 1,
-      progressLabel: "聚合摘要重生成失败",
-      aiCallCountActual: aiUsage.snapshot().actual,
-      aiCallCountEstimated: aiUsage.snapshot().estimated,
-      aiCallBreakdown: aiUsage.snapshot().breakdown,
-      finishedAt: new Date(),
-      errorSummary: error instanceof Error ? error.message : "Unknown cluster summary error",
-    });
-    throw error;
-  }
 }
 
 // Internal lightweight merge that moves items and deletes emptied clusters
@@ -2139,64 +2060,6 @@ export async function precomputeClusterMergeCleanPairs(
     vectorEnabled: vecMatrix !== null,
     durationMs: Date.now() - startedAt,
   };
-}
-
-export async function enqueueClusterMergeCleanPairPrecomputeTask(input?: {
-  triggerType?: "scheduled" | "manual" | "admin_action";
-}) {
-  const activeTaskCount = await prisma.backgroundTaskRun.count({
-    where: {
-      kind: "cluster_merge_precompute_clean_pairs",
-      status: { in: ["queued", "running"] },
-    },
-  });
-
-  if (activeTaskCount > 0) {
-    return null;
-  }
-
-  return enqueueTaskRun({
-    kind: "cluster_merge_precompute_clean_pairs",
-    triggerType: input?.triggerType ?? "manual",
-    label: "合并候选预计算",
-  });
-}
-
-export async function executeClusterMergeCleanPairPrecomputeTask(taskRun: {
-  id: string;
-}) {
-  await updateTaskRun(taskRun.id, {
-    status: "running",
-    progressCurrent: 0,
-    progressTotal: 1,
-    progressLabel: "正在预计算聚合合并候选",
-  });
-
-  try {
-    // 配置缺失时降级纯规则预筛，不阻断预计算任务
-    const runtimeConfig = await getIngestionRuntimeConfig().catch(() => null);
-    const result = await precomputeClusterMergeCleanPairs(new Date(), {
-      embedTexts: runtimeConfig ? createEmbedTexts(runtimeConfig.embedding) : null,
-    });
-    await updateTaskRun(taskRun.id, {
-      status: "succeeded",
-      progressCurrent: 1,
-      progressTotal: 1,
-      progressLabel: `已预计算 ${result.storedPairs}/${result.candidatePairs} 个合并候选（向量提名 ${result.vectorAdmittedPairs}），扫描 ${result.scoredPairs} 对`,
-      finishedAt: new Date(),
-    });
-    return result;
-  } catch (error) {
-    await updateTaskRun(taskRun.id, {
-      status: "failed",
-      progressCurrent: 1,
-      progressTotal: 1,
-      progressLabel: "聚合合并候选预计算失败",
-      errorSummary: error instanceof Error ? error.message : "Unknown clean pair precompute error",
-      finishedAt: new Date(),
-    });
-    throw error;
-  }
 }
 
 type ClusterMergeResult = {

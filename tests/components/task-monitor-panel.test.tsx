@@ -52,18 +52,26 @@ function buildMonitorSnapshot(): BackgroundTaskMonitorSnapshot {
           {
             key: "item_understanding",
             label: "条目理解",
+            modelNames: ["gpt-4.1-mini-understanding"],
             actual: 1,
             estimated: 2,
             promptTokens: 1200,
             completionTokens: 300,
             totalTokens: 1500,
             cachedTokens: 120,
+            cachedTokensStatus: "provider",
           },
           {
             key: "cluster_match",
             label: "聚合匹配",
-            actual: 0,
+            modelNames: ["gpt-4.1-mini-match"],
+            cachedTokensStatus: "unavailable",
+            actual: 1,
             estimated: 2,
+            promptTokens: 50,
+            completionTokens: 10,
+            totalTokens: 60,
+            cachedTokens: 0,
           },
           {
             key: "cluster_summary",
@@ -90,6 +98,8 @@ function buildMonitorSnapshot(): BackgroundTaskMonitorSnapshot {
             startedAt: "2026-04-21T00:00:08.000Z",
             finishedAt: null,
             durationMs: null,
+            status: "running",
+            detail: "处理 2/10 条",
           },
         ],
         taskTimeline: [
@@ -239,11 +249,14 @@ describe("TaskMonitorPanel", () => {
     expect(dialog.querySelector(".overflow-y-auto.p-6")).toBeTruthy();
     expect(within(dialog).queryByText("AI 调用")).not.toBeInTheDocument();
     expect(within(dialog).getByText("信息抓取")).toBeInTheDocument();
+    expect(within(dialog).queryByText("内容处理")).not.toBeInTheDocument();
+    expect(within(dialog).getAllByText(/处理 2\/10 条 · 进行中/).length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText("规则过滤").length).toBeGreaterThan(0);
-    expect(within(dialog).getByText("条目理解 · 模型 gpt-4.1-mini-understanding")).toBeInTheDocument();
-    expect(within(dialog).getByText("归组决策 · 模型 gpt-4.1-mini-match")).toBeInTheDocument();
-    expect(within(dialog).getByText("聚合合并 · 模型 gpt-4.1-mini-merge")).toBeInTheDocument();
-    expect(within(dialog).getByText("聚合收尾 · 模型 gpt-4.1-mini-cluster")).toBeInTheDocument();
+    expect(within(dialog).getByText("条目理解", { selector: ".text-sm.font-medium" })).toBeInTheDocument();
+    expect(within(dialog).getByText("归组决策", { selector: ".text-sm.font-medium" })).toBeInTheDocument();
+    expect(within(dialog).getByText("聚合合并", { selector: ".text-sm.font-medium" })).toBeInTheDocument();
+    expect(within(dialog).getByText("聚合收尾", { selector: ".text-sm.font-medium" })).toBeInTheDocument();
+    expect(within(dialog).queryByText(/· 模型 gpt-4\.1-mini/)).not.toBeInTheDocument();
     expect(within(dialog).queryByText("进度")).not.toBeInTheDocument();
     expect(within(dialog).getByText("摘要")).toBeInTheDocument();
     expect(within(dialog).queryByText("AI 用量")).not.toBeInTheDocument();
@@ -251,17 +264,21 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).getByText("1.2k")).toBeInTheDocument();
     expect(within(dialog).getByText("缓存 tokens")).toBeInTheDocument();
     expect(within(dialog).getByText("120")).toBeInTheDocument();
+    const cachedUsageRow = within(dialog).getByRole("row", { name: /聚合匹配/ });
+    expect(within(cachedUsageRow).getByText("0")).toBeInTheDocument();
+    expect(within(dialog).queryByText("未提供")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("（部分）")).not.toBeInTheDocument();
     expect(within(dialog).getByText("300")).toBeInTheDocument();
     expect(within(dialog).getByText("1.5k")).toBeInTheDocument();
     expect(
       within(dialog).getByText("7/10 已精确分类 = 1 (最终新增) + 2 (AI 过滤) + 1 (更新/重处理) + 1 (重复过滤) + 2 (规则过滤)"),
     ).toBeInTheDocument();
-    expect(within(dialog).getByText("抓取 1 个源 · 10 篇内容 · 正文补抓 2 篇")).toBeInTheDocument();
-    expect(within(dialog).getByText("规则过滤 2 · 复用 1")).toBeInTheDocument();
-    expect(within(dialog).getByText("摘要 5/1 · 分析 4/0 · 拆分 1/0 · 子事件 12 · 过滤 2 · 更新/重处理 1")).toBeInTheDocument();
-    expect(within(dialog).getByText("指纹命中 1 · 本地直连 2 · AI归组 1 · 跳过 0 · 新建 1")).toBeInTheDocument();
-    expect(within(dialog).getByText("候选 12/18 · Dirty 5 · Hash跳过 4 · AI返回 2 · 移动 6 · 失败 1 · 已合并 · 合并后 9 组")).toBeInTheDocument();
-    expect(within(dialog).getByText("参与重算 2 · 完成更新 2 · 摘要完成 1 · 摘要失败 0 · 已删除 0")).toBeInTheDocument();
+    expect(within(dialog).getByText(/抓取 1 个源 · 10 篇内容 · 正文补抓 2 篇/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/规则过滤 2 · 复用 1/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/摘要 5\/1 · 分析 4\/0 · 拆分 1\/0 · 子事件 12 · 过滤 2 · 更新\/重处理 1/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/指纹命中 1 · 本地直连 2 · AI归组 1 · 跳过 0 · 新建 1/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/候选 12\/18 · Dirty 5 · Hash跳过 4 · AI返回 2 · 移动 6 · 失败 1 · 已合并 · 合并后 9 组/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/参与重算 2 · 完成更新 2 · 摘要完成 1 · 摘要失败 0 · 已删除 0/)).toBeInTheDocument();
   });
 
   it("keeps finished ingestion summaries closed when reused items include filtered records", async () => {
@@ -399,7 +416,7 @@ describe("TaskMonitorPanel", () => {
       within(dialog).getByText("41/55 已精确分类 = 5 (最终新增) + 0 (AI 过滤) + 更新/重处理暂无精确数据 + 36 (重复过滤)；源抓取失败 3 个"),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByText("抓取 113 个源 · 失败 3 个源 · 55 篇内容 · 正文补抓 7 篇"),
+      within(dialog).getByText(/抓取 113 个源 · 失败 3 个源 · 55 篇内容 · 正文补抓 7 篇/),
     ).toBeInTheDocument();
   });
 
@@ -523,13 +540,13 @@ describe("TaskMonitorPanel", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "任务详情" });
-    expect(within(dialog).getByText("已完成")).toBeInTheDocument();
+    expect(within(dialog).getByText("已成功")).toBeInTheDocument();
     expect(
       within(dialog).getByText("已完成重新 AI 判定（聚合 · 子事件 2 · 处理成功）"),
     ).toBeInTheDocument();
   });
 
-  it("lists every task kind in the type filter and filters cleanup tasks precisely", async () => {
+  it("lists current and historical task kinds in the type filter and filters cleanup tasks precisely", async () => {
     const user = userEvent.setup();
     const baseTask = buildMonitorSnapshot().runningTasks[0];
     const recentTasks: BackgroundTaskMonitorSnapshot["recentTasks"] = [
@@ -539,9 +556,10 @@ describe("TaskMonitorPanel", () => {
       { ...baseTask, id: "task-summary", kind: "item_regenerate_summary", label: "摘要重生成", status: "succeeded" },
       { ...baseTask, id: "task-translation", kind: "item_regenerate_translation", label: "译文重生成", status: "succeeded" },
       { ...baseTask, id: "task-cluster", kind: "cluster_regenerate_summary", label: "聚合摘要重生成", status: "succeeded" },
-      { ...baseTask, id: "task-precompute", kind: "cluster_merge_precompute_clean_pairs", label: "合并候选预计算", status: "succeeded" },
+      { ...baseTask, id: "task-precompute", kind: "cluster_merge_precompute_clean_pairs", label: "旧版聚合合并缓存预计算", status: "succeeded" },
       { ...baseTask, id: "task-daily", kind: "daily_report_generate", label: "AI 日报生成", status: "succeeded" },
       { ...baseTask, id: "task-cleanup", kind: "item_cleanup", label: "清理历史文章", status: "succeeded" },
+      { ...baseTask, id: "task-old-reparse", kind: "item_reparse_aggregations", label: "旧版聚合内容重拆", status: "succeeded" },
     ];
     vi.stubGlobal(
       "fetch",
@@ -574,13 +592,13 @@ describe("TaskMonitorPanel", () => {
       "摘要重生成",
       "译文重生成",
       "聚合摘要重生成",
-      "合并候选预计算",
+      "旧版聚合合并缓存预计算",
       "AI 日报生成",
       "文章自动清理",
-      "聚合内容重拆",
+      "旧版聚合内容重拆",
     ]);
 
-    expect(within(await screen.findByRole("table")).getAllByText("合并候选预计算")).toHaveLength(2);
+    expect(within(await screen.findByRole("table")).getAllByText("旧版聚合合并缓存预计算")).toHaveLength(2);
 
     await user.selectOptions(kindSelect, "item_cleanup");
 
@@ -764,10 +782,10 @@ describe("TaskMonitorPanel", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "任务详情" });
     expect(
-      await within(dialog).findByText("抓取 1 个源 · 10 篇内容 · 正文补抓 3 篇"),
+      await within(dialog).findByText(/抓取 1 个源 · 10 篇内容 · 正文补抓 3 篇/),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByText("规则过滤 2 · 复用 1"),
+      within(dialog).getByText(/规则过滤 2 · 复用 1/),
     ).toBeInTheDocument();
     expect(
       within(dialog).getByText("6/10 已精确分类 = 3 (最终新增) + 0 (AI 过滤) + 更新/重处理暂无精确数据 + 1 (重复过滤) + 2 (规则过滤)"),
@@ -935,6 +953,80 @@ describe("TaskMonitorPanel", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "任务详情" });
     expect(within(dialog).getByText("审核 2 次 · 调用重试 1 次 · 已阻断自动发布")).toBeInTheDocument();
+  });
+
+  it("keeps Mastra lifecycle details out of the timeline and shows model names", async () => {
+    const task = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "mastra-timeline-core-only",
+      status: "succeeded" as const,
+      progressLabel: "步骤 ingestion-cluster_finalize：已完成",
+      startedAt: "2026-04-21T00:00:00.000Z",
+      finishedAt: "2026-04-21T00:00:10.000Z",
+      aiCallBreakdown: [{
+        key: "item_understanding" as const,
+        label: "条目理解",
+        actual: 1,
+        estimated: 1,
+        modelNames: ["test-model"],
+      }],
+      stageTimings: [],
+      taskTimeline: [{
+        key: "source_fetch" as const,
+        label: "信息抓取",
+        status: "succeeded" as const,
+        startedAt: "2026-04-21T00:00:00.000Z",
+        finishedAt: "2026-04-21T00:00:04.000Z",
+        durationMs: 4_000,
+        metrics: [{ label: "抓取源", value: 2 }, { label: "抓取内容", value: 7 }],
+      }],
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[task]} initialFocusTaskId={task.id} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    expect(within(dialog).getByText("信息抓取")).toBeInTheDocument();
+    expect(within(dialog).getByText("test-model")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/步骤 ingestion-cluster_finalize/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("开始")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("已完成", { selector: ".text-sm.font-medium" })).not.toBeInTheDocument();
+  });
+
+  it("localizes Mastra daily report stage labels when only stage timings exist", async () => {
+    const task = {
+      ...buildMonitorSnapshot().runningTasks[0],
+      id: "daily-report-stage-labels",
+      kind: "daily_report_generate" as const,
+      label: "AI 日报生成",
+      status: "succeeded" as const,
+      progressLabel: "日报生成完成",
+      taskTimeline: [],
+      stageTimings: ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "repair", "review", "persist_publish"].map((key) => ({
+        key,
+        label: key,
+        startedAt: "2026-04-21T00:00:00.000Z",
+        finishedAt: "2026-04-21T00:00:02.000Z",
+        durationMs: 2_000,
+        status: "succeeded" as const,
+      })),
+    };
+
+    renderWithProviders(
+      <TaskMonitorPanel runningTasks={[]} recentTasks={[task]} initialFocusTaskId={task.id} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "任务详情" });
+    for (const title of ["准备候选", "评估", "准备规划输入", "规划", "写作", "审核", "持久化/发布"]) {
+      expect(within(dialog).getByText(title, { selector: ".text-sm.font-medium" })).toBeInTheDocument();
+    }
+    expect(within(dialog).getAllByText("规划", { selector: ".text-sm.font-medium" })).toHaveLength(1);
+    expect(within(dialog).getAllByText("写作", { selector: ".text-sm.font-medium" })).toHaveLength(1);
+    for (const rawStage of ["prepare", "assess", "merge", "plan", "plan_validate", "write", "validate", "repair", "review", "persist_publish"]) {
+      expect(within(dialog).queryByText(rawStage, { selector: ".text-sm.font-medium" })).not.toBeInTheDocument();
+    }
+    expect(within(dialog).queryByText("AI 日报生成", { selector: ".text-sm.font-medium" })).not.toBeInTheDocument();
   });
 
   it("shows the review retry failure reason for historical daily report tasks", async () => {

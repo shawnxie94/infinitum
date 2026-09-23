@@ -171,21 +171,29 @@ describe("framework capability evolution", () => {
     });
   });
 
-  it("keeps every BackgroundTaskRun kind covered by one declarative host definition", () => {
-    expect(TASK_DEFINITIONS).toHaveLength(11);
+  it("keeps current task kinds covered while retaining retired workflow execution for old queues", () => {
+    expect(TASK_DEFINITIONS).toHaveLength(9);
     expect(TASK_DEFINITIONS.every((definition) => definition.mode === "workflow")).toBe(true);
-    expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(11);
+    expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(9);
+    expect(isWorkflowKind("cluster_merge_precompute_clean_pairs")).toBe(false);
+    expect(isWorkflowKind("item_reparse_aggregations")).toBe(true);
+    expect(TASK_DEFINITIONS.find((definition) => definition.kind === "item_reparse_aggregations")).toBeUndefined();
     for (const workflowDefinition of Object.values(WORKFLOW_TASK_DEFINITIONS)) {
       expect(workflowDefinition).toBeDefined();
       expect(workflowDefinition!.stages.every((stage) => ["replay_safe", "at_least_once", "business_checkpointed"].includes(stage.replayPolicy ?? ""))).toBe(true);
-      expect(TASK_DEFINITIONS.find((definition) => definition.kind === workflowDefinition!.kind)?.stageReplayPolicies).toEqual(
-        Object.fromEntries(workflowDefinition!.stages.map((stage) => [stage.id, stage.replayPolicy])),
-      );
+      const catalogEntry = TASK_DEFINITIONS.find((definition) => definition.kind === workflowDefinition!.kind);
+      if (workflowDefinition!.kind === "item_reparse_aggregations") {
+        expect(catalogEntry).toBeUndefined();
+      } else {
+        expect(catalogEntry?.stageReplayPolicies).toEqual(
+          Object.fromEntries(workflowDefinition!.stages.map((stage) => [stage.id, stage.replayPolicy])),
+        );
+      }
     }
     expect(TASK_DEFINITIONS.find((definition) => definition.kind === "daily_report_generate")?.stages).toEqual([
       ...DAILY_REPORT_WORKFLOW_STAGES,
     ]);
-    expect(Object.keys(WORKFLOW_TASK_DEFINITIONS).sort()).toEqual(TASK_DEFINITIONS.map((definition) => definition.kind).sort());
+    expect(Object.keys(WORKFLOW_TASK_DEFINITIONS).filter((kind) => kind !== "item_reparse_aggregations").sort()).toEqual(TASK_DEFINITIONS.map((definition) => definition.kind).sort());
     expect(WORKFLOW_TASK_DEFINITIONS.ingestion?.stages.map((stage) => stage.id)).toEqual([
       "source_sync", "item_processing", "cluster_merge", "cluster_finalize",
     ]);
@@ -208,8 +216,9 @@ describe("framework capability evolution", () => {
     expect(WORKFLOW_TASK_DEFINITIONS.cluster_regenerate_summary!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "writeback",
     ]);
-    expect(WORKFLOW_TASK_DEFINITIONS.cluster_merge_precompute_clean_pairs!.stages.map((stage) => stage.id)).toEqual([
-      "read", "compute", "writeback",
+    expect(WORKFLOW_TASK_DEFINITIONS.cluster_merge_precompute_clean_pairs).toBeUndefined();
+    expect(WORKFLOW_TASK_DEFINITIONS.precompute!.stages.map((stage) => stage.id)).toEqual([
+      "cluster_merge_clean_pairs", "entity_alias_check", "entity_suggestion_candidates",
     ]);
     expect(WORKFLOW_TASK_DEFINITIONS.item_reanalyze!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "validate", "writeback",

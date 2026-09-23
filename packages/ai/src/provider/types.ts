@@ -48,6 +48,7 @@ export type UsageSnapshot = {
   completionTokens: number;
   totalTokens: number;
   cachedTokens: number;
+  cachedTokensReported: boolean;
   tokenUsageSource: "provider" | "estimated" | "mixed";
   model: string;
   attemptType?: UsageAttemptType;

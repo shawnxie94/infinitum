@@ -54,7 +54,7 @@ const statusLabels = {
 } as const;
 
 const taskKindLabels = {
-  cluster_merge_precompute_clean_pairs: "合并候选预计算",
+  cluster_merge_precompute_clean_pairs: "旧版聚合合并缓存预计算",
   cluster_regenerate_summary: "聚合摘要重生成",
   daily_report_generate: "AI 日报生成",
   ingestion: "抓取任务",
@@ -64,7 +64,7 @@ const taskKindLabels = {
   item_regenerate_summary: "摘要重生成",
   item_regenerate_translation: "译文重生成",
   item_cleanup: "文章自动清理",
-  item_reparse_aggregations: "聚合内容重拆",
+  item_reparse_aggregations: "旧版聚合内容重拆",
 } as const;
 
 function getTaskKindLabel(kind: string) {
