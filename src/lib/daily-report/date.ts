@@ -55,6 +55,15 @@ export function getTodayDailyReportDate(now = new Date()) {
   return new Date(now.getTime() + SHANGHAI_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+/**
+ * 日报任务的生成日期：entityId 携带合法日期（重触发历史日报）时用 entityId，
+ * 否则回退今天。校验必须是"数字位数"而非字面反斜杠——此前误写为 \\d 导致
+ * 重触发历史日期静默变成当天，简报窗口错位、候选锐减。
+ */
+export function resolveDailyReportTaskDate(entityId: string | null | undefined, now = new Date()) {
+  return entityId && /^\d{4}-\d{2}-\d{2}$/.test(entityId) ? entityId : getTodayDailyReportDate(now);
+}
+
 export function formatDailyReportDateTime(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
   return DAILY_REPORT_DATE_TIME_FORMATTER.format(date);

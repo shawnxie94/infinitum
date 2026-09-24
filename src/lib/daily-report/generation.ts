@@ -7,7 +7,7 @@ import type { TaskExecutionContext } from "@infinitum/ai/orchestration/lifecycle
 import { createAiProvider } from "@/lib/ai/provider-next";
 import { type DailyReportStageContext } from "@/lib/ai/provider-types";
 import { prisma } from "@/lib/db";
-import { getDailyReportDateRange, getTodayDailyReportDate, normalizeDailyReportDate } from "@/lib/daily-report/date";
+import { getDailyReportDateRange, normalizeDailyReportDate, resolveDailyReportTaskDate } from "@/lib/daily-report/date";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { withDailyReportLock } from "@/lib/daily-report/history";
 import { DailyReportCancellationError, DailyReportGenerationError, DailyReportStagePauseError } from "@/lib/daily-report/errors";
@@ -1440,9 +1440,7 @@ export async function executeDailyReportWorkflowStage(
   projection: DailyReportWorkflowProjection = {},
   stageIdentity?: StepExecutionIdentity,
 ): Promise<void> {
-  const date = taskRun.entityId && /^\\d{4}-\\d{2}-\\d{2}$/.test(taskRun.entityId)
-    ? taskRun.entityId
-    : getTodayDailyReportDate();
+  const date = resolveDailyReportTaskDate(taskRun.entityId);
   const resumeCheckpoint = taskRun.pipelineCheckpointJson
     ? parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson)
     : null;
