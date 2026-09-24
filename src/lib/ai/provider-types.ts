@@ -285,16 +285,6 @@ export type AiCallUsage = {
   step?: StepExecutionIdentity;
 };
 
-export type CompletionOptions = {
-  responseFormat?: CompletionResponseFormat;
-  requireCompleteJson?: boolean;
-  messages?: DailyReportStageMessage[];
-  usageKey?: string;
-  attemptType?: AiCallUsage["attemptType"];
-  onUsage?: (usage: AiCallUsage) => void;
-};
-
-
 export class InvalidJsonModelResponseError extends Error {
   constructor(message: string) {
     super(message);

@@ -27,10 +27,6 @@ export type ClusterDecisionRecordInput = {
   now?: Date;
 };
 
-export function getDeclinedAttemptLimit() {
-  return MAX_DECLINED_ATTEMPTS;
-}
-
 function getDeclinedRetryDelayMs(attemptCount: number) {
   return DECLINED_RETRY_DELAYS_MS[Math.max(0, Math.min(attemptCount - 1, DECLINED_RETRY_DELAYS_MS.length - 1))] ?? null;
 }

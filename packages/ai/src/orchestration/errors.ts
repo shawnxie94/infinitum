@@ -31,9 +31,6 @@ function errorMessage(error: unknown): string {
 export function classifyTaskError(error: unknown): TaskFailureKind {
   if (error instanceof TaskExecutionError) return error.kind;
   if (error instanceof Error && error.name === "AbortError") return "canceled";
-  if (error && typeof error === "object" && "kind" in error && (error as { kind?: unknown }).kind === "p0-cooperative-cancel") {
-    return "canceled";
-  }
   const message = errorMessage(error);
   if (/cancel|abort|取消|终止/iu.test(message)) return "canceled";
   if (/context\s*(length|window|limit)|maximum\s+context|too\s+many\s+tokens|token\s+limit|上下文.{0,8}(超|限制)|令牌.{0,8}(超|限制)/iu.test(message)) {

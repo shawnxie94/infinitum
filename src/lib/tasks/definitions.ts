@@ -1,10 +1,8 @@
 import type { BackgroundTaskRunKind } from "@/lib/tasks/types";
 import { WORKFLOW_TASK_DEFINITIONS } from "@/lib/workflows/catalog";
 
-export type TaskExecutionMode = "workflow";
 export type TaskDefinition = {
   kind: BackgroundTaskRunKind;
-  mode: TaskExecutionMode;
   stages: readonly string[];
   stageReplayPolicies: Readonly<Record<string, "replay_safe" | "at_least_once" | "business_checkpointed">>;
   effects: readonly string[];
@@ -21,7 +19,6 @@ export const TASK_DEFINITIONS: readonly TaskDefinition[] = Object.values(WORKFLO
   .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition) && !RETIRED_TASK_KINDS.has(definition.kind as BackgroundTaskRunKind))
   .map((definition) => ({
     kind: definition.kind as BackgroundTaskRunKind,
-    mode: "workflow",
     stages: definition.stages.map((stage) => stage.id),
     stageReplayPolicies: Object.fromEntries(
       definition.stages.map((stage) => [stage.id, stage.replayPolicy ?? "at_least_once"]),

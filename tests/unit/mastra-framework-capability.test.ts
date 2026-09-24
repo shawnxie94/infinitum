@@ -173,7 +173,6 @@ describe("framework capability evolution", () => {
 
   it("keeps current task kinds covered while retaining retired workflow execution for old queues", () => {
     expect(TASK_DEFINITIONS).toHaveLength(9);
-    expect(TASK_DEFINITIONS.every((definition) => definition.mode === "workflow")).toBe(true);
     expect(new Set(TASK_DEFINITIONS.map((definition) => definition.kind)).size).toBe(9);
     expect(isWorkflowKind("cluster_merge_precompute_clean_pairs")).toBe(false);
     expect(isWorkflowKind("item_reparse_aggregations")).toBe(true);

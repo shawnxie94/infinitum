@@ -5,6 +5,7 @@ import { executeClusterMerge, recomputeCluster } from "@/lib/clusters/service";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { scheduleDefaultFeedCacheWarm } from "@/lib/feed/warmup";
 import {
   completeFetchRun,
   createFetchRun,
@@ -600,6 +601,7 @@ async function runClusterFinalizeStage(
     finishedAt: completedRun.finishedAt,
   });
   invalidateFeedCache();
+  scheduleDefaultFeedCacheWarm({ reason: `ingestion:${taskStatus}` });
   if (status !== "failed") {
     await enqueuePrecomputeTask({ triggerType: payload.trigger });
   }

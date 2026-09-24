@@ -110,11 +110,6 @@ function preserveAnchorLinks(inputText: string): string {
   });
 }
 
-export function buildItemSummaryInput(inputText: string): string {
-  const cleaned = stripHtmlTags(stripHtmlNoise(inputText));
-  return trimModelInput(cleaned, MODEL_INPUT_TRUNCATED_NOTICE);
-}
-
 export function buildAggregationParsingInput(inputText: string): string {
   const cleaned = stripHtmlTags(preserveAnchorLinks(stripHtmlNoise(inputText)));
   return trimModelInput(cleaned, MODEL_INPUT_TRUNCATED_NOTICE);

@@ -91,13 +91,6 @@ export function getAiTaskContract(type: PromptConfigType): AiTaskContract {
 
 const LEGACY_INPUT_PLACEHOLDER_PATTERN = /\{\{\s*(?:title|sourceName|translateTitle|maxEvents|inputText|candidatesJson|clustersJson|date|timezone|articlesJson|recentTopicsJson|reviewContextJson)\s*\}\}/g;
 
-export function containsLegacyAiInputPlaceholder(value: string | null | undefined): boolean {
-  LEGACY_INPUT_PLACEHOLDER_PATTERN.lastIndex = 0;
-  const result = typeof value === "string" && LEGACY_INPUT_PLACEHOLDER_PATTERN.test(value);
-  LEGACY_INPUT_PLACEHOLDER_PATTERN.lastIndex = 0;
-  return result;
-}
-
 const LEGACY_DEFAULT_USER_INSTRUCTIONS: Record<PromptConfigType, string[]> = {
   item_understanding: [
     `标题：{{title}}\n来源：{{sourceName}}\n是否需要翻译标题：{{translateTitle}}\n最多拆分事件数：{{maxEvents}}\n正文：{{inputText}}`,

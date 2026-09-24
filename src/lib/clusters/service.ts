@@ -69,7 +69,7 @@ import {
 } from "@/lib/clusters/decisions";
 import { buildEventIdentity } from "@/lib/clusters/identity";
 import { loadMentionResolver } from "@/lib/entities/mention-resolution";
-import { buildEmbeddingText, createEmbedTexts, type EmbedTextsFn } from "@/lib/ai/embeddings";
+import { buildEmbeddingText, type EmbedTextsFn } from "@/lib/ai/embeddings";
 import {
   type ClusterAssignmentCandidate,
   createContentCluster,
@@ -91,8 +91,7 @@ import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import { getDisplayTitle } from "@/lib/feed/presentation";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
-import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
-import { enqueueTaskRun, updateTaskRun } from "@/lib/tasks/service";
+import { enqueueTaskRun } from "@/lib/tasks/service";
 const clusterAssignmentQueues = new Map<string, Promise<void>>();
 
 type ClusterAssignmentSource = "exact_match" | "cheap_rank_direct" | "ai_match";

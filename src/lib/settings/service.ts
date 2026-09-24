@@ -1,12 +1,8 @@
 export { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
-export type { RuntimeConfigSeedOptions } from "@/lib/settings/core";
 export type {
   FetchModelApiModelsInput,
-  ImportSourcesFromOpmlOptions,
   SaveModelApiConfigInput,
   SavePromptConfigInput,
-  SourceInput,
-  SourceMetadataOptions,
 } from "@/lib/settings/core";
 export {
   ensureContentExtractionConfig,
@@ -65,6 +61,4 @@ export {
 } from "@/lib/settings/source-service";
 export type {
   AdminSourceGroupFilter,
-  AdminSourceListItem,
-  AdminSourceListResult,
 } from "@/lib/settings/source-service";

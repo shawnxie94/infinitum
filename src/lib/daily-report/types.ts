@@ -5,8 +5,6 @@ export const DAILY_REPORT_TIMEZONE = "Asia/Shanghai";
 export const DEFAULT_OPENING_LABEL = "摘要";
 export const DEFAULT_CLOSING_LABEL = "趋势观察";
 
-export const DAILY_REPORT_OPENING_LABEL_MAX_LENGTH = 20;
-export const DAILY_REPORT_CLOSING_LABEL_MAX_LENGTH = 20;
 export const DAILY_REPORT_TITLE_MAX_LENGTH = 64;
 export const DAILY_REPORT_HEADLINE_MAX_LENGTH = 64;
 
@@ -116,19 +114,6 @@ export type DailyReportCandidateAssessment = {
   suggestedBlockKey: string | null;
   historyDecision: DailyReportHistoryDecision;
   matchedRecentTopicTitle: string | null;
-};
-
-export type DailyReportAssessmentLedger = {
-  schemaVersion: 1;
-  candidateCount: number;
-  assessedCount: number;
-  unassessedCandidateIds: number[];
-  excludedCandidateIds: number[];
-  historyFilteredCandidateIds: number[];
-  historyFilteredCount: number;
-  assessments: DailyReportCandidateAssessment[];
-  batchCount: number;
-  recentTopics?: RecentDailyReportTopic[];
 };
 
 export type DailyReportPlanningCandidateBrief = {

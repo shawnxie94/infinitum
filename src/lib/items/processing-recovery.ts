@@ -2,31 +2,14 @@ import {
   ITEM_PROCESSING_RECOVERY_BATCH_SIZE,
   ITEM_PROCESSING_RECOVERY_LOOKBACK_MS,
   ITEM_PROCESSING_RECOVERY_MAX_ATTEMPTS,
-  ITEM_PROCESSING_RECOVERY_MAX_ROUNDS,
 } from "@/config/constants";
-import { createAiProvider } from "@/lib/ai/provider-next";
-import { type AiProvider } from "@/lib/ai/provider-types";
 import { RETRIABLE_AGGREGATION_PARSE_STATUSES } from "@/lib/aggregation/status";
-import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
-import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
-import { invalidateFeedCache } from "@/lib/feed/cache";
 import {
-  buildEventSignatureFromItemFields,
   classifyItemProcessingRecoveryReasons,
-  degradeExhaustedAggregationItem,
-  scheduleItemProcessingRetry,
   type ItemProcessingRecoveryReason,
 } from "@/lib/items/processing-state";
-import { reanalyzeItem, regenerateItemContent } from "@/lib/items/service";
-import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
-import {
-  enqueueTaskRun,
-  isTaskRunCancellationRequested,
-  TASK_RUN_CANCELLED_LABEL,
-  TASK_RUN_CANCELLED_MESSAGE,
-  updateTaskRun,
-} from "@/lib/tasks/service";
+import { enqueueTaskRun } from "@/lib/tasks/service";
 
 export type RecoveryCandidate = {
   id: string;

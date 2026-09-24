@@ -16,9 +16,6 @@ export const HOUR_MS = 60 * MINUTE_MS;
 /** 1 天的毫秒数 */
 export const DAY_MS = 24 * HOUR_MS;
 
-/** 1 周的毫秒数 */
-export const WEEK_MS = 7 * DAY_MS;
-
 // =============================================================================
 // Feed 缓存 TTL
 // =============================================================================
@@ -51,9 +48,6 @@ export const PAGE_VIEW_WRITE_DEDUPE_TTL_MS = 30 * MINUTE_MS;
 
 /** Admin Session 过期时间 (秒): 7 天 */
 export const ADMIN_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
-
-/** Admin Session 过期时间 (毫秒): 7 天 */
-export const ADMIN_SESSION_TTL_MS = WEEK_MS;
 
 // =============================================================================
 // Clusters
@@ -146,9 +140,6 @@ export const DEFAULT_POLL_INTERVAL_MS = 2 * 1000;
 // Ingestion
 // =============================================================================
 
-/** 摄入进度刷新间隔: 750ms */
-export const INGESTION_PROGRESS_FLUSH_INTERVAL_MS = 750;
-
 /** RSS 抓取失败后的重试次数 */
 export const RSS_FETCH_RETRY_COUNT = 1;
 
@@ -177,9 +168,6 @@ export const TOAST_DEDUPE_MS = 1200;
 
 /** Feed 状态轮询间隔: 30 秒 */
 export const STATUS_POLL_INTERVAL_MS = 30 * 1000;
-
-/** 全文搜索防抖延迟: 320ms */
-export const FEED_SEARCH_DEBOUNCE_MS = 320;
 
 /** 管理端聚合搜索防抖延迟: 500ms */
 export const ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS = 500;

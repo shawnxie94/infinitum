@@ -142,5 +142,4 @@ export const LLMS_SUMMARY =
   " 主要入口：首页资讯流、AI 日报、RSS 订阅。";
 
 export const LLMS_FULL_ENTRY_LIMIT = 30;
-export const LLMS_FULL_HEADING = `# ${SITE_NAME} - AI 资讯聚合平台`;
 

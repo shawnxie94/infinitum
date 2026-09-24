@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { normalizeFingerprint } from "@/lib/clusters/helpers";
 import { prisma } from "@/lib/db";
 import {
   enqueueItemReanalyzeTask,

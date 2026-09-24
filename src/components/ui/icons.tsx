@@ -181,15 +181,6 @@ export function IconFilter(props: IconProps) {
   );
 }
 
-export function IconFlame(props: IconProps) {
-  return (
-    <IconBase {...props}>
-      <path d="M12 22a7 7 0 0 0 7-7c0-2.6-1.3-4.9-3.7-6.8-.6 2-1.7 3.2-3.3 3.8.7-3.5-.8-6.4-4.2-8.7.2 3.5-.8 5.8-3 7.7A6.4 6.4 0 0 0 5 21.1" />
-      <path d="M12 22a3 3 0 0 0 3-3c0-1.3-.8-2.5-2.4-3.7-.2 1.4-.9 2.3-2 2.8.1-1.4-.4-2.7-1.5-3.8A4.1 4.1 0 0 0 9 20.9" />
-    </IconBase>
-  );
-}
-
 export function IconTrash(props: IconProps) {
   return (
     <IconBase {...props}>

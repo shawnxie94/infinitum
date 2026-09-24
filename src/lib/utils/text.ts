@@ -24,14 +24,6 @@ export function normalizeText(value: string | null | undefined): string {
 }
 
 /**
- * 规范化文本并转为小写
- * 用于去重等需要大小写不敏感的场景
- */
-export function normalizeTextLower(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-/**
  * 折叠多个连续空白为单个空格
  */
 export function collapseWhitespace(value: string): string {
@@ -53,13 +45,6 @@ export function stripHtmlTags(html: string | null | undefined): string {
     return "";
   }
   return html.replace(/<[^>]*>/g, "");
-}
-
-/**
- * 截断文本到指定长度
- */
-export function truncateText(text: string, maxLength: number): string {
-  return text.length <= maxLength ? text : `${text.slice(0, maxLength).trim()}...`;
 }
 
 /**

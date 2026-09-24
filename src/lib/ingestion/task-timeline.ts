@@ -1,5 +1,4 @@
 import type {
-  TaskStageTimingSnapshot,
   TaskTimelineNodeSnapshot,
   TaskTimelineNodeStatus,
 } from "@/lib/tasks/types";
@@ -121,47 +120,6 @@ export type IngestionTimelineModelNames = {
   clusterSummary: string | null;
 };
 
-function toTaskStageTimingSnapshot(stageTiming: IngestionStageTiming): TaskStageTimingSnapshot {
-  return {
-    key: stageTiming.key,
-    label: stageTiming.label,
-    startedAt: stageTiming.startedAt?.toISOString() ?? null,
-    finishedAt: stageTiming.finishedAt?.toISOString() ?? null,
-    durationMs: stageTiming.durationMs,
-  };
-}
-
-export function createIngestionStageTracker() {
-  const stageTimings: IngestionStageTiming[] = [];
-
-  return {
-    snapshot() {
-      return stageTimings.map(toTaskStageTimingSnapshot);
-    },
-    startStage(key: string, label: string) {
-      const stageTiming: IngestionStageTiming = {
-        key,
-        label,
-        startedAt: new Date(),
-        finishedAt: null,
-        durationMs: null,
-      };
-
-      stageTimings.push(stageTiming);
-      return stageTiming;
-    },
-    finishStage(stageTiming: IngestionStageTiming) {
-      if (stageTiming.finishedAt) {
-        return;
-      }
-
-      const finishedAt = new Date();
-      stageTiming.finishedAt = finishedAt;
-      stageTiming.durationMs = stageTiming.startedAt ? finishedAt.getTime() - stageTiming.startedAt.getTime() : null;
-    },
-  };
-}
-
 export function createIngestionTimelineCounters(): IngestionTimelineCounters {
   return {
     sourceFetch: {
@@ -266,17 +224,6 @@ export function createIngestionTimelineModelNames(): IngestionTimelineModelNames
     clusterMerge: null,
     clusterSummary: null,
   };
-}
-
-export function createInitialIngestionTaskTimeline(): TaskTimelineNodeSnapshot[] {
-  return [
-    { key: "source_fetch", label: "信息抓取", status: "running", startedAt: null, finishedAt: null, durationMs: null, metrics: [] },
-    { key: "rule_filter", label: "规则过滤", status: "pending", startedAt: null, finishedAt: null, durationMs: null, metrics: [] },
-    { key: "item_understanding", label: "条目理解", status: "pending", startedAt: null, finishedAt: null, durationMs: null, metrics: [] },
-    { key: "cluster_assignment", label: "归组决策", status: "pending", startedAt: null, finishedAt: null, durationMs: null, metrics: [] },
-    { key: "cluster_merge", label: "聚合合并", status: "pending", startedAt: null, finishedAt: null, durationMs: null, metrics: [] },
-    { key: "cluster_finalize", label: "聚合收尾", status: "pending", startedAt: null, finishedAt: null, durationMs: null, metrics: [] },
-  ];
 }
 
 function toNodeTiming(stageTiming: IngestionStageTiming | null) {

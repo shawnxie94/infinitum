@@ -12,7 +12,6 @@ import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { withDailyReportLock } from "@/lib/daily-report/history";
 import { DailyReportCancellationError, DailyReportGenerationError, DailyReportStagePauseError } from "@/lib/daily-report/errors";
 import { normalizeDailyReportContent } from "@/lib/daily-report/content";
-import { getDailyReportFailureSummary } from "@/lib/daily-report/review";
 import { getDailyReportAttemptLimit, isDailyReportContextOverflowError } from "@/lib/daily-report/attempts";
 import { DailyReportStageLoopError, runDailyReportStageLoop, type DailyReportStageLoopResult } from "@/lib/daily-report/stage-loop";
 import { listRecentDailyReportSourceSnapshots } from "@/lib/daily-report/repository";
@@ -25,12 +24,10 @@ import { DEFAULT_DAILY_REPORT_TEMPLATE, classifyDailyReportTemplateMigration, ge
 import { resolveDailyReportChannelSourceGroupIds } from "@/lib/events/service";
 import { getIngestionRuntimeConfig } from "@/lib/settings/runtime-service";
 import { type TaskPipelineCheckpoint } from "@/lib/tasks/types";
-import type { TaskAiCallBreakdownSnapshot } from "@/lib/tasks/types";
 import { parseTaskPipelineCheckpointJson } from "@/lib/tasks/checkpoint";
-import { ensureDefaultDailyReportSchedule, isTaskRunCancellationRequested, parseDailyReportChannelIdsJson, TASK_RUN_CANCELLED_LABEL, TASK_RUN_CANCELLED_MESSAGE, updateTaskRun } from "@/lib/tasks/service";
+import { ensureDefaultDailyReportSchedule, isTaskRunCancellationRequested, parseDailyReportChannelIdsJson, TASK_RUN_CANCELLED_MESSAGE } from "@/lib/tasks/service";
 import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/ai-usage";
-import { buildDailyReportTaskTimeline, normalizeDailyReportTimelineStage, type DailyReportPipelineStage } from "@/lib/daily-report/timeline";
-import { getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
+import { type DailyReportPipelineStage } from "@/lib/daily-report/timeline";
 import { DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS } from "@/lib/tasks/scheduler";
 import { buildDailyReportSourceKey, deduplicateDailyReportContentByCandidate } from "@/lib/daily-report/candidates";
 import { toCandidateSnapshotEntry } from "@/lib/daily-report/recovery-snapshot";
@@ -1381,22 +1378,6 @@ export async function generateDailyReport(input: {
       },
     });
   });
-}
-
-function compactCompletedDailyReportCheckpoint(checkpoint: TaskPipelineCheckpoint): TaskPipelineCheckpoint {
-  const compact: TaskPipelineCheckpoint = {
-    ...checkpoint,
-    data: {
-      ...(checkpoint.data ?? {}),
-      candidateSnapshotStorage: "daily_report",
-      checkpointCompacted: true,
-    },
-  };
-  // A persisted DailyReport already owns the candidate snapshot. Keep the
-  // assessment batches and planning briefs because recovery UI and retries
-  // still use them, but avoid duplicating the full candidate snapshot.
-  delete compact.candidateSnapshot;
-  return compact;
 }
 
 /**

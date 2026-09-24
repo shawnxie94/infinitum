@@ -770,16 +770,6 @@ export function buildClusterMergeCandidateInputHash(cluster: ClusterMergeInputHa
     .digest("hex");
 }
 
-export function buildClusterMergeInputHash(clusters: ClusterMergeInputHashSeed[]): string {
-  const sorted = [...clusters].sort((a, b) => a.id.localeCompare(b.id));
-  const payload = sorted.map(buildClusterMergeInputHashPayload);
-
-  return crypto
-    .createHash("sha256")
-    .update(JSON.stringify(payload))
-    .digest("hex");
-}
-
 export type ClusterMergeCandidate = {
   id: string;
   title: string;

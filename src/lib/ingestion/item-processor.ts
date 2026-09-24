@@ -307,35 +307,6 @@ export function buildPreparedFeedItemLookup(preparedItem: PreparedFeedItem, now:
   };
 }
 
-export function estimatePreparedItemAiWork(
-  preparedItem: PreparedFeedItem,
-  lookup: PreparedFeedItemLookup | null,
-  existing: Item | null | undefined,
-  blacklist: string[],
-): boolean {
-  if (!lookup || !preparedItem.aiParsingEnabled) {
-    return false;
-  }
-
-  const initialFilterMatch = evaluateRuleFilter({
-    title: lookup.originalTitle,
-    content: [lookup.rssContent, lookup.rssExcerpt].filter(Boolean).join("\n"),
-    url: lookup.originalUrl,
-    sourceName: preparedItem.sourceName,
-    blacklist,
-  });
-
-  if (initialFilterMatch.filtered) {
-    return false;
-  }
-
-  if (canReuseExistingByUrl(existing, lookup)) {
-    return false;
-  }
-
-  return true;
-}
-
 export async function processFeedItem({
   item,
   sourceId,

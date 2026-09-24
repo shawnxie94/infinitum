@@ -1,4 +1,4 @@
-import type { BackgroundTaskRun, Item } from "@prisma/client";
+import type { Item } from "@prisma/client";
 
 import {
   AGGREGATION_PARSE_STATUS,
@@ -31,10 +31,6 @@ import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/
 import {
   enqueueTaskRun,
   ensureDefaultItemCleanupSchedule,
-  isTaskRunCancellationRequested,
-  TASK_RUN_CANCELLED_LABEL,
-  TASK_RUN_CANCELLED_MESSAGE,
-  updateTaskRun,
 } from "@/lib/tasks/service";
 
 export type RegenerationTarget = "translation" | "summary";
@@ -64,33 +60,6 @@ type AggregationReparseResult = {
   affectedClusterIds: Set<string>;
   errorMessage: string | null;
 };
-
-async function countActiveAggregationChildren(parentItemId: string) {
-  return prisma.item.count({
-    where: {
-      status: "processed",
-      moderationStatus: { not: "filtered" },
-      OR: [
-        { parentItemId },
-        {
-          aggregationSplitParents: {
-            some: { parentItemId },
-          },
-        },
-      ],
-    },
-  });
-}
-
-async function buildItemReanalyzeCompletionLabel(item: Item) {
-  if (item.isAggregation) {
-    const childCount = await countActiveAggregationChildren(item.id);
-    return `已完成重新 AI 判定（聚合 · 子事件 ${childCount} · 处理成功）`;
-  }
-
-  return "已完成重新 AI 判定（非聚合 · 处理成功）";
-}
-
 async function replaceItemEntitiesSafely(itemId: string, entities: unknown) {
   try {
     await replaceItemEntities(itemId, entities);
@@ -876,7 +845,6 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
 const CLEANUP_BATCH_SIZE = 5000;
 const REPARSE_AGGREGATIONS_BATCH_SIZE = 200;
 const REPARSE_AGGREGATIONS_MIN_TEXT_CHARS = 40;
-const REPARSE_AGGREGATIONS_PROGRESS_UPDATE_INTERVAL = 10;
 
 export type ItemCleanupPlan = {
   cutoff: Date;
@@ -1174,11 +1142,6 @@ async function reparseAggregationCandidate(
       errorMessage: message,
     };
   }
-}
-
-function shouldWriteReparseProgress(processedCount: number, totalCandidates: number) {
-  return processedCount === totalCandidates ||
-    processedCount % REPARSE_AGGREGATIONS_PROGRESS_UPDATE_INTERVAL === 0;
 }
 
 /**

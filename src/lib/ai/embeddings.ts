@@ -19,12 +19,6 @@ export {
   resetEmbeddingFailureCache,
 } from "@infinitum/ai/provider/embeddings";
 
-export function isEmbeddingConfigReady(
-  config: EmbeddingRuntimeConfig | null | undefined,
-): config is EmbeddingRuntimeConfig {
-  return isEmbeddingClientConfigReady(config);
-}
-
 export function buildEmbeddingText(
   title: string,
   summary: string | null | undefined,

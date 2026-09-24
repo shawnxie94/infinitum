@@ -2,7 +2,6 @@ import dayjs, { type Dayjs } from "dayjs";
 
 import { RANGE_OPTIONS } from "@/lib/feed/range";
 import type {
-  FeedClusterPreviewItemDTO,
   FeedEntryDTO,
   FeedPagination,
   FeedRange,
@@ -48,11 +47,6 @@ export function formatRunTime(status: FetchRunSnapshot | null): string | null {
   }
 
   return formatDate(status.finishedAt ?? status.startedAt);
-}
-
-export function formatRunDetail(status: FetchRunSnapshot | null): string | null {
-  const detail = status?.errorSummary?.trim();
-  return detail ? `抓取说明：${detail}` : null;
 }
 
 export function formatScore(score: number): string {
@@ -228,17 +222,6 @@ export function extractItemIdsFromEntry(entry: FeedEntryDTO): string[] {
 
 export function getAllSelectableItemIds(items: FeedEntryDTO[]): string[] {
   return items.flatMap(extractItemIdsFromEntry);
-}
-
-export function toClusterPreviewItems(
-  entry: FeedEntryDTO,
-  expandedClusters: Record<string, FeedClusterPreviewItemDTO[]>,
-): FeedClusterPreviewItemDTO[] {
-  if (entry.type !== "cluster") {
-    return [];
-  }
-
-  return expandedClusters[entry.id] ?? entry.itemsPreview;
 }
 
 export function normalizeDateRange(nextRange: DateRangeValue): {

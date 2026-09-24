@@ -1,7 +1,6 @@
 import type { Dayjs } from "dayjs";
 
 import type {
-  ClusterDTO,
   FeedEntryKey,
   FeedEntryDTO,
   FeedGroupOption,
@@ -91,10 +90,3 @@ export type BatchActionDialogState = {
 } | null;
 
 export type DateRangeValue = [Dayjs | null, Dayjs | null] | null;
-
-export type FeedClusterOptionsState = {
-  clusterOptions: ClusterDTO[];
-  clusterSearch: string;
-  selectedClusterId: string | null;
-  isLoadingClusterOptions: boolean;
-};
