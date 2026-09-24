@@ -6,7 +6,6 @@ import { DAILY_REPORT_TIMEZONE } from "@/lib/daily-report/types";
 import { DEFAULT_DAILY_REPORT_TASK_LABEL } from "@/lib/tasks/types";
 import { enqueueTaskRun } from "@/lib/tasks/service";
 
-
 export async function enqueueDailyReportGeneration(date: string, triggerType: "manual" | "scheduled" | "admin_action" = "manual") {
   const normalizedDate = normalizeDailyReportDate(date);
   const existingActive = await prisma.backgroundTaskRun.findFirst({

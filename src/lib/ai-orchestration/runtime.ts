@@ -369,7 +369,7 @@ const sink: WorkflowTaskSink = {
     const row = await prisma.backgroundTaskRun.findUnique({
       where: { id: taskRunId },
     });
-    return (row as unknown as BackgroundTaskRun) ?? null;
+    return row ?? null;
   },
   async markStarted(taskRunId) {
     await prisma.backgroundTaskRun.updateMany({
