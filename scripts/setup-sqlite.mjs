@@ -29,13 +29,6 @@ const sqliteRuntimePragmas = [
   "PRAGMA synchronous = NORMAL;",
   "PRAGMA foreign_keys = ON;",
 ].join("\n");
-const removedPromptConfigTypes = [
-  "daily_report_refinement_chat",
-  "daily_report_refinement_generate",
-  "item_summary",
-  "item_analysis",
-  "item_aggregation",
-];
 
 function loadSchemaSql() {
   const prebuiltSchemaSqlPath = path.resolve(root, "prisma", "schema.sql");
@@ -83,7 +76,7 @@ function runSqlite(commandArgs, options = {}) {
   });
 }
 
-function ftsTableExists(tableName) {
+function tableExists(tableName) {
   const result = execFileSync(
     "sqlite3",
     [dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='${tableName}'`],
@@ -96,7 +89,7 @@ function ftsTableExists(tableName) {
 }
 
 function indexStatsExist(indexName) {
-  if (!ftsTableExists("sqlite_stat1")) {
+  if (!tableExists("sqlite_stat1")) {
     return false;
   }
 
@@ -112,7 +105,7 @@ function indexStatsExist(indexName) {
 }
 
 function applyRuntimeSqliteObjects() {
-  if (!ftsTableExists("items")) {
+  if (!tableExists("items")) {
     return;
   }
 
@@ -122,7 +115,7 @@ function applyRuntimeSqliteObjects() {
     });
   }
 
-  if (!ftsTableExists("items_fts")) {
+  if (!tableExists("items_fts")) {
     runSqlite([dbPath], {
       input: [
         `CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
@@ -177,25 +170,8 @@ function tableColumnExists(tableName, columnName) {
   return Number(result) > 0;
 }
 
-function hasForeignKey(tableName, targetTableName, fromColumn, targetColumn) {
-  if (!ftsTableExists(tableName)) {
-    return false;
-  }
-
-  const result = execFileSync(
-    "sqlite3",
-    ["-separator", "|", dbPath, `PRAGMA foreign_key_list("${tableName.replace(/"/g, '""')}")`],
-    { encoding: "utf8" },
-  ).trim();
-
-  return result.split("\n").some((row) => {
-    const [, , table, from, to] = row.split("|");
-    return table === targetTableName && from === fromColumn && to === targetColumn;
-  });
-}
-
 function addColumnIfMissing(tableName, columnName, definition) {
-  if (!ftsTableExists(tableName) || tableColumnExists(tableName, columnName)) {
+  if (!tableExists(tableName) || tableColumnExists(tableName, columnName)) {
     return false;
   }
 
@@ -203,225 +179,6 @@ function addColumnIfMissing(tableName, columnName, definition) {
     input: `ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${definition};\n`,
   });
   return true;
-}
-
-function dropColumnIfPresent(tableName, columnName, options = {}) {
-  if (!ftsTableExists(tableName) || !tableColumnExists(tableName, columnName)) {
-    return false;
-  }
-
-  const dropIndexes = (options.dropIndexes ?? [])
-    .map((indexName) => `DROP INDEX IF EXISTS "${indexName}";`)
-    .join("\n");
-
-  runSqlite([dbPath], {
-    input: `
-      ${dropIndexes}
-      ALTER TABLE "${tableName}" DROP COLUMN "${columnName}";
-    `,
-  });
-  return true;
-}
-
-function ensureDailyReportRevisionRestoreForeignKey() {
-  if (
-    !ftsTableExists("daily_report_revisions")
-    || !tableColumnExists("daily_report_revisions", "restoredFromRevisionId")
-    || hasForeignKey("daily_report_revisions", "daily_report_revisions", "restoredFromRevisionId", "id")
-  ) {
-    return;
-  }
-
-  runSqlite([dbPath], {
-    input: `
-      PRAGMA foreign_keys=OFF;
-      BEGIN IMMEDIATE;
-      UPDATE "daily_report_revisions"
-      SET "restoredFromRevisionId" = NULL
-      WHERE "restoredFromRevisionId" IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "daily_report_revisions" AS parent
-          WHERE parent."id" = "daily_report_revisions"."restoredFromRevisionId"
-        );
-
-      DROP TABLE IF EXISTS "_daily_report_revisions_restore_fk_upgrade";
-      CREATE TABLE "_daily_report_revisions_restore_fk_upgrade" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "dailyReportId" TEXT NOT NULL,
-        "revisionNo" INTEGER NOT NULL,
-        "action" TEXT NOT NULL,
-        "status" TEXT NOT NULL,
-        "title" TEXT NOT NULL,
-        "openingSummary" TEXT NOT NULL,
-        "closingThought" TEXT NOT NULL,
-        "summaryJson" TEXT NOT NULL,
-        "renderedMarkdown" TEXT NOT NULL,
-        "inputHash" TEXT NOT NULL,
-        "modelName" TEXT,
-        "templateSignature" TEXT,
-        "pipelineVersion" TEXT,
-        "taskRunId" TEXT,
-        "candidateSnapshot" TEXT,
-        "idempotencyKey" TEXT,
-        "actorType" TEXT NOT NULL DEFAULT 'system',
-        "actorId" TEXT,
-        "actorLabel" TEXT,
-        "restoredFromRevisionId" TEXT,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT "daily_report_revisions_dailyReportId_fkey"
-          FOREIGN KEY ("dailyReportId") REFERENCES "daily_reports" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-        CONSTRAINT "daily_report_revisions_restoredFromRevisionId_fkey"
-          FOREIGN KEY ("restoredFromRevisionId") REFERENCES "daily_report_revisions" ("id") ON DELETE SET NULL ON UPDATE CASCADE
-      );
-      INSERT INTO "_daily_report_revisions_restore_fk_upgrade" (
-        "id", "dailyReportId", "revisionNo", "action", "status", "title", "openingSummary",
-        "closingThought", "summaryJson", "renderedMarkdown", "inputHash", "modelName",
-        "templateSignature", "pipelineVersion", "taskRunId", "candidateSnapshot", "idempotencyKey",
-        "actorType", "actorId", "actorLabel", "restoredFromRevisionId", "createdAt"
-      )
-      SELECT
-        "id", "dailyReportId", "revisionNo", "action", "status", "title", "openingSummary",
-        "closingThought", "summaryJson", "renderedMarkdown", "inputHash", "modelName",
-        "templateSignature", "pipelineVersion", "taskRunId", "candidateSnapshot", "idempotencyKey",
-        "actorType", "actorId", "actorLabel", "restoredFromRevisionId", "createdAt"
-      FROM "daily_report_revisions";
-      DROP TABLE "daily_report_revisions";
-      ALTER TABLE "_daily_report_revisions_restore_fk_upgrade" RENAME TO "daily_report_revisions";
-      CREATE INDEX IF NOT EXISTS "daily_report_revisions_dailyReportId_createdAt_idx"
-        ON "daily_report_revisions"("dailyReportId", "createdAt");
-      CREATE UNIQUE INDEX IF NOT EXISTS "daily_report_revisions_dailyReportId_revisionNo_key"
-        ON "daily_report_revisions"("dailyReportId", "revisionNo");
-      CREATE UNIQUE INDEX IF NOT EXISTS "daily_report_revisions_idempotencyKey_key"
-        ON "daily_report_revisions"("idempotencyKey");
-      COMMIT;
-      PRAGMA foreign_keys=ON;
-    `,
-  });
-}
-
-function ensureDailyReportCurrentRevisionForeignKey() {
-  if (
-    !ftsTableExists("daily_reports")
-    || !tableColumnExists("daily_reports", "currentRevisionId")
-    || hasForeignKey("daily_reports", "daily_report_revisions", "currentRevisionId", "id")
-  ) {
-    return;
-  }
-
-  runSqlite([dbPath], {
-    input: `
-      PRAGMA foreign_keys=OFF;
-      BEGIN IMMEDIATE;
-      UPDATE "daily_reports"
-      SET "currentRevisionId" = NULL
-      WHERE "currentRevisionId" IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM "daily_report_revisions" AS revision
-          WHERE revision."id" = "daily_reports"."currentRevisionId"
-        );
-
-      DROP TABLE IF EXISTS "_daily_reports_current_revision_fk_upgrade";
-      CREATE TABLE "_daily_reports_current_revision_fk_upgrade" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "date" TEXT NOT NULL,
-        "timezone" TEXT NOT NULL DEFAULT 'Asia/Shanghai',
-        "status" TEXT NOT NULL DEFAULT 'draft',
-        "title" TEXT NOT NULL,
-        "openingSummary" TEXT NOT NULL,
-        "closingThought" TEXT NOT NULL,
-        "summaryJson" TEXT NOT NULL,
-        "renderedMarkdown" TEXT NOT NULL,
-        "inputHash" TEXT NOT NULL,
-        "modelName" TEXT,
-        "taskRunId" TEXT,
-        "candidateSnapshot" TEXT,
-        "currentRevisionId" TEXT,
-        "errorMessage" TEXT,
-        "publishedAt" DATETIME,
-        "generatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" DATETIME NOT NULL,
-        CONSTRAINT "daily_reports_taskRunId_fkey"
-          FOREIGN KEY ("taskRunId") REFERENCES "background_task_runs" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
-        CONSTRAINT "daily_reports_currentRevisionId_fkey"
-          FOREIGN KEY ("currentRevisionId") REFERENCES "daily_report_revisions" ("id") ON DELETE SET NULL ON UPDATE CASCADE
-      );
-      INSERT INTO "_daily_reports_current_revision_fk_upgrade" (
-        "id", "date", "timezone", "status", "title", "openingSummary", "closingThought",
-        "summaryJson", "renderedMarkdown", "inputHash", "modelName", "taskRunId",
-        "candidateSnapshot", "currentRevisionId", "errorMessage", "publishedAt", "generatedAt",
-        "createdAt", "updatedAt"
-      )
-      SELECT
-        "id", "date", "timezone", "status", "title", "openingSummary", "closingThought",
-        "summaryJson", "renderedMarkdown", "inputHash", "modelName", "taskRunId",
-        "candidateSnapshot", "currentRevisionId", "errorMessage", "publishedAt", "generatedAt",
-        "createdAt", "updatedAt"
-      FROM "daily_reports";
-      DROP TABLE "daily_reports";
-      ALTER TABLE "_daily_reports_current_revision_fk_upgrade" RENAME TO "daily_reports";
-      CREATE INDEX IF NOT EXISTS "daily_reports_status_date_idx" ON "daily_reports"("status", "date");
-      CREATE INDEX IF NOT EXISTS "daily_reports_taskRunId_idx" ON "daily_reports"("taskRunId");
-      CREATE INDEX IF NOT EXISTS "daily_reports_currentRevisionId_idx" ON "daily_reports"("currentRevisionId");
-      CREATE UNIQUE INDEX IF NOT EXISTS "daily_reports_date_timezone_key" ON "daily_reports"("date", "timezone");
-      COMMIT;
-      PRAGMA foreign_keys=ON;
-    `,
-  });
-}
-
-function renameColumnIfPresent(tableName, oldColumnName, newColumnName, options = {}) {
-  if (!ftsTableExists(tableName) || !tableColumnExists(tableName, oldColumnName)) {
-    return false;
-  }
-
-  const dropIndexes = (options.dropIndexes ?? [])
-    .map((indexName) => `DROP INDEX IF EXISTS "${indexName}";`)
-    .join("\n");
-
-  if (tableColumnExists(tableName, newColumnName)) {
-    runSqlite([dbPath], {
-      input: `
-        ${dropIndexes}
-        ALTER TABLE "${tableName}" DROP COLUMN "${oldColumnName}";
-      `,
-    });
-    return true;
-  }
-
-  runSqlite([dbPath], {
-    input: `
-      ${dropIndexes}
-      ALTER TABLE "${tableName}" RENAME COLUMN "${oldColumnName}" TO "${newColumnName}";
-    `,
-  });
-  return true;
-}
-
-function applyScoreFieldRenames() {
-  renameColumnIfPresent("content_clusters", "displayRecommendScore", "displayQualityScore", {
-    dropIndexes: ["content_clusters_status_displayRecommendScore_idx"],
-  });
-  renameColumnIfPresent("event_briefing_configs", "minAttentionScore", "minRankScore");
-
-  if (
-    ftsTableExists("content_clusters") &&
-    tableColumnExists("content_clusters", "displayQualityScore") &&
-    tableColumnExists("content_clusters", "displayAverageScore")
-  ) {
-    runSqlite([dbPath], {
-      input: `
-        UPDATE "content_clusters"
-        SET "displayQualityScore" = CASE
-          WHEN "displayAverageScore" > 100 THEN 100
-          WHEN "displayAverageScore" < 0 THEN 0
-          ELSE "displayAverageScore"
-        END;
-      `,
-    });
-  }
 }
 
 function querySqliteNumber(sql) {
@@ -434,9 +191,9 @@ function querySqliteNumber(sql) {
 
 function hasPendingClusterFeedStatsBackfill() {
   if (
-    !ftsTableExists("content_clusters") ||
-    !ftsTableExists("items") ||
-    !ftsTableExists("sources") ||
+    !tableExists("content_clusters") ||
+    !tableExists("items") ||
+    !tableExists("sources") ||
     !tableColumnExists("content_clusters", "latestCreatedAt") ||
     !tableColumnExists("content_clusters", "feedStatsUpdatedAt")
   ) {
@@ -466,7 +223,7 @@ function hasPendingClusterFeedStatsBackfill() {
 }
 
 function applyClusterFeedStatsBackfill() {
-  if (!ftsTableExists("content_clusters") || !ftsTableExists("items") || !ftsTableExists("sources")) {
+  if (!tableExists("content_clusters") || !tableExists("items") || !tableExists("sources")) {
     return;
   }
 
@@ -591,45 +348,6 @@ function applyClusterFeedStatsBackfill() {
       DROP TABLE IF EXISTS "_cluster_feed_group_backfill";
       DROP TABLE IF EXISTS "_cluster_feed_entity_backfill";
       DROP TABLE IF EXISTS "_cluster_feed_entity_json_backfill";
-    `,
-  });
-}
-
-function cleanupLegacyTagSchema() {
-  runSqlite([dbPath], {
-    input: `
-      PRAGMA foreign_keys=OFF;
-      DROP TABLE IF EXISTS "item_tags";
-      DROP TABLE IF EXISTS "tag_aliases";
-      DROP TABLE IF EXISTS "tag_suggestion_candidates";
-      DROP TABLE IF EXISTS "tag_suggestion_decisions";
-      DROP TABLE IF EXISTS "tags";
-      PRAGMA foreign_keys=ON;
-    `,
-  });
-
-  dropColumnIfPresent("content_clusters", "feedTagsJson");
-
-  runSqlite([dbPath], {
-    input: `
-      UPDATE "briefing_preference_configs"
-      SET "weightedRulesJson" = COALESCE((
-        SELECT json_group_array(json(rule."value"))
-        FROM json_each(
-          CASE
-            WHEN json_valid("briefing_preference_configs"."weightedRulesJson")
-            THEN "briefing_preference_configs"."weightedRulesJson"
-            ELSE '[]'
-          END
-        ) AS rule
-        WHERE json_extract(rule."value", '$.type') <> 'tag'
-      ), '[]')
-      WHERE json_valid("weightedRulesJson")
-        AND EXISTS (
-          SELECT 1
-          FROM json_each("briefing_preference_configs"."weightedRulesJson") AS rule
-          WHERE json_extract(rule."value", '$.type') = 'tag'
-        );
     `,
   });
 }
@@ -792,21 +510,9 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("items", "lastProcessingError", "TEXT");
   addColumnIfMissing("items", "publishedAtKnown", "BOOLEAN NOT NULL DEFAULT true");
 
-  dropColumnIfPresent("items", "dedupeSignature", {
-    dropIndexes: ["items_dedupeSignature_key", "items_dedupeSignature_idx"],
-  });
-  dropColumnIfPresent("item_dedupe_history", "dedupeSignature", {
-    dropIndexes: ["item_dedupe_history_dedupeSignature_key", "item_dedupe_history_dedupeSignature_idx"],
-  });
-
-  if (ftsTableExists("prompt_configs") && !tableColumnExists("prompt_configs", "templateJson")) {
-    runSqlite([dbPath], {
-      input: `ALTER TABLE "prompt_configs" ADD COLUMN "templateJson" TEXT;\n`,
-    });
-  }
-
+  addColumnIfMissing("prompt_configs", "templateJson", "TEXT");
   addColumnIfMissing("prompt_configs", "userPrompt", "TEXT");
-  if (ftsTableExists("prompt_configs")) {
+  if (tableExists("prompt_configs")) {
     runSqlite([dbPath], {
       input: 'UPDATE "prompt_configs" SET "userPrompt" = "prompt" WHERE "userPrompt" IS NULL;\n',
     });
@@ -831,17 +537,13 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("daily_report_revisions", "actorId", "TEXT");
   addColumnIfMissing("daily_report_revisions", "actorLabel", "TEXT");
   addColumnIfMissing("daily_report_revisions", "restoredFromRevisionId", "TEXT");
-  ensureDailyReportRevisionRestoreForeignKey();
-  ensureDailyReportCurrentRevisionForeignKey();
-  dropColumnIfPresent("task_schedules", "dailyReportMaxRetries");
-  if (ftsTableExists("daily_report_revisions")) {
+  if (tableExists("daily_report_revisions")) {
     runSqlite([dbPath], {
       input: 'CREATE UNIQUE INDEX IF NOT EXISTS "daily_report_revisions_idempotencyKey_key" ON "daily_report_revisions"("idempotencyKey");\n',
     });
   }
-  dropColumnIfPresent("task_schedules", "dailyReportGroupIdsJson");
 
-  if (!ftsTableExists("entities")) {
+  if (!tableExists("entities")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "entities" (
@@ -857,7 +559,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
-  if (!ftsTableExists("item_entities")) {
+  if (!tableExists("item_entities")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "item_entities" (
@@ -875,7 +577,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
-  if (!ftsTableExists("entity_aliases")) {
+  if (!tableExists("entity_aliases")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "entity_aliases" (
@@ -895,7 +597,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
-  if (!ftsTableExists("entity_suggestion_decisions")) {
+  if (!tableExists("entity_suggestion_decisions")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "entity_suggestion_decisions" (
@@ -913,7 +615,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
-  if (!ftsTableExists("entity_suggestion_candidates")) {
+  if (!tableExists("entity_suggestion_candidates")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "entity_suggestion_candidates" (
@@ -945,7 +647,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
-  if (!ftsTableExists("header_links")) {
+  if (!tableExists("header_links")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "header_links" (
@@ -965,7 +667,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
-  if (!ftsTableExists("event_briefing_configs")) {
+  if (!tableExists("event_briefing_configs")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "event_briefing_configs" (
@@ -978,9 +680,6 @@ function applyAdditiveSchemaUpgrades() {
       `,
     });
   }
-  dropColumnIfPresent("event_briefing_configs", "includeSingleItems");
-  dropColumnIfPresent("items", "understandingInputHash");
-  dropColumnIfPresent("items", "understandingVersion");
   runSqlite([dbPath], {
     input: `
       CREATE INDEX IF NOT EXISTS "items_nextProcessingRetryAt_status_moderationStatus_idx" ON "items"("nextProcessingRetryAt", "status", "moderationStatus");
@@ -990,7 +689,7 @@ function applyAdditiveSchemaUpgrades() {
 
   addColumnIfMissing("event_briefing_configs", "briefingChannelsJson", "TEXT NOT NULL DEFAULT '[]'");
 
-  if (!ftsTableExists("briefing_preference_configs")) {
+  if (!tableExists("briefing_preference_configs")) {
     runSqlite([dbPath], {
       input: `
         CREATE TABLE IF NOT EXISTS "briefing_preference_configs" (
@@ -1020,7 +719,6 @@ function applyAdditiveSchemaUpgrades() {
     addColumnIfMissing("content_clusters", "feedStatsUpdatedAt", "DATETIME"),
   ].some(Boolean);
   addColumnIfMissing("content_clusters", "earliestCreatedAt", "DATETIME");
-  applyScoreFieldRenames();
 
   runSqlite([dbPath], {
     input: `
@@ -1036,20 +734,6 @@ function applyAdditiveSchemaUpgrades() {
   if (clusterFeedStatsColumnsAdded || hasPendingClusterFeedStatsBackfill()) {
     applyClusterFeedStatsBackfill();
   }
-}
-
-function cleanupRemovedPromptConfigTypes() {
-  if (!ftsTableExists("prompt_configs")) {
-    return;
-  }
-
-  const quotedTypes = removedPromptConfigTypes
-    .map((type) => `'${type.replace(/'/g, "''")}'`)
-    .join(", ");
-
-  runSqlite([dbPath], {
-    input: `DELETE FROM "prompt_configs" WHERE "type" IN (${quotedTypes});\n`,
-  });
 }
 
 function sleep(ms) {
@@ -1117,20 +801,14 @@ try {
     rmSync(`${dbPath}-wal`, { force: true });
   }
 
-  const shouldBackfillEntities = existsSync(dbPath) && ftsTableExists("items") && (
-    !ftsTableExists("entities")
-    || !ftsTableExists("item_entities")
-    || ftsTableExists("tags")
-    || ftsTableExists("tag_aliases")
-    || ftsTableExists("item_tags")
-    || (ftsTableExists("content_clusters") && tableColumnExists("content_clusters", "feedTagsJson"))
+  const shouldBackfillEntities = existsSync(dbPath) && tableExists("items") && (
+    !tableExists("entities")
+    || !tableExists("item_entities")
+    || tableExists("tags")
+    || tableExists("tag_aliases")
+    || tableExists("item_tags")
+    || (tableExists("content_clusters") && tableColumnExists("content_clusters", "feedTagsJson"))
   );
-
-  if (existsSync(dbPath)) {
-    addColumnIfMissing("items", "processingAttemptCount", "INTEGER NOT NULL DEFAULT 0");
-    addColumnIfMissing("items", "nextProcessingRetryAt", "DATETIME");
-    addColumnIfMissing("items", "lastProcessingError", "TEXT");
-  }
 
   const sql = `${sqliteRuntimePragmas}\n${makeSqliteSchemaIdempotent(loadSchemaSql())}\n${sqliteRuntimePragmas}\n`;
   runSqlite([dbPath], {
@@ -1141,8 +819,6 @@ try {
     applyEntityItemBackfill();
     console.log(`Entity item backfill applied: up to ${entityBackfillLimit} items`);
   }
-  cleanupLegacyTagSchema();
-  cleanupRemovedPromptConfigTypes();
 
   applyRuntimeSqliteObjects();
 

@@ -39,6 +39,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'items'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'items_fts'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = '_prisma_migrations'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('model_api_configs') WHERE "name" IN ('type', 'dimensions', 'batchSize', 'timeoutMs')`)).toBe("4");
   }, 30_000);
 
   it("serializes concurrent setup runs with a lock", { timeout: 30000 }, async () => {
@@ -177,16 +178,6 @@ describe("sqlite setup", () => {
         "id", "name", "type", "prompt", "systemPrompt", "isEnabled", "isDefault", "updatedAt"
       ) VALUES (
         'prompt-old', '旧日报提示词', 'daily_report', '模板', '系统提示词', true, true, CURRENT_TIMESTAMP
-      ), (
-        'prompt-removed-chat', '旧日报微调对话提示词', 'daily_report_refinement_chat', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
-      ), (
-        'prompt-removed-generate', '旧日报微调生成提示词', 'daily_report_refinement_generate', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
-      ), (
-        'prompt-item-summary', '旧条目摘要提示词', 'item_summary', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
-      ), (
-        'prompt-item-analysis', '旧内容分析提示词', 'item_analysis', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
-      ), (
-        'prompt-item-aggregation', '旧聚合拆分提示词', 'item_aggregation', '模板', '系统提示词', true, false, CURRENT_TIMESTAMP
       );
       `,
     );
@@ -199,54 +190,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('prompt_configs') WHERE "name" = 'templateJson'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT "userPrompt" FROM "prompt_configs" WHERE "id" = 'prompt-old'`)).toBe("模板");
     expect(runSqlite(dbPath, `SELECT "name" FROM "prompt_configs" WHERE "id" = 'prompt-old'`)).toBe("旧日报提示词");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('daily_report_refinement_chat', 'daily_report_refinement_generate')`)).toBe("0");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "prompt_configs" WHERE "type" IN ('item_summary', 'item_analysis', 'item_aggregation')`)).toBe("0");
   }, 15_000);
-
-  it("cleans legacy tag search text and preference rules during Docker SQLite setup", () => {
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-entity-cleanup-"));
-    const dbPath = path.join(tempDir, "cleanup.db");
-
-    tempDirs.push(tempDir);
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-    runSqlite(
-      dbPath,
-      `
-      CREATE TABLE "tags" ("id" TEXT NOT NULL PRIMARY KEY);
-      INSERT INTO "content_clusters" (
-        "id", "kind", "title", "summary", "score", "itemCount", "latestPublishedAt", "status",
-        "fingerprint", "feedSearchText", "feedEntitiesJson", "updatedAt"
-      ) VALUES (
-        'cluster-legacy-setup', 'topic', 'Setup title', 'Setup summary', 50, 1, CURRENT_TIMESTAMP,
-        'active', 'legacy-setup-fingerprint', 'Setup title Setup summary OldTag', '[]', CURRENT_TIMESTAMP
-      );
-      INSERT INTO "briefing_preference_configs" (
-        "id", "weightedRulesJson", "maxCuratorBoost", "maxCuratorPenalty", "updatedAt"
-      ) VALUES (
-        'preference-legacy-setup',
-        '[{"type":"tag","value":"oldtag","weight":8},{"type":"keyword","value":"AI","weight":3}]',
-        15, 20, CURRENT_TIMESTAMP
-      );
-      `,
-    );
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    expect(runSqlite(dbPath, `SELECT "feedSearchText" FROM "content_clusters" WHERE "id" = 'cluster-legacy-setup'`)).toBe(
-      "Setup title Setup summary",
-    );
-    expect(runSqlite(dbPath, `SELECT "weightedRulesJson" FROM "briefing_preference_configs" WHERE "id" = 'preference-legacy-setup'`)).toBe(
-      '[{"type":"keyword","value":"AI","weight":3}]',
-    );
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'table' AND "name" = 'tags'`)).toBe("0");
-  }, 30_000);
 
   it("adds publishedAtKnown to an existing items table without dropping item data", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-published-at-upgrade-"));
@@ -289,7 +233,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT "publishedAtKnown" FROM "items" WHERE "id" = 'item-published-at-upgrade'`)).toBe("1");
   }, 30_000);
 
-  it("drops obsolete understanding cache columns without dropping items", () => {
+  it("keeps items data and FTS sync when setup runs against an existing volume", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-understanding-upgrade-"));
     const dbPath = path.join(tempDir, "understanding-upgrade.db");
 
@@ -316,8 +260,6 @@ describe("sqlite setup", () => {
         'https://upgrade.example.com/item', 'item-understanding-upgrade', 'Existing item', CURRENT_TIMESTAMP,
         'processed', 'allowed', 50, 'existing', 'en', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       );
-      ALTER TABLE "items" ADD COLUMN "understandingInputHash" TEXT;
-      ALTER TABLE "items" ADD COLUMN "understandingVersion" TEXT;
       `,
     );
 
@@ -327,97 +269,8 @@ describe("sqlite setup", () => {
     });
 
     expect(runSqlite(dbPath, `SELECT "originalTitle" FROM "items" WHERE "id" = 'item-understanding-upgrade'`)).toBe("Existing item");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("0");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'trigger' AND "name" LIKE 'items_fts_%'`)).toBe("3");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items_fts" WHERE "rowid" = (SELECT "rowid" FROM "items" WHERE "id" = 'item-understanding-upgrade')`)).toBe("1");
-  }, 20_000);
-
-  it("drops legacy dedupeSignature columns during setup", () => {
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-dedupe-cleanup-"));
-    const dbPath = path.join(tempDir, "dedupe-cleanup.db");
-
-    tempDirs.push(tempDir);
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    runSqlite(
-      dbPath,
-      `
-      ALTER TABLE "items" ADD COLUMN "dedupeSignature" TEXT;
-      CREATE INDEX "items_dedupeSignature_idx" ON "items"("dedupeSignature");
-      ALTER TABLE "item_dedupe_history" ADD COLUMN "dedupeSignature" TEXT;
-      CREATE INDEX "item_dedupe_history_dedupeSignature_idx" ON "item_dedupe_history"("dedupeSignature");
-      `,
-    );
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'dedupeSignature'`)).toBe("0");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('item_dedupe_history') WHERE "name" = 'dedupeSignature'`)).toBe("0");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='items_dedupeSignature_idx'`)).toBe("0");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='item_dedupe_history_dedupeSignature_idx'`)).toBe("0");
-  }, 20_000);
-
-  it("drops the retired daily report retry column without dropping the schedule", () => {
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-daily-report-retry-cleanup-"));
-    const dbPath = path.join(tempDir, "daily-report-retry-cleanup.db");
-
-    tempDirs.push(tempDir);
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    runSqlite(
-      dbPath,
-      `
-      ALTER TABLE "task_schedules" ADD COLUMN "dailyReportMaxRetries" INTEGER NOT NULL DEFAULT 0;
-      UPDATE "task_schedules" SET "dailyReportMaxRetries" = 9;
-      `,
-    );
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'task_schedules'`)).toBe("1");
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('task_schedules') WHERE "name" = 'dailyReportMaxRetries'`)).toBe("0");
-  }, 20_000);
-
-  it("adds the restore-source foreign key to legacy daily report revision tables", () => {
-    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-daily-report-revision-fk-"));
-    const dbPath = path.join(tempDir, "daily-report-revision-fk.db");
-
-    tempDirs.push(tempDir);
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    runSqlite(dbPath, `
-      PRAGMA foreign_keys=OFF;
-      ALTER TABLE "daily_report_revisions" RENAME TO "legacy_daily_report_revisions";
-      CREATE TABLE "daily_report_revisions" AS SELECT * FROM "legacy_daily_report_revisions";
-      DROP TABLE "legacy_daily_report_revisions";
-      PRAGMA foreign_keys=ON;
-    `);
-
-    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
-      cwd: process.cwd(),
-      encoding: "utf8",
-    });
-
-    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_foreign_key_list('daily_report_revisions') WHERE "table" = 'daily_report_revisions' AND "from" = 'restoredFromRevisionId' AND "to" = 'id'`)).toBe("1");
   }, 20_000);
 
   it("does not rerun cluster feed stats backfill or earliestCreatedAt backfill after clusters have been initialized", () => {
@@ -469,7 +322,9 @@ describe("sqlite setup", () => {
     });
 
     expect(runSqlite(dbPath, `SELECT "displayItemCount" FROM "content_clusters" WHERE id = 'cluster-backfilled'`)).toBe("7");
-    expect(runSqlite(dbPath, `SELECT "displayQualityScore" FROM "content_clusters" WHERE id = 'cluster-backfilled'`)).toBe("88");
+    // displayAverageScore=88 ≠ displayQualityScore=91：重跑 setup 不得把质量分 v4 的
+    // 持久化精选分覆盖回平均分（旧行为会在容器每次重启时清掉校准值）。
+    expect(runSqlite(dbPath, `SELECT "displayQualityScore" FROM "content_clusters" WHERE id = 'cluster-backfilled'`)).toBe("91");
     expect(runSqlite(dbPath, `SELECT COALESCE("earliestCreatedAt", '') FROM "content_clusters" WHERE id = 'cluster-backfilled'`)).toBe("");
   }, 20_000);
 
