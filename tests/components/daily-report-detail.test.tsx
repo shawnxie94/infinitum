@@ -87,7 +87,8 @@ describe("DailyReportDetail", () => {
     expect(await screen.findByRole("heading", { name: "草稿日报", level: 1 })).toBeInTheDocument();
     expect(screen.getByText("草稿")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/admin/session", { cache: "no-store" });
-    expect(fetchMock).toHaveBeenCalledWith("/api/admin/daily-reports/2026-04-29", undefined);
+    // fetch(url) 与 fetch(url, undefined) 等价；断言只钉 URL 与会话请求形态。
+    expect(fetchMock).toHaveBeenCalledWith("/api/admin/daily-reports/2026-04-29");
   });
 
   it("does not fetch admin detail for anonymous visitors", async () => {

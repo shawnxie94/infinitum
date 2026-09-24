@@ -4,6 +4,7 @@ import type {
   AdminPromptConfig,
   PromptConfigType,
 } from "@/lib/settings/types";
+import { fetchJsonOrThrow } from "@/lib/utils/http";
 
 export type ModelApiConfigPayload = {
   type: "chat" | "embedding";
@@ -41,23 +42,20 @@ async function requestAiSettingsJson<T>(
   method: string,
   body?: unknown,
 ): Promise<T> {
-  const response = await fetch(url, {
-    method,
-    headers:
-      method === "GET"
-        ? undefined
-        : {
-            "content-type": "application/json",
-          },
-    body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
-  });
-  const payload = (await response.json()) as T & { error?: string };
-
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error ?? "请求失败");
-  }
-
-  return payload;
+  return fetchJsonOrThrow<T>(
+    url,
+    {
+      method,
+      headers:
+        method === "GET"
+          ? undefined
+          : {
+              "content-type": "application/json",
+            },
+      body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
+    },
+    "请求失败",
+  );
 }
 
 export function getModelApiConfig(configId: string) {

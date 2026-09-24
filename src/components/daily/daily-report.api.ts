@@ -3,26 +3,12 @@ import type {
   DailyReportRevisionDetailDTO,
   DailyReportRevisionListItemDTO,
 } from "@/lib/daily-report/types";
-
-type ApiResult<T> = {
-  ok: boolean;
-  status: number;
-  data: T;
-};
+import { requestJsonWithMeta } from "@/lib/utils/http";
 
 type TaskRunPayload = {
   taskRun?: { id: string } | null;
   error?: string;
 };
-
-async function requestJsonWithMeta<T>(input: RequestInfo | URL, init?: RequestInit): Promise<ApiResult<T>> {
-  const response = await fetch(input, init);
-  return {
-    ok: response.ok,
-    status: response.status,
-    data: (await response.json()) as T,
-  };
-}
 
 export function requestDailyReportGeneration(date: string) {
   return requestJsonWithMeta<TaskRunPayload>("/api/admin/daily-reports/generate", {

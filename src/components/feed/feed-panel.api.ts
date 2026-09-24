@@ -10,6 +10,7 @@ import type {
 } from "@/lib/feed/types";
 import { DEFAULT_FEED_PAGE_SIZE } from "@/lib/feed/types";
 import type { FeedQueryState } from "@/components/feed/feed-panel.types";
+import { requestJson, requestJsonWithMeta } from "@/lib/utils/http";
 import { buildFeedSearch } from "@/components/feed/feed-panel.utils";
 
 type FeedPayload = {
@@ -54,26 +55,6 @@ type MergeSelectedItemsPayload = {
   };
   error?: string;
 };
-
-type ApiResult<T> = {
-  ok: boolean;
-  status: number;
-  data: T;
-};
-
-async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const response = init ? await fetch(input, init) : await fetch(input);
-  return (await response.json()) as T;
-}
-
-async function requestJsonWithMeta<T>(input: RequestInfo | URL, init?: RequestInit): Promise<ApiResult<T>> {
-  const response = init ? await fetch(input, init) : await fetch(input);
-  return {
-    ok: response.ok,
-    status: response.status,
-    data: (await response.json()) as T,
-  };
-}
 
 export async function requestFeed(
   query: FeedQueryState,

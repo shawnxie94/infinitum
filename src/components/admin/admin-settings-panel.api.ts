@@ -1,4 +1,5 @@
 import type { AdminBriefingPreferenceSuggestion, AdminSettingsSnapshot } from "@/lib/settings/types";
+import { fetchJsonOrThrow } from "@/lib/utils/http";
 
 type SourceResolvePayload = {
   source?: {
@@ -155,20 +156,17 @@ async function requestAdminSettingsJson<T extends { error?: string }>(
   body?: unknown,
   fallbackMessage = "请求失败",
 ): Promise<T> {
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "content-type": "application/json",
+  return fetchJsonOrThrow<T>(
+    url,
+    {
+      method,
+      headers: {
+        "content-type": "application/json",
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const payload = (await response.json()) as T;
-
-  if (!response.ok || payload.error) {
-    throw new Error(payload.error ?? fallbackMessage);
-  }
-
-  return payload;
+    fallbackMessage,
+  );
 }
 
 export function submitAdminSettingsAction(url: string, method: string, body: unknown) {

@@ -4,6 +4,7 @@ import type {
   ClusterReviewCandidateDTO,
   ReviewItemDTO,
 } from "@/lib/feed/types";
+import { getResponseError } from "@/lib/utils/http";
 
 export type RequiredActionField = "cluster" | "taskRun";
 
@@ -39,19 +40,6 @@ type MergeClustersPayload = {
   result?: MergeClustersResult;
   error?: string;
 };
-
-export function getResponseError(
-  response: Response,
-  payload: {
-    error?: string;
-  },
-  fallbackMessage: string,
-) {
-  if (!response.ok) {
-    return payload.error ?? fallbackMessage;
-  }
-  return payload.error ?? null;
-}
 
 async function parseJsonResponse<T extends { error?: string }>(
   response: Response,
