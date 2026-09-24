@@ -1,3 +1,5 @@
+import { TaskCancellationError } from "@infinitum/ai/orchestration/errors";
+
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
 import type { TaskAiUsageSnapshot } from "@/lib/tasks/ai-usage";
 
@@ -29,7 +31,9 @@ export class DailyReportStagePauseError extends Error {
   }
 }
 
-export class DailyReportCancellationError extends Error {
+// 继承 TaskCancellationError 让 glue 的 classifyTaskError 走 instanceof 分支，
+// 取消判定不依赖「管理员手动终止」文案正则。
+export class DailyReportCancellationError extends TaskCancellationError {
   aiUsage: TaskAiUsageSnapshot;
   checkpoint: TaskPipelineCheckpoint | null;
 

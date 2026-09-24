@@ -72,3 +72,6 @@ next-env.d.ts
 /daily-detail*.png
 /graphify-out
 
+
+# ZCode 工作区本地目录
+.zcode/

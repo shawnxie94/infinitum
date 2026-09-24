@@ -36,7 +36,9 @@ export function createAiRuntime(input: {
       const disposable = mastra as unknown as { shutdown?: () => Promise<void> };
       if (typeof disposable.shutdown === "function") {
         await disposable.shutdown();
+        return;
       }
+      console.warn("[ai-orchestration] Mastra shutdown API unavailable; skip runtime disposal (mastra version drift?)");
     },
   };
 }
@@ -46,5 +48,7 @@ export async function restartActiveWorkflowRuns(runtime: AiRuntime): Promise<voi
   const api = runtime.mastra as unknown as { restartAllActiveWorkflowRuns?: () => Promise<void> };
   if (typeof api.restartAllActiveWorkflowRuns === "function") {
     await api.restartAllActiveWorkflowRuns();
+    return;
   }
+  console.warn("[ai-orchestration] Mastra restartAllActiveWorkflowRuns API unavailable; crash recovery skipped (mastra version drift?)");
 }
