@@ -9,7 +9,6 @@ import {
   deleteModelApiConfig,
   deletePromptConfig,
   fetchModelApiConfigModels,
-  getModelApiConfig,
   testModelApiConfig,
   updateModelApiConfig,
   updatePromptConfig,
@@ -356,7 +355,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
   const [showModelModal, setShowModelModal] = useState(false);
   const [modelListTab, setModelListTab] = useState<"chat" | "embedding">("chat");
   const [editingModelConfig, setEditingModelConfig] = useState<AdminModelApiConfig | null>(null);
-  const [editingModelApiKeyRaw, setEditingModelApiKeyRaw] = useState("");
   const [modelForm, setModelForm] = useState<ModelFormState>(() => buildEmptyModelForm("chat"));
   const [modelSaving, setModelSaving] = useState(false);
   const [modelOptions, setModelOptions] = useState<string[]>([]);
@@ -421,7 +419,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
 
   const openCreateModelModal = () => {
     setEditingModelConfig(null);
-    setEditingModelApiKeyRaw("");
     setModelForm(buildEmptyModelForm(modelListTab));
     setModelOptions([]);
     setModelOptionsError("");
@@ -431,7 +428,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
 
   const openEditModelModal = async (config: AdminModelApiConfig) => {
     setEditingModelConfig(config);
-    setEditingModelApiKeyRaw("");
     setModelForm({
       modelType: config.type,
       providerId: inferModelApiProvider(config.baseUrl),
@@ -455,13 +451,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
     setModelOptionsError("");
     setModelNameManual(true);
     setShowModelModal(true);
-
-    try {
-      const detail = await getModelApiConfig(config.id);
-      setEditingModelApiKeyRaw(detail.apiKeyRaw || "");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "读取模型配置详情失败", "error");
-    }
   };
 
   const handleFetchModelOptions = async () => {
@@ -1051,24 +1040,12 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                 }
                 className="flex-1"
               />
-              {modelForm.apiKey ? (
+              {modelForm.apiKey && !(editingModelConfig && modelForm.apiKeyMode === "keep") ? (
                 <IconButton
-                  onClick={() =>
-                    copyText(
-                      editingModelConfig && modelForm.apiKeyMode === "keep"
-                        ? editingModelApiKeyRaw
-                        : modelForm.apiKey,
-                      "API密钥已复制。",
-                    )
-                  }
+                  onClick={() => copyText(modelForm.apiKey, "API密钥已复制。")}
                   title="复制"
                   variant="secondary"
                   size="md"
-                  disabled={
-                    Boolean(editingModelConfig) &&
-                    modelForm.apiKeyMode === "keep" &&
-                    !editingModelApiKeyRaw
-                  }
                 >
                   <IconCopy className="h-4 w-4" />
                 </IconButton>

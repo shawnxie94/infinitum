@@ -118,7 +118,6 @@ describe("/api/admin/settings", () => {
       modelName: "gpt-test",
       ingestionItemConcurrency: 3,
       apiKeyMasked: "••••••••••••",
-      apiKeyRaw: "sk-test-1234",
       hasApiKey: true,
       isEnabled: true,
       isDefault: true,
@@ -134,7 +133,9 @@ describe("/api/admin/settings", () => {
 
     expect(response.status).toBe(200);
     expect(json.apiKeyMasked).toBe("••••••••••••");
-    expect(json.apiKeyRaw).toBe("sk-test-1234");
+    // 明文 key 不经详情接口出库（keep 模式编辑无需回显）
+    expect(json.apiKeyRaw).toBeUndefined();
+    expect(JSON.stringify(json)).not.toContain("sk-test-1234");
   });
 
   it("creates model api configs for admins", async () => {

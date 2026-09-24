@@ -52,9 +52,7 @@ export type AdminModelApiConfig = {
   updatedAt: string;
 };
 
-export type AdminModelApiConfigDetail = AdminModelApiConfig & {
-  apiKeyRaw: string;
-};
+export type AdminModelApiConfigDetail = AdminModelApiConfig;
 
 export type AdminPromptConfig = {
   id: string;

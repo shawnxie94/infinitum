@@ -702,14 +702,6 @@ describe("AdminSettingsPanel", () => {
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            ...buildInitialSettings().modelApiConfigs[0],
-            apiKeyRaw: "sk-test-1234",
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
             config: {
               ...buildInitialSettings().modelApiConfigs[0],
               ingestionItemConcurrency: 5,
@@ -728,7 +720,7 @@ describe("AdminSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/admin/settings/model-api-configs/model-1", {
+      expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/admin/settings/model-api-configs/model-1", {
         method: "PUT",
         headers: {
           "content-type": "application/json",
@@ -761,17 +753,10 @@ describe("AdminSettingsPanel", () => {
     expect(screen.queryByText("KimiCLI/1.44")).not.toBeInTheDocument();
   });
 
-  it("copies the raw model api key from the edit modal", async () => {
+  it("does not echo or offer to copy the stored model api key in the edit modal", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn<Clipboard["writeText"]>().mockResolvedValue(undefined);
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          ...buildInitialSettings().modelApiConfigs[0],
-          apiKeyRaw: "sk-test-1234",
-        }),
-      ),
-    );
+    const fetchMock = vi.fn<typeof fetch>();
 
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -783,38 +768,22 @@ describe("AdminSettingsPanel", () => {
 
     await user.click(screen.getByTitle("编辑"));
 
+    // 编辑详情不再请求单条接口（明文 key 不出库），弹窗内也没有可复制已存 Key 的入口
+    expect(screen.queryByTitle("复制")).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/model-api-configs/model-1", {
-        method: "GET",
-      });
+      expect(screen.getByDisplayValue("••••••••••••")).toBeInTheDocument();
     });
-
-    await waitFor(() => {
-      expect(screen.getByTitle("复制")).not.toBeDisabled();
-    });
-
-    await user.click(screen.getByTitle("复制"));
-
-    await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("sk-test-1234");
-    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("falls back when the clipboard api cannot copy the model api key", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn<Clipboard["writeText"]>().mockRejectedValue(new Error("denied"));
     const execCommand = vi.fn<(commandId: string) => boolean>(() => {
-      expect(document.querySelector("textarea")).toHaveValue("sk-test-1234");
+      expect(document.querySelector("textarea")).toHaveValue("sk-brand-new-key");
       return true;
     });
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          ...buildInitialSettings().modelApiConfigs[0],
-          apiKeyRaw: "sk-test-1234",
-        }),
-      ),
-    );
+    const fetchMock = vi.fn<typeof fetch>();
 
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -829,6 +798,8 @@ describe("AdminSettingsPanel", () => {
     renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
 
     await user.click(screen.getByTitle("编辑"));
+    const keyInput = screen.getByDisplayValue("••••••••••••");
+    await user.type(keyInput, "sk-brand-new-key");
 
     await waitFor(() => {
       expect(screen.getByTitle("复制")).not.toBeDisabled();

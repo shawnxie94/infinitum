@@ -32,10 +32,7 @@ export async function getModelApiConfig(id: string) {
     throw new Error("模型配置不存在。");
   }
 
-  return {
-    ...serializeAdminModelApiConfig(config),
-    apiKeyRaw: config.apiKey,
-  };
+  return serializeAdminModelApiConfig(config);
 }
 
 export async function createModelApiConfig(input: SaveModelApiConfigInput) {
