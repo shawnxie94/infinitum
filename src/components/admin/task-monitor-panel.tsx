@@ -316,6 +316,9 @@ function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
   if (label === "审核次数" && typeof checkpoint.reviewAttempts === "number") {
     return checkpoint.reviewAttempts;
   }
+  if (label === "审核阻断发布") {
+    return checkpoint.reviewStatus === "unavailable" || checkpoint.reviewStatus === "rejected" ? 1 : 0;
+  }
 
   if (label === "裁剪主题" || label === "截取主题") {
     const planningAudit = checkpoint.planningAudit as { truncatedTopicCount?: unknown } | undefined;

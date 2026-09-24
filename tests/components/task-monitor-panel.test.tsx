@@ -1217,6 +1217,7 @@ describe("TaskMonitorPanel", () => {
         ],
         assessmentBatches: [{ index: 0, candidateIds: [1, 2], status: "succeeded" as const, attempt: 1 }],
         planningCandidateBriefs: [{ candidateId: 1 }, { candidateId: 2 }],
+        reviewStatus: "unavailable" as const,
         reviewAttempts: 1,
         draft: {
           headline: "测试草稿",
@@ -1270,7 +1271,7 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).queryByText("日报阶段：plan")).not.toBeInTheDocument();
     expect(within(dialog).getByText("候选快照 2")).toBeInTheDocument();
     expect(within(dialog).getByText("准备 2 个候选供全局规划")).toBeInTheDocument();
-    expect(within(dialog).getByText("审核 1 次 · 调用重试 0 次 · 未阻断自动发布")).toBeInTheDocument();
+    expect(within(dialog).getByText("审核 1 次 · 调用重试 0 次 · 已阻断自动发布")).toBeInTheDocument();
     expect(within(dialog).getByText("入选 2 条")).toBeInTheDocument();
   });
 
