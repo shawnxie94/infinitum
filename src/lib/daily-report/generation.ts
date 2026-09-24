@@ -1224,7 +1224,11 @@ export async function generateDailyReportInternal(input: {
         lastCompletedStage: "review",
         failedStage: null,
         failureCode: null,
-        resumeEligible: reviewStatus === "passed",
+        // 审核完成后的 checkpoint 始终可续跑：后续 persist 阶段按 reviewStatus
+        // 复用裁决（passed→自动发布；rejected/unavailable→仅落 draft）。若钉为
+        // 不可续跑，persist 阶段会整线重跑，审核/重推的 AI 调用被重复消耗且
+        // 全部记到 persist 节点名下。
+        resumeEligible: true,
         reviewStatus,
         reviewAttempts,
         reviewRetryStage,
