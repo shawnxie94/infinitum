@@ -50,6 +50,15 @@ export function parseTaskPipelineCheckpointJson(value: string | null | undefined
       ...(parsed.plan !== undefined ? { plan: parsed.plan } : {}),
       ...(parsed.draft !== undefined ? { draft: parsed.draft } : {}),
       ...(Array.isArray(parsed.violations) ? { violations: parsed.violations } : {}),
+      ...(typeof parsed.reviewStatus === "string" ? { reviewStatus: parsed.reviewStatus as TaskPipelineCheckpoint["reviewStatus"] } : {}),
+      ...(typeof parsed.reviewAttempts === "number" ? { reviewAttempts: parsed.reviewAttempts } : {}),
+      ...(typeof parsed.reviewRetryStage === "string" && (parsed.reviewRetryStage === "plan" || parsed.reviewRetryStage === "write")
+        ? { reviewRetryStage: parsed.reviewRetryStage as TaskPipelineCheckpoint["reviewRetryStage"] }
+        : {}),
+      ...(Array.isArray(parsed.reviewViolations) ? { reviewViolations: parsed.reviewViolations } : {}),
+      ...(parsed.reviewAudit && typeof parsed.reviewAudit === "object" && !Array.isArray(parsed.reviewAudit)
+        ? { reviewAudit: parsed.reviewAudit as Record<string, unknown> }
+        : {}),
       ...(parsed.data && typeof parsed.data === "object" && !Array.isArray(parsed.data) ? { data: parsed.data as Record<string, unknown> } : {}),
     };
   } catch {
