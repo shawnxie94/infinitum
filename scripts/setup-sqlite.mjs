@@ -138,6 +138,11 @@ function applyRuntimeSqliteObjects() {
 
   // 触发器与 FTS 表存在性解耦：存量卷可能只剩表而丢了触发器（历史重建遗留），
   // 缺失会让新条目静默脱离标题搜索索引，且只有首次建表路径能重建。
+  // 补齐仅在触发器缺失时执行（O(N) 全扫）：触发器齐全时索引由触发器保证同步，
+  // 避免每次容器启动都对全量 items 做失步扫描。
+  const ftsTriggerCountBefore = querySqliteNumber(
+    `SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('items_fts_ai','items_fts_au','items_fts_ad');`,
+  );
   runSqlite([dbPath], {
     input: [
       `CREATE TRIGGER IF NOT EXISTS items_fts_ai AFTER INSERT ON items BEGIN
@@ -159,14 +164,19 @@ function applyRuntimeSqliteObjects() {
       `CREATE TRIGGER IF NOT EXISTS items_fts_ad AFTER DELETE ON items BEGIN
         DELETE FROM items_fts WHERE rowid = old.rowid;
       END;`,
-      // 幂等补齐失步窗口内漏索引的条目（已有行不重写）
-      `INSERT INTO items_fts(rowid, originalTitle, translatedTitle, author, rssExcerpt, rssContent, fullText, summaryText)
+    ].join("\n"),
+  });
+
+  if (ftsTriggerCountBefore < 3) {
+    // 幂等补齐失步窗口内漏索引的条目（已有行不重写）
+    runSqlite([dbPath], {
+      input: `INSERT INTO items_fts(rowid, originalTitle, translatedTitle, author, rssExcerpt, rssContent, fullText, summaryText)
        SELECT rowid, originalTitle, COALESCE(translatedTitle, ''), COALESCE(author, ''), COALESCE(rssExcerpt, ''),
               COALESCE(rssContent, ''), COALESCE(fullText, ''), COALESCE(summaryText, '')
        FROM items
        WHERE rowid NOT IN (SELECT rowid FROM items_fts);`,
-    ].join("\n"),
-  });
+    });
+  }
 }
 
 function tableColumnExists(tableName, columnName) {

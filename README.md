@@ -126,6 +126,19 @@ npm run worker   # 终端 2：后台任务 Worker
 
 本地默认访问 <http://localhost:3000>，管理后台登录入口 <http://localhost:3000/login>。
 
+### 数据备份
+
+SQLite 数据库（含 WAL）整体在数据卷内，备份用官方 `.backup` API 产出一致性快照：
+
+```bash
+# 宿主机上执行（容器外也可，只要能读到卷内 db 文件）
+docker exec infinitum sqlite3 /app/data/dev.db ".backup '/app/data/backups/db-manual.sqlite'"
+# 或用自带脚本（含完整性校验与保留期清理，适合挂 cron）
+scripts/backup-sqlite.sh <db-path> <backup-dir> [retain-days=14]
+```
+
+恢复：停止 app 与 worker 后，用快照文件替换数据卷内的 db 文件再启动。建议每日定时备份并将备份目录指向宿主机挂载或外部存储。
+
 ## FAQ
 
 ### 为什么改了源码里的默认来源或提示词，线上没有变化？

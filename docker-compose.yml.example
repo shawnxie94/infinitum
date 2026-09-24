@@ -17,6 +17,21 @@ services:
       ADMIN_SESSION_COOKIE_SECURE: "true"
     ports:
       - "3001:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - 'fetch("http://127.0.0.1:3000/api/health").then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1));'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     volumes:
       - infinitum-data:/app/data
   worker:
