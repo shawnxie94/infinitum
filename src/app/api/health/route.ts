@@ -1,12 +1,8 @@
-import { prisma } from "@/lib/db";
+import { checkHealth } from "@/lib/health/service";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    return Response.json({ status: "ok" });
-  } catch {
-    return Response.json({ status: "unhealthy" }, { status: 503 });
-  }
+  const status = await checkHealth();
+  return Response.json({ status }, { status: status === "ok" ? 200 : 503 });
 }
