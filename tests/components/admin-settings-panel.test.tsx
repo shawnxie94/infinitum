@@ -753,10 +753,12 @@ describe("AdminSettingsPanel", () => {
     expect(screen.queryByText("KimiCLI/1.44")).not.toBeInTheDocument();
   });
 
-  it("does not echo or offer to copy the stored model api key in the edit modal", async () => {
+  it("copies the stored model api key on demand from the edit modal", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn<Clipboard["writeText"]>().mockResolvedValue(undefined);
-    const fetchMock = vi.fn<typeof fetch>();
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ apiKey: "sk-test-1234" })),
+    );
 
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -767,13 +769,21 @@ describe("AdminSettingsPanel", () => {
     renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
 
     await user.click(screen.getByTitle("编辑"));
+    expect(screen.getByDisplayValue("••••••••••••")).toBeInTheDocument();
 
-    // 编辑详情不再请求单条接口（明文 key 不出库），弹窗内也没有可复制已存 Key 的入口
-    expect(screen.queryByTitle("复制")).not.toBeInTheDocument();
+    // 明文不预取：编辑态不拉详情，点击复制时才按需请求专用端点
+    await user.click(screen.getByTitle("复制"));
+
     await waitFor(() => {
-      expect(screen.getByDisplayValue("••••••••••••")).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/model-api-configs/model-1/key", {
+        method: "GET",
+      });
     });
-    expect(fetchMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("sk-test-1234");
+    });
+    // 复制后表单里仍只有掩码，明文不进表单状态
+    expect(screen.getByDisplayValue("••••••••••••")).toBeInTheDocument();
   });
 
   it("falls back when the clipboard api cannot copy the model api key", async () => {

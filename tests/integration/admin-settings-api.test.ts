@@ -33,6 +33,7 @@ vi.mock("@/lib/settings/service", async (importOriginal) => {
     updateEventBriefingConfig,
     updateBriefingPreferenceConfig,
     getModelApiConfig,
+    getModelApiConfigSecret: vi.fn(),
     updatePromptConfig,
   };
 });
@@ -109,7 +110,7 @@ describe("/api/admin/settings", () => {
     expect(json.taskSchedule.key).toBe("ingestion_default");
   });
 
-  it("returns raw api key only from the single model config detail endpoint", async () => {
+  it("never returns the raw api key from the single model config detail endpoint", async () => {
     requireAdmin.mockResolvedValue(undefined);
     getModelApiConfig.mockResolvedValue({
       id: "model-1",
@@ -133,9 +134,36 @@ describe("/api/admin/settings", () => {
 
     expect(response.status).toBe(200);
     expect(json.apiKeyMasked).toBe("••••••••••••");
-    // 明文 key 不经详情接口出库（keep 模式编辑无需回显）
+    // 明文 key 不经详情接口出库（编辑表单只回显掩码）
     expect(json.apiKeyRaw).toBeUndefined();
     expect(JSON.stringify(json)).not.toContain("sk-test-1234");
+  });
+
+  it("serves the stored api key from the dedicated copy endpoint for admins", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+    const { getModelApiConfigSecret } = await import("@/lib/settings/service");
+    vi.mocked(getModelApiConfigSecret).mockResolvedValue({ apiKey: "sk-test-1234" });
+
+    const { GET } = await import("@/app/api/admin/settings/model-api-configs/[id]/key/route");
+    const response = await GET(new Request("http://localhost/api/admin/settings/model-api-configs/model-1/key"), {
+      params: Promise.resolve({ id: "model-1" }),
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.apiKey).toBe("sk-test-1234");
+    expect(getModelApiConfigSecret).toHaveBeenCalledWith("model-1");
+  });
+
+  it("rejects the api key copy endpoint for anonymous visitors", async () => {
+    requireAdmin.mockRejectedValue(new Error("Unauthorized"));
+
+    const { GET } = await import("@/app/api/admin/settings/model-api-configs/[id]/key/route");
+    const response = await GET(new Request("http://localhost/api/admin/settings/model-api-configs/model-1/key"), {
+      params: Promise.resolve({ id: "model-1" }),
+    });
+
+    expect(response.status).toBe(401);
   });
 
   it("creates model api configs for admins", async () => {

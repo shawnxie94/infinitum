@@ -419,3 +419,18 @@ async function testEmbeddingModelApiConfig(config: {
     };
   }
 }
+
+export async function getModelApiConfigSecret(id: string) {
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
+
+  const config = await prisma.modelApiConfig.findUnique({
+    where: { id },
+    select: { apiKey: true },
+  });
+
+  if (!config) {
+    throw new Error("模型配置不存在。");
+  }
+
+  return { apiKey: config.apiKey };
+}

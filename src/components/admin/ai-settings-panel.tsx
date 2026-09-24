@@ -9,6 +9,7 @@ import {
   deleteModelApiConfig,
   deletePromptConfig,
   fetchModelApiConfigModels,
+  getModelApiConfigKey,
   testModelApiConfig,
   updateModelApiConfig,
   updatePromptConfig,
@@ -415,6 +416,20 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
 
     const copied = await writeClipboardText(value);
     showToast(copied ? message : "复制失败，请手动复制。", copied ? "success" : "error");
+  };
+
+  const [modelKeyCopyLoading, setModelKeyCopyLoading] = useState(false);
+  // 存储的 Key 不随详情出库：编辑态点击复制时按需单条拉取，写完剪贴板即弃
+  const copyStoredModelApiKey = async (configId: string) => {
+    setModelKeyCopyLoading(true);
+    try {
+      const { apiKey } = await getModelApiConfigKey(configId);
+      await copyText(apiKey, "API密钥已复制。");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "读取 API 密钥失败", "error");
+    } finally {
+      setModelKeyCopyLoading(false);
+    }
   };
 
   const openCreateModelModal = () => {
@@ -1040,12 +1055,19 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
                 }
                 className="flex-1"
               />
-              {modelForm.apiKey && !(editingModelConfig && modelForm.apiKeyMode === "keep") ? (
+              {modelForm.apiKey ? (
                 <IconButton
-                  onClick={() => copyText(modelForm.apiKey, "API密钥已复制。")}
+                  onClick={() => {
+                    if (editingModelConfig && modelForm.apiKeyMode === "keep") {
+                      void copyStoredModelApiKey(editingModelConfig.id);
+                    } else {
+                      void copyText(modelForm.apiKey, "API密钥已复制。");
+                    }
+                  }}
                   title="复制"
                   variant="secondary"
                   size="md"
+                  disabled={modelKeyCopyLoading}
                 >
                   <IconCopy className="h-4 w-4" />
                 </IconButton>

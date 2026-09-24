@@ -127,3 +127,10 @@ export function updatePromptConfig(configId: string, input: PromptConfigPayload)
 export function deletePromptConfig(configId: string) {
   return requestAiSettingsJson(`/api/admin/settings/prompt-configs/${configId}`, "DELETE");
 }
+
+export function getModelApiConfigKey(configId: string) {
+  return requestAiSettingsJson<{ apiKey: string }>(
+    `/api/admin/settings/model-api-configs/${configId}/key`,
+    "GET",
+  );
+}

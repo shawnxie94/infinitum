@@ -26,6 +26,7 @@ export {
   deleteModelApiConfig,
   fetchModelApiModels,
   getModelApiConfig,
+  getModelApiConfigSecret,
   listModelApiConfigs,
   testModelApiConfig,
   updateModelApiConfig,
