@@ -273,6 +273,51 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items_fts" WHERE "rowid" = (SELECT "rowid" FROM "items" WHERE "id" = 'item-understanding-upgrade')`)).toBe("1");
   }, 20_000);
 
+  it("restores lost FTS triggers and backfills missing index rows on an existing volume", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-fts-repair-"));
+    const dbPath = path.join(tempDir, "fts-repair.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    // 模拟存量卷的失步状态：触发器丢失 + 触发器缺位期间新增的条目没有进索引
+    runSqlite(dbPath, `
+      DROP TRIGGER "items_fts_ai";
+      DROP TRIGGER "items_fts_au";
+      DROP TRIGGER "items_fts_ad";
+      INSERT INTO "sources" (
+        "id", "name", "rssUrl", "siteUrl", "enabled", "aiParsingEnabled", "aggregationEnabled", "aggregationDetectionEnabled", "updatedAt"
+      ) VALUES (
+        'source-fts-repair', 'Repair Source', 'https://repair.example.com/feed.xml', 'https://repair.example.com',
+        true, true, true, false, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "items" (
+        "id", "sourceId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle", "publishedAt",
+        "status", "moderationStatus", "qualityScore", "qualityRationale", "language", "createdAt", "updatedAt"
+      ) VALUES (
+        'item-fts-repair', 'source-fts-repair', 'https://repair.example.com/item',
+        'https://repair.example.com/item', 'item-fts-repair', 'QuantumLeap Release', CURRENT_TIMESTAMP,
+        'processed', 'allowed', 50, 'existing', 'en', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      DELETE FROM "items_fts" WHERE rowid NOT IN (SELECT rowid FROM "items_fts" LIMIT 1);
+    `);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'trigger' AND "name" LIKE 'items_fts_%'`)).toBe("3");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items_fts"`)).toBe(
+      runSqlite(dbPath, `SELECT COUNT(*) FROM "items"`),
+    );
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items_fts" WHERE "originalTitle" = 'QuantumLeap Release'`)).toBe("1");
+  }, 20_000);
+
   it("does not rerun cluster feed stats backfill or earliestCreatedAt backfill after clusters have been initialized", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-cluster-backfill-"));
     const dbPath = path.join(tempDir, "cluster-backfill.db");

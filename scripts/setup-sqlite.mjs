@@ -117,8 +117,8 @@ function applyRuntimeSqliteObjects() {
 
   if (!tableExists("items_fts")) {
     runSqlite([dbPath], {
-      input: [
-        `CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
+      input: `
+        CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
           originalTitle,
           translatedTitle,
           author,
@@ -127,33 +127,46 @@ function applyRuntimeSqliteObjects() {
           fullText,
           summaryText,
           tokenize='trigram'
-        );`,
-        `INSERT INTO items_fts(rowid, originalTitle, translatedTitle, author, rssExcerpt, rssContent, fullText, summaryText)
-         SELECT rowid, originalTitle, COALESCE(translatedTitle, ''), COALESCE(author, ''), COALESCE(rssExcerpt, ''),
-                COALESCE(rssContent, ''), COALESCE(fullText, ''), COALESCE(summaryText, '')
-         FROM items;`,
-        `CREATE TRIGGER IF NOT EXISTS items_fts_ai AFTER INSERT ON items BEGIN
-          INSERT INTO items_fts(rowid, originalTitle, translatedTitle, author, rssExcerpt, rssContent, fullText, summaryText)
-          VALUES (new.rowid, COALESCE(new.originalTitle, ''), COALESCE(new.translatedTitle, ''), COALESCE(new.author, ''),
-                  COALESCE(new.rssExcerpt, ''), COALESCE(new.rssContent, ''), COALESCE(new.fullText, ''), COALESCE(new.summaryText, ''));
-        END;`,
-        `CREATE TRIGGER IF NOT EXISTS items_fts_au AFTER UPDATE ON items BEGIN
-          UPDATE items_fts SET
-            originalTitle = COALESCE(new.originalTitle, ''),
-            translatedTitle = COALESCE(new.translatedTitle, ''),
-            author = COALESCE(new.author, ''),
-            rssExcerpt = COALESCE(new.rssExcerpt, ''),
-            rssContent = COALESCE(new.rssContent, ''),
-            fullText = COALESCE(new.fullText, ''),
-            summaryText = COALESCE(new.summaryText, '')
-          WHERE rowid = old.rowid;
-        END;`,
-        `CREATE TRIGGER IF NOT EXISTS items_fts_ad AFTER DELETE ON items BEGIN
-          DELETE FROM items_fts WHERE rowid = old.rowid;
-        END;`,
-      ].join("\n"),
+        );
+        INSERT INTO items_fts(rowid, originalTitle, translatedTitle, author, rssExcerpt, rssContent, fullText, summaryText)
+        SELECT rowid, originalTitle, COALESCE(translatedTitle, ''), COALESCE(author, ''), COALESCE(rssExcerpt, ''),
+               COALESCE(rssContent, ''), COALESCE(fullText, ''), COALESCE(summaryText, '')
+        FROM items;
+      `,
     });
   }
+
+  // 触发器与 FTS 表存在性解耦：存量卷可能只剩表而丢了触发器（历史重建遗留），
+  // 缺失会让新条目静默脱离标题搜索索引，且只有首次建表路径能重建。
+  runSqlite([dbPath], {
+    input: [
+      `CREATE TRIGGER IF NOT EXISTS items_fts_ai AFTER INSERT ON items BEGIN
+        INSERT INTO items_fts(rowid, originalTitle, translatedTitle, author, rssExcerpt, rssContent, fullText, summaryText)
+        VALUES (new.rowid, COALESCE(new.originalTitle, ''), COALESCE(new.translatedTitle, ''), COALESCE(new.author, ''),
+                COALESCE(new.rssExcerpt, ''), COALESCE(new.rssContent, ''), COALESCE(new.fullText, ''), COALESCE(new.summaryText, ''));
+      END;`,
+      `CREATE TRIGGER IF NOT EXISTS items_fts_au AFTER UPDATE ON items BEGIN
+        UPDATE items_fts SET
+          originalTitle = COALESCE(new.originalTitle, ''),
+          translatedTitle = COALESCE(new.translatedTitle, ''),
+          author = COALESCE(new.author, ''),
+          rssExcerpt = COALESCE(new.rssExcerpt, ''),
+          rssContent = COALESCE(new.rssContent, ''),
+          fullText = COALESCE(new.fullText, ''),
+          summaryText = COALESCE(new.summaryText, '')
+        WHERE rowid = old.rowid;
+      END;`,
+      `CREATE TRIGGER IF NOT EXISTS items_fts_ad AFTER DELETE ON items BEGIN
+        DELETE FROM items_fts WHERE rowid = old.rowid;
+      END;`,
+      // 幂等补齐失步窗口内漏索引的条目（已有行不重写）
+      `INSERT INTO items_fts(rowid, originalTitle, translatedTitle, author, rssExcerpt, rssContent, fullText, summaryText)
+       SELECT rowid, originalTitle, COALESCE(translatedTitle, ''), COALESCE(author, ''), COALESCE(rssExcerpt, ''),
+              COALESCE(rssContent, ''), COALESCE(fullText, ''), COALESCE(summaryText, '')
+       FROM items
+       WHERE rowid NOT IN (SELECT rowid FROM items_fts);`,
+    ].join("\n"),
+  });
 }
 
 function tableColumnExists(tableName, columnName) {
