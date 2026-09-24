@@ -307,6 +307,15 @@ function getDailyReportCheckpointMetric(task: TaskRunSnapshot, label: string) {
   if (label === "可规划候选" && Array.isArray(checkpoint.planningCandidateBriefs)) {
     return checkpoint.planningCandidateBriefs.length;
   }
+  if (label === "入选数") {
+    const draft = checkpoint.draft as { blocks?: Array<{ items?: unknown[] }> } | undefined;
+    if (draft && Array.isArray(draft.blocks)) {
+      return draft.blocks.reduce((total, block) => total + (Array.isArray(block.items) ? block.items.length : 0), 0);
+    }
+  }
+  if (label === "审核次数" && typeof checkpoint.reviewAttempts === "number") {
+    return checkpoint.reviewAttempts;
+  }
 
   if (label === "裁剪主题" || label === "截取主题") {
     const planningAudit = checkpoint.planningAudit as { truncatedTopicCount?: unknown } | undefined;

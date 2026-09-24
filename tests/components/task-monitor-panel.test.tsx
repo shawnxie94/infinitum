@@ -1217,6 +1217,14 @@ describe("TaskMonitorPanel", () => {
         ],
         assessmentBatches: [{ index: 0, candidateIds: [1, 2], status: "succeeded" as const, attempt: 1 }],
         planningCandidateBriefs: [{ candidateId: 1 }, { candidateId: 2 }],
+        reviewAttempts: 1,
+        draft: {
+          headline: "测试草稿",
+          blocks: [
+            { type: "section", items: [{ title: "a" }, { title: "b" }] },
+            { type: "text", text: "结语" },
+          ],
+        },
       },
       stageTimings: [
         {
@@ -1235,6 +1243,22 @@ describe("TaskMonitorPanel", () => {
           durationMs: 194,
           status: "succeeded" as const,
         },
+        {
+          key: "review",
+          label: "review",
+          startedAt: "2026-09-23T17:12:00.000Z",
+          finishedAt: "2026-09-23T17:12:26.000Z",
+          durationMs: 26_000,
+          status: "succeeded" as const,
+        },
+        {
+          key: "persist_publish",
+          label: "persist_publish",
+          startedAt: "2026-09-23T17:12:26.000Z",
+          finishedAt: "2026-09-23T17:12:27.000Z",
+          durationMs: 1_000,
+          status: "succeeded" as const,
+        },
       ],
     };
 
@@ -1246,6 +1270,8 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).queryByText("日报阶段：plan")).not.toBeInTheDocument();
     expect(within(dialog).getByText("候选快照 2")).toBeInTheDocument();
     expect(within(dialog).getByText("准备 2 个候选供全局规划")).toBeInTheDocument();
+    expect(within(dialog).getByText("审核 1 次 · 调用重试 0 次 · 未阻断自动发布")).toBeInTheDocument();
+    expect(within(dialog).getByText("入选 2 条")).toBeInTheDocument();
   });
 
   it("shows the review retry failure reason for historical daily report tasks", async () => {

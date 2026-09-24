@@ -27,9 +27,11 @@ export async function POST(request: Request, context: RouteContext<"/api/admin/m
     const retryKind = originalTask.kind === "cluster_merge_precompute_clean_pairs"
       ? "precompute"
       : originalTask.kind;
+    // 链式重触发时剥离既有后缀，避免 label 变成"(重新触发) (重新触发)"
+    const baseLabel = originalTask.label.replace(/\s*[（(]重新触发[)）]\s*$/g, "").trim();
     const retryLabel = originalTask.kind === "cluster_merge_precompute_clean_pairs"
       ? "预计算（旧版聚合合并缓存任务重试）"
-      : `${originalTask.label} (重新触发)`;
+      : `${baseLabel} (重新触发)`;
     const checkpoint = originalTask.pipelineCheckpointJson
       ? (() => {
           try {
