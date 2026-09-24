@@ -216,6 +216,62 @@ describe("Mastra staged task workflows", () => {
     expect(stored.pipelineCheckpointJson).toBeNull();
   });
 
+  it("writes back daily schedule lastRunStatus when a scheduled run succeeds", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "scheduled",
+        status: "queued",
+        label: "日报生成",
+      },
+    });
+
+    const result = await triggerTaskWorkflow("daily_report_generate", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const schedule = await prisma.taskSchedule.findFirstOrThrow();
+
+    expect(result.status).toBe("succeeded");
+    expect(stored.status).toBe("succeeded");
+    expect(schedule.lastRunStatus).toBe("succeeded");
+    expect(schedule.lastRunStartedAt).not.toBeNull();
+    expect(schedule.lastRunFinishedAt).not.toBeNull();
+  });
+
+  it("records cancellation on the daily schedule when a scheduled run is cancelled", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "scheduled",
+        status: "queued",
+        label: "日报生成",
+        cancelRequestedAt: new Date(),
+      },
+    });
+
+    const result = await triggerTaskWorkflow("daily_report_generate", taskRun.id);
+    const schedule = await prisma.taskSchedule.findFirstOrThrow();
+
+    expect(result.status).toBe("cancelled");
+    expect(schedule.lastRunStatus).toBe("cancelled");
+  });
+
+  it("does not write schedule run status for manual daily report runs", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "日报生成",
+      },
+    });
+
+    const result = await triggerTaskWorkflow("daily_report_generate", taskRun.id);
+    const schedule = await prisma.taskSchedule.findFirstOrThrow();
+
+    expect(result.status).toBe("succeeded");
+    expect(schedule.lastRunStatus).toBeNull();
+  });
+
   it("persists cancellation for a queued staged task before business side effects", async () => {
     const taskRun = await prisma.backgroundTaskRun.create({
       data: {

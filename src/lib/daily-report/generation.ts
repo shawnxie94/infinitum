@@ -39,7 +39,6 @@ import { buildDailyReportCandidateCoverage, buildDailyReportReviewContext, dedup
 import { filterRecentDailyReportDuplicates } from "@/lib/daily-report/recent-duplicates";
 import { buildDailyReportExcludedAssessDuplicateSnapshots, buildDailyReportExcludedRecentDuplicateSnapshots, buildDailyReportRecoveryCandidates, buildDailyReportRecoveryPlan, buildRecentDailyReportTopics, parseDailyReportCandidateSnapshot } from "@/lib/daily-report/recovery-snapshot";
 import { assertDailyReportSourceIdsExist, buildExpandedDailyReportSourceRegistry, countExistingSelectedDailyReportCandidates, countSelectedDailyReportCandidates } from "@/lib/daily-report/source-registry";
-import { markDailyScheduleRunFinished } from "@/lib/daily-report/report-lifecycle";
 
 
 export async function generateDailyReportInternal(input: {
