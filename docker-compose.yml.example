@@ -41,6 +41,21 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/app/data/dev.db
+    healthcheck:
+      test:
+        - CMD
+        - sqlite3
+        - /app/data/dev.db
+        - 'SELECT CASE WHEN (strftime(''%s'',''now'')*1000 - COALESCE(lastHeartbeatAt,0)) < 60000 THEN 1 ELSE 0 END FROM task_schedules WHERE key=''ingestion_default'';'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     volumes:
       - infinitum-data:/app/data
 
