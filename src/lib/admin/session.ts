@@ -1,9 +1,12 @@
 import { ADMIN_SESSION_TTL_SECONDS } from "@/config/constants";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { cookies } from "next/headers";
 
 const ADMIN_SESSION_COOKIE_NAME = "infinitum_admin_session";
+
+// docker-compose/.env 示例文件内置的占位值，照抄上线等于无密码，启动时直接拒绝。
+const WEAK_ADMIN_CREDENTIAL_VALUES = new Set(["change-me", "replace-with-a-long-random-secret"]);
 
 type AdminSessionPayload = {
   exp: number;
@@ -163,5 +166,32 @@ export async function requireAdmin() {
 }
 
 export function validateAdminPassword(password: string): boolean {
-  return password === getAdminPassword();
+  // 双侧哈希后 timingSafeEqual：长度归一 + 常数时间比较
+  const provided = createHash("sha256").update(password, "utf8").digest();
+  const expected = createHash("sha256").update(getAdminPassword(), "utf8").digest();
+  return timingSafeEqual(provided, expected);
+}
+
+export function assertDeployableAdminCredentials({ now = new Date() }: { now?: Date } = {}) {
+  const password = process.env.ADMIN_PASSWORD?.trim();
+  const secret = process.env.ADMIN_SESSION_SECRET?.trim();
+
+  if (!password) {
+    throw new Error("ADMIN_PASSWORD 未配置，拒绝启动。");
+  }
+  if (WEAK_ADMIN_CREDENTIAL_VALUES.has(password)) {
+    throw new Error("ADMIN_PASSWORD 仍是示例值（change-me），拒绝启动。请改为强口令。");
+  }
+
+  if (!secret) {
+    throw new Error("ADMIN_SESSION_SECRET 未配置，拒绝启动。");
+  }
+  if (WEAK_ADMIN_CREDENTIAL_VALUES.has(secret)) {
+    throw new Error("ADMIN_SESSION_SECRET 仍是示例值，拒绝启动。请改为长随机串。");
+  }
+  if (secret.length < 32) {
+    console.warn(
+      `[${now.toISOString()}] [admin] ADMIN_SESSION_SECRET 短于 32 字符，建议更换为长随机串。`,
+    );
+  }
 }
