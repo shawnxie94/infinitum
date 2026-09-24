@@ -442,6 +442,33 @@ export async function ensureDefaultItemCleanupSchedule() {
   return upsertDefaultItemCleanupSchedule();
 }
 
+/**
+ * scheduled 触发的任务到达终态后回写所属调度行的运行状态。
+ * UI 监控面板的「Last Status」消费该字段；manual/admin_action 触发不回写。
+ */
+export async function markScheduledTaskRunFinished(
+  kind: BackgroundTaskRunKind,
+  taskRun: { startedAt: Date | null; createdAt: Date },
+  status: "succeeded" | "partial" | "failed" | "cancelled",
+) {
+  const scheduleKey = getHeartbeatScheduleKeyForTaskKind(kind);
+
+  const schedule = scheduleKey === DEFAULT_DAILY_REPORT_SCHEDULE_KEY
+    ? await ensureDefaultDailyReportSchedule()
+    : scheduleKey === DEFAULT_ITEM_CLEANUP_SCHEDULE_KEY
+      ? await ensureDefaultItemCleanupSchedule()
+      : await ensureDefaultIngestionSchedule();
+
+  await prisma.taskSchedule.update({
+    where: { id: schedule.id },
+    data: {
+      lastRunStartedAt: taskRun.startedAt ?? taskRun.createdAt,
+      lastRunFinishedAt: new Date(),
+      lastRunStatus: status,
+    },
+  });
+}
+
 export async function enqueueTaskRun(input: EnqueueTaskRunInput) {
   return createTaskRun(input);
 }

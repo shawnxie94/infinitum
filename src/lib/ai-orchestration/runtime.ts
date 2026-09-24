@@ -1,7 +1,7 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
-import { markDailyScheduleRunFinished } from "@/lib/daily-report/report-lifecycle";
+import { markScheduledTaskRunFinished } from "@/lib/tasks/service";
 import { WORKFLOW_TASK_DEFINITIONS } from "@/lib/workflows/catalog";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
 import type { WorkflowTaskSink } from "@infinitum/ai/orchestration/types";
@@ -350,16 +350,17 @@ async function projectTaskAiUsage(taskRunId: string, value: unknown, identity?: 
   });
 }
 
-// 终态汇合点：scheduled 触发的日报任务在此回写 task_schedules 运行状态。
-// 业务核心不再直写任务行终态（由 glue mark* 镜像），回写必须挂在 sink 终态之后重读行状态。
-async function mirrorDailyScheduleTerminalState(taskRunId: string) {
+// 终态汇合点：scheduled 触发的任务在此回写所属调度行的运行状态（ingestion/
+// 日报/清理三类）。业务核心不再直写任务行终态（由 glue mark* 镜像），
+// 回写必须挂在 sink 终态之后重读行状态。
+async function mirrorScheduledTaskTerminalState(taskRunId: string) {
   const row = await prisma.backgroundTaskRun.findUnique({
     where: { id: taskRunId },
     select: { kind: true, triggerType: true, status: true, startedAt: true, createdAt: true },
   });
-  if (!row || row.kind !== "daily_report_generate" || row.triggerType !== "scheduled") return;
+  if (!row || row.triggerType !== "scheduled") return;
   if (row.status === "queued" || row.status === "running") return;
-  await markDailyScheduleRunFinished(row as BackgroundTaskRun, row.status);
+  await markScheduledTaskRunFinished(row.kind, row, row.status);
 }
 
 const sink: WorkflowTaskSink = {
@@ -381,7 +382,7 @@ const sink: WorkflowTaskSink = {
       where: { id: taskRunId, status: { in: ["queued", "running"] } },
       data: { status: "succeeded", finishedAt: new Date() },
     });
-    await mirrorDailyScheduleTerminalState(taskRunId);
+    await mirrorScheduledTaskTerminalState(taskRunId);
   },
   async markCancelled(taskRunId, message) {
     await prisma.backgroundTaskRun.updateMany({
@@ -392,7 +393,7 @@ const sink: WorkflowTaskSink = {
         errorSummary: (message ?? "任务已取消").slice(0, 500),
       },
     });
-    await mirrorDailyScheduleTerminalState(taskRunId);
+    await mirrorScheduledTaskTerminalState(taskRunId);
   },
   async markFailed(taskRunId, message, failureKind) {
     // D6 终态兜底：业务体在写入自身终态前崩溃时，避免 BackgroundTaskRun 卡 running
@@ -404,7 +405,7 @@ const sink: WorkflowTaskSink = {
         errorSummary: `${failureKind ? `[${failureKind}] ` : ""}${message}`.slice(0, 500),
       },
     });
-    await mirrorDailyScheduleTerminalState(taskRunId);
+    await mirrorScheduledTaskTerminalState(taskRunId);
   },
   async projectStep(event: TaskStepLifecycleEvent) {
     if (event.errorMessage) {

@@ -255,6 +255,24 @@ describe("Mastra staged task workflows", () => {
     expect(schedule.lastRunStatus).toBe("cancelled");
   });
 
+  it("records terminal status on the ingestion schedule for scheduled ingestion runs", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "ingestion",
+        triggerType: "scheduled",
+        status: "queued",
+        label: "定时抓取",
+        cancelRequestedAt: new Date(),
+      },
+    });
+
+    const result = await triggerTaskWorkflow("ingestion", taskRun.id);
+    const schedule = await prisma.taskSchedule.findFirstOrThrow({ where: { key: "ingestion_default" } });
+
+    expect(result.status).toBe("cancelled");
+    expect(schedule.lastRunStatus).toBe("cancelled");
+  });
+
   it("does not write schedule run status for manual daily report runs", async () => {
     const taskRun = await prisma.backgroundTaskRun.create({
       data: {

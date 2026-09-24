@@ -1,30 +1,11 @@
 
-import type { BackgroundTaskRun } from "@prisma/client";
-
 import { prisma } from "@/lib/db";
 import { normalizeDailyReportDate } from "@/lib/daily-report/date";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { DAILY_REPORT_TIMEZONE } from "@/lib/daily-report/types";
 import { DEFAULT_DAILY_REPORT_TASK_LABEL } from "@/lib/tasks/types";
-import { enqueueTaskRun, ensureDefaultDailyReportSchedule } from "@/lib/tasks/service";
+import { enqueueTaskRun } from "@/lib/tasks/service";
 
-
-export async function markDailyScheduleRunFinished(taskRun: BackgroundTaskRun, status: "succeeded" | "failed" | "partial" | "cancelled") {
-  if (taskRun.triggerType !== "scheduled") {
-    return;
-  }
-
-  const schedule = await ensureDefaultDailyReportSchedule();
-  const now = new Date();
-  await prisma.taskSchedule.update({
-    where: { id: schedule.id },
-    data: {
-      lastRunStartedAt: taskRun.startedAt ?? taskRun.createdAt,
-      lastRunFinishedAt: now,
-      lastRunStatus: status,
-    },
-  });
-}
 
 export async function enqueueDailyReportGeneration(date: string, triggerType: "manual" | "scheduled" | "admin_action" = "manual") {
   const normalizedDate = normalizeDailyReportDate(date);
