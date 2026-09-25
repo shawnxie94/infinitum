@@ -281,7 +281,8 @@ describe("TaskMonitorPanel", () => {
     expect(within(dialog).getByText(/摘要 5\/1 · 分析 4\/0 · 拆分 1\/0 · 子事件 12 · 过滤 2 · 更新\/重处理 1/)).toBeInTheDocument();
     expect(within(dialog).getByText(/指纹命中 1 · 本地直连 2 · AI归组 1 · 跳过 0 · 新建 1/)).toBeInTheDocument();
     expect(within(dialog).getByText(/候选 12\/18 · Dirty 5 · Hash跳过 4 · AI返回 2 · 移动 6 · 失败 1 · 已合并 · 合并后 9 组/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/参与重算 2 · 完成更新 2 · 摘要尝试 2 · 摘要完成 1 · 摘要未完成 0 · 已删除 0/)).toBeInTheDocument();
+    expect(within(dialog).getByText("摘要完成 1 · 摘要失败 0")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/参与重算|完成更新|摘要尝试|已删除/)).not.toBeInTheDocument();
   });
 
   it("hides token details from timeline nodes while keeping summary usage", async () => {

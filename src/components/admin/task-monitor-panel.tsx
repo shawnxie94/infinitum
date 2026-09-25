@@ -419,7 +419,7 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
       return parts.join(" · ");
     }
     case "cluster_finalize":
-      return `参与重算 ${getValue("参与重算")} · 完成更新 ${getValue("完成更新")} · 摘要尝试 ${getValue("摘要尝试")} · 摘要完成 ${getValue("摘要完成")} · 摘要未完成 ${getValue(["摘要未完成", "摘要失败"])} · 已删除 ${getValue("已删除")}`;
+      return `摘要完成 ${getValue("摘要完成")} · 摘要失败 ${getValue(["摘要失败", "摘要未完成"])}`;
     default:
       return statusLabels[task.status];
   }
