@@ -323,6 +323,7 @@ export async function processFeedItem({
   fullTextFetchThreshold,
   contentExtraction,
   now,
+  signal,
 }: {
   item: ParsedFeedItem;
   sourceId: string;
@@ -339,6 +340,7 @@ export async function processFeedItem({
   fullTextFetchThreshold: number;
   contentExtraction: RunIngestionOptions["contentExtraction"];
   now: Date;
+  signal?: AbortSignal;
 }): Promise<ProcessedItemRecord | null> {
   const lookup = providedLookup ?? buildPreparedFeedItemLookup({
     item,
@@ -445,6 +447,7 @@ export async function processFeedItem({
   addElapsed(timings, "ruleFilterMs", initialRuleFilterStartedAt);
 
   if (initialRuleFilter.filtered) {
+    signal?.throwIfAborted();
     const dbWriteStartedAt = Date.now();
     const stored = await upsertItem(
       {
@@ -538,6 +541,7 @@ export async function processFeedItem({
     const fetchStartedAt = Date.now();
     try {
       const fetchContext = {
+        signal,
         rssContent,
         rssExcerpt,
         reason: fullTextFetchReason,
@@ -550,10 +554,12 @@ export async function processFeedItem({
       fullTextFetched = Boolean(fetchedFullText && fetchedFullText.trim());
     } catch (error) {
       addElapsed(timings, "fullTextFetchMs", fetchStartedAt);
+      if (signal?.aborted) throw error;
       appendIssue(issues, error, "Unknown article fetch error");
     }
   }
 
+  signal?.throwIfAborted();
   const ruleFilterStartedAt = Date.now();
   const ruleFilter = evaluateRuleFilter({
     title: originalTitle,
@@ -573,6 +579,7 @@ export async function processFeedItem({
     moderationReason = "rule_filter";
     moderationDetail = ruleFilter.detail;
   } else if (aiParsingEnabled) {
+    signal?.throwIfAborted();
     const translateTitle = shouldTranslateTitle(originalTitle);
     const understandingInput = buildItemUnderstandingInput({
       fullText,
@@ -642,6 +649,7 @@ export async function processFeedItem({
       }
 
       if (isAggregation && !preserveExistingSplit) {
+        signal?.throwIfAborted();
         const events = understanding.aggregation.events;
         const preUpsertStartedAt = Date.now();
         const preUpsert = await upsertItem(
@@ -730,6 +738,7 @@ export async function processFeedItem({
       }
     } catch (error) {
       addElapsed(timings, "analysisMs", understandingStartedAt);
+      if (signal?.aborted) throw error;
       appendIssue(issues, error, "Unknown item understanding error");
       summaryStatus = "failed";
       summaryText = existing?.summaryText ?? buildFallbackSummary(rssExcerpt);
@@ -764,6 +773,7 @@ export async function processFeedItem({
     status = "processed";
   }
 
+  signal?.throwIfAborted();
   const dbWriteStartedAt = Date.now();
   const stored = await upsertItem(
     {

@@ -92,6 +92,20 @@ describe("background task persistence", () => {
     expect(secondClaim).toBeNull();
   });
 
+  it("arbitrates concurrent claims for one queued task", async () => {
+    const created = await enqueueTaskRun({
+      kind: "ingestion",
+      triggerType: "manual",
+      label: "默认抓取任务",
+    });
+
+    const claims = await Promise.all([claimNextQueuedTaskRun(), claimNextQueuedTaskRun()]);
+
+    expect(claims.filter((claim) => claim?.id === created.id)).toHaveLength(1);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect(await prisma.backgroundTaskRun.count({ where: { id: created.id, status: "running" } })).toBe(1);
+  });
+
   it("lists the newest tasks first", async () => {
     await enqueueTaskRun({
       kind: "ingestion",
@@ -432,6 +446,30 @@ describe("background task persistence", () => {
     expect(ingestionTasks).toHaveLength(1);
     expect(ingestionTasks[0]?.triggerType).toBe("scheduled");
     expect(ingestionTasks[0]?.status).toBe("running");
+  });
+
+  it("does not duplicate a scheduled ingestion run when worker cycles race", async () => {
+    await prisma.taskSchedule.create({
+      data: {
+        key: "ingestion_default",
+        enabled: true,
+        cronExpression: "0 * * * *",
+        sourceConcurrency: 2,
+        fullTextFetchThreshold: 80,
+        timezone: "Asia/Shanghai",
+        nextRunAt: new Date("2026-04-12T01:00:00.000Z"),
+      },
+    });
+
+    await Promise.all([
+      runWorkerCycle({ now: new Date("2026-04-12T01:00:00.000Z"), executeTaskRun: async () => undefined }),
+      runWorkerCycle({ now: new Date("2026-04-12T01:00:00.000Z"), executeTaskRun: async () => undefined }),
+    ]);
+
+    const scheduledRuns = await prisma.backgroundTaskRun.findMany({
+      where: { kind: "ingestion", triggerType: "scheduled" },
+    });
+    expect(scheduledRuns).toHaveLength(1);
   });
 
   it("enqueues a scheduled daily report for the current Shanghai day by default when due", async () => {

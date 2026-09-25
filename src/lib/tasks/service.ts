@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import {
   claimTaskRun,
+  createScheduledTaskRunIfDue,
   createTaskRun,
   findNextQueuedTaskRun,
   findRecentTaskRuns,
@@ -471,6 +472,10 @@ export async function markScheduledTaskRunFinished(
 
 export async function enqueueTaskRun(input: EnqueueTaskRunInput) {
   return createTaskRun(input);
+}
+
+export async function enqueueScheduledTaskRunIfDue(input: Parameters<typeof createScheduledTaskRunIfDue>[0]) {
+  return createScheduledTaskRunIfDue(input);
 }
 
 export async function claimNextQueuedTaskRun() {

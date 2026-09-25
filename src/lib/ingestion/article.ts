@@ -4,11 +4,12 @@ import { JSDOM } from "jsdom";
 import type { RuntimeConfig } from "@/config/runtime";
 import type { ArticleFetchContext, ArticleFetcher } from "@/lib/ingestion/types";
 
-export async function fetchArticleContent(url: string): Promise<string | null> {
+export async function fetchArticleContent(url: string, context?: ArticleFetchContext): Promise<string | null> {
   const response = await fetch(url, {
     headers: {
       "User-Agent": "infinitum-feed-bot/1.0",
     },
+    ...(context?.signal ? { signal: context.signal } : {}),
   });
 
   if (!response.ok) {
@@ -48,36 +49,124 @@ function buildJinaReaderUrl(baseUrl: string, targetUrl: string) {
   return `${baseUrl.replace(/\/+$/, "")}/${targetUrl}`;
 }
 
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    throw signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+  }
+}
+
+function createTimedSignal(signal: AbortSignal | undefined, timeoutMs: number) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+}
+
+function waitWithSignal(waitMs: number, signal?: AbortSignal) {
+  throwIfAborted(signal);
+  if (waitMs <= 0) return Promise.resolve();
+
+  return new Promise<void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const cleanup = () => {
+      if (timer !== null) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      cleanup();
+      reject(signal?.reason ?? new DOMException("The operation was aborted", "AbortError"));
+    };
+
+    timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, waitMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
+}
+
 function createJinaRateLimiter(rpmLimit: number) {
   let nextAvailableAt = 0;
   const minIntervalMs = Math.ceil(60_000 / Math.max(1, rpmLimit));
 
-  return async function waitForSlot() {
+  return async function waitForSlot(signal?: AbortSignal) {
+    throwIfAborted(signal);
     const now = Date.now();
-    const waitMs = Math.max(0, nextAvailableAt - now);
-    nextAvailableAt = Math.max(now, nextAvailableAt) + minIntervalMs;
+    const reservationAt = Math.max(now, nextAvailableAt);
+    const waitMs = Math.max(0, reservationAt - now);
+    nextAvailableAt = reservationAt + minIntervalMs;
 
-    if (waitMs > 0) {
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    try {
+      await waitWithSignal(waitMs, signal);
+    } catch (error) {
+      if (nextAvailableAt === reservationAt + minIntervalMs) nextAvailableAt = reservationAt;
+      throw error;
     }
   };
 }
 
+type SemaphoreWaiter = {
+  signal?: AbortSignal;
+  grant: () => void;
+  reject: (reason: unknown) => void;
+  removeAbortListener?: () => void;
+};
+
 function createSemaphore(limit: number) {
   let active = 0;
-  const queue: Array<() => void> = [];
-
-  return async function runWithSlot<T>(task: () => Promise<T>): Promise<T> {
-    if (active >= limit) {
-      await new Promise<void>((resolve) => queue.push(resolve));
+  const queue: SemaphoreWaiter[] = [];
+  const grantNext = () => {
+    while (queue.length > 0) {
+      const waiter = queue.shift()!;
+      waiter.removeAbortListener?.();
+      if (waiter.signal?.aborted) {
+        waiter.reject(waiter.signal.reason ?? new DOMException("The operation was aborted", "AbortError"));
+        continue;
+      }
+      waiter.grant();
+      return;
     }
+  };
 
-    active += 1;
+  return async function runWithSlot<T>(task: (signal?: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    let hasSlot = false;
     try {
-      return await task();
+      throwIfAborted(signal);
+      if (active < limit) {
+        active += 1;
+        hasSlot = true;
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          const waiter: SemaphoreWaiter = {
+            signal,
+            grant: () => {
+              active += 1;
+              hasSlot = true;
+              resolve();
+            },
+            reject,
+          };
+          queue.push(waiter);
+          if (signal) {
+            const onAbort = () => {
+              const queuedIndex = queue.indexOf(waiter);
+              if (queuedIndex < 0) return;
+              queue.splice(queuedIndex, 1);
+              waiter.removeAbortListener?.();
+              reject(signal.reason ?? new DOMException("The operation was aborted", "AbortError"));
+            };
+            waiter.removeAbortListener = () => signal.removeEventListener("abort", onAbort);
+            signal.addEventListener("abort", onAbort, { once: true });
+            if (signal.aborted) onAbort();
+          }
+        });
+      }
+      throwIfAborted(signal);
+      return await task(signal);
     } finally {
-      active -= 1;
-      queue.shift()?.();
+      if (hasSlot) {
+        active -= 1;
+        grantNext();
+      }
     }
   };
 }
@@ -85,9 +174,11 @@ function createSemaphore(limit: number) {
 async function fetchJinaReaderContent(
   url: string,
   config: RuntimeConfig["contentExtraction"],
-  waitForSlot: () => Promise<void>,
+  waitForSlot: (signal?: AbortSignal) => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<string | null> {
-  await waitForSlot();
+  await waitForSlot(signal);
+  throwIfAborted(signal);
 
   const headers: Record<string, string> = {
     Accept: "text/plain",
@@ -100,7 +191,7 @@ async function fetchJinaReaderContent(
 
   const response = await fetch(buildJinaReaderUrl(config.jinaBaseUrl, url), {
     headers,
-    signal: AbortSignal.timeout(config.timeoutMs),
+    signal,
   });
 
   if (!response.ok) {
@@ -114,19 +205,17 @@ export function createConfiguredArticleFetcher(
   config: RuntimeConfig["contentExtraction"],
   localFetcher: ArticleFetcher = fetchArticleContent,
 ): ArticleFetcher {
-  if (!config.jinaEnabled) {
-    return localFetcher;
-  }
-
   const waitForJinaSlot = createJinaRateLimiter(config.rpmLimit);
   const runJinaWithSlot = createSemaphore(config.concurrency);
   let jinaCalls = 0;
 
   return async (url: string, context?: ArticleFetchContext) => {
     const shouldTryJinaFirst = context?.reason === "rss_html";
-    const canCallJina = () => !shouldSkipJinaForUrl(url) && config.maxPerRun > 0 && jinaCalls < config.maxPerRun;
+    throwIfAborted(context?.signal);
+    const canCallJina = () => config.jinaEnabled && !shouldSkipJinaForUrl(url) && config.maxPerRun > 0 && jinaCalls < config.maxPerRun;
 
     const tryJina = async () => {
+      throwIfAborted(context?.signal);
       if (!canCallJina()) {
         return null;
       }
@@ -135,8 +224,13 @@ export function createConfiguredArticleFetcher(
         context.metrics.jinaAttempted = true;
       }
       jinaCalls += 1;
+      const requestSignal = createTimedSignal(context?.signal, config.timeoutMs);
       try {
-        const content = await runJinaWithSlot(() => fetchJinaReaderContent(url, config, waitForJinaSlot));
+        const content = await runJinaWithSlot(
+          (signal) => fetchJinaReaderContent(url, config, waitForJinaSlot, signal),
+          requestSignal,
+        );
+        throwIfAborted(context?.signal);
         if (!isValidExtractedContent(content, config.minChars)) {
           return null;
         }
@@ -145,17 +239,21 @@ export function createConfiguredArticleFetcher(
         }
         return content;
       } catch (error) {
+        if (context?.signal?.aborted) throw error;
         console.error("[Article Fetcher] Jina Reader fetch failed:", error);
         return null;
       }
     };
 
     const tryLocal = async () => {
+      throwIfAborted(context?.signal);
       if (context?.metrics) {
         context.metrics.localAttempted = true;
       }
+      const requestSignal = createTimedSignal(context?.signal, config.timeoutMs);
       try {
-        const content = trimExtractedContent(await localFetcher(url, context), config.maxChars);
+        const content = trimExtractedContent(await localFetcher(url, { ...context, signal: requestSignal }), config.maxChars);
+        throwIfAborted(context?.signal);
         if (!isValidExtractedContent(content, config.minChars)) {
           return null;
         }
@@ -164,6 +262,7 @@ export function createConfiguredArticleFetcher(
         }
         return content;
       } catch (error) {
+        if (context?.signal?.aborted) throw error;
         console.error("[Article Fetcher] Local article fetch failed:", error);
         return null;
       }

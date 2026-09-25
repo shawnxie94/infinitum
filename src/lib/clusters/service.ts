@@ -255,19 +255,11 @@ async function findClusterForItem(
     (entry) => entry.score >= CLUSTER_AI_MIN_SCORE && entry.dateCompatible && !entry.hardConflict,
   );
 
-  if (rankedCandidates.length === 0) {
-    return {
-      cluster: null,
-      fingerprint,
-      matchSource: null,
-      skippedIncompleteSignature: false,
-    };
-  }
-
-  const topCandidate = rankedCandidates[0]!;
+  const topCandidate = rankedCandidates[0];
   const secondCandidateScore = rankedCandidates[1]?.score ?? Number.NEGATIVE_INFINITY;
 
   if (
+    topCandidate &&
     topCandidate.strongMatch &&
     topCandidate.score >= CLUSTER_DIRECT_MATCH_MIN_SCORE &&
     topCandidate.score - secondCandidateScore >= CLUSTER_DIRECT_MATCH_MIN_GAP
@@ -281,6 +273,15 @@ async function findClusterForItem(
   }
 
   const embedTexts = options.aiProvider?.embedTexts;
+  if (!embedTexts && rankedCandidates.length === 0) {
+    return {
+      cluster: null,
+      fingerprint,
+      matchSource: null,
+      skippedIncompleteSignature: false,
+    };
+  }
+
   const aiEntries = embedTexts
     ? await selectAiCandidatesWithEmbeddingRecall({
         embedTexts,
@@ -294,6 +295,14 @@ async function findClusterForItem(
       })
     : rankedCandidates;
   const aiCandidates = aiEntries.slice(0, CLUSTER_AI_CANDIDATE_LIMIT).map((entry) => entry.candidate);
+  if (aiCandidates.length === 0) {
+    return {
+      cluster: null,
+      fingerprint,
+      matchSource: null,
+      skippedIncompleteSignature: false,
+    };
+  }
 
   try {
     const matchedClusterId = await options.aiProvider.matchClusterCandidate(buildClusterMatchInput(item, options), {
@@ -1751,6 +1760,11 @@ export async function executeClusterMerge(
 
   // Execute merges
   const affectedClusterIds = new Set<string>();
+  const nonApprovedPairKeys = new Set(
+    recordedMergeDecisions
+      .filter((decision) => decision.verdict !== "approved")
+      .map((decision) => decision.pairKey),
+  );
   let mergedCount = 0;
   let itemsMoved = 0;
   let failedGroups = 0;
@@ -1773,12 +1787,20 @@ export async function executeClusterMerge(
       groupWithCounts.slice(1).map((c) => c.id),
       allowedPairs,
     );
+    const selectedMemberIds = [target.id];
+    const pairwiseSafeSources = sources.filter((sourceId) => {
+      const conflictsWithSelectedMember = selectedMemberIds.some((selectedId) =>
+        nonApprovedPairKeys.has(buildClusterMergeEdgeKey(selectedId, sourceId)),
+      );
+      if (!conflictsWithSelectedMember) selectedMemberIds.push(sourceId);
+      return !conflictsWithSelectedMember;
+    });
 
-    if (sources.length === 0) continue;
+    if (pairwiseSafeSources.length === 0) continue;
 
     try {
       const stillAllowedSources: string[] = [];
-      for (const sourceId of sources) {
+      for (const sourceId of pairwiseSafeSources) {
         const blockingConstraint = await findBlockingClusterPairConstraint({
           leftClusterId: target.id,
           rightClusterId: sourceId,

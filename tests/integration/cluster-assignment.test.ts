@@ -1842,6 +1842,166 @@ describe("cluster assignment", () => {
     ).resolves.toBe(1);
   });
 
+  it.each([
+    { maxTarget: "A", counts: { A: 3, B: 2, C: 1 } },
+    { maxTarget: "B", counts: { A: 2, B: 3, C: 1 } },
+    { maxTarget: "C", counts: { A: 1, B: 2, C: 3 } },
+  ])("keeps an explicitly declined triangle pair separate when $maxTarget is the largest target", async ({ counts }) => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Transitive Conflict Feed",
+        rssUrl: "https://transitive-conflict.example.com/feed.xml",
+        siteUrl: "https://transitive-conflict.example.com",
+      },
+    });
+    const publishedAt = new Date("2026-04-20T10:00:00.000Z");
+    const clusterIds = ["A", "B", "C"];
+    await prisma.contentCluster.createMany({
+      data: clusterIds.map((id) => ({
+        id,
+        kind: "topic",
+        title: "Acme 发布 Orion",
+        summary: "Acme 发布 Orion 开发平台。",
+        score: 80,
+        itemCount: counts[id as keyof typeof counts],
+        latestPublishedAt: publishedAt,
+        status: "active",
+        fingerprint: `triangle-${id}`,
+        eventFingerprint: "triangle-shared-event",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Orion",
+        eventDate: "2026-04-20",
+        mergeInputHash: null,
+      })),
+    });
+    await prisma.item.createMany({
+      data: clusterIds.flatMap((clusterId) => Array.from({ length: counts[clusterId as keyof typeof counts] }, (_, index) => ({
+        id: `${clusterId}-item-${index}`,
+        sourceId: source.id,
+        clusterId,
+        originalUrl: `https://transitive-conflict.example.com/${clusterId}/${index}`,
+        canonicalUrl: `https://transitive-conflict.example.com/${clusterId}/${index}`,
+        urlHash: `triangle-${clusterId}-${index}`,
+        originalTitle: "Acme 发布 Orion",
+        publishedAt,
+        summaryText: "Acme 发布 Orion 开发平台。",
+        status: "processed",
+        moderationStatus: "allowed",
+        eventType: "launch",
+        eventSubject: "Acme",
+        eventAction: "发布",
+        eventObject: "Orion",
+        eventDate: "2026-04-20",
+      }))),
+    });
+    const assessClusterMergePairs = vi.fn().mockResolvedValue([
+      { leftClusterId: "A", rightClusterId: "B", verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件" },
+      { leftClusterId: "B", rightClusterId: "C", verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件" },
+      { leftClusterId: "A", rightClusterId: "C", verdict: "declined", confidence: 95, reasonCode: "different_event", reasonText: "明确不能合并" },
+    ]);
+
+    const result = await executeClusterMerge(
+      { assessClusterMergePairs } as unknown as AiProvider,
+      new Date("2026-04-21T10:00:00.000Z"),
+    );
+    const remainingClusters = await prisma.contentCluster.findMany({ select: { id: true } });
+    const itemClusters = await prisma.item.findMany({
+      where: { id: { in: ["A-item-0", "B-item-0", "C-item-0"] } },
+      select: { id: true, clusterId: true },
+    });
+
+    expect(assessClusterMergePairs).toHaveBeenCalledOnce();
+    expect(result.mergedCount).toBe(1);
+    expect(remainingClusters).toHaveLength(2);
+    expect(itemClusters.find((item) => item.id === "A-item-0")?.clusterId)
+      .not.toBe(itemClusters.find((item) => item.id === "C-item-0")?.clusterId);
+  });
+
+  it("uses semantic recall when no rule-qualified cluster candidate exists", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Semantic Recall Feed",
+        rssUrl: "https://semantic-recall.example.com/feed.xml",
+        siteUrl: "https://semantic-recall.example.com",
+      },
+    });
+    const publishedAt = new Date("2026-04-20T10:00:00.000Z");
+    await prisma.contentCluster.create({
+      data: {
+        id: "semantic-recall-candidate",
+        kind: "topic",
+        title: "Neptune platform launch from a technology company",
+        summary: "A technology company launches the Neptune platform for developers.",
+        score: 80,
+        itemCount: 1,
+        latestPublishedAt: publishedAt,
+        status: "active",
+        fingerprint: "semantic-recall-fingerprint",
+      },
+    });
+    await prisma.item.create({
+      data: {
+        id: "semantic-recall-seed",
+        sourceId: source.id,
+        clusterId: "semantic-recall-candidate",
+        originalUrl: "https://semantic-recall.example.com/seed",
+        canonicalUrl: "https://semantic-recall.example.com/seed",
+        urlHash: "semantic-recall-seed",
+        originalTitle: "Neptune platform launch",
+        publishedAt,
+        summaryText: "The Neptune platform was launched.",
+        status: "processed",
+        moderationStatus: "allowed",
+      },
+    });
+    const incoming = await prisma.item.create({
+      data: {
+        id: "semantic-recall-incoming",
+        sourceId: source.id,
+        originalUrl: "https://semantic-recall.example.com/incoming",
+        canonicalUrl: "https://semantic-recall.example.com/incoming",
+        urlHash: "semantic-recall-incoming",
+        originalTitle: "Acme Labs 发布 Neptune",
+        translatedTitle: "Acme Labs launched Neptune",
+        publishedAt,
+        summaryText: "Acme Labs 发布 Neptune 开发者平台。",
+        status: "processed",
+        moderationStatus: "allowed",
+        eventType: "launch",
+        eventSubject: "Acme Labs",
+        eventAction: "发布",
+        eventObject: "Neptune",
+        eventDate: "2026-04-20",
+      },
+    });
+    const embedTexts = vi.fn(async (texts: string[]) => texts.map(() => [1, 0]));
+    const matchClusterCandidate = vi.fn(async (_input: string, context?: { candidates?: Array<{ id: string }> }) =>
+      context?.candidates?.[0]?.id ?? null,
+    );
+    const aiProvider = { embedTexts, matchClusterCandidate } as unknown as AiProvider;
+
+    const assignment = await assignItemToCluster(incoming.id, {
+      eventSignature: {
+        eventType: "launch",
+        eventSubject: "Acme Labs",
+        eventAction: "发布",
+        eventObject: "Neptune",
+        eventDate: "2026-04-20",
+      },
+      aiProvider,
+    });
+
+    expect(embedTexts).toHaveBeenCalledOnce();
+    expect(matchClusterCandidate).toHaveBeenCalledOnce();
+    expect(assignment).toMatchObject({
+      clusterId: "semantic-recall-candidate",
+      matchSource: "ai_match",
+      createdNewCluster: false,
+    });
+  });
+
   it("does not send singleton merge candidates to AI when key objects conflict", async () => {
     const source = await prisma.source.create({
       data: {

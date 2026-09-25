@@ -7,6 +7,7 @@ import {
 } from "@/lib/daily-report/service";
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
 import { executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
+import { persistDailyReport } from "@/lib/daily-report/persistence";
 import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
 import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
@@ -774,6 +775,40 @@ describe("daily report service", () => {
     await prisma.source.deleteMany();
     await prisma.sourceGroup.deleteMany();
     await prisma.taskSchedule.deleteMany();
+  });
+
+  it("does not duplicate a generated revision when persistence retries with the same idempotency key", async () => {
+    const input = {
+      date: REPORT_DATE,
+      existing: null,
+      content: JSON.parse(buildDailyReportOutput(1)),
+      title: "幂等日报",
+      renderedMarkdown: "# 幂等日报",
+      inputHash: "idempotent-input-hash",
+      candidateSnapshot: "[]",
+      modelName: null,
+      templateSignature: "test-template-v1",
+      sourceRows: [],
+      expandedSourcesByNumber: new Map(),
+      shouldAutoPublish: false,
+      publishedAt: null,
+      idempotencyKey: "generated:test-task:idempotent-input-hash",
+      aiUsage: { actual: 0, estimated: 0, breakdown: [] },
+      buildCancellationCheckpoint: () => null,
+    };
+
+    await persistDailyReport(input);
+    await persistDailyReport(input);
+
+    const report = await prisma.dailyReport.findUniqueOrThrow({
+      where: { date_timezone: { date: REPORT_DATE, timezone: "Asia/Shanghai" } },
+    });
+    const revisions = await prisma.dailyReportRevision.findMany({
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+
+    expect(revisions).toHaveLength(1);
+    expect(report.currentRevisionId).toBe(revisions[0]?.id);
   });
 
   it("turns an existing published report into a clean draft when regenerated", async () => {

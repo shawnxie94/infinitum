@@ -110,6 +110,7 @@ export async function resolveRunOptions(options?: Partial<RunIngestionOptions>):
     processingStartAt:
       options?.processingStartAt ?? runtimeConfig?.ingestion.processingStartAt ?? null,
     now,
+    signal: options?.signal,
     taskTimelineModelNames: runtimeConfig?.selectedPromptConfigs
       ? {
           itemUnderstanding: resolvePromptModelName(runtimeConfig.selectedPromptConfigs.itemUnderstanding, defaultModelName),

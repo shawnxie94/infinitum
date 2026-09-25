@@ -22,6 +22,7 @@ import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider
 async function runIngestionWorkflowStagesForTest(
   inputOrOptions?: BackgroundTaskRun | Partial<RunIngestionOptions>,
   explicitOptions?: Partial<RunIngestionOptions>,
+  controller = new AbortController(),
 ) {
   const taskRun = inputOrOptions && "id" in inputOrOptions && "triggerType" in inputOrOptions
     ? inputOrOptions as BackgroundTaskRun
@@ -34,7 +35,6 @@ async function runIngestionWorkflowStagesForTest(
         },
       });
   const options = taskRun === inputOrOptions ? explicitOptions : inputOrOptions as Partial<RunIngestionOptions> | undefined;
-  const controller = new AbortController();
   const context: DomainTaskContext = {
     signal: controller.signal,
     taskRunId: taskRun.id,
@@ -55,6 +55,7 @@ async function runIngestionWorkflowStagesForTest(
       startedAt: new Date().toISOString(),
     },
     checkCancellation: async () => {
+      controller.signal.throwIfAborted();
       const latest = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
       if (!latest.cancelRequestedAt) return;
       await prisma.backgroundTaskRun.update({
@@ -218,6 +219,47 @@ describe("ingestion workflow stages", () => {
       "openai",
       "codex 云端智能体",
     ]);
+  });
+
+  it("stops AI analysis and item writes when article fetching is cancelled", async () => {
+    const controller = new AbortController();
+    const parser = {
+      parseURL: vi.fn().mockResolvedValue({
+        items: [{
+          title: "A short RSS item",
+          link: "https://example.com/posts/cancelled-fetch",
+          isoDate: "2026-04-10T09:00:00.000Z",
+          "content:encoded": "<p>A short RSS body</p>",
+          contentSnippet: "A short excerpt",
+        }],
+      }),
+    };
+    const aiProvider = buildAiProviderMock();
+    const articleFetcher = vi.fn(async (_url: string, context?: { signal?: AbortSignal }) => {
+      expect(context?.signal).toBe(controller.signal);
+      controller.abort(new DOMException("cancelled", "AbortError"));
+      throw controller.signal.reason;
+    });
+
+    await expect(runIngestionWorkflowStagesForTest({
+      parser,
+      articleFetcher,
+      aiProvider,
+      sourceConfigs: [{
+        name: "Cancel Feed",
+        rssUrl: "https://example.com/feed.xml",
+        siteUrl: "https://example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+      }],
+      blacklist: [],
+      fullTextFetchThreshold: 1_000,
+      now: new Date("2026-04-10T10:30:00.000Z"),
+    }, undefined, controller)).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(articleFetcher).toHaveBeenCalledOnce();
+    expect(aiProvider.understandItem).not.toHaveBeenCalled();
+    await expect(prisma.item.count()).resolves.toBe(0);
   });
 
   it("records source fetch failures in the ingestion task timeline", async () => {

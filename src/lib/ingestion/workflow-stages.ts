@@ -408,7 +408,7 @@ async function runItemProcessingStage(
   overrides?: Partial<RunIngestionOptions>,
 ): Promise<IngestionWorkflowPayload> {
   const startedAt = new Date();
-  const options = await resolveStageOptions(payload, overrides);
+  const options = await resolveStageOptions(payload, { ...overrides, signal: context.signal });
   const preparedLookupEntries = dedupePreparedLookupsByDedupeKey(
     payload.preparedItems
       .map((preparedItem) => ({ preparedItem, lookup: buildPreparedFeedItemLookup(preparedItem, new Date(payload.now)) }))
@@ -464,6 +464,7 @@ async function runItemProcessingStage(
           fullTextFetchThreshold: options.fullTextFetchThreshold ?? DEFAULT_FULL_TEXT_FETCH_THRESHOLD,
           contentExtraction: options.contentExtraction,
           now: new Date(payload.now),
+          signal: options.signal,
         });
         if (!result) return;
         accumulateItemTimelineMetrics(timelineCounters, result);
@@ -512,7 +513,9 @@ async function runItemProcessingStage(
   await updateTaskRun(context.taskRunId, {
     progressCurrent: Math.min(next.processableItemCount, successCount + Math.max(0, failureCount - next.sourceFailureCount)),
     progressTotal: next.processableItemCount,
-    progressLabel: `已处理 ${successCount + Math.max(0, failureCount - next.sourceFailureCount)}/${next.processableItemCount} 条内容`,
+    ...(!context.signal.aborted ? {
+      progressLabel: `已处理 ${successCount + Math.max(0, failureCount - next.sourceFailureCount)}/${next.processableItemCount} 条内容`,
+    } : {}),
     itemsAdded,
     fullTextFetchedCount,
     aiCallCountActual: next.aiCallCountActual,

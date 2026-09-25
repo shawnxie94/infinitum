@@ -123,6 +123,51 @@ export async function createTaskRun(input: EnqueueTaskRunInput) {
   });
 }
 
+export async function createScheduledTaskRunIfDue(input: {
+  scheduleId: string;
+  expectedNextRunAt: Date;
+  nextRunAt: Date;
+  kind: EnqueueTaskRunInput["kind"];
+  label: string;
+  entityId?: string | null;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const claimedSchedule = await tx.taskSchedule.updateMany({
+      where: {
+        id: input.scheduleId,
+        enabled: true,
+        nextRunAt: input.expectedNextRunAt,
+      },
+      data: { nextRunAt: input.nextRunAt },
+    });
+    if (claimedSchedule.count !== 1) return false;
+
+    const activeRunCount = await tx.backgroundTaskRun.count({
+      where: {
+        kind: input.kind,
+        status: { in: ["queued", "running"] },
+      },
+    });
+    if (activeRunCount > 0) {
+      await tx.taskSchedule.update({
+        where: { id: input.scheduleId },
+        data: { nextRunAt: input.expectedNextRunAt },
+      });
+      return false;
+    }
+
+    await tx.backgroundTaskRun.create({
+      data: {
+        kind: input.kind,
+        triggerType: "scheduled",
+        label: input.label,
+        entityId: input.entityId ?? null,
+      },
+    });
+    return true;
+  });
+}
+
 export async function findNextQueuedTaskRun(excludedKinds: string[] = []) {
   return prisma.backgroundTaskRun.findFirst({
     where: {

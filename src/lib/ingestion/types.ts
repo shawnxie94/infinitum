@@ -39,6 +39,7 @@ export type RssParserLike = {
 };
 
 export type ArticleFetchContext = {
+  signal?: AbortSignal;
   rssContent?: string | null;
   rssExcerpt?: string | null;
   reason?: "short_content" | "rss_html";
@@ -110,6 +111,7 @@ export type RunIngestionOptions = {
   maxFeedItemsToScan?: number;
   processingStartAt?: Date | null;
   now?: Date;
+  signal?: AbortSignal;
   onProgress?: (snapshot: {
     status: "running" | "succeeded" | "failed" | "partial";
     sourceCount: number;
