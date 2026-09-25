@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { listPublishedDailyReportsForLlmsFull } from "@/lib/daily-report/repository";
 import { resolvePublicOrigin } from "@/lib/http/public-origin";
 import {
   LLMS_FULL_ENTRY_LIMIT,
@@ -81,20 +81,7 @@ function buildReportBlock(origin: string, report: {
 export async function GET(request: Request): Promise<Response> {
   const origin = resolvePublicOrigin(request);
 
-  const reports = await prisma.dailyReport.findMany({
-    where: { status: "published" },
-    select: {
-      date: true,
-      title: true,
-      openingSummary: true,
-      generatedAt: true,
-      publishedAt: true,
-      renderedMarkdown: true,
-      _count: { select: { sources: true } },
-    },
-    orderBy: [{ date: "desc" }, { generatedAt: "desc" }],
-    take: LLMS_FULL_ENTRY_LIMIT,
-  });
+  const reports = await listPublishedDailyReportsForLlmsFull(LLMS_FULL_ENTRY_LIMIT);
 
   const sections: string[] =
     reports.length === 0

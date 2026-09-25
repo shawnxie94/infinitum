@@ -14,7 +14,7 @@ vi.mock("@/lib/daily-report/cache", () => ({
   invalidateDailyReportCache: vi.fn(),
 }));
 
-const { listDailyReports } = await import("@/lib/daily-report/repository");
+const { listDailyReports, listPublishedDailyReportsForLlmsFull } = await import("@/lib/daily-report/repository");
 
 function buildDailyReportContent(label: string) {
   return JSON.stringify({
@@ -72,5 +72,70 @@ describe("daily report public cache versioning", () => {
     expect(firstKey).toMatch(/^daily:list:/);
     expect(secondKey).toMatch(/^daily:list:/);
     expect(secondKey).not.toBe(firstKey);
+  });
+
+  it("caches the bounded published-report content projection for llms-full", async () => {
+    await prisma.dailyReport.create({
+      data: {
+        date: "2026-04-23",
+        timezone: "Asia/Shanghai",
+        status: "published",
+        title: "旧日报",
+        openingSummary: "旧日报摘要",
+        closingThought: "旧日报结语",
+        summaryJson: buildDailyReportContent("旧版"),
+        renderedMarkdown: "# 旧日报\n",
+        inputHash: "llms-old",
+        publishedAt: new Date("2026-04-23T09:00:00.000Z"),
+      },
+    });
+    const report = await prisma.dailyReport.create({
+      data: {
+        date: "2026-04-24",
+        timezone: "Asia/Shanghai",
+        status: "published",
+        title: "最新日报",
+        openingSummary: "最新日报摘要",
+        closingThought: "最新日报结语",
+        summaryJson: buildDailyReportContent("最新"),
+        renderedMarkdown: "# 最新日报\n",
+        inputHash: "llms-current",
+        publishedAt: new Date("2026-04-24T09:00:00.000Z"),
+      },
+    });
+    await prisma.dailyReport.create({
+      data: {
+        date: "2026-04-25",
+        timezone: "Asia/Shanghai",
+        status: "draft",
+        title: "草稿不应公开",
+        openingSummary: "草稿摘要",
+        closingThought: "草稿结语",
+        summaryJson: buildDailyReportContent("草稿"),
+        renderedMarkdown: "# 草稿\n",
+        inputHash: "llms-draft",
+      },
+    });
+
+    const reports = await listPublishedDailyReportsForLlmsFull(1);
+    const firstKey = cacheKeys.at(-1);
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({
+      date: "2026-04-24",
+      title: "最新日报",
+      renderedMarkdown: "# 最新日报\n",
+      _count: { sources: 0 },
+    });
+    expect(firstKey).toMatch(/^daily:llms-full:/);
+
+    await prisma.dailyReport.update({
+      where: { id: report.id },
+      data: { renderedMarkdown: "# 最新日报 - 更新\n" },
+    });
+    const updatedReports = await listPublishedDailyReportsForLlmsFull(1);
+
+    expect(cacheKeys.at(-1)).not.toBe(firstKey);
+    expect(updatedReports[0]?.renderedMarkdown).toBe("# 最新日报 - 更新\n");
   });
 });

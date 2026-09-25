@@ -9,11 +9,16 @@ import { describe, expect, it } from "vitest";
  * 规则：src/lib 与 src/app/api 下任何触碰 feed 相关模型的 Prisma 写操作，
  * 要么在文件内调用 invalidateFeedCache()，要么在本文件的 DELEGATED 中登记
  * 失效责任方与理由；src/app/api 禁止直连 @/lib/db 或出现 Prisma 写操作。
+ * public SEO routes 的数据读取边界由本文件下方的专用守卫覆盖。
  * 新写路径出现时，本测试会列出未覆盖文件并拒绝通过。
  */
 
 const REPO_ROOT = process.cwd();
 const SCAN_ROOTS = ["src/lib", "src/app/api"];
+const PUBLIC_SEO_ROUTE_FILES = [
+  "src/app/llms-full.txt/route.ts",
+  "src/app/sitemap-news.xml/route.ts",
+];
 
 const FEED_AFFECTING_MODELS = [
   "contentCluster",
@@ -171,5 +176,14 @@ describe("feed cache 失效写操作矩阵", () => {
       violations.map(toRepoRelative),
       "API route 应通过领域 service 读写数据，不要直接 import @/lib/db（读路径请走对应 feed/service 查询层）",
     ).toEqual([]);
+  });
+
+  it("公开 SEO routes 不直接读取 Prisma", () => {
+    const violations = PUBLIC_SEO_ROUTE_FILES.filter((file) => {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      return content.includes('@/lib/db') || /\bprisma\s*\./.test(content);
+    });
+
+    expect(violations).toEqual([]);
   });
 });

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { refreshAllClusterFeedStats, refreshClusterFeedStats } from "@/lib/clusters/feed-stats";
 import { resolveFeedFilters } from "@/lib/feed/range";
-import { listFeedItems } from "@/lib/feed/repository";
+import { listFeedItems, listNewsSitemapItems } from "@/lib/feed/repository";
 
 describe("/api/feed", () => {
   beforeEach(async () => {
@@ -196,6 +196,28 @@ describe("/api/feed", () => {
       ],
     });
     await refreshAllClusterFeedStats();
+  });
+
+  it("lists news sitemap items by createdAt with publishability, order, and limit constraints", async () => {
+    const since = new Date("2026-04-09T00:00:00.000Z");
+    const limited = await listNewsSitemapItems(since, 2);
+    const allRecent = await listNewsSitemapItems(since, 100);
+
+    expect(limited.map((item) => item.originalUrl)).toEqual([
+      "https://api.example.com/a",
+      "https://api.example.com/a-2",
+    ]);
+    expect(allRecent.map((item) => item.originalUrl)).toEqual([
+      "https://api.example.com/a",
+      "https://api.example.com/a-2",
+      "https://api.example.com/timezone-created",
+      "https://api.example.com/b",
+    ]);
+    expect(allRecent[0]).toMatchObject({
+      translatedTitle: "故事 A",
+      originalUrl: "https://api.example.com/a",
+      source: { name: "API Feed" },
+    });
   });
 
   it("returns a mixed feed with clusters and single items for the selected range", async () => {

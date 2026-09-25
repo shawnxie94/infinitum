@@ -1745,6 +1745,27 @@ async function listFeedGroupCounts(
   };
 }
 
+export async function listNewsSitemapItems(since: Date, limit: number) {
+  return prisma.item.findMany({
+    where: {
+      status: "processed",
+      moderationStatus: "allowed",
+      isAggregation: false,
+      createdAt: { gte: since },
+    },
+    select: {
+      translatedTitle: true,
+      originalTitle: true,
+      originalUrl: true,
+      publishedAt: true,
+      createdAt: true,
+      source: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: Math.max(0, Math.trunc(limit)),
+  });
+}
+
 export async function listFeedItems(
   filters: FeedFilters & {
     rangeStart: Date | null;

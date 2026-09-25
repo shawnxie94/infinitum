@@ -1,9 +1,10 @@
-import { FEED_FILTER_OPTIONS_CACHE_TTL_MS, FEED_LIST_CACHE_TTL_MS, FEED_STATUS_CACHE_TTL_MS } from "@/config/constants";
+import { DEFAULT_FEED_CACHE_TTL_MS, FEED_FILTER_OPTIONS_CACHE_TTL_MS, FEED_LIST_CACHE_TTL_MS, FEED_STATUS_CACHE_TTL_MS } from "@/config/constants";
 import {
   getLatestFeedItemUpdate,
   getLatestFeedSourceConfigUpdate,
   listFeedFilterOptions,
   listFeedItems,
+  listNewsSitemapItems,
   getLatestFetchRun,
   countDisplayItemsCreatedDuringFetchRun,
   toFetchRunSnapshot,
@@ -11,6 +12,7 @@ import {
 import { withFeedCache } from "@/lib/feed/cache";
 
 type FeedFiltersInput = Parameters<typeof listFeedItems>[0] & { isCustomRange?: boolean };
+const NEWS_SITEMAP_CACHE_TTL_MS = DEFAULT_FEED_CACHE_TTL_MS;
 type FeedPaginationInput = Parameters<typeof listFeedItems>[1];
 
 const ROLLING_RANGE_CACHE_KEYS = new Set(["3d", "7d", "1m", "1y"]);
@@ -81,6 +83,17 @@ export async function getCachedFeedItems(filters: FeedFiltersInput, pagination: 
     `feed:list:${cacheVersion}:${serializeFeedFilters(filters)}:${serializeFeedPagination(pagination)}`,
     () => listFeedItems(filters, pagination),
     FEED_LIST_CACHE_TTL_MS,
+  );
+}
+
+export async function getCachedNewsSitemapItems(since: Date, limit: number) {
+  const normalizedLimit = Math.max(0, Math.trunc(limit));
+  const timeBucket = Math.floor(since.getTime() / NEWS_SITEMAP_CACHE_TTL_MS);
+
+  return withFeedCache(
+    `feed:news-sitemap:${timeBucket}:${normalizedLimit}`,
+    () => listNewsSitemapItems(since, normalizedLimit),
+    NEWS_SITEMAP_CACHE_TTL_MS,
   );
 }
 

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { getCachedNewsSitemapItems } from "@/lib/feed/service";
 import { SITE_NAME } from "@/lib/seo/metadata";
 
 export const dynamic = "force-dynamic";
@@ -18,20 +18,7 @@ function escapeXml(value: string) {
 
 export async function GET(): Promise<Response> {
   const since = new Date(Date.now() - NEWS_WINDOW_HOURS * 60 * 60 * 1000);
-
-  const items = await prisma.item.findMany({
-    where: {
-      status: "processed",
-      moderationStatus: "allowed",
-      isAggregation: false,
-      createdAt: { gte: since },
-    },
-    include: {
-      source: { select: { name: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: NEWS_MAX_ENTRIES,
-  });
+  const items = await getCachedNewsSitemapItems(since, NEWS_MAX_ENTRIES);
 
   const publicationName = escapeXml(SITE_NAME);
   const language = "zh";

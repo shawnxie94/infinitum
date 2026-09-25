@@ -524,6 +524,29 @@ export async function listDailyReports(input: {
   return listDailyReportsUncached(input);
 }
 
+export async function listPublishedDailyReportsForLlmsFull(limit: number) {
+  const take = Math.max(0, Math.trunc(limit));
+  const cacheVersion = await getDailyReportCacheVersion(false);
+
+  return withDailyReportCache(
+    `daily:llms-full:${cacheVersion}:${take}`,
+    () => prisma.dailyReport.findMany({
+      where: { status: "published" },
+      select: {
+        date: true,
+        title: true,
+        openingSummary: true,
+        generatedAt: true,
+        publishedAt: true,
+        renderedMarkdown: true,
+        _count: { select: { sources: true } },
+      },
+      orderBy: [{ date: "desc" }, { generatedAt: "desc" }],
+      take,
+    }),
+  );
+}
+
 async function listDailyReportsUncached(input: {
   isAdmin: boolean;
   status?: "draft" | "published" | "all";
