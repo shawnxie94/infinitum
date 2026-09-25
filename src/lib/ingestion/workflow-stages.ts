@@ -145,23 +145,59 @@ function accumulateItemTimelineMetrics(counters: IngestionTimelineCounters, resu
   counters.clusterAssignment.newCluster += metrics.clusterAssignment?.newCluster ?? 0;
 }
 
+export function mergeIngestionStageAiBreakdown(
+  previousEntries: TaskAiCallBreakdownSnapshot[],
+  incomingEntries: TaskAiCallBreakdownSnapshot[],
+): TaskAiCallBreakdownSnapshot[] {
+  const breakdown = new Map(previousEntries.map((entry) => [entry.key, { ...entry }]));
+  for (const entry of incomingEntries) {
+    const previous = breakdown.get(entry.key);
+    const previousSource = previous?.tokenUsageSource;
+    const nextSource = entry.tokenUsageSource;
+    const previousCachedStatus = previous?.cachedTokensStatus;
+    const nextCachedStatus = entry.cachedTokensStatus;
+    const cachedTokensStatus = previousCachedStatus === undefined
+      ? nextCachedStatus
+      : nextCachedStatus === undefined || previousCachedStatus === nextCachedStatus
+        ? previousCachedStatus
+        : "partial";
+    breakdown.set(entry.key, {
+      ...previous,
+      ...entry,
+      ...((previous?.modelNames?.length ?? 0) > 0 || (entry.modelNames?.length ?? 0) > 0
+        ? { modelNames: [...new Set([...(previous?.modelNames ?? []), ...(entry.modelNames ?? [])])] }
+        : {}),
+      actual: (previous?.actual ?? 0) + entry.actual,
+      estimated: (previous?.estimated ?? 0) + entry.estimated,
+      ...(entry.promptTokens !== undefined || previous?.promptTokens !== undefined
+        ? { promptTokens: (previous?.promptTokens ?? 0) + (entry.promptTokens ?? 0) }
+        : {}),
+      ...(entry.completionTokens !== undefined || previous?.completionTokens !== undefined
+        ? { completionTokens: (previous?.completionTokens ?? 0) + (entry.completionTokens ?? 0) }
+        : {}),
+      ...(entry.totalTokens !== undefined || previous?.totalTokens !== undefined
+        ? { totalTokens: (previous?.totalTokens ?? 0) + (entry.totalTokens ?? 0) }
+        : {}),
+      ...(entry.cachedTokens !== undefined || previous?.cachedTokens !== undefined
+        ? { cachedTokens: (previous?.cachedTokens ?? 0) + (entry.cachedTokens ?? 0) }
+        : {}),
+      ...(cachedTokensStatus !== undefined ? { cachedTokensStatus } : {}),
+      ...(previousSource && nextSource && previousSource !== nextSource
+        ? { tokenUsageSource: "mixed" as const }
+        : { tokenUsageSource: nextSource ?? previousSource }),
+    });
+  }
+  return [...breakdown.values()];
+}
+
 function mergeStageAiUsage(
   payload: IngestionWorkflowPayload,
   usage: ReturnType<ResolvedRunOptions["aiUsage"]["snapshot"]>,
 ): Pick<IngestionWorkflowPayload, "aiCallCountActual" | "aiCallCountEstimated" | "aiCallBreakdown"> {
-  const breakdown = new Map(payload.aiCallBreakdown.map((entry) => [entry.key, { ...entry }]));
-  for (const entry of usage.breakdown) {
-    const previous = breakdown.get(entry.key);
-    breakdown.set(entry.key, {
-      ...entry,
-      actual: (previous?.actual ?? 0) + entry.actual,
-      estimated: (previous?.estimated ?? 0) + entry.estimated,
-    });
-  }
   return {
     aiCallCountActual: payload.aiCallCountActual + usage.actual,
     aiCallCountEstimated: payload.aiCallCountEstimated + usage.estimated,
-    aiCallBreakdown: [...breakdown.values()],
+    aiCallBreakdown: mergeIngestionStageAiBreakdown(payload.aiCallBreakdown, usage.breakdown),
   };
 }
 
@@ -563,8 +599,19 @@ async function runClusterFinalizeStage(
   const timelineCounters = structuredClone(payload.timelineCounters ?? createIngestionTimelineCounters());
   for (const clusterId of payload.affectedClusterIds) {
     await context.checkCancellation();
-    await recomputeCluster(clusterId, trackedAiProvider);
+    const result = await recomputeCluster(clusterId, trackedAiProvider);
     timelineCounters.clusterFinalize.recomputed += 1;
+    if (result.updated) timelineCounters.clusterFinalize.updated += 1;
+    if (result.deleted) timelineCounters.clusterFinalize.deleted += 1;
+    if (result.summaryAttempted) {
+      timelineCounters.clusterFinalize.summaryAttempted =
+        (timelineCounters.clusterFinalize.summaryAttempted ?? 0) + 1;
+      if (result.summarySucceeded) {
+        timelineCounters.clusterFinalize.summarySucceeded += 1;
+      } else {
+        timelineCounters.clusterFinalize.summaryFailed += 1;
+      }
+    }
   }
   const completedPayload = finishTimelineStage({
     ...payload,

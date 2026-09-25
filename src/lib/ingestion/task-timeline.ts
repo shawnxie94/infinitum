@@ -101,6 +101,7 @@ export type IngestionTimelineCounters = {
     recomputed: number;
     updated: number;
     deleted: number;
+    summaryAttempted: number;
     summarySucceeded: number;
     summaryFailed: number;
   };
@@ -211,6 +212,7 @@ export function createIngestionTimelineCounters(): IngestionTimelineCounters {
       recomputed: 0,
       updated: 0,
       deleted: 0,
+      summaryAttempted: 0,
       summarySucceeded: 0,
       summaryFailed: 0,
     },
@@ -271,10 +273,12 @@ export function buildIngestionTaskTimeline(input: {
   modelNames: IngestionTimelineModelNames;
 }): TaskTimelineNodeSnapshot[] {
   const { counters, stages, modelNames } = input;
+  const summaryAttempted = counters.clusterFinalize.summaryAttempted ?? 0;
   const clusterFinalizeCounts =
     counters.clusterFinalize.recomputed +
     counters.clusterFinalize.updated +
     counters.clusterFinalize.deleted +
+    summaryAttempted +
     counters.clusterFinalize.summarySucceeded +
     counters.clusterFinalize.summaryFailed;
 
@@ -446,8 +450,9 @@ export function buildIngestionTaskTimeline(input: {
       metrics: [
         { label: "参与重算", value: counters.clusterFinalize.recomputed },
         { label: "完成更新", value: counters.clusterFinalize.updated },
+        { label: "摘要尝试", value: summaryAttempted },
         { label: "摘要完成", value: counters.clusterFinalize.summarySucceeded },
-        { label: "摘要失败", value: counters.clusterFinalize.summaryFailed },
+        { label: "摘要未完成", value: counters.clusterFinalize.summaryFailed },
         { label: "已删除", value: counters.clusterFinalize.deleted },
       ],
     },

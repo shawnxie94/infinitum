@@ -10,7 +10,11 @@ import {
   shouldEnqueueProcessingRecoveryFromIngestion,
   startIngestionTask,
 } from "@/lib/ingestion/service";
-import { executeIngestionWorkflowStage, findOrCreateIngestionFetchRun } from "@/lib/ingestion/workflow-stages";
+import {
+  executeIngestionWorkflowStage,
+  findOrCreateIngestionFetchRun,
+  mergeIngestionStageAiBreakdown,
+} from "@/lib/ingestion/workflow-stages";
 import type { RunIngestionOptions } from "@/lib/ingestion/types";
 import { buildDedupeKeys } from "@/lib/ingestion/dedupe";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
@@ -103,6 +107,28 @@ describe("ingestion workflow stages", () => {
     await prisma.sourceGroup.deleteMany();
     await prisma.blacklistKeyword.deleteMany();
     await prisma.taskSchedule.deleteMany();
+  });
+
+  it("preserves token usage when later ingestion stages report no token data", () => {
+    const tokenEntries = (["item_understanding", "cluster_match", "cluster_merge"] as const).map((key) => ({
+      key,
+      label: key,
+      actual: 1,
+      estimated: 0,
+      promptTokens: 100,
+      completionTokens: 20,
+      totalTokens: 120,
+      cachedTokens: 10,
+      cachedTokensStatus: "provider" as const,
+      tokenUsageSource: "provider" as const,
+    }));
+    const merged = mergeIngestionStageAiBreakdown(tokenEntries, [
+      { key: "item_understanding", label: "item_understanding", actual: 0, estimated: 0 },
+      { key: "cluster_match", label: "cluster_match", actual: 0, estimated: 0 },
+      { key: "cluster_merge", label: "cluster_merge", actual: 0, estimated: 0 },
+    ]);
+
+    expect(merged).toEqual(tokenEntries);
   });
 
   it("creates a queued ingestion background task", async () => {
@@ -2249,8 +2275,21 @@ describe("ingestion workflow stages", () => {
     });
 
     const storedCluster = await prisma.contentCluster.findFirstOrThrow();
+    const storedTask = await prisma.backgroundTaskRun.findFirstOrThrow({
+      where: { kind: "ingestion" },
+      orderBy: { createdAt: "desc" },
+    });
+    const taskTimeline = JSON.parse(storedTask.taskTimelineJson ?? "[]") as Array<{
+      key: string;
+      metrics: Array<{ label: string; value: number }>;
+    }>;
     expect(summarizeCluster).toHaveBeenCalledTimes(2);
     expect(storedCluster.summary).toBe("两篇报道都聚焦 OpenAI 面向开发者发布的新 agent 工具包。");
+    expect(taskTimeline.find((node) => node.key === "cluster_finalize")?.metrics).toEqual(expect.arrayContaining([
+      { label: "摘要尝试", value: 1 },
+      { label: "摘要完成", value: 1 },
+      { label: "摘要未完成", value: 0 },
+    ]));
   });
 
   it("skips cluster summary ai when the cluster summary input hash is unchanged", async () => {
@@ -3124,6 +3163,12 @@ describe("ingestion workflow stages", () => {
       { label: "指纹命中", value: 2 },
       { label: "AI归组", value: 0 },
       { label: "新建", value: 2 },
+    ]));
+    expect(taskTimeline.find((node) => node.key === "cluster_finalize")?.metrics).toEqual(expect.arrayContaining([
+      { label: "参与重算", value: 2 },
+      { label: "摘要尝试", value: 2 },
+      { label: "摘要完成", value: 0 },
+      { label: "摘要未完成", value: 2 },
     ]));
     expect(aggregationFixture.mock.calls.map((call) => call[0]).join("\n")).toContain(
       "OpenAI Toolkit launch (link: https://openai.com/toolkit?utm_source=tldrdev)",
