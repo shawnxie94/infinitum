@@ -11,6 +11,7 @@ import { getDailyReportDateRange, normalizeDailyReportDate, resolveDailyReportTa
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { withDailyReportLock } from "@/lib/daily-report/history";
 import { DailyReportCancellationError, DailyReportGenerationError, DailyReportStagePauseError } from "@/lib/daily-report/errors";
+import { getDailyReportFailureSummary } from "@/lib/daily-report/review";
 import { normalizeDailyReportContent } from "@/lib/daily-report/content";
 import { getDailyReportAttemptLimit, isDailyReportContextOverflowError } from "@/lib/daily-report/attempts";
 import { DailyReportStageLoopError, runDailyReportStageLoop, type DailyReportStageLoopResult } from "@/lib/daily-report/stage-loop";
@@ -1415,6 +1416,7 @@ export type DailyReportWorkflowProjection = {
   onCheckpoint?: (checkpoint: TaskPipelineCheckpoint) => Promise<void>;
   onProgress?: (label: string) => Promise<void>;
   onAiUsage?: (usage: TaskAiUsageSnapshot) => Promise<void>;
+  onPartial?: (summary: string) => Promise<void>;
 };
 
 /** Execute one business stage; task lifecycle/checkpoint projection stays in the Mastra glue port. */
@@ -1448,6 +1450,19 @@ export async function executeDailyReportWorkflowStage(
       },
     });
     await projection.onAiUsage?.(result.aiUsage);
+    if (
+      stage === "persist_publish"
+      && (result.partial || result.reviewStatus === "rejected" || result.reviewStatus === "unavailable")
+    ) {
+      const summary = getDailyReportFailureSummary({
+        status: result.reviewStatus,
+        audit: result.reviewAudit,
+        violations: result.reviewViolations,
+        partial: result.partial,
+        omittedTopicCount: result.omittedTopicIds?.length,
+      });
+      await projection.onPartial?.(summary ?? "日报部分完成，已保留草稿并阻止自动发布。");
+    }
   } catch (error) {
     if (!(error instanceof DailyReportStagePauseError)) throw error;
     await projection.onAiUsage?.(error.aiUsage);

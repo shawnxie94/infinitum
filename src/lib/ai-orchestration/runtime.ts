@@ -384,6 +384,18 @@ const sink: WorkflowTaskSink = {
     });
     await mirrorScheduledTaskTerminalState(taskRunId);
   },
+  async markPartial(taskRunId, message) {
+    await prisma.backgroundTaskRun.updateMany({
+      where: { id: taskRunId, status: { in: ["queued", "running"] } },
+      data: {
+        status: "partial",
+        finishedAt: new Date(),
+        progressLabel: "部分完成",
+        errorSummary: (message ?? "任务部分完成").slice(0, 500),
+      },
+    });
+    await mirrorScheduledTaskTerminalState(taskRunId);
+  },
   async markCancelled(taskRunId, message) {
     await prisma.backgroundTaskRun.updateMany({
       where: { id: taskRunId, status: { in: ["queued", "running"] } },

@@ -6,6 +6,7 @@ import {
   generateDailyReport,
 } from "@/lib/daily-report/service";
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
+import { executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
 import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
 import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
@@ -1713,6 +1714,89 @@ describe("daily report service", () => {
     expect(recoveryResult.reviewStatus).toBe("passed");
     expect(reviewDailyReportMock).toHaveBeenCalledTimes(3);
     expect(writeDailyReportMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    {
+      configureReview: () => reviewDailyReportMock.mockResolvedValue({
+        verdict: "reject",
+        violations: [{
+          code: "factual_inconsistency",
+          severity: "error",
+          message: "事实需要重新核对",
+          evidence: "草稿中的数字与候选摘要不一致。",
+          guidance: "重新核对候选证据。",
+        }],
+        summary: "未通过",
+      }),
+    },
+    {
+      configureReview: () => reviewDailyReportMock.mockRejectedValue(new Error("review service unavailable")),
+    },
+  ])("projects final review failures to the task partial callback", async ({ configureReview }) => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    configureReview();
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "running",
+        label: "日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+    const onPartial = vi.fn(async () => undefined);
+
+    await executeDailyReportWorkflowStage(taskRun, "persist_publish", { onPartial });
+
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+    expect(onPartial).toHaveBeenCalledTimes(1);
+    expect(onPartial).toHaveBeenCalledWith(expect.stringMatching(/审核/));
+    expect(report.status).toBe("draft");
+    expect(report.publishedAt).toBeNull();
+  });
+
+  it("projects a partial final report and blocks auto-publish after optional invalid topics are omitted", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    const dailyReportPrompt = await prisma.promptConfig.findFirstOrThrow({
+      where: { type: "daily_report", isDefault: true },
+    });
+    const template = JSON.parse(dailyReportPrompt.templateJson ?? "{}");
+    const optionalSection = template.blocks.find((block: Record<string, unknown>) =>
+      block.type === "section" && block.key === "changes-practice");
+    if (!optionalSection) throw new Error("测试日报模板缺少 changes-practice 栏目。");
+    optionalSection.item.notes = [{ label: "核验", required: true, instruction: "补充关键数据核验依据。" }];
+    await prisma.promptConfig.update({
+      where: { id: dailyReportPrompt.id },
+      data: { templateJson: JSON.stringify(template) },
+    });
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "running",
+        label: "日报生成",
+        entityId: REPORT_DATE,
+      },
+    });
+    const onPartial = vi.fn(async () => undefined);
+
+    await executeDailyReportWorkflowStage(taskRun, "persist_publish", { onPartial });
+
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+    expect(onPartial).toHaveBeenCalledWith(expect.stringContaining("部分条目"));
+    expect(report.status).toBe("draft");
+    expect(report.publishedAt).toBeNull();
   });
 
   it("persists a draft without publishing when the reviewer is unavailable", async () => {

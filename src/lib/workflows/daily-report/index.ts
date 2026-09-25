@@ -26,6 +26,7 @@ export function createDailyReportWorkflowDefinition(): DomainTaskDefinition {
             onCheckpoint: context.projectCheckpoint,
             onProgress: context.projectProgress,
             onAiUsage: context.projectAiUsage,
+            onPartial: context.markPartial,
           },
           buildDailyReportStageIdentity(context.taskRunId, {
             stepId: context.stepId,

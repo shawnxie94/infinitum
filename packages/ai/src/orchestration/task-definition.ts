@@ -19,6 +19,7 @@ export type DomainTaskContext = {
   projectCheckpoint?: (checkpoint: unknown) => Promise<void>;
   projectProgress?: (label: string) => Promise<void>;
   projectAiUsage?: (usage: unknown) => Promise<void>;
+  markPartial?: (message?: string) => Promise<void>;
 };
 
 export type DomainTaskReplayPolicy = "replay_safe" | "at_least_once" | "business_checkpointed";
@@ -130,6 +131,7 @@ export function createDomainTaskRunWorkflow(input: {
                 attempt: context!.attempt,
                 retryCount: context!.retryCount,
               }),
+              markPartial: async (message) => input.sink.markPartial?.(inputData.taskRunId, message),
             };
             stagePayload = await stage.execute(stagePayload, domainContext);
             await input.sink.projectCheckpoint?.(inputData.taskRunId, {

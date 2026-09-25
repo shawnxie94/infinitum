@@ -1,6 +1,32 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockState = vi.hoisted(() => ({ runtimeConfig: null as unknown, rssItems: [] as unknown[] }));
+const mockState = vi.hoisted(() => ({
+  runtimeConfig: null as unknown,
+  rssItems: [] as unknown[],
+  dailyReportOutcome: null as "partial" | "rejected" | "unavailable" | null,
+}));
+
+vi.mock("@/lib/daily-report/generation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/daily-report/generation")>();
+  return {
+    ...actual,
+    executeDailyReportWorkflowStage: vi.fn(async (_taskRun: unknown, stage: string, projection: {
+      onCheckpoint?: (checkpoint: unknown) => Promise<void>;
+      onPartial?: (summary: string) => Promise<void>;
+    }) => {
+      await ensureDefaultDailyReportSchedule();
+      const outcome = mockState.dailyReportOutcome;
+      if (stage !== "persist_publish" || !outcome) return;
+      await projection.onCheckpoint?.({ reviewStatus: outcome === "partial" ? "passed" : outcome });
+      const summary = outcome === "partial"
+        ? "日报部分完成"
+        : outcome === "rejected"
+          ? "审核未通过，已保留草稿"
+          : "审核不可用，已保留草稿";
+      await projection.onPartial?.(summary);
+    }),
+  };
+});
 
 vi.mock("@/lib/ai/provider-next", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -130,6 +156,7 @@ vi.mock("@/lib/clusters/service", async (importOriginal) => ({
 }));
 
 import { prisma } from "@/lib/db";
+import { ensureDefaultDailyReportSchedule } from "@/lib/tasks/service";
 import { triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
 import {
   createItemReanalyzeWorkflowDefinition,
@@ -140,6 +167,7 @@ describe("Mastra staged task workflows", () => {
   beforeEach(async () => {
     mockState.runtimeConfig = null;
     mockState.rssItems = [];
+    mockState.dailyReportOutcome = null;
     await prisma.item.deleteMany();
     await prisma.fetchRun.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();
@@ -235,6 +263,35 @@ describe("Mastra staged task workflows", () => {
     expect(schedule.lastRunStatus).toBe("succeeded");
     expect(schedule.lastRunStartedAt).not.toBeNull();
     expect(schedule.lastRunFinishedAt).not.toBeNull();
+  });
+
+  it.each([
+    { outcome: "partial" as const, reviewStatus: "passed", summary: "日报部分完成" },
+    { outcome: "rejected" as const, reviewStatus: "rejected", summary: "审核未通过，已保留草稿" },
+    { outcome: "unavailable" as const, reviewStatus: "unavailable", summary: "审核不可用，已保留草稿" },
+  ])("projects final daily report $outcome outcome to scheduled partial status", async ({ outcome, reviewStatus, summary }) => {
+    mockState.dailyReportOutcome = outcome;
+    await ensureDefaultDailyReportSchedule();
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "scheduled",
+        status: "queued",
+        label: "日报生成",
+      },
+    });
+
+    const result = await triggerTaskWorkflow("daily_report_generate", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const checkpoint = JSON.parse(stored.pipelineCheckpointJson ?? "{}");
+    const schedule = await prisma.taskSchedule.findFirstOrThrow();
+
+    expect(result.status).toBe("partial");
+    expect(stored.status).toBe("partial");
+    expect(stored.progressLabel).toBe("部分完成");
+    expect(stored.errorSummary).toBe(summary);
+    expect(checkpoint.reviewStatus).toBe(reviewStatus);
+    expect(schedule.lastRunStatus).toBe("partial");
   });
 
   it("records cancellation on the daily schedule when a scheduled run is cancelled", async () => {

@@ -94,6 +94,24 @@ describe("framework capability evolution", () => {
     expect(stepEvents.every((event) => event.includes("generate-task"))).toBe(true);
   });
 
+  it("preserves a domain-projected partial terminal state instead of marking success", async () => {
+    let status = "running";
+    const { sink, events, stepEvents } = createSink({
+      getTaskRun: async () => ({ ...row, status }),
+      markPartial: async () => { status = "partial"; },
+    });
+
+    const result = await runTaskWithLifecycle({
+      row,
+      sink,
+      body: async () => { await sink.markPartial?.(row.id, "日报部分完成"); },
+    });
+
+    expect(result.status).toBe("partial");
+    expect(events).not.toContain("succeeded");
+    expect(stepEvents).toContain("daily_report_generate-task:finish:partial");
+  });
+
   it("maps cooperative cancellation to cancelled instead of failed", async () => {
     const { sink, events } = createSink({
       isCancellationRequested: async () => true,

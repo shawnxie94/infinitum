@@ -62,6 +62,7 @@ export type WorkflowTaskSink = {
   isCancellationRequested(taskRunId: string): Promise<boolean>;
   markStarted?(taskRunId: string, runId?: string): Promise<void>;
   markSucceeded?(taskRunId: string, runId?: string): Promise<void>;
+  markPartial?(taskRunId: string, message?: string): Promise<void>;
   markCancelled?(taskRunId: string, message?: string): Promise<void>;
   /** D6 终态兜底：业务体未写自身终态即崩溃时，把 BackgroundTaskRun 落到 failed。 */
   markFailed?(taskRunId: string, message: string, failureKind?: string): Promise<void>;
