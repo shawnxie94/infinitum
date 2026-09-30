@@ -64,9 +64,6 @@ function buildBriefing(overrides: Partial<EventBriefingDTO> = {}): EventBriefing
         summary: "OpenAI 更新了面向开发者的 Agent 工具链。",
         qualityScore: 91,
         rankScore: 91,
-        baseRankScore: 82,
-        curatorBoost: 9,
-        curatorPenalty: 0,
         isFollowUp: true,
         sourceCount: 5,
         itemCount: 12,
@@ -189,55 +186,6 @@ describe("EventBriefingList", () => {
     expect(within(card).queryByText(/OpenAI Blog/)).not.toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: /提升事件偏好/ })).not.toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: /降低事件偏好/ })).not.toBeInTheDocument();
-  });
-
-  it("shows manual preference buttons only for admins and records manual feedback", () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderEventBriefingList(buildBriefing(), { initialIsAdmin: true });
-
-    const card = screen.getByRole("article");
-    const boostButton = within(card).getByRole("button", {
-      name: "提升事件偏好：OpenAI 发布新的 Agent 工具链能力",
-    });
-    const penaltyButton = within(card).getByRole("button", {
-      name: "降低事件偏好：OpenAI 发布新的 Agent 工具链能力",
-    });
-
-    fireEvent.click(boostButton);
-    expect(boostButton).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("已记录为更关注的事件。")).toBeInTheDocument();
-    fireEvent.click(penaltyButton);
-    expect(penaltyButton).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("已记录为降低关注的事件。")).toBeInTheDocument();
-
-    expect(fetchMock).toHaveBeenCalledWith("/api/admin/curator-behavior", expect.objectContaining({
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        eventType: "manual_boost",
-        targetType: "event",
-        targetId: "cluster-openai",
-        entryType: "cluster",
-        entryId: "cluster-openai",
-        clusterId: "cluster-openai",
-        itemId: null,
-      }),
-    }));
-    expect(fetchMock).toHaveBeenCalledWith("/api/admin/curator-behavior", expect.objectContaining({
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        eventType: "manual_penalty",
-        targetType: "event",
-        targetId: "cluster-openai",
-        entryType: "cluster",
-        entryId: "cluster-openai",
-        clusterId: "cluster-openai",
-        itemId: null,
-      }),
-    }));
   });
 
   it("marks non-follow-up entries as new content", () => {

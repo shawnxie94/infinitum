@@ -57,7 +57,6 @@ describe("admin settings service", () => {
     await prisma.blacklistKeyword.deleteMany();
     await prisma.contentExtractionConfig.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
-    await prisma.briefingPreferenceConfig.deleteMany();
   });
 
   it("seeds code defaults into model and prompt tables when the database is empty", async () => {
@@ -105,8 +104,7 @@ describe("admin settings service", () => {
     expect(settings.taskSchedule.sourceConcurrency).toBe(2);
     expect(settings.taskSchedule.fullTextFetchThreshold).toBe(80);
     expect(settings.eventBriefing.config.minRankScore).toBe(0);
-    expect(settings.eventBriefing.preference.maxCuratorBoost).toBe(15);
-    expect(settings.eventBriefing.preference.weightedRules).toEqual([]);
+    expect(settings.eventBriefing).not.toHaveProperty("preference");
     expect(settings.promptConfigs.find((config) => config.type === "item_understanding")?.systemPrompt).toContain(
       "一次完成摘要、内容分析、事件识别与聚合拆分",
     );

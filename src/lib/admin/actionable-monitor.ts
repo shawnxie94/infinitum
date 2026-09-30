@@ -12,7 +12,7 @@ const AI_TELEMETRY_STAGE_KINDS = new Set(["item_reanalyze", "item_regenerate_sum
 
 export type ActionableMonitorRangeDays = (typeof ACTIONABLE_MONITOR_RANGE_DAYS)[number];
 export type ActionableMonitorSeverity = "critical" | "warning" | "info";
-export type ActionableMonitorCategory = "source" | "content" | "entity" | "preference" | "cluster" | "split" | "task";
+export type ActionableMonitorCategory = "source" | "content" | "entity" | "cluster" | "split" | "task";
 
 export type ActionableMonitorItem = {
   id: string;
@@ -89,7 +89,6 @@ export async function getActionableMonitorSnapshot(
     sourceSnapshot,
     filteredItemCount,
     entitySuggestions,
-    briefingPreferenceSuggestionCount,
     autoMergeableEntityCount,
     clusterReview,
     aggregationSplitCounts,
@@ -105,9 +104,6 @@ export async function getActionableMonitorSnapshot(
       },
     }),
     listAdminEntitySuggestions({ page: 1, pageSize: 1, sort: "confidence_desc" }),
-    prisma.briefingPreferenceSuggestion.count({
-      where: { status: "pending" },
-    }),
     prisma.entitySuggestionCandidate.count({
       where: {
         status: "active",
@@ -208,20 +204,6 @@ export async function getActionableMonitorSnapshot(
           : `当前有 ${entitySuggestions.totalCount} 条实体建议等待复核。`,
       count: entitySuggestions.totalCount,
       href: "/admin?tab=monitoring&section=content&view=entities&suggestions=open",
-      actionLabel: "查看",
-      details: [],
-    });
-  }
-
-  if (briefingPreferenceSuggestionCount > 0) {
-    items.push({
-      id: "briefing-preferences",
-      category: "preference",
-      severity: "info",
-      title: "偏好建议",
-      description: `当前有 ${briefingPreferenceSuggestionCount} 条事件偏好建议等待复核。`,
-      count: briefingPreferenceSuggestionCount,
-      href: "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
       actionLabel: "查看",
       details: [],
     });

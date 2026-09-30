@@ -6,14 +6,12 @@ import { useState } from "react";
 
 import { useMinWidth } from "@/components/ui/use-min-width";
 
-import { recordCuratorBehaviorClient } from "@/components/curator-behavior/record";
 import { EventBriefingCard } from "@/components/events/event-briefing-card";
 import { EventBriefingDetailModal } from "@/components/events/event-briefing-detail-modal";
 import { EventBriefingPagination } from "@/components/events/event-briefing-pagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { IconChevronLeft, IconChevronRight } from "@/components/ui/icons";
 import { SelectNative } from "@/components/ui/select-native";
-import { useToast } from "@/components/ui/toast";
 import { useClientAdminSession } from "@/components/ui/use-client-admin-session";
 import { getTodayDailyReportDate } from "@/lib/daily-report/date";
 import { addEventBriefingDays } from "@/lib/events/date";
@@ -169,57 +167,14 @@ export function EventBriefingList({
 }: EventBriefingListProps) {
   const isLgUp = useMinWidth("(min-width: 1024px)", true);
   const isAdmin = useClientAdminSession(initialIsAdmin, hydrateAdminClient);
-  const { showToast } = useToast();
   const [selectedEntry, setSelectedEntry] = useState<EventBriefingEntryDTO | null>(null);
-  const [manualFeedbackState, setManualFeedbackState] = useState<{
-    key: string;
-    eventType: "manual_boost" | "manual_penalty";
-  } | null>(null);
   const hasEntries = briefing.entries.length > 0;
   const { page, pageSize, totalPages, total } = briefing.pagination;
   const firstRank = (page - 1) * pageSize + 1;
   const shouldShowPagination = total > EVENT_BRIEFING_DEFAULT_PAGE_SIZE || totalPages > 1;
   const openEntry = (entry: EventBriefingEntryDTO) => {
     setSelectedEntry(entry);
-    recordCuratorBehaviorClient({
-      eventType: "event_detail_opened",
-      targetType: "event",
-      targetId: entry.id,
-      entryType: entry.type,
-      entryId: entry.id,
-      clusterId: entry.type === "cluster" ? entry.id : null,
-      itemId: entry.type === "single" ? entry.id : null,
-    });
   };
-  const recordManualFeedback = (
-    entry: EventBriefingEntryDTO,
-    eventType: "manual_boost" | "manual_penalty",
-  ) => {
-    const key = `${entry.type}:${entry.id}`;
-
-    setManualFeedbackState({ key, eventType });
-    window.setTimeout(() => {
-      setManualFeedbackState((current) => (
-        current?.key === key && current.eventType === eventType ? null : current
-      ));
-    }, 1500);
-    showToast(
-      eventType === "manual_boost"
-        ? "已记录为更关注的事件。"
-        : "已记录为降低关注的事件。",
-      "info",
-    );
-    recordCuratorBehaviorClient({
-      eventType,
-      targetType: "event",
-      targetId: entry.id,
-      entryType: entry.type,
-      entryId: entry.id,
-      clusterId: entry.type === "cluster" ? entry.id : null,
-      itemId: entry.type === "single" ? entry.id : null,
-    });
-  };
-
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       {isLgUp ? (
@@ -263,12 +218,7 @@ export function EventBriefingList({
               key={`${entry.type}:${entry.id}`}
               entry={entry}
               rank={firstRank + index}
-              isAdmin={isAdmin}
-              activeManualFeedback={
-                manualFeedbackState?.key === `${entry.type}:${entry.id}` ? manualFeedbackState.eventType : null
-              }
               onOpen={openEntry}
-              onManualFeedback={recordManualFeedback}
             />
           ))
         ) : (

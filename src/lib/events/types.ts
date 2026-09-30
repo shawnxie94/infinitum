@@ -1,4 +1,4 @@
-import type { AdminBriefingPreferenceConfig, AdminEventBriefingConfig } from "@/lib/settings/types";
+import type { AdminEventBriefingConfig } from "@/lib/settings/types";
 
 export type EventBriefingEntryType = "cluster" | "single";
 export type EventBriefingTag = "all" | "follow_up" | "new_content";
@@ -49,9 +49,6 @@ export type EventBriefingEntryDTO = {
   summary: string;
   qualityScore: number;
   rankScore: number;
-  baseRankScore: number;
-  curatorBoost: number;
-  curatorPenalty: number;
   isFollowUp: boolean;
   sourceCount: number;
   itemCount: number;
@@ -93,7 +90,6 @@ export type EventBriefingDTO = {
 };
 
 export type EventBriefingConfigForRuntime = AdminEventBriefingConfig;
-export type BriefingPreferenceForRuntime = AdminBriefingPreferenceConfig;
 
 export type EventCandidateEntity = {
   name: string;

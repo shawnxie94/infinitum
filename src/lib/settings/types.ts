@@ -104,46 +104,12 @@ export type AdminEventBriefingChannel = {
   sortOrder: number;
 };
 
-export type AdminBriefingPreferenceConfig = {
-  id: string;
-  weightedRules: AdminBriefingWeightRule[];
-  maxCuratorBoost: number;
-  maxCuratorPenalty: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type AdminBriefingWeightRuleType = "entity" | "keyword" | "source_group" | "event_type";
-
-export type AdminBriefingWeightRule = {
-  type: AdminBriefingWeightRuleType;
-  value: string;
-  weight: number;
-};
-
-export type AdminBriefingPreferenceSuggestion = {
-  id: string;
-  ruleType: AdminBriefingWeightRuleType;
-  value: string;
-  label: string | null;
-  suggestedWeight: number;
-  confidence: number;
-  positiveScore: number;
-  negativeScore: number;
-  sampleCount: number;
-  reason: string;
-  status: "pending" | "accepted" | "dismissed";
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type AdminSettingsSnapshot = {
   modelApiConfigs: AdminModelApiConfig[];
   promptConfigs: AdminPromptConfig[];
   headerLinks?: AdminHeaderLink[];
   eventBriefing: {
     config: AdminEventBriefingConfig;
-    preference: AdminBriefingPreferenceConfig;
   };
   contentExtraction: {
     id: string;

@@ -1,4 +1,4 @@
-import type { AdminBriefingPreferenceSuggestion, AdminSettingsSnapshot } from "@/lib/settings/types";
+import type { AdminSettingsSnapshot } from "@/lib/settings/types";
 import { fetchJsonOrThrow } from "@/lib/utils/http";
 
 type SourceResolvePayload = {
@@ -43,23 +43,6 @@ type ContentExtractionPayload = {
 type EventBriefingPayload = {
   error?: string;
   eventBriefing?: AdminSettingsSnapshot["eventBriefing"];
-};
-
-type BriefingPreferenceSuggestionsPayload = {
-  error?: string;
-  suggestions?: AdminBriefingPreferenceSuggestion[];
-  dismissedCount?: number;
-};
-
-type BriefingPreferenceSuggestionAcceptPayload = {
-  error?: string;
-  suggestion?: AdminBriefingPreferenceSuggestion;
-  preference?: AdminSettingsSnapshot["eventBriefing"]["preference"];
-};
-
-type BriefingPreferenceSuggestionPayload = {
-  error?: string;
-  suggestion?: AdminBriefingPreferenceSuggestion;
 };
 
 type GroupReorderPayload = {
@@ -304,11 +287,6 @@ export async function saveEventBriefingSettings(input: AdminSettingsSnapshot["ev
         minRankScore: input.config.minRankScore,
         channels: input.config.channels,
       },
-      preference: {
-        weightedRules: input.preference.weightedRules,
-        maxCuratorBoost: input.preference.maxCuratorBoost,
-        maxCuratorPenalty: input.preference.maxCuratorPenalty,
-      },
     },
     "速览配置保存失败。",
   );
@@ -318,69 +296,6 @@ export async function saveEventBriefingSettings(input: AdminSettingsSnapshot["ev
   }
 
   return payload.eventBriefing;
-}
-
-export async function listBriefingPreferenceSuggestions() {
-  const payload = await requestAdminSettingsJson<BriefingPreferenceSuggestionsPayload>(
-    "/api/admin/settings/event-briefing/suggestions",
-    "GET",
-    undefined,
-    "偏好建议加载失败。",
-  );
-
-  return payload.suggestions ?? [];
-}
-
-export async function generateBriefingPreferenceSuggestions() {
-  const payload = await requestAdminSettingsJson<BriefingPreferenceSuggestionsPayload>(
-    "/api/admin/settings/event-briefing/suggestions",
-    "POST",
-    undefined,
-    "偏好建议生成失败。",
-  );
-
-  return payload.suggestions ?? [];
-}
-
-export async function acceptBriefingPreferenceSuggestion(id: string) {
-  const payload = await requestAdminSettingsJson<BriefingPreferenceSuggestionAcceptPayload>(
-    `/api/admin/settings/event-briefing/suggestions/${id}/accept`,
-    "POST",
-    undefined,
-    "偏好建议接受失败。",
-  );
-
-  if (!payload.preference) {
-    throw new Error("偏好建议接受失败。");
-  }
-
-  return payload.preference;
-}
-
-export async function dismissBriefingPreferenceSuggestion(id: string) {
-  const payload = await requestAdminSettingsJson<BriefingPreferenceSuggestionPayload>(
-    `/api/admin/settings/event-briefing/suggestions/${id}/dismiss`,
-    "POST",
-    undefined,
-    "偏好建议忽略失败。",
-  );
-
-  if (!payload.suggestion) {
-    throw new Error("偏好建议忽略失败。");
-  }
-
-  return payload.suggestion;
-}
-
-export async function dismissBriefingPreferenceSuggestions(suggestionIds: string[]) {
-  const payload = await requestAdminSettingsJson<BriefingPreferenceSuggestionsPayload>(
-    "/api/admin/settings/event-briefing/suggestions",
-    "POST",
-    { action: "dismiss_ids", suggestionIds },
-    "忽略偏好建议失败。",
-  );
-
-  return payload.dismissedCount ?? 0;
 }
 
 export async function reorderSourceGroups(groupIds: string[]) {

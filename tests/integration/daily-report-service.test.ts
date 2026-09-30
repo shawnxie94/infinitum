@@ -8,7 +8,7 @@ import {
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
 import { executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
 import { persistDailyReport } from "@/lib/daily-report/persistence";
-import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
+import { updateEventBriefingConfig } from "@/lib/settings/service";
 import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
 
@@ -742,7 +742,6 @@ describe("daily report service", () => {
     await prisma.blacklistKeyword.deleteMany();
     await prisma.taskSchedule.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
-    await prisma.briefingPreferenceConfig.deleteMany();
 
     // These service tests focus on candidate/source/persistence behavior. Use a
     // deliberately permissive v2 template fixture so small synthetic pools do
@@ -1002,7 +1001,7 @@ describe("daily report service", () => {
     expect(candidates.filter((candidate) => candidate.clusterId === cluster.id)).toHaveLength(1);
   });
 
-  it("uses event briefing rankScore and candidate limit when generating reports", async () => {
+  it("uses universal event briefing rankScore (preference-free) and candidate limit when generating reports", async () => {
     const priorityGroup = await prisma.sourceGroup.create({
       data: { name: "Priority Sources" },
     });
@@ -1049,7 +1048,7 @@ describe("daily report service", () => {
           createdAt: new Date("2026-04-24T02:00:00.000Z"),
           status: "processed",
           moderationStatus: "allowed",
-          summaryText: "这条内容质量较低，但命中事件类型偏好，应通过事件速览排序进入日报。",
+          summaryText: "这条内容质量较低，只能依赖通用评分进入日报候选。",
           qualityScore: 70,
           eventType: "security",
         },
@@ -1083,20 +1082,13 @@ describe("daily report service", () => {
       },
     });
     await updateEventBriefingConfig({ minRankScore: 0 });
-    await updateBriefingPreferenceConfig({
-      weightedRules: [
-        { type: "event_type", value: "security", weight: 30 },
-      ],
-      maxCuratorBoost: 30,
-      maxCuratorPenalty: 20,
-    });
     writeDailyReportMock.mockResolvedValue(JSON.stringify({
       headline: "安全事件优先",
       blocks: [
         {
           type: "text",
           title: "摘要",
-          body: "今天日报候选应来自事件速览排序结果，而不是旧的质量分候选池。",
+          body: "今天日报候选应来自事件速览通用排序结果，而不是旧的质量分候选池。",
         },
         {
           type: "section",
@@ -1105,7 +1097,7 @@ describe("daily report service", () => {
             {
               topicId: "topic-1",
               title: "安全事件需要优先进入日报",
-              body: "该事件命中事件速览偏好规则，即使质量分不是最高，也应作为日报候选。",
+              body: "该候选来自事件速览通用排序，作为日报候选保留。",
               sourceIds: [1],
             },
           ],
@@ -1123,7 +1115,7 @@ describe("daily report service", () => {
         {
           type: "text",
           title: "趋势观察",
-          body: "候选池切换后，日报会跟随事件速览的主理人偏好和排序逻辑，减少两套重点判断互相打架的问题。",
+          body: "候选池切换后，日报会跟随事件速览的通用排序逻辑，减少两套重点判断互相打架的问题。",
         },
       ],
     }));
@@ -1137,13 +1129,13 @@ describe("daily report service", () => {
 
     expect(articles).toHaveLength(2);
     expect(articles[0]).toMatchObject({
-      title: "安全事件需要优先进入日报",
+      title: "高质量但未偏好内容",
       candidateScore: expect.any(Number),
     });
     expect(snapshot.candidateSource).toBe("event_briefing");
     expect(snapshot.candidates?.map((candidate) => candidate.title)).toEqual([
-      "安全事件需要优先进入日报",
       "高质量但未偏好内容",
+      "安全事件需要优先进入日报",
     ]);
   });
 

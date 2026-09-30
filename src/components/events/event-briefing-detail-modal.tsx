@@ -2,7 +2,6 @@
 
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 
-import { recordCuratorBehaviorClient } from "@/components/curator-behavior/record";
 import { renderInlineMarkdown } from "@/components/ui/inline-markdown";
 import { ChevronIcon } from "@/components/ui/chevron-icon";
 import { ModalShell } from "@/components/ui/modal-shell";
@@ -53,16 +52,6 @@ function buildDomId(value: string) {
 }
 
 function EventSourceItem({ item }: { item: EventBriefingItemDTO }) {
-  const recordSourceClick = () => {
-    recordCuratorBehaviorClient({
-      eventType: "event_source_clicked",
-      targetType: "item",
-      targetId: item.id,
-      itemId: item.id,
-      metadata: { sourceName: item.sourceName },
-    });
-  };
-
   return (
     <article className="rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 py-3">
       <div className="space-y-3">
@@ -72,7 +61,6 @@ function EventSourceItem({ item }: { item: EventBriefingItemDTO }) {
             href={item.originalUrl}
             target="_blank"
             rel="noreferrer"
-            onClick={recordSourceClick}
           >
             {item.title}
           </a>
@@ -120,7 +108,6 @@ export function EventBriefingDetailModal({ entry, isAdmin = false, onClose }: Ev
   };
   const statusLabel = entry.isFollowUp ? "新进展" : "新内容";
   const primaryOriginalUrl = !isCluster ? entry.items[0]?.originalUrl : null;
-  const primaryItemId = !isCluster ? entry.items[0]?.id : null;
   const sourceLabel = entry.sourceCount === 1
     ? entry.items.find((item) => item.sourceName.trim())?.sourceName ?? "1 个"
     : `${entry.sourceCount} 个`;
@@ -198,18 +185,6 @@ export function EventBriefingDetailModal({ entry, isAdmin = false, onClose }: Ev
                     href={primaryOriginalUrl}
                     target="_blank"
                     rel="noreferrer"
-                    onClick={() => {
-                      if (!primaryItemId) {
-                        return;
-                      }
-
-                      recordCuratorBehaviorClient({
-                        eventType: "event_source_clicked",
-                        targetType: "item",
-                        targetId: primaryItemId,
-                        itemId: primaryItemId,
-                      });
-                    }}
                   >
                     {entry.title}
                   </a>

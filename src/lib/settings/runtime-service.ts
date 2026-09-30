@@ -9,9 +9,7 @@ import {
   serializeRuntimeContentExtractionConfig,
 } from "@/lib/settings/content-extraction-service";
 import {
-  ensureBriefingPreferenceConfig,
   ensureEventBriefingConfig,
-  serializeAdminBriefingPreferenceConfig,
   serializeAdminEventBriefingConfig,
 } from "@/lib/settings/event-briefing-service";
 import { listAdminHeaderLinks } from "@/lib/settings/header-link-service";
@@ -166,7 +164,6 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
     cleanupSchedule,
     contentExtractionConfig,
     eventBriefingConfig,
-    briefingPreferenceConfig,
     headerLinks,
   ] = await Promise.all([
     prisma.modelApiConfig.findMany({
@@ -197,7 +194,6 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
     ensureDefaultItemCleanupSchedule(),
     ensureContentExtractionConfig(),
     ensureEventBriefingConfig(),
-    ensureBriefingPreferenceConfig(),
     listAdminHeaderLinks(),
   ]);
 
@@ -221,7 +217,6 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
     headerLinks,
     eventBriefing: {
       config: serializeAdminEventBriefingConfig(eventBriefingConfig),
-      preference: serializeAdminBriefingPreferenceConfig(briefingPreferenceConfig),
     },
     contentExtraction: serializeAdminContentExtractionConfig(contentExtractionConfig),
     blacklistKeywords: blacklist.map((entry) => entry.keyword),

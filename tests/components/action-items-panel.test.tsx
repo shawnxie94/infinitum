@@ -57,17 +57,6 @@ function buildActionableSnapshot(): ActionableMonitorSnapshot {
         details: ["AI Agents → AI Agent，影响 4 条，置信 99%"],
       },
       {
-        id: "briefing-preferences",
-        category: "preference",
-        severity: "info",
-        title: "偏好建议",
-        description: "当前有 2 条事件偏好建议等待复核。",
-        count: 2,
-        href: "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
-        actionLabel: "查看",
-        details: [],
-      },
-      {
         id: "aggregation-splits",
         category: "split",
         severity: "warning",
@@ -127,7 +116,6 @@ describe("ActionItemsPanel", () => {
       "过滤内容复核",
       "实体治理建议",
       "异常信息源",
-      "偏好建议",
       "聚合拆分复核",
       "聚合待定",
       "近期失败任务",
@@ -158,12 +146,6 @@ describe("ActionItemsPanel", () => {
     expect(within(tagCard!).getByRole("link", { name: "查看" })).toHaveAttribute(
       "href",
       "/admin?tab=monitoring&section=content&view=entities&suggestions=open",
-    );
-    const preferenceCard = screen.getByRole("heading", { name: "偏好建议" }).closest("article");
-    expect(preferenceCard).not.toBeNull();
-    expect(within(preferenceCard!).getByRole("link", { name: "查看" })).toHaveAttribute(
-      "href",
-      "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
     );
 
     await user.click(screen.getByRole("button", { name: "3天" }));
@@ -196,11 +178,9 @@ describe("ActionItemsPanel", () => {
 
     expect(await screen.findByRole("heading", { name: "异常信息源" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "实体治理建议" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "偏好建议" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "过滤内容复核" })).toBeInTheDocument();
     expect(screen.getByText("当前没有待处理的实体治理建议。")).toBeInTheDocument();
-    expect(screen.getByText("当前没有待处理的事件偏好建议。")).toBeInTheDocument();
-    expect(screen.getAllByText("0")).toHaveLength(7);
+    expect(screen.getAllByText("0")).toHaveLength(6);
     expect(screen.queryByText("当前没有待处理事项")).not.toBeInTheDocument();
   });
 });

@@ -1,20 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  acceptBriefingPreferenceSuggestion,
-  dismissBriefingPreferenceSuggestions,
-  generateBriefingPreferenceSuggestions,
-  recordCuratorBehavior,
-} from "@/lib/curator-behavior/service";
 import { prisma } from "@/lib/db";
 import { getEventBriefing } from "@/lib/events/service";
-import { updateBriefingPreferenceConfig, updateEventBriefingConfig } from "@/lib/settings/service";
+import { updateEventBriefingConfig } from "@/lib/settings/service";
 
 describe("event briefing service", () => {
   beforeEach(async () => {
-    await prisma.briefingPreferenceSuggestion.deleteMany();
-    await prisma.curatorBehaviorDimension.deleteMany();
-    await prisma.curatorBehaviorEvent.deleteMany();
     await prisma.itemEntity.deleteMany();
     await prisma.entity.deleteMany();
     await prisma.item.deleteMany();
@@ -22,161 +13,9 @@ describe("event briefing service", () => {
     await prisma.source.deleteMany();
     await prisma.sourceGroup.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
-    await prisma.briefingPreferenceConfig.deleteMany();
   });
 
-  it("turns curator behavior snapshots into accepted briefing preference rules", async () => {
-    const group = await prisma.sourceGroup.create({
-      data: { id: "group-ai-behavior", name: "AI", sortOrder: 0 },
-    });
-    const source = await prisma.source.create({
-      data: {
-        id: "source-ai-behavior",
-        name: "AI Blog",
-        rssUrl: "https://behavior.example.com/feed.xml",
-        siteUrl: "https://behavior.example.com",
-        groupId: group.id,
-      },
-    });
-    const entity = await prisma.entity.create({
-      data: { id: "entity-ai-behavior", name: "AI Coding", normalized: "ai-coding" },
-    });
-    await prisma.item.create({
-      data: {
-        id: "item-ai-behavior",
-        sourceId: source.id,
-        originalUrl: "https://behavior.example.com/openai-agent",
-        canonicalUrl: "https://behavior.example.com/openai-agent",
-        urlHash: "hash-ai-behavior",
-        originalTitle: "OpenAI Agent tools",
-        translatedTitle: "OpenAI 发布 Agent 工具",
-        publishedAt: new Date("2026-06-30T07:30:00.000Z"),
-        summaryText: "OpenAI 发布面向开发者的 Agent 工具。",
-        status: "processed",
-        moderationStatus: "allowed",
-        qualityScore: 88,
-        eventType: "launch",
-        eventSubject: "OpenAI",
-        eventObject: "Agent tools",
-        createdAt: new Date("2026-06-30T08:00:00.000Z"),
-      },
-    });
-    await prisma.itemEntity.create({
-      data: { itemId: "item-ai-behavior", entityId: entity.id },
-    });
-
-    await recordCuratorBehavior({
-      eventType: "feed_item_opened",
-      targetType: "item",
-      targetId: "item-ai-behavior",
-      occurredAt: new Date("2026-07-01T00:00:00.000Z"),
-    });
-    await recordCuratorBehavior({
-      eventType: "event_source_clicked",
-      targetType: "item",
-      targetId: "item-ai-behavior",
-      occurredAt: new Date("2026-07-01T01:00:00.000Z"),
-    });
-    await recordCuratorBehavior({
-      eventType: "manual_boost",
-      targetType: "item",
-      targetId: "item-ai-behavior",
-      occurredAt: new Date("2026-07-01T02:00:00.000Z"),
-    });
-
-    const suggestions = await generateBriefingPreferenceSuggestions({
-      now: new Date("2026-07-02T00:00:00.000Z"),
-    });
-    const entitySuggestion = suggestions.find((suggestion) => (
-      suggestion.ruleType === "entity" && suggestion.value === "ai-coding"
-    ));
-
-    expect(entitySuggestion).toMatchObject({
-      suggestedWeight: 3,
-      positiveScore: 8,
-      negativeScore: 0,
-      sampleCount: 3,
-    });
-
-    const result = await acceptBriefingPreferenceSuggestion(entitySuggestion!.id);
-
-    expect(result.preference.weightedRules).toContainEqual({
-      type: "entity",
-      value: "ai-coding",
-      weight: 3,
-    });
-    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBeGreaterThan(0);
-    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
-  });
-
-  it("dismisses only the provided briefing preference suggestions", async () => {
-    await prisma.briefingPreferenceSuggestion.createMany({
-      data: [
-        {
-          id: "suggestion-first",
-          suggestionKey: "keyword:code",
-          ruleType: "keyword",
-          value: "code",
-          label: "code",
-          suggestedWeight: 3,
-          confidence: 0.8,
-          reason: "关键词「code」偏好更强。",
-          status: "pending",
-        },
-        {
-          id: "suggestion-second",
-          suggestionKey: "keyword:security",
-          ruleType: "keyword",
-          value: "security",
-          label: "security",
-          suggestedWeight: -3,
-          confidence: 0.7,
-          reason: "关键词「security」降权信号更强。",
-          status: "pending",
-        },
-        {
-          id: "suggestion-outside",
-          suggestionKey: "keyword:outside",
-          ruleType: "keyword",
-          value: "outside",
-          label: "outside",
-          suggestedWeight: 1,
-          confidence: 0.5,
-          reason: "不在本次忽略范围内的建议。",
-          status: "pending",
-        },
-        {
-          id: "suggestion-accepted",
-          suggestionKey: "keyword:accepted",
-          ruleType: "keyword",
-          value: "accepted",
-          label: "accepted",
-          suggestedWeight: 2,
-          confidence: 0.6,
-          reason: "已接受。",
-          status: "accepted",
-          acceptedAt: new Date("2026-07-01T00:00:00.000Z"),
-        },
-      ],
-    });
-
-    expect(await dismissBriefingPreferenceSuggestions(["suggestion-first", "suggestion-second"])).toBe(2);
-    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "pending" } })).toBe(1);
-    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "dismissed" } })).toBe(2);
-    expect(await prisma.briefingPreferenceSuggestion.count({ where: { status: "accepted" } })).toBe(1);
-    expect(
-      await prisma.briefingPreferenceSuggestion.findUniqueOrThrow({
-        where: { id: "suggestion-outside" },
-      }),
-    ).toMatchObject({ status: "pending" });
-    expect(
-      await prisma.briefingPreferenceSuggestion.findUniqueOrThrow({
-        where: { id: "suggestion-accepted" },
-      }),
-    ).toMatchObject({ status: "accepted" });
-  });
-
-  it("ranks public daily clusters and singles with curator preferences", async () => {
+  it("ranks public daily clusters and singles on the universal score regardless of stale preference config", async () => {
     const group = await prisma.sourceGroup.create({
       data: { id: "group-ai", name: "AI", sortOrder: 0 },
     });
@@ -325,16 +164,6 @@ describe("event briefing service", () => {
         },
       ],
     });
-    await updateBriefingPreferenceConfig({
-      weightedRules: [
-        { type: "entity", value: "AI Coding", weight: 6 },
-        { type: "source_group", value: group.id, weight: 5 },
-        { type: "keyword", value: "OpenAI", weight: 5 },
-        { type: "event_type", value: "launch", weight: 4 },
-      ],
-      maxCuratorBoost: 15,
-      maxCuratorPenalty: 20,
-    });
 
     const firstPage = await getEventBriefing({ date: "2026-06-30", page: 1, pageSize: 1 });
 
@@ -350,7 +179,6 @@ describe("event briefing service", () => {
     });
     expect(firstPage.entries[0]?.sourceCount).toBe(2);
     expect(firstPage.entries[0]?.isFollowUp).toBe(true);
-    expect(firstPage.entries[0]?.curatorBoost).toBeGreaterThan(0);
 
     const followUpOnly = await getEventBriefing({ date: "2026-06-30", tag: "follow_up" });
     expect(followUpOnly.entries.map((entry) => entry.id)).toEqual(["cluster-openai"]);
@@ -374,6 +202,115 @@ describe("event briefing service", () => {
       ["ai-channel", 1],
     ]);
     expect(aiChannel.entries.map((entry) => entry.id)).toEqual(["cluster-openai"]);
+  });
+
+  it("keeps ranking, counts and pagination stable when no preference config exists", async () => {
+    const source = await prisma.source.create({
+      data: {
+        id: "source-stable-a",
+        name: "Stable A",
+        rssUrl: "https://stable-a.example.com/feed.xml",
+        siteUrl: "https://stable-a.example.com",
+      },
+    });
+    await prisma.contentCluster.create({
+      data: {
+        id: "cluster-tie-a",
+        title: "Tie A",
+        summary: "Tie A",
+        score: 80,
+        itemCount: 2,
+        latestPublishedAt: new Date("2026-06-30T07:30:00.000Z"),
+        fingerprint: "cluster-tie-a",
+        displayItemCount: 2,
+        displaySourceCount: 1,
+        displayAverageScore: 80,
+        latestCreatedAt: new Date("2026-06-30T08:00:00.000Z"),
+      },
+    });
+    await prisma.contentCluster.create({
+      data: {
+        id: "cluster-tie-b",
+        title: "Tie B",
+        summary: "Tie B",
+        score: 80,
+        itemCount: 2,
+        latestPublishedAt: new Date("2026-06-30T07:30:00.000Z"),
+        fingerprint: "cluster-tie-b",
+        displayItemCount: 2,
+        displaySourceCount: 1,
+        displayAverageScore: 80,
+        latestCreatedAt: new Date("2026-06-30T08:00:00.000Z"),
+      },
+    });
+    await prisma.item.createMany({
+      data: [
+        {
+          id: "item-tie-a-1",
+          sourceId: source.id,
+          clusterId: "cluster-tie-a",
+          originalUrl: "https://stable-a.example.com/a1",
+          canonicalUrl: "https://stable-a.example.com/a1",
+          urlHash: "hash-tie-a-1",
+          originalTitle: "Tie A item 1",
+          publishedAt: new Date("2026-06-30T07:00:00.000Z"),
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          createdAt: new Date("2026-06-30T07:50:00.000Z"),
+        },
+        {
+          id: "item-tie-a-2",
+          sourceId: source.id,
+          clusterId: "cluster-tie-a",
+          originalUrl: "https://stable-a.example.com/a2",
+          canonicalUrl: "https://stable-a.example.com/a2",
+          urlHash: "hash-tie-a-2",
+          originalTitle: "Tie A item 2",
+          publishedAt: new Date("2026-06-30T07:10:00.000Z"),
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          createdAt: new Date("2026-06-30T08:00:00.000Z"),
+        },
+        {
+          id: "item-tie-b-1",
+          sourceId: source.id,
+          clusterId: "cluster-tie-b",
+          originalUrl: "https://stable-a.example.com/b1",
+          canonicalUrl: "https://stable-a.example.com/b1",
+          urlHash: "hash-tie-b-1",
+          originalTitle: "Tie B item 1",
+          publishedAt: new Date("2026-06-30T07:00:00.000Z"),
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          createdAt: new Date("2026-06-30T07:55:00.000Z"),
+        },
+        {
+          id: "item-tie-b-2",
+          sourceId: source.id,
+          clusterId: "cluster-tie-b",
+          originalUrl: "https://stable-a.example.com/b2",
+          canonicalUrl: "https://stable-a.example.com/b2",
+          urlHash: "hash-tie-b-2",
+          originalTitle: "Tie B item 2",
+          publishedAt: new Date("2026-06-30T07:10:00.000Z"),
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          createdAt: new Date("2026-06-30T08:00:00.000Z"),
+        },
+      ],
+    });
+    await updateEventBriefingConfig({ minRankScore: 0 });
+
+    const firstRun = await getEventBriefing({ date: "2026-06-30", page: 1, pageSize: 1 });
+
+    expect(firstRun.entries[0]?.rankScore).toBeGreaterThan(0);
+    expect(firstRun.entries[0]).not.toHaveProperty("curatorBoost");
+    expect(firstRun.entries[0]).not.toHaveProperty("curatorPenalty");
+    expect(firstRun.pagination.total).toBe(2);
   });
 
   it("degrades singleton clusters to single entries in event briefing", async () => {

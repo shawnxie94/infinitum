@@ -25,7 +25,6 @@ const categoryOrder: Record<ActionableMonitorItem["category"], number> = {
   cluster: 3,
   content: 4,
   entity: 5,
-  preference: 6,
 };
 
 function buildDefaultActionItems(rangeDays: ActionableMonitorRangeDays): ActionableMonitorItem[] {
@@ -93,17 +92,6 @@ function buildDefaultActionItems(rangeDays: ActionableMonitorRangeDays): Actiona
       description: "当前没有待处理的实体治理建议。",
       count: 0,
       href: "/admin?tab=monitoring&section=content&view=entities&suggestions=open",
-      actionLabel: "查看",
-      details: [],
-    },
-    {
-      id: "briefing-preferences",
-      category: "preference",
-      severity: "info",
-      title: "偏好建议",
-      description: "当前没有待处理的事件偏好建议。",
-      count: 0,
-      href: "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
       actionLabel: "查看",
       details: [],
     },

@@ -10,7 +10,6 @@ const getModelApiConfig = vi.fn();
 const updatePromptConfig = vi.fn();
 const createHeaderLink = vi.fn();
 const updateEventBriefingConfig = vi.fn();
-const updateBriefingPreferenceConfig = vi.fn();
 
 vi.mock("@/lib/admin/session", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/admin/session")>();
@@ -31,7 +30,6 @@ vi.mock("@/lib/settings/service", async (importOriginal) => {
     createPromptConfig,
     createHeaderLink,
     updateEventBriefingConfig,
-    updateBriefingPreferenceConfig,
     getModelApiConfig,
     getModelApiConfigSecret: vi.fn(),
     updatePromptConfig,
@@ -269,18 +267,6 @@ describe("/api/admin/settings", () => {
       createdAt: "2026-06-30T00:00:00.000Z",
       updatedAt: "2026-07-01T00:00:00.000Z",
     });
-    updateBriefingPreferenceConfig.mockResolvedValue({
-      id: "briefing-preference-config",
-      weightedRules: [
-        { type: "entity", value: "OpenAI", weight: 8 },
-        { type: "entity", value: "AI Coding", weight: 6 },
-        { type: "event_type", value: "security", weight: -2 },
-      ],
-      maxCuratorBoost: 15,
-      maxCuratorPenalty: 20,
-      createdAt: "2026-06-30T00:00:00.000Z",
-      updatedAt: "2026-07-01T00:00:00.000Z",
-    });
 
     const { PATCH } = await import("@/app/api/admin/settings/event-briefing/route");
     const response = await PATCH(
@@ -298,15 +284,6 @@ describe("/api/admin/settings", () => {
                 sortOrder: 0,
               },
             ],
-          },
-          preference: {
-            weightedRules: [
-              { type: "entity", value: "OpenAI", weight: 8 },
-              { type: "entity", value: "AI Coding", weight: 6 },
-              { type: "event_type", value: "security", weight: -2 },
-            ],
-            maxCuratorBoost: 15,
-            maxCuratorPenalty: 20,
           },
         }),
         headers: {
@@ -329,15 +306,6 @@ describe("/api/admin/settings", () => {
           sortOrder: 0,
         },
       ],
-    });
-    expect(updateBriefingPreferenceConfig).toHaveBeenCalledWith({
-      weightedRules: [
-        { type: "entity", value: "OpenAI", weight: 8 },
-        { type: "entity", value: "AI Coding", weight: 6 },
-        { type: "event_type", value: "security", weight: -2 },
-      ],
-      maxCuratorBoost: 15,
-      maxCuratorPenalty: 20,
     });
   });
 

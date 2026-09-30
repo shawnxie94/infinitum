@@ -116,7 +116,6 @@ async function main() {
     entryType: Entry["type"];
     entryId: string;
     rankScore: number;
-    baseRankScore: number;
     qualityScore: number;
     sourceCount: number;
     itemCount: number;
@@ -185,7 +184,6 @@ async function main() {
             entryType: entry.type,
             entryId: entry.id,
             rankScore: entry.rankScore,
-            baseRankScore: entry.baseRankScore,
             qualityScore: entry.qualityScore,
             sourceCount: entry.sourceCount,
             itemCount: entry.itemCount,

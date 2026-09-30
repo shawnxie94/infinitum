@@ -6,13 +6,39 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 function runSqlite(dbPath: string, sql: string) {
+  // 每个 sqlite3 连接独立进程，必须逐连接打开 FK，
+  // 否则 legacy drop 顺序不会被真实约束校验。
   return execFileSync("sqlite3", [dbPath], {
-    input: `${sql.trim().replace(/;?$/, ";")}\n`,
+    input: `PRAGMA foreign_keys=ON;\n${sql.trim().replace(/;?$/, ";")}\n`,
     encoding: "utf8",
   }).trim();
 }
 
 const tempDirs: string[] = [];
+
+// 受保护行内容快照：只取 setup 升级不会重写的语义字段（允许 setup 正常
+// 升级派生字段如 display* / feed*，但不允许删数据或改这些核心语义）。
+function snapshotProtectedData(dbPath: string) {
+  return runSqlite(
+    dbPath,
+    `
+    SELECT 'source' || '|' || "id" || '|' || "name" || '|' || "rssUrl" FROM "sources" WHERE "id" = 'source-legacy';
+    SELECT 'item' || '|' || "id" || '|' || "originalTitle" || '|' || "status" || '|' || "moderationStatus" FROM "items" WHERE "id" = 'item-legacy';
+    SELECT 'cluster' || '|' || "id" || '|' || "title" || '|' || "summary" || '|' || "status" || '|' || "fingerprint" FROM "content_clusters" WHERE "id" = 'cluster-legacy';
+    SELECT 'hidden-cluster' || '|' || "id" || '|' || "title" || '|' || "status" FROM "content_clusters" WHERE "id" = 'cluster-legacy-hidden';
+    SELECT 'decision' || '|' || "id" || '|' || "verdict" || '|' || "source" || '|' || "pairKey" FROM "cluster_decisions" WHERE "id" = 'decision-legacy';
+    SELECT 'constraint' || '|' || "id" || '|' || "kind" || '|' || "scope" || '|' || "pairKey" FROM "cluster_constraints" WHERE "id" = 'constraint-legacy';
+    SELECT 'feedback' || '|' || "id" || '|' || "clusterId" || '|' || "status" || '|' || "note" FROM "cluster_feedback" WHERE "id" = 'feedback-legacy';
+    SELECT 'entity' || '|' || "id" || '|' || "name" || '|' || "normalized" FROM "entities" WHERE "id" = 'entity-legacy';
+    SELECT 'alias' || '|' || "id" || '|' || "entityId" || '|' || "aliasNormalized" FROM "entity_aliases" WHERE "id" = 'alias-legacy';
+    SELECT 'item-entity' || '|' || "itemId" || '|' || "entityId" FROM "item_entities" WHERE "id" = 'item-entity-legacy';
+    SELECT 'report' || '|' || "id" || '|' || "title" || '|' || "status" || '|' || "renderedMarkdown" || '|' || "currentRevisionId" FROM "daily_reports" WHERE "id" = 'report-legacy';
+    SELECT 'revision' || '|' || "id" || '|' || "dailyReportId" || '|' || "action" || '|' || "renderedMarkdown" FROM "daily_report_revisions" WHERE "id" = 'revision-legacy';
+    SELECT 'fetchrun' || '|' || "id" || '|' || "status" || '|' || "itemCount" || '|' || "itemsAdded" || '|' || "successCount" || '|' || "failureCount" FROM "fetch_runs" WHERE "id" = 'fetchrun-legacy';
+    SELECT 'pageview' || '|' || "path" || '|' || "visitorId" || '|' || "date" FROM "page_views" WHERE "id" = 'pageview-legacy';
+    `,
+  );
+}
 
 afterEach(() => {
   while (tempDirs.length > 0) {
@@ -39,6 +65,7 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'items'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'items_fts'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = '_prisma_migrations'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name IN ('briefing_preference_configs', 'briefing_preference_suggestions', 'curator_behavior_events', 'curator_behavior_dimensions')`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('model_api_configs') WHERE "name" IN ('type', 'dimensions', 'batchSize', 'timeoutMs')`)).toBe("4");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_merge_clean_pair_candidates') WHERE "name" IN ('recallSource', 'bm25Score', 'vectorSimilarity')`)).toBe("3");
   }, 30_000);
@@ -59,6 +86,7 @@ describe("sqlite setup", () => {
       ALTER TABLE "cluster_merge_clean_pair_candidates" DROP COLUMN "recallSource";
       ALTER TABLE "cluster_merge_clean_pair_candidates" DROP COLUMN "bm25Score";
       ALTER TABLE "cluster_merge_clean_pair_candidates" DROP COLUMN "vectorSimilarity";
+      PRAGMA foreign_keys=OFF;
       INSERT INTO "cluster_merge_clean_pair_candidates" (
         "id", "pairKey", "leftClusterId", "rightClusterId", "leftInputHash", "rightInputHash",
         "score", "attemptCount", "expiresAt", "createdAt", "updatedAt"
@@ -66,6 +94,7 @@ describe("sqlite setup", () => {
         'legacy-candidate', 'legacy-pair', 'left-cluster', 'right-cluster', 'left-hash', 'right-hash',
         123, 2, '2026-10-01T00:00:00.000Z', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       );
+      PRAGMA foreign_keys=ON;
       `,
     );
 
@@ -79,6 +108,207 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_merge_clean_pair_candidates') WHERE "name" IN ('recallSource', 'bm25Score', 'vectorSimilarity')`)).toBe("3");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "cluster_merge_clean_pair_candidates" WHERE "id" = 'legacy-candidate' AND "recallSource" IS NULL AND "bm25Score" IS NULL AND "vectorSimilarity" IS NULL AND "score" = 123 AND "attemptCount" = 2`)).toBe("1");
   }, 30_000);
+
+  it("drops legacy curator preference tables idempotently and keeps protected business data", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-curator-drop-"));
+    const dbPath = path.join(tempDir, "legacy-curator.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    // Simulate a legacy volume that still carries the four dedicated curator
+    // preference tables (real FK between dimensions and behavior events) next
+    // to protected business and governance data.
+    runSqlite(
+      dbPath,
+      `
+      PRAGMA trusted_schema = ON;
+      CREATE TABLE "briefing_preference_configs" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "weightedRulesJson" TEXT NOT NULL DEFAULT '[]',
+        "maxCuratorBoost" INTEGER NOT NULL DEFAULT 15,
+        "maxCuratorPenalty" INTEGER NOT NULL DEFAULT 20,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL
+      );
+      CREATE TABLE "briefing_preference_suggestions" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "suggestionKey" TEXT NOT NULL,
+        "ruleType" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "label" TEXT,
+        "suggestedWeight" INTEGER NOT NULL,
+        "confidence" REAL NOT NULL,
+        "positiveScore" INTEGER NOT NULL DEFAULT 0,
+        "negativeScore" INTEGER NOT NULL DEFAULT 0,
+        "sampleCount" INTEGER NOT NULL DEFAULT 0,
+        "reason" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "dismissedAt" DATETIME,
+        "acceptedAt" DATETIME,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL
+      );
+      CREATE TABLE "curator_behavior_events" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "eventType" TEXT NOT NULL,
+        "targetType" TEXT NOT NULL,
+        "targetId" TEXT NOT NULL,
+        "entryType" TEXT,
+        "entryId" TEXT,
+        "itemId" TEXT,
+        "clusterId" TEXT,
+        "score" INTEGER NOT NULL,
+        "metadataJson" TEXT NOT NULL DEFAULT '{}',
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE "curator_behavior_dimensions" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "eventId" TEXT NOT NULL,
+        "ruleType" TEXT NOT NULL,
+        "value" TEXT NOT NULL,
+        "label" TEXT,
+        "score" INTEGER NOT NULL,
+        "targetDedupKey" TEXT NOT NULL,
+        "occurredAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "curator_behavior_dimensions_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "curator_behavior_events" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+      );
+      INSERT INTO "curator_behavior_events" ("id", "eventType", "targetType", "targetId", "score")
+        VALUES ('behavior-1', 'manual_boost', 'item', 'item-1', 2);
+      INSERT INTO "curator_behavior_dimensions" ("id", "eventId", "ruleType", "value", "score", "targetDedupKey")
+        VALUES ('dimension-1', 'behavior-1', 'entity', 'ai-coding', 2, 'entity:ai-coding:behavior-1');
+      INSERT INTO "briefing_preference_configs" ("id", "weightedRulesJson", "createdAt", "updatedAt")
+        VALUES ('preference-1', '[{"type":"entity","value":"ai-coding","weight":3}]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+      INSERT INTO "briefing_preference_suggestions" (
+        "id", "suggestionKey", "ruleType", "value", "suggestedWeight", "confidence",
+        "positiveScore", "negativeScore", "sampleCount", "reason", "status", "createdAt", "updatedAt"
+      ) VALUES (
+        'suggestion-1', 'entity:ai-coding', 'entity', 'ai-coding', 3, 0.7,
+        8, 0, 3, '历史建议', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO "source_groups" ("id", "name", "color", "sortOrder", "createdAt", "updatedAt")
+        VALUES ('group-legacy', 'AI', '#000000', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+      INSERT INTO "sources" (
+        "id", "name", "rssUrl", "siteUrl", "enabled", "aiParsingEnabled", "aggregationEnabled",
+        "aggregationDetectionEnabled", "groupId", "createdAt", "updatedAt"
+      ) VALUES (
+        'source-legacy', 'AI Blog', 'https://legacy.example.com/feed.xml', 'https://legacy.example.com',
+        1, 1, 1, 1, 'group-legacy', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "items" (
+        "id", "sourceId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle",
+        "publishedAt", "publishedAtKnown", "status", "moderationStatus", "qualityScore", "createdAt", "updatedAt"
+      ) VALUES (
+        'item-legacy', 'source-legacy', 'https://legacy.example.com/a', 'https://legacy.example.com/a',
+        'hash-legacy', 'Legacy item', '2026-06-30T07:00:00.000Z', 1, 'filtered', 'filtered', 90,
+        '2026-06-30T08:00:00.000Z', CURRENT_TIMESTAMP
+      );
+      INSERT INTO "content_clusters" (
+        "id", "title", "summary", "score", "itemCount", "status",
+        "latestPublishedAt", "fingerprint", "createdAt", "updatedAt"
+      ) VALUES (
+        'cluster-legacy', 'Legacy cluster', 'Legacy cluster summary', 80, 1, 'published',
+        '2026-06-30T07:30:00.000Z', 'cluster-legacy', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      UPDATE "items" SET "clusterId" = 'cluster-legacy' WHERE "id" = 'item-legacy';
+      INSERT INTO "event_briefing_configs" ("id", "minRankScore", "briefingChannelsJson", "createdAt", "updatedAt")
+        VALUES ('briefing-config-legacy', 0, '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+      -- hidden 是 content_clusters 的合法治理状态；治理表行（决策/约束/反馈）为真实合法语义。
+      INSERT INTO "content_clusters" (
+        "id", "title", "summary", "score", "itemCount", "status",
+        "latestPublishedAt", "fingerprint", "feedStatsUpdatedAt", "createdAt", "updatedAt"
+      ) VALUES (
+        'cluster-legacy-hidden', 'Hidden legacy cluster', 'Hidden legacy summary', 40, 0, 'hidden',
+        '2026-06-29T07:00:00.000Z', 'cluster-legacy-hidden', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "cluster_decisions" (
+        "id", "kind", "source", "verdict", "leftClusterId", "rightClusterId",
+        "pairKey", "inputHash", "createdAt", "updatedAt"
+      ) VALUES (
+        'decision-legacy', 'cluster_pair', 'manual', 'declined',
+        'cluster-legacy', 'cluster-legacy-hidden', 'legacy-pair', 'legacy-input-hash',
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "cluster_constraints" (
+        "id", "kind", "scope", "leftId", "rightId", "pairKey", "createdBy", "createdAt", "updatedAt"
+      ) VALUES (
+        'constraint-legacy', 'cannot_link', 'cluster_cluster',
+        'cluster-legacy', 'cluster-legacy-hidden', 'legacy-pair', 'admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "cluster_feedback" (
+        "id", "clusterId", "clusterTitle", "status", "note", "createdAt"
+      ) VALUES (
+        'feedback-legacy', 'cluster-legacy', 'Legacy cluster', 'open', '遗留反馈意见', CURRENT_TIMESTAMP
+      );
+
+      -- 实体及关联：entities ← entity_aliases / item_entities → items（真实 FK）。
+      INSERT INTO "entities" ("id", "name", "normalized", "createdAt", "updatedAt")
+        VALUES ('entity-legacy', 'Legacy Entity', 'legacy entity', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+      INSERT INTO "entity_aliases" (
+        "id", "entityId", "aliasName", "aliasNormalized", "createdBy", "createdAt", "updatedAt"
+      ) VALUES (
+        'alias-legacy', 'entity-legacy', 'Legacy Alias', 'legacy alias', 'admin', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "item_entities" ("id", "itemId", "entityId", "createdAt")
+        VALUES ('item-entity-legacy', 'item-legacy', 'entity-legacy', CURRENT_TIMESTAMP);
+
+      -- 日报实际表：daily_reports ← daily_report_revisions（真实 FK，含 currentRevisionId 回链）。
+      INSERT INTO "daily_reports" (
+        "id", "date", "timezone", "status", "title", "openingSummary", "closingThought",
+        "summaryJson", "renderedMarkdown", "inputHash", "createdAt", "updatedAt"
+      ) VALUES (
+        'report-legacy', '2026-06-30', 'Asia/Shanghai', 'published', 'Legacy daily report',
+        'Legacy opening', 'Legacy closing', '[]', '# Legacy daily report',
+        'report-hash-legacy', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "daily_report_revisions" (
+        "id", "dailyReportId", "revisionNo", "action", "status", "title", "openingSummary", "closingThought",
+        "summaryJson", "renderedMarkdown", "inputHash", "actorType", "createdAt"
+      ) VALUES (
+        'revision-legacy', 'report-legacy', 1, 'baseline', 'published', 'Legacy daily report',
+        'Legacy opening', 'Legacy closing', '[]', '# Legacy revision markdown',
+        'report-hash-legacy', 'system', CURRENT_TIMESTAMP
+      );
+      UPDATE "daily_reports" SET "currentRevisionId" = 'revision-legacy' WHERE "id" = 'report-legacy';
+
+      -- 非偏好通用统计的实际模型：schema 中没有通用偏好统计表，通用统计落在
+      -- fetch_runs（采集统计字段）与 page_views（通用访问统计），此处一并保护。
+      INSERT INTO "fetch_runs" (
+        "id", "triggerType", "status", "sourceCount", "itemCount",
+        "successCount", "failureCount", "itemsAdded", "startedAt"
+      ) VALUES (
+        'fetchrun-legacy', 'scheduled', 'succeeded', 1, 1, 1, 0, 1, CURRENT_TIMESTAMP
+      );
+      INSERT INTO "page_views" ("id", "path", "visitorId", "date", "createdAt")
+        VALUES ('pageview-legacy', '/', 'visitor-legacy', '2026-06-30', CURRENT_TIMESTAMP);
+      `,
+    );
+
+    const snapshotBefore = snapshotProtectedData(dbPath);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      });
+
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name IN ('briefing_preference_configs', 'briefing_preference_suggestions', 'curator_behavior_events', 'curator_behavior_dimensions')`)).toBe("0");
+      expect(runSqlite(dbPath, "PRAGMA foreign_key_check")).toBe("");
+      // 内容级一致：不只是行数，快照包含受保护行的关键字段值。
+      expect(snapshotProtectedData(dbPath)).toBe(snapshotBefore);
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sources" WHERE "id" = 'source-legacy'`)).toBe("1");
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items" WHERE "id" = 'item-legacy' AND "status" = 'filtered' AND "moderationStatus" = 'filtered'`)).toBe("1");
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "content_clusters" WHERE "id" = 'cluster-legacy' AND "status" = 'published'`)).toBe("1");
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "event_briefing_configs" WHERE "id" = 'briefing-config-legacy'`)).toBe("1");
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "source_groups" WHERE "id" = 'group-legacy'`)).toBe("1");
+    }
+  }, 60_000);
 
   it("serializes concurrent setup runs with a lock", { timeout: 30000 }, async () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-lock-"));

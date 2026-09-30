@@ -67,14 +67,11 @@ vi.mock("@/components/admin/action-items-panel", () => ({
 vi.mock("@/components/admin/admin-settings-panel", () => ({
   AdminSettingsPanel: ({
     activeSection,
-    initialOpenBriefingPreferenceSuggestions,
   }: {
     activeSection: string;
-    initialOpenBriefingPreferenceSuggestions?: boolean;
   }) => (
     <div>
       {`设置面板:${activeSection}`}
-      {initialOpenBriefingPreferenceSuggestions ? <span>打开偏好建议</span> : null}
     </div>
   ),
 }));
@@ -98,14 +95,6 @@ function buildInitialSettings(): AdminSettingsSnapshot {
             sortOrder: 0,
           },
         ],
-        createdAt: "2026-04-20T10:00:00.000Z",
-        updatedAt: "2026-04-20T10:00:00.000Z",
-      },
-      preference: {
-        id: "briefing-preference-config",
-        weightedRules: [],
-        maxCuratorBoost: 15,
-        maxCuratorPenalty: 20,
         createdAt: "2026-04-20T10:00:00.000Z",
         updatedAt: "2026-04-20T10:00:00.000Z",
       },
@@ -234,20 +223,15 @@ describe("AdminPageClient", () => {
     expect(screen.getByText("设置面板:content-extraction")).toBeInTheDocument();
   });
 
-  it("restores event briefing preference suggestions from the url query", async () => {
-    searchParamsState.value = "tab=settings&section=content&view=event-briefing&suggestions=open";
+  it("keeps the event briefing settings route free of preference query params", async () => {
+    searchParamsState.value = "tab=settings&section=content&view=event-briefing";
 
     renderAdminPageClient();
 
     await waitFor(() => {
       expect(screen.getByText("设置面板:event-briefing")).toBeInTheDocument();
     });
-    expect(screen.getByText("打开偏好建议")).toBeInTheDocument();
-    expect(replaceStateSpy).toHaveBeenLastCalledWith(
-      null,
-      "",
-      "/admin?tab=settings&section=content&view=event-briefing&suggestions=open",
-    );
+    expect(screen.queryByText("打开偏好建议")).not.toBeInTheDocument();
   });
 
   it("restores task subsections from the url query", async () => {

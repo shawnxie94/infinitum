@@ -89,14 +89,6 @@ function buildInitialSettings(): AdminSettingsSnapshot {
         createdAt: "2026-04-20T10:00:00.000Z",
         updatedAt: "2026-04-20T10:00:00.000Z",
       },
-      preference: {
-        id: "briefing-preference-config",
-        weightedRules: [],
-        maxCuratorBoost: 15,
-        maxCuratorPenalty: 20,
-        createdAt: "2026-04-20T10:00:00.000Z",
-        updatedAt: "2026-04-20T10:00:00.000Z",
-      },
     },
     contentExtraction: {
       id: "content-extraction-1",
@@ -1781,7 +1773,7 @@ describe("AdminSettingsPanel", () => {
     await waitForElementToBeRemoved(() => screen.queryByText("正文解析设置已保存。"), { timeout: 4000 });
   });
 
-  it("submits event briefing display and curator preference settings", async () => {
+  it("submits event briefing display settings without preference fields", async () => {
     const user = userEvent.setup();
     const savedEventBriefing = {
       config: {
@@ -1804,46 +1796,9 @@ describe("AdminSettingsPanel", () => {
           },
         ],
       },
-      preference: {
-        ...buildInitialSettings().eventBriefing.preference,
-        weightedRules: [
-                  { type: "entity", value: "AI Coding", weight: 6 },
-          { type: "keyword", value: "OpenAI", weight: -4 },
-        ],
-      },
     };
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
       const url = String(input);
-
-      if (url.startsWith("/api/admin/settings/entities")) {
-        return new Response(JSON.stringify({
-          entities: [
-            {
-              id: "entity-ai-coding",
-              name: "AI Coding",
-              normalized: "ai-coding",
-              itemCount: 12,
-              aliasCount: 0,
-              aliases: [],
-              createdAt: "2026-04-20T10:00:00.000Z",
-              updatedAt: "2026-04-20T10:00:00.000Z",
-            },
-            {
-              id: "entity-marketing",
-              name: "Marketing",
-              normalized: "marketing",
-              itemCount: 3,
-              aliasCount: 0,
-              aliases: [],
-              createdAt: "2026-04-20T10:00:00.000Z",
-              updatedAt: "2026-04-20T10:00:00.000Z",
-            },
-          ],
-          totalCount: 2,
-          page: 1,
-          pageSize: 100,
-        }));
-      }
 
       if (url === "/api/admin/settings/event-briefing" && init?.method === "PATCH") {
         return new Response(JSON.stringify({ eventBriefing: savedEventBriefing }));
@@ -1859,24 +1814,18 @@ describe("AdminSettingsPanel", () => {
     await user.click(screen.getByRole("tab", { name: "速览配置" }));
 
     const panel = screen.getByRole("tabpanel");
-    expect(within(panel).getByText("事件偏好")).toBeInTheDocument();
+    expect(within(panel).queryByText("事件偏好")).not.toBeInTheDocument();
     expect(within(panel).getByText("速览频道")).toBeInTheDocument();
-    expect(within(panel).queryByLabelText("默认重点事件数量")).not.toBeInTheDocument();
-    expect(within(panel).queryByLabelText("单页最大事件数量")).not.toBeInTheDocument();
-    expect(within(panel).queryByLabelText("来源预览数量")).not.toBeInTheDocument();
-    expect(within(panel).queryByLabelText("入选原因数量")).not.toBeInTheDocument();
-    expect(within(panel).queryByText("每行一条。偏好只影响公开排序，不采集访客行为，也不会硬过滤内容。")).not.toBeInTheDocument();
-    expect(within(panel).queryByText("一级筛选按频道展示，候选内容由来源组圈定；未选择来源组时使用全部来源。")).not.toBeInTheDocument();
-    expect(within(panel).getByText("全部组")).toBeInTheDocument();
-    expect(within(panel).queryByText("全部来源组")).not.toBeInTheDocument();
-    expect(within(panel).getByLabelText("加权上限")).toHaveValue(15);
-    expect(within(panel).getByLabelText("降权上限")).toHaveValue(20);
+    expect(within(panel).queryByRole("button", { name: "偏好建议" })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "新增规则" })).not.toBeInTheDocument();
+    expect(within(panel).queryByLabelText("加权上限")).not.toBeInTheDocument();
+    expect(within(panel).queryByLabelText("降权上限")).not.toBeInTheDocument();
 
     await user.clear(within(panel).getByLabelText("最低入选分"));
     await user.type(within(panel).getByLabelText("最低入选分"), "20");
     vi.stubGlobal("crypto", { randomUUID: () => "test-channel-id" });
     await user.click(within(panel).getByRole("button", { name: "新增频道" }));
-    let dialog = screen.getByRole("dialog", { name: "新增频道" });
+    const dialog = screen.getByRole("dialog", { name: "新增频道" });
     const newChannelNameInput = within(dialog).getByLabelText("频道名称");
     await user.clear(newChannelNameInput);
     await user.type(newChannelNameInput, "观点实践");
@@ -1884,26 +1833,6 @@ describe("AdminSettingsPanel", () => {
     await user.click(within(dialog).getByRole("button", { name: "添加" }));
     expect(within(panel).getByText("观点实践")).toBeInTheDocument();
     expect(within(panel).getByText("Core")).toBeInTheDocument();
-    await user.click(within(panel).getByRole("button", { name: "新增规则" }));
-    dialog = screen.getByRole("dialog", { name: "新增加权规则" });
-    await waitFor(() => {
-      expect(within(dialog).getByRole("option", { name: "AI Coding (12)" })).toBeInTheDocument();
-    });
-    await user.selectOptions(within(dialog).getByLabelText("内容"), ["AI Coding"]);
-    await user.clear(within(dialog).getByLabelText("权重"));
-    await user.type(within(dialog).getByLabelText("权重"), "6");
-    await user.click(within(dialog).getByRole("button", { name: "添加" }));
-
-    await user.click(within(panel).getByRole("button", { name: "新增规则" }));
-    dialog = screen.getByRole("dialog", { name: "新增加权规则" });
-    await user.selectOptions(within(dialog).getByLabelText("类型"), ["keyword"]);
-    await user.type(within(dialog).getByLabelText("内容"), "OpenAI");
-    await user.clear(within(dialog).getByLabelText("权重"));
-    await user.type(within(dialog).getByLabelText("权重"), "-4");
-    await user.click(within(dialog).getByRole("button", { name: "添加" }));
-
-    expect(within(panel).getByText("AI Coding (12)")).toBeInTheDocument();
-    expect(within(panel).getByText("OpenAI")).toBeInTheDocument();
     await user.click(within(panel).getByRole("button", { name: "保存配置" }));
 
     await waitFor(() => {
@@ -1932,135 +1861,10 @@ describe("AdminSettingsPanel", () => {
               },
             ],
           },
-          preference: {
-            weightedRules: [
-              { type: "entity", value: "AI Coding", weight: 6 },
-              { type: "keyword", value: "OpenAI", weight: -4 },
-            ],
-            maxCuratorBoost: 15,
-            maxCuratorPenalty: 20,
-          },
         }),
       });
     });
     await screen.findByText("速览配置已保存。");
-  });
-
-  it("opens briefing preference suggestions in a governance-style modal", async () => {
-    const user = userEvent.setup();
-    const updatedPreference = {
-      ...buildInitialSettings().eventBriefing.preference,
-      weightedRules: [
-        { type: "entity", value: "ai-coding", weight: 3 },
-      ],
-    };
-    const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
-      const url = String(input);
-
-      if (url.startsWith("/api/admin/settings/entities")) {
-        return new Response(JSON.stringify({
-          entities: [],
-          totalCount: 0,
-          page: 1,
-          pageSize: 100,
-        }));
-      }
-
-      if (url === "/api/admin/settings/event-briefing/suggestions" && init?.method === "GET") {
-        return new Response(JSON.stringify({
-          suggestions: [
-            {
-              id: "suggestion-ai-coding",
-              ruleType: "entity",
-              value: "ai-coding",
-              label: "AI Coding",
-              suggestedWeight: 3,
-              confidence: 0.71,
-              positiveScore: 8,
-              negativeScore: 0,
-              sampleCount: 3,
-              reason: "实体「AI Coding」近 30 天偏好更强，来自 3 次管理行为。",
-              status: "pending",
-              createdAt: "2026-07-01T00:00:00.000Z",
-              updatedAt: "2026-07-01T00:00:00.000Z",
-            },
-          ],
-        }));
-      }
-
-      if (url === "/api/admin/settings/event-briefing/suggestions" && init?.method === "POST") {
-        return new Response(JSON.stringify({ suggestions: [] }));
-      }
-
-      if (url === "/api/admin/settings/event-briefing/suggestions/suggestion-ai-coding/accept") {
-        return new Response(JSON.stringify({
-          suggestion: {
-            id: "suggestion-ai-coding",
-            status: "accepted",
-          },
-          preference: updatedPreference,
-        }));
-      }
-
-      return new Response(JSON.stringify({ error: "unexpected request" }), { status: 500 });
-    });
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderWithProviders(
-      <AdminSettingsPanel
-        initialSettings={buildInitialSettings()}
-        activeSection="event-briefing"
-        embedMode
-      />,
-    );
-
-    const panel = screen.getByRole("tabpanel");
-    expect(within(panel).getByRole("button", { name: "偏好建议" })).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "新增规则" })).toBeInTheDocument();
-    expect(within(panel).queryByText("根据近 30 天管理行为生成，接受后写入上方事件偏好。")).not.toBeInTheDocument();
-
-    await user.click(within(panel).getByRole("button", { name: "偏好建议" }));
-
-    const dialog = await screen.findByRole("dialog", { name: "偏好建议" });
-    expect(within(dialog).getByLabelText("偏好建议筛选")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("偏好建议排序")).toHaveValue("sample_desc");
-    expect(within(dialog).getByRole("button", { name: "忽略当前列表" })).toBeEnabled();
-    expect(within(dialog).queryByRole("option", { name: "按证据强度" })).not.toBeInTheDocument();
-    expect(within(dialog).getByText("AI Coding")).toBeInTheDocument();
-    expect(within(dialog).getByText("+3")).toBeInTheDocument();
-    expect(within(dialog).getByText("3 次")).toBeInTheDocument();
-    expect(within(dialog).queryByText("3 次 / 71%")).not.toBeInTheDocument();
-    expect(within(dialog).queryByText("ai-coding")).not.toBeInTheDocument();
-
-    await user.click(within(dialog).getByRole("button", { name: "忽略当前列表" }));
-    const dismissAllDialog = screen.getByRole("dialog", { name: "确认忽略当前列表" });
-    expect(
-      within(dismissAllDialog).getByText(/确定要忽略当前列表中的 \d+ 条待处理建议吗？忽略后不会写入事件偏好规则。/),
-    ).toBeInTheDocument();
-    await user.click(within(dismissAllDialog).getByRole("button", { name: "取消" }));
-    expect(screen.queryByRole("dialog", { name: "确认忽略当前列表" })).not.toBeInTheDocument();
-
-    await user.type(within(dialog).getByLabelText("偏好建议筛选"), "Coding");
-    expect(within(dialog).getByText("AI Coding")).toBeInTheDocument();
-
-    await user.click(within(dialog).getByRole("button", { name: "接受偏好建议：AI Coding" }));
-    const acceptDialog = screen.getByRole("dialog", { name: "接受偏好建议" });
-    expect(within(acceptDialog).getByText("实体：AI Coding +3")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalledWith(
-      "/api/admin/settings/event-briefing/suggestions/suggestion-ai-coding/accept",
-      expect.anything(),
-    );
-    await user.click(within(acceptDialog).getByRole("button", { name: "接受" }));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/admin/settings/event-briefing/suggestions/suggestion-ai-coding/accept",
-        expect.objectContaining({ method: "POST" }),
-      );
-    });
-    expect(await screen.findByText("偏好建议已写入事件偏好。")).toBeInTheDocument();
-    expect(within(panel).getByText("ai-coding")).toBeInTheDocument();
   });
 
   it("submits the daily report schedule candidate limit", async () => {

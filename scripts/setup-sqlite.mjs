@@ -520,6 +520,28 @@ function applyEntityItemBackfill() {
   });
 }
 
+function dropLegacyCuratorPreferenceTables() {
+  // 旧偏好专用表已从 schema 移除；存量卷按 FK 依赖顺序幂等清理，
+  // 只删这 4 张专用表，不动内容/来源/实体/聚类/日报/治理与通用统计表。
+  runSqlite([dbPath], {
+    input: `
+      DROP INDEX IF EXISTS "briefing_preference_suggestions_status_confidence_idx";
+      DROP INDEX IF EXISTS "briefing_preference_suggestions_ruleType_value_idx";
+      DROP INDEX IF EXISTS "briefing_preference_suggestions_suggestionKey_key";
+      DROP TABLE IF EXISTS "briefing_preference_suggestions";
+      DROP INDEX IF EXISTS "curator_behavior_dimensions_targetDedupKey_key";
+      DROP INDEX IF EXISTS "curator_behavior_dimensions_occurredAt_idx";
+      DROP INDEX IF EXISTS "curator_behavior_dimensions_ruleType_value_occurredAt_idx";
+      DROP INDEX IF EXISTS "curator_behavior_dimensions_targetDedupKey_occurredAt_idx";
+      DROP TABLE IF EXISTS "curator_behavior_dimensions";
+      DROP INDEX IF EXISTS "curator_behavior_events_eventType_createdAt_idx";
+      DROP INDEX IF EXISTS "curator_behavior_events_targetType_targetId_createdAt_idx";
+      DROP TABLE IF EXISTS "curator_behavior_events";
+      DROP TABLE IF EXISTS "briefing_preference_configs";
+    `,
+  });
+}
+
 function applyAdditiveSchemaUpgrades() {
   // Repair///bootstrap item processing recovery columns before any items rebuilds.
   runSqlite([dbPath], {
@@ -715,22 +737,6 @@ function applyAdditiveSchemaUpgrades() {
 
   addColumnIfMissing("event_briefing_configs", "briefingChannelsJson", "TEXT NOT NULL DEFAULT '[]'");
 
-  if (!tableExists("briefing_preference_configs")) {
-    runSqlite([dbPath], {
-      input: `
-        CREATE TABLE IF NOT EXISTS "briefing_preference_configs" (
-          "id" TEXT NOT NULL PRIMARY KEY,
-          "weightedRulesJson" TEXT NOT NULL DEFAULT '[]',
-          "maxCuratorBoost" INTEGER NOT NULL DEFAULT 15,
-          "maxCuratorPenalty" INTEGER NOT NULL DEFAULT 20,
-          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          "updatedAt" DATETIME NOT NULL
-        );
-      `,
-    });
-  }
-  addColumnIfMissing("briefing_preference_configs", "weightedRulesJson", "TEXT NOT NULL DEFAULT '[]'");
-
   const clusterFeedStatsColumnsAdded = [
     addColumnIfMissing("content_clusters", "eventFingerprint", "TEXT"),
     addColumnIfMissing("content_clusters", "eventBucket", "TEXT"),
@@ -840,6 +846,7 @@ try {
   runSqlite([dbPath], {
     input: sql,
   });
+  dropLegacyCuratorPreferenceTables();
   applyAdditiveSchemaUpgrades();
   if (shouldBackfillEntities) {
     applyEntityItemBackfill();

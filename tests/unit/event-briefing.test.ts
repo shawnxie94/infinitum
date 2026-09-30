@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { getEventBriefingDateRange } from "@/lib/events/date";
-import { compressBehaviorNetScore, getCuratorBehaviorScore } from "@/lib/curator-behavior/service";
-import { calculateCuratorPreference } from "@/lib/events/preferences";
 import {
   calculateEventBriefingBaseRankScore,
   createEventBriefingRankContext,
@@ -110,11 +108,45 @@ describe("event briefing helpers", () => {
     );
   });
 
+  it("ranks purely on the universal score without any preference fields", () => {
+    const range = getEventBriefingDateRange("2026-06-30");
+    const candidate = buildCandidate();
+    const score = calculateEventBriefingBaseRankScore(candidate, range);
+    const range2 = getEventBriefingDateRange("2026-06-30");
+    const entry = {
+      id: candidate.id,
+      type: candidate.type,
+      title: candidate.title,
+      summary: candidate.summary,
+      qualityScore: candidate.qualityScore,
+      rankScore: score,
+      isFollowUp: candidate.isFollowUp,
+      sourceCount: candidate.sourceCount,
+      itemCount: candidate.itemCount,
+      newItemCountOnDate: candidate.newItemCountOnDate,
+      newSourceCountOnDate: candidate.newSourceCountOnDate,
+      latestCreatedAt: candidate.latestCreatedAt.toISOString(),
+      latestPublishedAt: candidate.latestPublishedAt.toISOString(),
+      eventType: candidate.eventType,
+      eventSubject: candidate.eventSubject,
+      eventAction: candidate.eventAction,
+      eventObject: candidate.eventObject,
+      eventDate: candidate.eventDate,
+      detailHref: "",
+      items: [],
+    } as EventBriefingEntryDTO;
+
+    expect(entry.rankScore).toBe(score);
+    expect(entry).not.toHaveProperty("curatorBoost");
+    expect(entry).not.toHaveProperty("curatorPenalty");
+    expect(entry).not.toHaveProperty("baseRankScore");
+    expect(range2.date).toBe(range.date);
+  });
+
   it("uses a stable id tie-breaker when ranked entries otherwise match", () => {
     const common = {
       type: "single",
       rankScore: 80,
-      baseRankScore: 80,
       latestCreatedAt: "2026-06-30T08:00:00.000Z",
     } as const;
     const entries = [
@@ -179,33 +211,4 @@ describe("event briefing helpers", () => {
     );
   });
 
-  it("adds capped site-level curator boosts and penalties without hard filtering", () => {
-    const result = calculateCuratorPreference(buildCandidate(), {
-      id: "preference",
-      weightedRules: [
-        { type: "entity", value: "AI Coding", weight: 6 },
-        { type: "source_group", value: "group-1", weight: 5 },
-        { type: "keyword", value: "OpenAI", weight: 5 },
-        { type: "event_type", value: "launch", weight: 9 },
-        { type: "keyword", value: "agent", weight: -8 },
-      ],
-      maxCuratorBoost: 10,
-      maxCuratorPenalty: 8,
-      createdAt: "2026-06-30T00:00:00.000Z",
-      updatedAt: "2026-06-30T00:00:00.000Z",
-    });
-
-    expect(result.curatorBoost).toBe(10);
-    expect(result.curatorPenalty).toBe(8);
-  });
-
-  it("compresses behavior evidence into small suggested rule weights", () => {
-    expect(getCuratorBehaviorScore("event_source_clicked")).toBe(2);
-    expect(getCuratorBehaviorScore("cluster_hidden")).toBe(-5);
-    expect(compressBehaviorNetScore(1)).toBe(1);
-    expect(compressBehaviorNetScore(6)).toBe(2);
-    expect(compressBehaviorNetScore(7)).toBe(3);
-    expect(compressBehaviorNetScore(-3)).toBe(-2);
-    expect(compressBehaviorNetScore(0)).toBe(0);
-  });
 });

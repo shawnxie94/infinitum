@@ -1,5 +1,5 @@
 
-import type { AdminBriefingWeightRule, AdminBriefingWeightRuleType, AdminEventBriefingChannel } from "@/lib/settings/types";
+import type { AdminEventBriefingChannel } from "@/lib/settings/types";
 
 
 export type AdminSettingsSection =
@@ -56,27 +56,6 @@ export const eventTypeOptions = [
   { value: "security", label: "安全" },
   { value: "other", label: "其他" },
 ];
-export const eventBriefingRuleTypeOptions: Array<{ value: AdminBriefingWeightRuleType; label: string }> = [
-  { value: "entity", label: "实体" },
-  { value: "keyword", label: "关键词" },
-  { value: "source_group", label: "来源组" },
-  { value: "event_type", label: "事件类型" },
-];
-export const eventBriefingRuleTypeLabels: Record<AdminBriefingWeightRuleType, string> = {
-  entity: "实体",
-  keyword: "关键词",
-  source_group: "来源组",
-  event_type: "事件类型",
-};
-export type BriefingPreferenceSuggestionSort = "sample_desc" | "weight_desc" | "updated_desc";
-export const BRIEFING_PREFERENCE_SUGGESTION_PAGE_SIZE = 10;
-
-
-export function formatSignedWeight(value: number) {
-  return value > 0 ? `+${value}` : String(value);
-}
-
-
 export function normalizeHeaderLinkRelOption(rel: string) {
   return rel.split(/\s+/).includes("sponsored") ? HEADER_LINK_REL_SPONSORED : HEADER_LINK_REL_DEFAULT;
 }
@@ -111,17 +90,6 @@ export function areStringArraysEqual(left: string[], right: string[]) {
   }
 
   return left.every((value, index) => value === right[index]);
-}
-
-export function areWeightRulesEqual(left: AdminBriefingWeightRule[], right: AdminBriefingWeightRule[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((value, index) => {
-    const other = right[index];
-    return other && value.type === other.type && value.value === other.value && value.weight === other.weight;
-  });
 }
 
 export function areEventBriefingChannelsEqual(left: AdminEventBriefingChannel[], right: AdminEventBriefingChannel[]) {

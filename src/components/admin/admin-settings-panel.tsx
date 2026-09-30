@@ -3,7 +3,7 @@ import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, PointerSe
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useEffect, useRef, useState, useTransition } from "react";
 
-import { acceptBriefingPreferenceSuggestion, dismissBriefingPreferenceSuggestions, generateBriefingPreferenceSuggestions, importSourcesFromOpmlText, deleteHeaderLink, dismissBriefingPreferenceSuggestion, listBriefingPreferenceSuggestions, listAdminEntities, reorderHeaderLinks, reorderSourceGroups, resolveSourceFromRssUrl, saveContentExtractionConfig, saveDefaultDailyReportSchedule, saveDefaultIngestionSchedule, saveDefaultItemCleanupSchedule, saveEventBriefingSettings, saveHeaderLink, submitAdminSettingsAction, type AdminEntity } from "@/components/admin/admin-settings-panel.api";
+import { importSourcesFromOpmlText, deleteHeaderLink, reorderHeaderLinks, reorderSourceGroups, resolveSourceFromRssUrl, saveContentExtractionConfig, saveDefaultDailyReportSchedule, saveDefaultIngestionSchedule, saveDefaultItemCleanupSchedule, saveEventBriefingSettings, saveHeaderLink, submitAdminSettingsAction } from "@/components/admin/admin-settings-panel.api";
 import { AiSettingsPanel } from "@/components/admin/ai-settings-panel";
 import { EntitySettingsPanel } from "@/components/admin/entity-settings-panel";
 import { Button } from "@/components/ui/button";
@@ -20,12 +20,11 @@ import { SelectField } from "@/components/ui/select-field";
 import { TextArea } from "@/components/ui/text-area";
 import { TextInput } from "@/components/ui/text-input";
 import { useToast } from "@/components/ui/toast";
-import type { AdminBriefingPreferenceSuggestion, AdminBriefingWeightRule, AdminBriefingWeightRuleType, AdminEventBriefingChannel, AdminSettingsSnapshot, PromptConfigType } from "@/lib/settings/types";
+import type { AdminEventBriefingChannel, AdminSettingsSnapshot, PromptConfigType } from "@/lib/settings/types";
 import { DEFAULT_SCHEDULE_TIMEZONE, DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS, MAX_CLEANUP_RETENTION_DAYS, MAX_AGGREGATION_SPLIT_MAX_EVENTS, MAX_DAILY_REPORT_OFFSET_DAYS, MAX_FULL_TEXT_FETCH_THRESHOLD, MAX_SOURCE_CONCURRENCY, MIN_CLEANUP_RETENTION_DAYS, MIN_AGGREGATION_SPLIT_MAX_EVENTS, MIN_DAILY_REPORT_OFFSET_DAYS, MIN_FULL_TEXT_FETCH_THRESHOLD, MIN_SOURCE_CONCURRENCY, MAX_PER_SOURCE_ITEM_LIMIT, MAX_DAILY_REPORT_CANDIDATE_LIMIT, MIN_DAILY_REPORT_CANDIDATE_LIMIT, MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS, MIN_PER_SOURCE_ITEM_LIMIT } from "@/lib/tasks/scheduler";
 import { cx } from "@/lib/ui/cx";
 
-import { appendMissingOptions, areEventBriefingChannelsEqual, areStringArraysEqual, areWeightRulesEqual, BRIEFING_PREFERENCE_SUGGESTION_PAGE_SIZE, checkboxInputClassName, createEventBriefingChannel, DEFAULT_DAILY_REPORT_CHANNEL_ID, downloadTextFile, escapeXml, eventBriefingRuleTypeLabels, eventBriefingRuleTypeOptions, eventTypeOptions, formatSignedWeight, formatSourceUpdateTime, getInitialSourceFilterNumber, getInitialSourceFilterValue, HEADER_LINK_REL_DEFAULT, HEADER_LINK_REL_SPONSORED, headerLinkRelOptions, normalizeHeaderLinkRelOption, normalizeSourceEnabledFilter, refreshPage, sourceFilterQueryKeys, toDateTimeLocalValue, toIsoDateTimeOrNull, type AdminSettingsSection, type BriefingPreferenceSuggestionSort } from "@/components/admin/admin-settings-panel.helpers";
-import BriefingPreferenceSuggestionModal from "@/components/admin/briefing-preference-suggestion-modal";
+import { appendMissingOptions, areEventBriefingChannelsEqual, areStringArraysEqual, checkboxInputClassName, createEventBriefingChannel, DEFAULT_DAILY_REPORT_CHANNEL_ID, downloadTextFile, escapeXml, formatSourceUpdateTime, getInitialSourceFilterNumber, getInitialSourceFilterValue, HEADER_LINK_REL_DEFAULT, HEADER_LINK_REL_SPONSORED, headerLinkRelOptions, normalizeHeaderLinkRelOption, normalizeSourceEnabledFilter, refreshPage, sourceFilterQueryKeys, toDateTimeLocalValue, toIsoDateTimeOrNull, type AdminSettingsSection } from "@/components/admin/admin-settings-panel.helpers";
 import { AdminWorkspaceSidebar, GroupRow, HeaderLinkRow } from "@/components/admin/admin-settings-panel-rows";
 type AdminSettingsPanelProps = {
   initialSettings: AdminSettingsSnapshot;
@@ -34,7 +33,6 @@ type AdminSettingsPanelProps = {
   activeSection?: AdminSettingsSection;
   initialPromptType?: PromptConfigType;
   initialOpenEntitySuggestions?: boolean;
-  initialOpenBriefingPreferenceSuggestions?: boolean;
 };
 
 export function AdminSettingsPanel({
@@ -44,7 +42,6 @@ export function AdminSettingsPanel({
   activeSection: externalActiveSection,
   initialPromptType,
   initialOpenEntitySuggestions = false,
-  initialOpenBriefingPreferenceSuggestions = false,
 }: AdminSettingsPanelProps) {
   type AdminSource = AdminSettingsSnapshot["sources"][number];
   type AdminHeaderLink = NonNullable<AdminSettingsSnapshot["headerLinks"]>[number];
@@ -202,66 +199,16 @@ export function AdminSettingsPanel({
     useState<"create" | "edit" | null>(null);
   const [eventBriefingChannelDraft, setEventBriefingChannelDraft] =
     useState<AdminEventBriefingChannel | null>(null);
-  const [eventBriefingWeightedRules, setEventBriefingWeightedRules] = useState(
-    initialSettings.eventBriefing.preference.weightedRules,
-  );
-  const [eventBriefingMaxCuratorBoost, setEventBriefingMaxCuratorBoost] = useState(
-    String(initialSettings.eventBriefing.preference.maxCuratorBoost),
-  );
-  const [eventBriefingMaxCuratorPenalty, setEventBriefingMaxCuratorPenalty] = useState(
-    String(initialSettings.eventBriefing.preference.maxCuratorPenalty),
-  );
-  const [eventBriefingRuleModalOpen, setEventBriefingRuleModalOpen] = useState(false);
-  const [eventBriefingRuleDraft, setEventBriefingRuleDraft] = useState<{
-    type: AdminBriefingWeightRuleType;
-    value: string;
-    weight: string;
-  }>({ type: "entity", value: "", weight: "5" });
-  const [briefingPreferenceSuggestions, setBriefingPreferenceSuggestions] = useState<AdminBriefingPreferenceSuggestion[]>([]);
-  const [briefingPreferenceSuggestionsLoaded, setBriefingPreferenceSuggestionsLoaded] = useState(false);
-  const [briefingPreferenceSuggestionModalOpen, setBriefingPreferenceSuggestionModalOpen] = useState(
-    initialOpenBriefingPreferenceSuggestions,
-  );
-  const [briefingPreferenceSuggestionSearch, setBriefingPreferenceSuggestionSearch] = useState("");
-  const [briefingPreferenceSuggestionSort, setBriefingPreferenceSuggestionSort] =
-    useState<BriefingPreferenceSuggestionSort>("sample_desc");
-  const [briefingPreferenceSuggestionPage, setBriefingPreferenceSuggestionPage] = useState(1);
-  const [briefingPreferenceSuggestionPageSize, setBriefingPreferenceSuggestionPageSize] = useState(
-    BRIEFING_PREFERENCE_SUGGESTION_PAGE_SIZE,
-  );
-  const [briefingPreferenceAcceptTarget, setBriefingPreferenceAcceptTarget] =
-    useState<AdminBriefingPreferenceSuggestion | null>(null);
-  const [briefingPreferenceDismissTarget, setBriefingPreferenceDismissTarget] =
-    useState<AdminBriefingPreferenceSuggestion | null>(null);
-  const [briefingPreferenceDismissAllConfirmOpen, setBriefingPreferenceDismissAllConfirmOpen] = useState(false);
-  const [eventBriefingEntities, setEventBriefingEntities] = useState<AdminEntity[]>([]);
-  const [eventBriefingEntitiesLoaded, setEventBriefingEntitiesLoaded] = useState(false);
   const normalizedBlacklistKeywords = blacklistText
     .split("\n")
     .map((keyword) => keyword.trim())
     .filter(Boolean);
-  const eventBriefingEntitySelectOptions = appendMissingOptions(
-    eventBriefingEntities.map((entity) => ({
-      value: entity.name,
-      label: `${entity.name} (${entity.itemCount})`,
-    })),
-    eventBriefingWeightedRules
-      .filter((rule) => rule.type === "entity")
-      .map((rule) => rule.value),
-  );
   const eventBriefingSourceGroupSelectOptions = appendMissingOptions(
     orderedGroups.map((group) => ({
       value: group.id,
       label: group.name,
     })),
-    [
-      ...eventBriefingWeightedRules.filter((rule) => rule.type === "source_group").map((rule) => rule.value),
-      ...eventBriefingChannels.flatMap((channel) => channel.sourceGroupIds),
-    ],
-  );
-  const eventBriefingEventTypeSelectOptions = appendMissingOptions(
-    eventTypeOptions,
-    eventBriefingWeightedRules.filter((rule) => rule.type === "event_type").map((rule) => rule.value),
+    eventBriefingChannels.flatMap((channel) => channel.sourceGroupIds),
   );
 
   // Paginated source list fetched from the dedicated sources API.
@@ -299,64 +246,6 @@ export function AdminSettingsPanel({
       .catch(() => { /* ignore */ });
   }, [activeSection, sourcePage, sourcePageSize, sourceNameFilter, sourceGroupFilter, sourceEnabledFilter, sourceGroupOverrides, sourceListRefreshKey]);
 
-  useEffect(() => {
-    if (activeSection !== "event-briefing" || eventBriefingEntitiesLoaded) {
-      return;
-    }
-
-    let ignore = false;
-
-    listAdminEntities({ sort: "usage_desc", page: 1, pageSize: 100 })
-      .then((payload) => {
-        if (ignore) {
-          return;
-        }
-        setEventBriefingEntities(payload.entities);
-        setEventBriefingEntitiesLoaded(true);
-      })
-      .catch(() => {
-        if (ignore) {
-          return;
-        }
-        setEventBriefingEntitiesLoaded(true);
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, [activeSection, eventBriefingEntitiesLoaded]);
-
-  useEffect(() => {
-    if (
-      activeSection !== "event-briefing" ||
-      !briefingPreferenceSuggestionModalOpen ||
-      briefingPreferenceSuggestionsLoaded
-    ) {
-      return;
-    }
-
-    let ignore = false;
-
-    listBriefingPreferenceSuggestions()
-      .then((suggestions) => {
-        if (ignore) {
-          return;
-        }
-        setBriefingPreferenceSuggestions(suggestions);
-        setBriefingPreferenceSuggestionsLoaded(true);
-      })
-      .catch(() => {
-        if (ignore) {
-          return;
-        }
-        setBriefingPreferenceSuggestionsLoaded(true);
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, [activeSection, briefingPreferenceSuggestionModalOpen, briefingPreferenceSuggestionsLoaded]);
-
   // Lighter-weight search for the group-linking modal — fetches with a larger
   // page size since the modal needs instant client-side filtering.
   const [groupLinkSourceList, setGroupLinkSourceList] = useState<AdminSource[]>([]);
@@ -381,25 +270,6 @@ export function AdminSettingsPanel({
   }, [sourceGroupLinkTarget, sourceGroupLinkSearch]);
 
   const safeSourcePage = Math.min(sourcePage, sourceTotalPages);
-  const getEventBriefingRuleOptions = (type: AdminBriefingWeightRuleType) => {
-    if (type === "entity") {
-      return eventBriefingEntitySelectOptions;
-    }
-    if (type === "source_group") {
-      return eventBriefingSourceGroupSelectOptions;
-    }
-    if (type === "event_type") {
-      return eventBriefingEventTypeSelectOptions;
-    }
-    return [];
-  };
-  const getEventBriefingRuleLabel = (rule: AdminBriefingWeightRule) => {
-    if (rule.type === "keyword") {
-      return rule.value;
-    }
-
-    return getEventBriefingRuleOptions(rule.type).find((option) => option.value === rule.value)?.label ?? rule.value;
-  };
   const getEventBriefingChannelGroupSummary = (channel: AdminEventBriefingChannel) => {
     if (channel.sourceGroupIds.length === 0) {
       return "全部组";
@@ -408,82 +278,6 @@ export function AdminSettingsPanel({
     return channel.sourceGroupIds
       .map((groupId) => eventBriefingSourceGroupSelectOptions.find((option) => option.value === groupId)?.label ?? groupId)
       .join("、");
-  };
-  const filteredBriefingPreferenceSuggestions = briefingPreferenceSuggestions
-    .filter((suggestion) => {
-      const search = briefingPreferenceSuggestionSearch.trim().toLowerCase();
-      if (!search) {
-        return true;
-      }
-
-      return [
-        eventBriefingRuleTypeLabels[suggestion.ruleType],
-        suggestion.value,
-        suggestion.label,
-        suggestion.reason,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(search);
-    })
-    .sort((left, right) => {
-      if (briefingPreferenceSuggestionSort === "sample_desc") {
-        return right.sampleCount - left.sampleCount || right.confidence - left.confidence;
-      }
-      if (briefingPreferenceSuggestionSort === "weight_desc") {
-        return Math.abs(right.suggestedWeight) - Math.abs(left.suggestedWeight) || right.confidence - left.confidence;
-      }
-      if (briefingPreferenceSuggestionSort === "updated_desc") {
-        return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-      }
-
-      return right.sampleCount - left.sampleCount || right.confidence - left.confidence;
-    });
-  const briefingPreferenceSuggestionTotalCount = filteredBriefingPreferenceSuggestions.length;
-  const briefingPreferenceSuggestionTotalPages = Math.max(
-    1,
-    Math.ceil(briefingPreferenceSuggestionTotalCount / briefingPreferenceSuggestionPageSize),
-  );
-  const safeBriefingPreferenceSuggestionPage = Math.min(
-    briefingPreferenceSuggestionPage,
-    briefingPreferenceSuggestionTotalPages,
-  );
-  const pagedBriefingPreferenceSuggestions = filteredBriefingPreferenceSuggestions.slice(
-    (safeBriefingPreferenceSuggestionPage - 1) * briefingPreferenceSuggestionPageSize,
-    safeBriefingPreferenceSuggestionPage * briefingPreferenceSuggestionPageSize,
-  );
-  const openEventBriefingRuleModal = () => {
-    setEventBriefingRuleDraft({ type: "entity", value: "", weight: "5" });
-    setEventBriefingRuleModalOpen(true);
-  };
-  const openBriefingPreferenceSuggestionModal = () => {
-    setBriefingPreferenceSuggestionModalOpen(true);
-  };
-  const addEventBriefingWeightRule = () => {
-    const value = eventBriefingRuleDraft.value.trim();
-    const parsedWeight = Number.parseInt(eventBriefingRuleDraft.weight.trim(), 10);
-
-    if (!value) {
-      showToast("请选择或输入规则内容。", "error");
-      return;
-    }
-    if (!Number.isInteger(parsedWeight) || parsedWeight < -50 || parsedWeight > 30 || parsedWeight === 0) {
-      showToast("权重需为 -50 到 30 之间的非 0 整数。", "error");
-      return;
-    }
-
-    const nextRule: AdminBriefingWeightRule = {
-      type: eventBriefingRuleDraft.type,
-      value: eventBriefingRuleDraft.type === "event_type" ? value.toLowerCase() : value,
-      weight: parsedWeight,
-    };
-
-    setEventBriefingWeightedRules((current) => [...current, nextRule]);
-    setEventBriefingRuleModalOpen(false);
-  };
-  const removeEventBriefingWeightRule = (index: number) => {
-    setEventBriefingWeightedRules((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
   const openCreateEventBriefingChannelModal = () => {
     setEventBriefingChannelDraft(createEventBriefingChannel(eventBriefingChannels.length));
@@ -540,68 +334,6 @@ export function AdminSettingsPanel({
       return current
         .filter((channel) => channel.id !== channelId)
         .map((channel, index) => ({ ...channel, sortOrder: index }));
-    });
-  };
-  const refreshBriefingPreferenceSuggestions = () => {
-    startTransition(async () => {
-      try {
-        const suggestions = await generateBriefingPreferenceSuggestions();
-        setBriefingPreferenceSuggestions(suggestions);
-        setBriefingPreferenceSuggestionsLoaded(true);
-        setBriefingPreferenceSuggestionPage(1);
-        showToast(suggestions.length > 0 ? "偏好建议已更新。" : "暂无新的偏好建议。", "success");
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : "偏好建议生成失败。", "error");
-      }
-    });
-  };
-  const acceptBriefingPreferenceSuggestionItem = (suggestion: AdminBriefingPreferenceSuggestion) => {
-    startTransition(async () => {
-      try {
-        const preference = await acceptBriefingPreferenceSuggestion(suggestion.id);
-        const nextSnapshot = {
-          ...eventBriefingSnapshot,
-          preference,
-        };
-
-        setEventBriefingSnapshot(nextSnapshot);
-        setEventBriefingWeightedRules(preference.weightedRules);
-        setEventBriefingMaxCuratorBoost(String(preference.maxCuratorBoost));
-        setEventBriefingMaxCuratorPenalty(String(preference.maxCuratorPenalty));
-        setBriefingPreferenceSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
-        setBriefingPreferenceSuggestionPage(1);
-        showToast("偏好建议已写入事件偏好。", "success");
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : "偏好建议接受失败。", "error");
-      }
-    });
-  };
-  const dismissBriefingPreferenceSuggestionItem = (suggestion: AdminBriefingPreferenceSuggestion) => {
-    startTransition(async () => {
-      try {
-        await dismissBriefingPreferenceSuggestion(suggestion.id);
-        setBriefingPreferenceSuggestions((current) => current.filter((item) => item.id !== suggestion.id));
-        setBriefingPreferenceSuggestionPage(1);
-        showToast("偏好建议已忽略。", "success");
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : "偏好建议忽略失败。", "error");
-      }
-    });
-  };
-  const dismissAllBriefingPreferenceSuggestionItems = () => {
-    startTransition(async () => {
-      try {
-        const dismissedCount = await dismissBriefingPreferenceSuggestions(
-          briefingPreferenceSuggestions.map((item) => item.id),
-        );
-        const nextSuggestions = await listBriefingPreferenceSuggestions();
-        setBriefingPreferenceSuggestions(nextSuggestions);
-        setBriefingPreferenceSuggestionPage(1);
-        setBriefingPreferenceDismissAllConfirmOpen(false);
-        showToast(`已忽略 ${dismissedCount} 条偏好建议。`, "success");
-      } catch (error) {
-        showToast(error instanceof Error ? error.message : "忽略偏好建议失败。", "error");
-      }
     });
   };
 
@@ -1277,8 +1009,6 @@ export function AdminSettingsPanel({
 
   const saveEventBriefingSettingsForm = () => {
     const parsedMinRankScore = Number.parseInt(eventBriefingMinRankScore.trim(), 10);
-    const parsedMaxCuratorBoost = Number.parseInt(eventBriefingMaxCuratorBoost.trim(), 10);
-    const parsedMaxCuratorPenalty = Number.parseInt(eventBriefingMaxCuratorPenalty.trim(), 10);
     const normalizedChannels = eventBriefingChannels.map((channel, index) => ({
       ...channel,
       name: channel.name.trim(),
@@ -1287,8 +1017,6 @@ export function AdminSettingsPanel({
     }));
     const numericFields: Array<[number, number, number, string]> = [
       [parsedMinRankScore, 0, 100, "最低入选分"],
-      [parsedMaxCuratorBoost, 0, 30, "主理人加权上限"],
-      [parsedMaxCuratorPenalty, 0, 50, "主理人降权上限"],
     ];
 
     for (const [value, min, max, label] of numericFields) {
@@ -1314,20 +1042,11 @@ export function AdminSettingsPanel({
             minRankScore: parsedMinRankScore,
             channels: normalizedChannels,
           },
-          preference: {
-            ...eventBriefingSnapshot.preference,
-            weightedRules: eventBriefingWeightedRules,
-            maxCuratorBoost: parsedMaxCuratorBoost,
-            maxCuratorPenalty: parsedMaxCuratorPenalty,
-          },
         });
 
         setEventBriefingSnapshot(saved);
         setEventBriefingMinRankScore(String(saved.config.minRankScore));
         setEventBriefingChannels(saved.config.channels);
-        setEventBriefingWeightedRules(saved.preference.weightedRules);
-        setEventBriefingMaxCuratorBoost(String(saved.preference.maxCuratorBoost));
-        setEventBriefingMaxCuratorPenalty(String(saved.preference.maxCuratorPenalty));
         showToast("速览配置已保存。", "success");
       } catch (error) {
         showToast(error instanceof Error ? error.message : "速览配置保存失败。", "error");
@@ -1475,10 +1194,7 @@ export function AdminSettingsPanel({
     !areEventBriefingChannelsEqual(
       eventBriefingChannels.map((channel, index) => ({ ...channel, sortOrder: index })),
       eventBriefingSnapshot.config.channels,
-    ) ||
-    !areWeightRulesEqual(eventBriefingWeightedRules, eventBriefingSnapshot.preference.weightedRules) ||
-    eventBriefingMaxCuratorBoost.trim() !== String(eventBriefingSnapshot.preference.maxCuratorBoost) ||
-    eventBriefingMaxCuratorPenalty.trim() !== String(eventBriefingSnapshot.preference.maxCuratorPenalty);
+    );
   const dailyReportScheduleIsDirty =
     dailyReportScheduleEnabled !== dailyReportScheduleSnapshot.enabled ||
     dailyReportScheduleCronExpression.trim() !== dailyReportScheduleSnapshot.cronExpression ||
@@ -1796,343 +1512,6 @@ export function AdminSettingsPanel({
                 ) : null}
               </ModalShell>
 
-              <section className="space-y-4 border-t border-[color:var(--line)] pt-5" aria-labelledby="event-briefing-preference-settings">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 id="event-briefing-preference-settings" className="text-sm font-semibold text-[var(--text-1)]">
-                    事件偏好
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={openBriefingPreferenceSuggestionModal}
-                    >
-                      偏好建议
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={openEventBriefingRuleModal}
-                    >
-                      新增规则
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <FormField label="加权上限" htmlFor="event-briefing-max-boost">
-                    <TextInput
-                      id="event-briefing-max-boost"
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={30}
-                      step={1}
-                      value={eventBriefingMaxCuratorBoost}
-                      onChange={(event) => setEventBriefingMaxCuratorBoost(event.target.value)}
-                    />
-                  </FormField>
-                  <FormField label="降权上限" htmlFor="event-briefing-max-penalty">
-                    <TextInput
-                      id="event-briefing-max-penalty"
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={50}
-                      step={1}
-                      value={eventBriefingMaxCuratorPenalty}
-                      onChange={(event) => setEventBriefingMaxCuratorPenalty(event.target.value)}
-                    />
-                  </FormField>
-                </div>
-
-                <div className="w-full overflow-x-auto">
-                  {eventBriefingWeightedRules.length > 0 ? (
-                    <table className="w-full min-w-[42rem] table-fixed text-sm">
-                      <colgroup>
-                        <col className="w-[8rem]" />
-                        <col />
-                        <col className="w-[8rem]" />
-                        <col className="w-[5rem]" />
-                      </colgroup>
-                      <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
-                        <tr>
-                          <th className="whitespace-nowrap px-4 py-3 text-left">类型</th>
-                          <th className="px-4 py-3 text-left">内容</th>
-                          <th className="whitespace-nowrap px-4 py-3 text-right">权重</th>
-                          <th className="whitespace-nowrap px-4 py-3 text-right">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[color:var(--line)]">
-                        {eventBriefingWeightedRules.map((rule, index) => (
-                          <tr
-                            key={`${rule.type}:${rule.value}:${rule.weight}:${index}`}
-                            className="transition-colors hover:bg-[var(--bg-muted)]"
-                          >
-                            <td className="px-4 py-3 text-[var(--text-2)]">
-                              {eventBriefingRuleTypeLabels[rule.type]}
-                            </td>
-                            <td className="px-4 py-3 font-medium text-[var(--text-1)]">
-                              {getEventBriefingRuleLabel(rule)}
-                            </td>
-                            <td className={cx(
-                              "px-4 py-3 text-right font-mono text-sm",
-                              rule.weight > 0 ? "text-[var(--accent)]" : "text-[var(--danger-ink)]",
-                            )}>
-                              {rule.weight > 0 ? `+${rule.weight}` : rule.weight}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <IconButton
-                                variant="secondary"
-                                size="sm"
-                                title="删除规则"
-                                className="text-[var(--danger-ink)] hover:bg-[var(--danger-surface)] hover:text-[var(--danger-ink)]"
-                                onClick={() => removeEventBriefingWeightRule(index)}
-                              >
-                                <IconTrash className="h-4 w-4" />
-                              </IconButton>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div className="bg-[var(--surface)] px-4 py-8 text-center text-sm text-[var(--text-3)]">
-                      暂无加权规则。
-                    </div>
-                  )}
-                </div>
-
-              </section>
-
-              <BriefingPreferenceSuggestionModal
-                suggestions={pagedBriefingPreferenceSuggestions}
-                pendingCount={briefingPreferenceSuggestions.length}
-                totalCount={briefingPreferenceSuggestionTotalCount}
-                page={safeBriefingPreferenceSuggestionPage}
-                pageSize={briefingPreferenceSuggestionPageSize}
-                search={briefingPreferenceSuggestionSearch}
-                sort={briefingPreferenceSuggestionSort}
-                isOpen={briefingPreferenceSuggestionModalOpen}
-                isBusy={isPending}
-                onClose={() => setBriefingPreferenceSuggestionModalOpen(false)}
-                onSearchChange={(value) => {
-                  setBriefingPreferenceSuggestionSearch(value);
-                  setBriefingPreferenceSuggestionPage(1);
-                }}
-                onSortChange={(value) => {
-                  setBriefingPreferenceSuggestionSort(value);
-                  setBriefingPreferenceSuggestionPage(1);
-                }}
-                onPageChange={setBriefingPreferenceSuggestionPage}
-                onPageSizeChange={(nextPageSize) => {
-                  setBriefingPreferenceSuggestionPageSize(nextPageSize);
-                  setBriefingPreferenceSuggestionPage(1);
-                }}
-                onAccept={setBriefingPreferenceAcceptTarget}
-                onDismiss={setBriefingPreferenceDismissTarget}
-                onDismissAll={() => setBriefingPreferenceDismissAllConfirmOpen(true)}
-                onRefresh={refreshBriefingPreferenceSuggestions}
-              />
-
-              <ModalShell
-                isOpen={briefingPreferenceDismissAllConfirmOpen}
-                onClose={() => setBriefingPreferenceDismissAllConfirmOpen(false)}
-                title="确认忽略当前列表"
-                widthClassName="max-w-md"
-                bodyClassName="space-y-3 p-6"
-                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
-                footer={
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      variant="secondary"
-                      onClick={() => setBriefingPreferenceDismissAllConfirmOpen(false)}
-                      disabled={isPending}
-                    >
-                      取消
-                    </Button>
-                    <Button
-                      variant="danger"
-                      onClick={dismissAllBriefingPreferenceSuggestionItems}
-                      disabled={isPending}
-                    >
-                      忽略当前列表
-                    </Button>
-                  </div>
-                }
-              >
-                <p className="text-sm leading-6 text-[var(--text-2)]">
-                  确定要忽略当前列表中的 {briefingPreferenceSuggestions.length} 条待处理建议吗？忽略后不会写入事件偏好规则。
-                </p>
-              </ModalShell>
-
-              <ModalShell
-                isOpen={Boolean(briefingPreferenceAcceptTarget)}
-                onClose={() => setBriefingPreferenceAcceptTarget(null)}
-                title="接受偏好建议"
-                widthClassName="max-w-md"
-                bodyClassName="space-y-3 p-6"
-                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
-                footer={
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      variant="secondary"
-                      onClick={() => setBriefingPreferenceAcceptTarget(null)}
-                      disabled={isPending}
-                    >
-                      取消
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onClick={() => {
-                        if (!briefingPreferenceAcceptTarget) {
-                          return;
-                        }
-
-                        const target = briefingPreferenceAcceptTarget;
-                        setBriefingPreferenceAcceptTarget(null);
-                        acceptBriefingPreferenceSuggestionItem(target);
-                      }}
-                      disabled={isPending}
-                    >
-                      接受
-                    </Button>
-                  </div>
-                }
-              >
-                <p className="text-sm leading-6 text-[var(--text-2)]">
-                  接受后会写入事件偏好规则，并影响后续事件速览排序。
-                </p>
-                <div className="rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-1)]">
-                  {briefingPreferenceAcceptTarget
-                    ? `${eventBriefingRuleTypeLabels[briefingPreferenceAcceptTarget.ruleType]}：${briefingPreferenceAcceptTarget.label ?? briefingPreferenceAcceptTarget.value} ${formatSignedWeight(briefingPreferenceAcceptTarget.suggestedWeight)}`
-                    : ""}
-                </div>
-              </ModalShell>
-
-              <ModalShell
-                isOpen={Boolean(briefingPreferenceDismissTarget)}
-                onClose={() => setBriefingPreferenceDismissTarget(null)}
-                title="忽略偏好建议"
-                widthClassName="max-w-md"
-                bodyClassName="space-y-3 p-6"
-                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
-                footer={
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      variant="secondary"
-                      onClick={() => setBriefingPreferenceDismissTarget(null)}
-                      disabled={isPending}
-                    >
-                      取消
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onClick={() => {
-                        if (!briefingPreferenceDismissTarget) {
-                          return;
-                        }
-
-                        const target = briefingPreferenceDismissTarget;
-                        setBriefingPreferenceDismissTarget(null);
-                        dismissBriefingPreferenceSuggestionItem(target);
-                      }}
-                      disabled={isPending}
-                    >
-                      忽略
-                    </Button>
-                  </div>
-                }
-              >
-                <p className="text-sm leading-6 text-[var(--text-2)]">
-                  忽略后这条建议会从待处理列表中移除，不会写入事件偏好规则。
-                </p>
-                <div className="rounded-sm border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm text-[var(--text-1)]">
-                  {briefingPreferenceDismissTarget
-                    ? `${eventBriefingRuleTypeLabels[briefingPreferenceDismissTarget.ruleType]}：${briefingPreferenceDismissTarget.label ?? briefingPreferenceDismissTarget.value}`
-                    : ""}
-                </div>
-              </ModalShell>
-
-              <ModalShell
-                isOpen={eventBriefingRuleModalOpen}
-                onClose={() => setEventBriefingRuleModalOpen(false)}
-                title="新增加权规则"
-                widthClassName="max-w-lg"
-                bodyClassName="space-y-4 p-6"
-                footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-6"
-                footer={
-                  <div className="flex justify-end gap-2">
-                    <Button variant="secondary" onClick={() => setEventBriefingRuleModalOpen(false)}>
-                      取消
-                    </Button>
-                    <Button variant="primary" onClick={addEventBriefingWeightRule}>
-                      添加
-                    </Button>
-                  </div>
-                }
-              >
-                <FormField label="类型" htmlFor="event-briefing-rule-type">
-                  <SelectField
-                    id="event-briefing-rule-type"
-                    aria-label="类型"
-                    value={eventBriefingRuleDraft.type}
-                    options={eventBriefingRuleTypeOptions}
-                    showSearch={false}
-                    onChange={(value) => setEventBriefingRuleDraft({
-      type: (value as AdminBriefingWeightRuleType) || "entity",
-                      value: "",
-                      weight: eventBriefingRuleDraft.weight,
-                    })}
-                  />
-                </FormField>
-                {eventBriefingRuleDraft.type === "keyword" ? (
-                  <FormField label="内容" htmlFor="event-briefing-rule-keyword">
-                    <TextInput
-                      id="event-briefing-rule-keyword"
-                      value={eventBriefingRuleDraft.value}
-                      placeholder="OpenAI"
-                      onChange={(event) => setEventBriefingRuleDraft((current) => ({
-                        ...current,
-                        value: event.target.value,
-                      }))}
-                    />
-                  </FormField>
-                ) : (
-                  <FormField label="内容" htmlFor="event-briefing-rule-value">
-                    <SelectField
-                      id="event-briefing-rule-value"
-                      aria-label="内容"
-                      value={eventBriefingRuleDraft.value}
-                      options={getEventBriefingRuleOptions(eventBriefingRuleDraft.type)}
-                      placeholder={
-                        eventBriefingRuleDraft.type === "entity" && !eventBriefingEntitiesLoaded
-                          ? "加载实体中"
-                          : "选择一项"
-                      }
-                      onChange={(value) => setEventBriefingRuleDraft((current) => ({
-                        ...current,
-                        value: String(value ?? ""),
-                      }))}
-                    />
-                  </FormField>
-                )}
-                <FormField label="权重" htmlFor="event-briefing-rule-weight">
-                  <TextInput
-                    id="event-briefing-rule-weight"
-                    type="number"
-                    inputMode="numeric"
-                    min={-50}
-                    max={30}
-                    step={1}
-                    value={eventBriefingRuleDraft.weight}
-                    onChange={(event) => setEventBriefingRuleDraft((current) => ({
-                      ...current,
-                      weight: event.target.value,
-                    }))}
-                  />
-                </FormField>
-              </ModalShell>
             </div>
           </div>
         ) : null}

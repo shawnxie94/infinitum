@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition, useCallback, type MouseEvent } from "react";
 
 import { ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS, STATUS_POLL_INTERVAL_MS } from "@/config/constants";
-import { recordCuratorBehaviorClient } from "@/components/curator-behavior/record";
 import { deleteItem, filterItem, joinCluster, mergeSelectedItems, queueIngestionRun, regenerateClusterSummary, requestClusterItems, requestClusterOptions, requestFeed, requestIngestionStatus, requestReanalysis, requestRegeneration } from "@/components/feed/feed-panel.api";
 import { GroupFilterSidebar } from "@/components/feed/feed-panel-sidebar";
 import type { AssignClusterDialogState, BatchActionDialogState, DateRangeValue, DeleteItemDialogState, FeedFeedback, FeedPanelProps, FeedQueryState, ManualFilterDialogState, RegenerateDialogState, RegenerateMode } from "@/components/feed/feed-panel.types";
@@ -1889,12 +1888,6 @@ export function FeedPanel({
                                   href={clusterItem.originalUrl}
                                   target="_blank"
                                   rel="noreferrer"
-                                  onClick={() => recordCuratorBehaviorClient({
-                                    eventType: "feed_item_opened",
-                                    targetType: "item",
-                                    targetId: clusterItem.id,
-                                    itemId: clusterItem.id,
-                                  })}
                                 >
                                   {clusterItem.title}
                                 </a>
@@ -1995,12 +1988,6 @@ export function FeedPanel({
                             href={entry.originalUrl}
                             target="_blank"
                             rel="noreferrer"
-                            onClick={() => recordCuratorBehaviorClient({
-                              eventType: "feed_item_opened",
-                              targetType: "item",
-                              targetId: entry.id,
-                              itemId: entry.id,
-                            })}
                           >
                             {entry.title}
                           </a>
