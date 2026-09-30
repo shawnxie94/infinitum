@@ -1,4 +1,5 @@
 import {
+  CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE,
   DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE,
 } from "@/config/prompts";
@@ -23,7 +24,7 @@ import { InvalidJsonModelResponseError, isInvalidJsonModelResponseError } from "
 import { createAiModelRuntime } from "@infinitum/ai/provider/runtime";
 import { createAiOperationRunner } from "@infinitum/ai/provider/operations";
 import { createAiSdkTransport, createCompatClientTransport } from "@infinitum/ai/provider/transports";
-import { CLUSTER_MATCH_SCHEMA } from "@/lib/ai/protocols/cluster";
+import { CLUSTER_MATCH_SCHEMA, CLUSTER_MERGE_DECISIONS_SCHEMA } from "@/lib/ai/protocols/cluster";
 import { ENTITY_ALIAS_DECISIONS_SCHEMA } from "@/lib/ai/protocols/entity-alias";
 import type { JsonCompleteRequest, StageContext, StageValidationFeedback } from "@infinitum/ai/provider/types";
 import {
@@ -355,8 +356,17 @@ export function createAiProvider(
         compactClusterMergeInputForModel(clustersJson),
       );
 
+      const systemPrompt = clusterMergeConfig.systemPrompt.includes(CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE)
+        ? clusterMergeConfig.systemPrompt
+        : `${clusterMergeConfig.systemPrompt}\n\n${CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE}`;
       const decisions = await operations.completeJson(
-        buildJsonRequest(clusterMergeConfig, "cluster_merge", userContent),
+        buildJsonRequest(
+          { ...clusterMergeConfig, systemPrompt },
+          "cluster_merge",
+          userContent,
+          "cluster_merge",
+          CLUSTER_MERGE_DECISIONS_SCHEMA,
+        ),
         (output) => parseClusterMergeDecisions(output, metadata),
       );
 

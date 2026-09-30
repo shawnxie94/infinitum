@@ -139,6 +139,8 @@ export const PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE = `请审
 
 如果没有明确的语义问题，返回 {"verdict":"pass","violations":[],"summary":"通过"}；如果存在问题，只返回可由输入证据支持的 violations。不要返回日报正文。`;
 
+export const CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE = `输出协议必须为 {"decisions":[{"pair_id":"输入中的稳定 ID","verdict":"approved|declined|ambiguous","confidence":98,"reasonCode":"same_event|insufficient_evidence|different_event|object_conflict|action_conflict|date_conflict|subject_conflict","reasonText":"中文依据"}]}。每个输入 pair_id 恰好返回一次，输出顺序不限。verdict 与 reasonCode 必须匹配；confidence 是 0 到 100 的整数；reasonText 非空。不得输出其他字段。`;
+
 export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。
 
 判断标准：
@@ -149,7 +151,7 @@ export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基�
 5. 时间窗口接近（7天内）
 
 注意：
-- 输入 JSON 的 pairs 数组由本地规则预筛选生成；每个 Pair 只有 left 和 right 两个聚合组
+- 输入 JSON 的 pairs 数组由本地规则预筛选生成；每个 Pair 都有稳定的 pair_id，以及 left 和 right 两个聚合组
 - left/right 是聚合组当前快照；id 是聚合组标识，itemCount 是该聚合组包含的条目数
 - title 和 summary 是展示文本，用于理解事件；eventType、eventSubject、eventAction、eventObject、eventDate 是结构化事件线索，应优先用于判断是否同一具体事件
 - pairs[].score 是本地规则对该 Pair 的相关性评分，只表示需要复核的优先级和相似强度；分数高不等于必须合并，最终仍以两个聚合组是否为同一具体事件为准
@@ -160,14 +162,16 @@ export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基�
 - 多个聚合组是否最终合并由系统根据 approved pair 组装，你只负责确认两两 Pair
 
 输出要求：
-- 严格按照输入 pairs 的顺序逐一判断，不要遗漏或新增 Pair
+- 每个输入 pair_id 必须在输出 decisions 中恰好出现一次；不得新增、遗漏或重复 ID，输出顺序不限
 - verdict 只能是 approved、declined、ambiguous
-- approved：明确是同一具体事件，可以合并
-- declined：明确不是同一具体事件，不应合并
-- ambiguous：有相关性但证据不足，无法安全决定，交给人工复核
+- approved：明确是同一具体事件，可以合并；reasonCode 必须为 same_event
+- declined：明确不是同一具体事件，不应合并；reasonCode 使用 different_event、object_conflict、action_conflict、date_conflict 或 subject_conflict
+- ambiguous：有相关性但证据不足，无法安全决定，交给人工复核；reasonCode 必须为 insufficient_evidence
+- confidence 必须是 0 到 100 的整数；reasonText 必须用中文说明关键依据
 
-只输出 JSON：{"verdicts":["approved","declined","ambiguous"]}
-verdicts 数组长度必须与输入 pairs 数组长度完全一致；verdicts[i] 对应 pairs[i]。`;
+只输出 JSON：{"decisions":[{"pair_id":"merge_pair_<stable-id>","verdict":"declined","confidence":98,"reasonCode":"different_event","reasonText":"事件主体和具体对象不同"}]}
+每个 decision 必须包含 pair_id、verdict、confidence、reasonCode、reasonText 五个字段。
+${CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE}`;
 
 /** Exact previous default used only to migrate the already-upgraded prompt. */
 export const PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。

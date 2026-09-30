@@ -5,6 +5,7 @@ import { CLUSTER_MERGE_SCAN_CLUSTER_LIMIT } from "@/config/constants";
 import { buildEventIdentity } from "@/lib/clusters/identity";
 import {
   buildClusterMergeCandidateInputHash,
+  buildClusterMergeCleanPairKey,
   normalizeFingerprint,
 } from "@/lib/clusters/helpers";
 import {
@@ -17,10 +18,14 @@ import {
   splitClusterIntoSingletons,
 } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
+import { resetMentionResolverCache } from "@/lib/entities/mention-resolution";
 import { getAdminCluster } from "@/lib/feed/repository";
 
 describe("cluster assignment", () => {
   beforeEach(async () => {
+    await prisma.entityAlias.deleteMany({ where: { aliasNormalized: "blueorbit" } });
+    await prisma.entity.deleteMany({ where: { normalized: "northstar labs" } });
+    resetMentionResolverCache();
     await prisma.backgroundTaskRun.deleteMany();
     await prisma.clusterDecision.deleteMany();
     await prisma.clusterConstraint.deleteMany();
@@ -28,6 +33,117 @@ describe("cluster assignment", () => {
     await prisma.item.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.source.deleteMany();
+  });
+
+  it("excludes the item's assigned cluster from BM25 candidates during reanalysis", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Reanalysis Feed",
+        rssUrl: "https://reanalysis.example.com/feed.xml",
+        siteUrl: "https://reanalysis.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    const publishedAt = new Date("2026-04-20T10:00:00.000Z");
+    const eventSignature = {
+      eventType: "launch" as const,
+      eventSubject: "Acme Labs",
+      eventAction: "发布",
+      eventObject: "Neptune",
+      eventDate: "2026-04-20",
+    };
+    await prisma.contentCluster.createMany({
+      data: [
+        {
+          id: "reanalyze-current-cluster",
+          kind: "topic",
+          title: "Stored current cluster",
+          summary: "Acme Labs 发布 Neptune 平台。",
+          score: 80,
+          itemCount: 1,
+          latestPublishedAt: publishedAt,
+          status: "active",
+          fingerprint: "manual-current-cluster",
+          eventType: eventSignature.eventType,
+          eventSubject: eventSignature.eventSubject,
+          eventAction: eventSignature.eventAction,
+          eventObject: eventSignature.eventObject,
+          eventDate: eventSignature.eventDate,
+        },
+        {
+          id: "reanalyze-other-cluster",
+          kind: "topic",
+          title: "Other stored cluster",
+          summary: "Acme Labs 发布 Neptune 开发平台。",
+          score: 80,
+          itemCount: 1,
+          latestPublishedAt: publishedAt,
+          status: "active",
+          fingerprint: "manual-other-cluster",
+          eventType: eventSignature.eventType,
+          eventSubject: eventSignature.eventSubject,
+          eventAction: eventSignature.eventAction,
+          eventObject: eventSignature.eventObject,
+          eventDate: eventSignature.eventDate,
+        },
+      ],
+    });
+    await prisma.item.create({
+      data: {
+        id: "reanalyze-other-seed",
+        sourceId: source.id,
+        clusterId: "reanalyze-other-cluster",
+        originalUrl: "https://reanalysis.example.com/other-seed",
+        canonicalUrl: "https://reanalysis.example.com/other-seed",
+        urlHash: "reanalyze-other-seed",
+        originalTitle: "Acme Neptune platform launch",
+        publishedAt,
+        summaryText: "Acme Labs 发布 Neptune 开发平台。",
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 80,
+        qualityRationale: "candidate seed",
+        language: "zh",
+        ...eventSignature,
+      },
+    });
+    const item = await prisma.item.create({
+      data: {
+        id: "reanalyze-current-item",
+        sourceId: source.id,
+        clusterId: "reanalyze-current-cluster",
+        originalUrl: "https://reanalysis.example.com/item",
+        canonicalUrl: "https://reanalysis.example.com/item",
+        urlHash: "reanalyze-current-item",
+        originalTitle: "Acme Neptune platform update",
+        translatedTitle: "Acme Neptune platform update",
+        publishedAt,
+        summaryText: "Acme Labs 发布 Neptune 开发平台。",
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 80,
+        qualityRationale: "reanalysis fixture",
+        language: "zh",
+        ...eventSignature,
+      },
+    });
+    let candidateIds: string[] = [];
+    const embedTexts = vi.fn(async (texts: string[]) => texts.map(() => [1, 0]));
+    const matchClusterCandidate = vi.fn(async (_input: string, context?: { candidates?: Array<{ id: string }> }) => {
+      candidateIds = context?.candidates?.map((candidate) => candidate.id) ?? [];
+      return "reanalyze-other-cluster";
+    });
+
+    const assignment = await assignItemToCluster(item.id, {
+      eventSignature,
+      aiProvider: { embedTexts, matchClusterCandidate } as unknown as AiProvider,
+    });
+
+    expect(matchClusterCandidate).toHaveBeenCalledOnce();
+    expect(candidateIds).toEqual(["reanalyze-other-cluster"]);
+    expect(assignment.clusterId).toBe("reanalyze-other-cluster");
   });
 
   it("limits cluster merge scans before local pair scoring", async () => {
@@ -189,7 +305,7 @@ describe("cluster assignment", () => {
     }
   });
 
-  it("unions ordinary scan clusters with affected clusters so precomputed pairs are consumable", async () => {
+  it("revalidates precomputed clean pairs and rejects incompatible event objects", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Precomputed Union Feed",
@@ -272,6 +388,26 @@ describe("cluster assignment", () => {
         expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
       },
     });
+    const legacyAssess = vi.fn();
+    const legacyResult = await executeClusterMerge(
+      { assessClusterMergePairs: legacyAssess } as unknown as AiProvider,
+      now,
+      { liveClusterIds: [clusters[0].id] },
+    );
+    expect(legacyResult.precomputedCleanPairsUsed).toBe(0);
+    expect(legacyAssess).not.toHaveBeenCalled();
+    await prisma.clusterMergeCleanPairCandidate.deleteMany({});
+    await prisma.clusterMergeCleanPairCandidate.create({
+      data: {
+        pairKey: buildClusterMergeCleanPairKey(clusters[0], clusters[1]),
+        leftClusterId: clusters[0].id,
+        rightClusterId: clusters[1].id,
+        leftInputHash: buildClusterMergeCandidateInputHash(clusters[0]),
+        rightInputHash: buildClusterMergeCandidateInputHash(clusters[1]),
+        score: 100,
+        expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+      },
+    });
     const assessClusterMergePairs = vi.fn().mockImplementation(async (clustersJson: string) => {
       const input = JSON.parse(clustersJson) as {
         pairs: Array<{ left: { id: string }; right: { id: string } }>;
@@ -297,13 +433,14 @@ describe("cluster assignment", () => {
     );
 
     expect(result.baseClusters).toBe(2);
-    expect(result.precomputedCleanPairsUsed).toBe(1);
-    expect(result.skipped).toBe(false);
-    expect(result.mergedCount).toBe(1);
-    expect(assessClusterMergePairs).toHaveBeenCalledTimes(1);
+    expect(result.precomputedCleanPairsUsed).toBe(0);
+    expect(result.precomputedCleanPairsInvalidSkipped).toBeGreaterThan(0);
+    expect(result.skipped).toBe(true);
+    expect(result.mergedCount).toBe(0);
+    expect(assessClusterMergePairs).not.toHaveBeenCalled();
     await expect(
       prisma.contentCluster.findUnique({ where: { id: clusters[1].id } }),
-    ).resolves.toBeNull();
+    ).resolves.toMatchObject({ status: "active" });
   });
 
   it("marks orphaned cluster pair decisions stale while preserving their audit record", async () => {
@@ -1438,6 +1575,15 @@ describe("cluster assignment", () => {
       affectedClusterIds: ["openai-contract-cluster"],
     });
     expect(assessClusterMergePairs).toHaveBeenCalledTimes(1);
+    const recordedDecision = await prisma.clusterDecision.findFirst({
+      where: { kind: "cluster_pair", source: "llm", reasonText: "主体、对象和时间一致" },
+    });
+    expect(recordedDecision).toMatchObject({
+      verdict: "approved",
+      confidence: 95,
+      reasonCode: "same_event",
+      reasonText: "主体、对象和时间一致",
+    });
     await expect(prisma.contentCluster.findUnique({ where: { id: "microsoft-contract-cluster" } })).resolves.toBeNull();
     await expect(
       prisma.item.count({
@@ -1447,6 +1593,224 @@ describe("cluster assignment", () => {
         },
       }),
     ).resolves.toBe(2);
+  });
+
+  it("canonicalizes entity aliases before live merge safety filtering", async () => {
+    const canonicalEntity = await prisma.entity.create({
+      data: { name: "Northstar Labs", normalized: "northstar labs" },
+    });
+    await prisma.entityAlias.create({
+      data: {
+        entityId: canonicalEntity.id,
+        aliasName: "BlueOrbit",
+        aliasNormalized: "blueorbit",
+        createdBy: "test",
+      },
+    });
+    const source = await prisma.source.create({
+      data: {
+        name: "Entity Alias Merge Feed",
+        rssUrl: "https://entity-alias-merge.example.com/feed.xml",
+        siteUrl: "https://entity-alias-merge.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    const publishedAt = new Date("2026-04-20T09:00:00.000Z");
+    const clusterFixtures = [
+      {
+        id: "northstar-alias-cluster",
+        title: "Northstar Labs launches Polaris 4 AI model",
+        summary: "Northstar Labs announces a Polaris 4 AI model launch with enterprise features.",
+        eventSubject: "Northstar Labs",
+      },
+      {
+        id: "blueorbit-alias-cluster",
+        title: "BlueOrbit launches Polaris 4 AI model",
+        summary: "BlueOrbit announces a Polaris 4 AI model launch with enterprise features.",
+        eventSubject: "BlueOrbit",
+      },
+    ];
+    await prisma.contentCluster.createMany({
+      data: clusterFixtures.map((fixture) => ({
+        id: fixture.id,
+        kind: "topic",
+        title: fixture.title,
+        summary: fixture.summary,
+        score: 84,
+        itemCount: 1,
+        latestPublishedAt: publishedAt,
+        status: "active",
+        fingerprint: fixture.id,
+        eventType: "launch",
+        eventSubject: fixture.eventSubject,
+        eventAction: "launches",
+        eventObject: null,
+        eventDate: "2026-04-20",
+      })),
+    });
+    await prisma.item.createMany({
+      data: clusterFixtures.map((fixture) => ({
+        id: `${fixture.id}-item`,
+        sourceId: source.id,
+        clusterId: fixture.id,
+        originalUrl: `https://entity-alias-merge.example.com/${fixture.id}`,
+        canonicalUrl: `https://entity-alias-merge.example.com/${fixture.id}`,
+        urlHash: `${fixture.id}-hash`,
+        originalTitle: fixture.title,
+        publishedAt,
+        summaryText: fixture.summary,
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 84,
+        qualityRationale: "relevant",
+      })),
+    });
+    const assessClusterMergePairs = vi.fn(async (clustersJson: string) => {
+      const input = JSON.parse(clustersJson) as {
+        pairs: Array<{ left: { id: string }; right: { id: string } }>;
+      };
+      expect(input.pairs).toHaveLength(1);
+      expect(input.pairs[0]).toMatchObject({
+        left: expect.objectContaining({ id: expect.stringMatching(/(northstar|blueorbit)-alias-cluster/) }),
+        right: expect.objectContaining({ id: expect.stringMatching(/(northstar|blueorbit)-alias-cluster/) }),
+      });
+      return [{
+        leftClusterId: "northstar-alias-cluster",
+        rightClusterId: "blueorbit-alias-cluster",
+        verdict: "approved" as const,
+        confidence: 95,
+        reasonCode: "same_event",
+        reasonText: "已配置别名指向同一主体",
+      }];
+    });
+    const aiProvider = { assessClusterMergePairs } as unknown as AiProvider;
+
+    const result = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));
+
+    expect(result).toMatchObject({ skipped: false, mergedCount: 1 });
+    expect(assessClusterMergePairs).toHaveBeenCalledTimes(1);
+  });
+
+  it("downgrades an AI approval whose reason and event signatures reject the merge", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Contradictory Merge Feed",
+        rssUrl: "https://contradictory-merge.example.com/feed.xml",
+        siteUrl: "https://contradictory-merge.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    const publishedAt = new Date("2026-04-20T09:00:00.000Z");
+    const pair = [
+      {
+        id: "contradictory-openai-ipo",
+        title: "Altman responds to OpenAI IPO speculation",
+        summary: "Artificial intelligence news discusses capital markets, safety commitments and model development.",
+        eventSubject: "OpenAI",
+        eventAction: "responds",
+        eventObject: "IPO speculation",
+      },
+      {
+        id: "contradictory-manus-release",
+        title: "Manus launches its 2.0 AI bundle",
+        summary: "Artificial intelligence news discusses capital markets, safety commitments and model development.",
+        eventSubject: "Manus",
+        eventAction: "launches",
+        eventObject: "Manus 2.0 AI bundle",
+      },
+    ];
+    await prisma.contentCluster.createMany({
+      data: pair.map((cluster) => ({
+        id: cluster.id,
+        kind: "topic",
+        title: cluster.title,
+        summary: cluster.summary,
+        score: 84,
+        itemCount: 1,
+        latestPublishedAt: publishedAt,
+        status: "active",
+        fingerprint: cluster.id,
+        eventType: "other",
+        eventSubject: cluster.eventSubject,
+        eventAction: cluster.eventAction,
+        eventObject: cluster.eventObject,
+      })),
+    });
+    await prisma.item.createMany({
+      data: pair.map((cluster) => ({
+        id: `${cluster.id}-item`,
+        sourceId: source.id,
+        clusterId: cluster.id,
+        originalUrl: `https://contradictory-merge.example.com/${cluster.id}`,
+        canonicalUrl: `https://contradictory-merge.example.com/${cluster.id}`,
+        urlHash: `${cluster.id}-hash`,
+        originalTitle: cluster.title,
+        publishedAt,
+        summaryText: cluster.summary,
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 84,
+        qualityRationale: "relevant",
+      })),
+    });
+    const assessClusterMergePairs = vi.fn(async (clustersJson: string) => {
+      const input = JSON.parse(clustersJson) as {
+        pairs: Array<{ left: { id: string }; right: { id: string } }>;
+      };
+      expect(input.pairs).toHaveLength(1);
+      return [{
+        leftClusterId: "contradictory-openai-ipo",
+        rightClusterId: "contradictory-manus-release",
+        verdict: "approved" as const,
+        confidence: 96,
+        reasonCode: "same_event",
+        reasonText: "这是两个不同的事件，应该拒绝合并。",
+      }];
+    });
+    const aiProvider = {
+      embedTexts: async (texts: string[]) => texts.map(() => [1, 0]),
+      assessClusterMergePairs,
+    } as unknown as AiProvider;
+
+    const result = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));
+
+    expect(assessClusterMergePairs).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      skipped: false,
+      mergedCount: 0,
+      decisionsApproved: 0,
+      decisionsAmbiguous: 1,
+    });
+    const decision = await prisma.clusterDecision.findFirstOrThrow({
+      where: {
+        kind: "cluster_pair",
+        OR: [
+          { leftClusterId: "contradictory-openai-ipo", rightClusterId: "contradictory-manus-release" },
+          { leftClusterId: "contradictory-manus-release", rightClusterId: "contradictory-openai-ipo" },
+        ],
+      },
+    });
+    expect(decision).toMatchObject({
+      verdict: "ambiguous",
+      reasonCode: "insufficient_evidence",
+    });
+    expect(decision.reasonText).toContain("原始 AI verdict=approved");
+    expect(decision.reasonText).toContain("这是两个不同的事件，应该拒绝合并。");
+    expect(result.pairDiagnostics[0]?.decision.consistency).toMatchObject({
+      status: "downgraded",
+      issueCodes: ["explicit_negative_reason", "unrelated_structured_entities"],
+      original: {
+        verdict: "approved",
+        reasonCode: "same_event",
+        reasonText: "这是两个不同的事件，应该拒绝合并。",
+      },
+      effective: { verdict: "ambiguous", reasonCode: "insufficient_evidence" },
+    });
+    await expect(prisma.contentCluster.count({ where: { id: { in: pair.map((cluster) => cluster.id) } } })).resolves.toBe(2);
   });
 
   it("persists AI ambiguous verdicts for manual review without merging", async () => {
@@ -1549,6 +1913,26 @@ describe("cluster assignment", () => {
       mergedCount: 0,
       failedGroups: 0,
     });
+    expect(result.pairDiagnostics).toHaveLength(1);
+    const pairDiagnostic = result.pairDiagnostics[0]!;
+    expect(pairDiagnostic).toMatchObject({
+      pairId: expect.any(String),
+      pairKey: expect.any(String),
+      selectionPaths: expect.arrayContaining(["live"]),
+      bm25Score: expect.any(Number),
+      signals: expect.objectContaining({ safety: expect.objectContaining({ rejected: false }) }),
+      decision: {
+        verdict: "ambiguous",
+        confidence: 62,
+        reasonCode: "insufficient_evidence",
+        reasonText: "主体和对象相关，但动作不同",
+      },
+    });
+    expect([pairDiagnostic.leftClusterId, pairDiagnostic.rightClusterId].sort()).toEqual([
+      "ambiguous-left-cluster",
+      "ambiguous-right-cluster",
+    ]);
+    expect(pairDiagnostic.recallChannels).toContain("bm25");
     await expect(
       prisma.clusterDecision.findFirst({
         where: { reasonCode: "insufficient_evidence" },
@@ -1670,6 +2054,10 @@ describe("cluster assignment", () => {
       },
     });
     const cooldownPass = await executeClusterMerge(aiProvider, now);
+    await prisma.clusterMergeCleanPairCandidate.update({
+      where: { id: storedPair.id },
+      data: { recallSource: null, bm25Score: null, vectorSimilarity: null },
+    });
     const secondPass = await executeClusterMerge(aiProvider, new Date("2026-04-21T17:00:00.000Z"));
     const thirdPass = await executeClusterMerge(aiProvider, new Date("2026-04-22T18:00:00.000Z"));
     const fourthPass = await executeClusterMerge(aiProvider, new Date("2026-04-24T18:00:00.000Z"));
@@ -1687,6 +2075,14 @@ describe("cluster assignment", () => {
     expect(secondPass).toMatchObject({
       dirtyPairs: 0,
       precomputedCleanPairsUsed: 1,
+    });
+    expect(secondPass.pairDiagnostics[0]).toMatchObject({
+      selectionPaths: ["precomputed_cache"],
+      recallChannels: ["unknown"],
+      cachePriorityScore: storedPair.score,
+      bm25Score: null,
+      vectorSimilarity: null,
+      decision: { verdict: "declined" },
     });
     expect(thirdPass).toMatchObject({
       dirtyPairs: 0,
@@ -1919,7 +2315,7 @@ describe("cluster assignment", () => {
       .not.toBe(itemClusters.find((item) => item.id === "C-item-0")?.clusterId);
   });
 
-  it("uses semantic recall when no rule-qualified cluster candidate exists", async () => {
+  it("uses vector recall when no BM25 sparse candidate exists", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Semantic Recall Feed",

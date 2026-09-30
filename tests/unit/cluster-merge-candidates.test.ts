@@ -5,14 +5,12 @@ import {
   buildClusterMergeCandidateInputHash,
   buildClusterMergeCandidateSelection,
   buildClusterMergeCandidates,
+  getClusterMergePairAuditSignals,
   buildClusterMergeInput,
   filterClusterMergeSourcesByAllowedEdges,
   hasClusterMergeCandidateEdge,
-  rankClusterCandidates,
   type ClusterMergeCandidate,
 } from "@/lib/clusters/helpers";
-import type { ClusterAssignmentCandidate } from "@/lib/clusters/repository";
-
 function createCandidate(overrides: Partial<ClusterMergeCandidate>): ClusterMergeCandidate {
   return {
     id: "cluster",
@@ -31,100 +29,7 @@ function createCandidate(overrides: Partial<ClusterMergeCandidate>): ClusterMerg
   };
 }
 
-function createAssignmentCandidate(overrides: Partial<ClusterAssignmentCandidate>): ClusterAssignmentCandidate {
-  return {
-    id: "assignment-candidate",
-    title: "聚合标题",
-    summary: "聚合摘要",
-    fingerprint: "fingerprint",
-    eventFingerprint: null,
-    eventBucket: null,
-    eventType: null,
-    eventSubject: null,
-    eventAction: null,
-    eventObject: null,
-    eventDate: null,
-    latestPublishedAt: new Date("2026-04-20T09:00:00.000Z"),
-    itemCount: 1,
-    ...overrides,
-  };
-}
-
 describe("buildClusterMergeCandidates", () => {
-  it("uses the same canonical date compatibility rule for initial assignment", () => {
-    const item = {
-      originalTitle: "Acme 发布 Widget",
-      translatedTitle: null,
-      summaryText: "Acme 发布 Widget。",
-      rssExcerpt: null,
-      fullText: null,
-      rssContent: null,
-      publishedAt: new Date("2026-04-10T10:00:00.000Z"),
-    } as unknown as Parameters<typeof rankClusterCandidates>[0];
-    const eventSignature = {
-      eventType: "launch" as const,
-      eventSubject: "Acme",
-      eventAction: "发布",
-      eventObject: "Widget",
-      eventDate: "2026年4月",
-    };
-
-    const compatible = rankClusterCandidates(item, eventSignature, [
-      createAssignmentCandidate({
-        id: "compatible",
-        eventType: "launch",
-        eventSubject: "Acme 公司",
-        eventAction: "正式发布",
-        eventObject: "新版 Widget 服务",
-        eventDate: "2026-04-10",
-      }),
-    ]);
-    const conflicting = rankClusterCandidates(item, { ...eventSignature, eventDate: "2026年5月" }, [
-      createAssignmentCandidate({
-        id: "conflicting",
-        eventType: "launch",
-        eventSubject: "Acme",
-        eventAction: "发布",
-        eventObject: "Widget",
-        eventDate: "2026-04-10",
-      }),
-    ]);
-
-    expect(compatible[0]?.strongMatch).toBe(true);
-    expect(conflicting[0]?.dateCompatible).toBe(false);
-    expect(conflicting[0]?.strongMatch).toBe(false);
-
-    const smallDateDrift = rankClusterCandidates(item, {
-      ...eventSignature,
-      eventDate: "2026-04-11",
-    }, [
-      createAssignmentCandidate({
-        id: "small-date-drift",
-        eventType: "launch",
-        eventSubject: "Acme",
-        eventAction: "发布",
-        eventObject: "Widget",
-        eventDate: "2026-04-10",
-      }),
-    ]);
-    expect(smallDateDrift[0]?.dateCompatible).toBe(true);
-    expect(smallDateDrift[0]?.strongMatch).toBe(false);
-
-    const objectConflict = rankClusterCandidates(item, eventSignature, [
-      createAssignmentCandidate({
-        id: "object-conflict",
-        title: "Acme 发布 Pricing",
-        summary: "Acme 发布 Pricing。",
-        eventType: "launch",
-        eventSubject: "Acme",
-        eventAction: "发布",
-        eventObject: "Pricing",
-        eventDate: "2026-04-10",
-      }),
-    ]);
-    expect(objectConflict[0]?.hardConflict).toBe(true);
-  });
-
   it("does not keep existing multi-item clusters when no merge anchor is found", () => {
     const candidates = buildClusterMergeCandidates([
       createCandidate({
@@ -220,6 +125,56 @@ describe("buildClusterMergeCandidates", () => {
     ]);
   });
 
+  it("keeps unrelated subjects out of sparse recall but admits dense top neighbors to AI", () => {
+    const left = createCandidate({
+      id: "openai-ipo-rumor",
+      title: "奥尔特曼回应 OpenAI IPO 传闻",
+      summary: "人工智能行业新闻关注资本市场、安全承诺与模型发展。",
+      fingerprint: "openai-ipo-rumor",
+      eventType: "announcement",
+      eventSubject: "OpenAI",
+      eventAction: "回应",
+      eventObject: "IPO 传闻",
+      eventDate: "2026-04-20",
+    });
+    const right = createCandidate({
+      id: "manus-2-release",
+      title: "Manus 2.0 发布 AI 全家桶",
+      summary: "人工智能行业新闻关注资本市场、AI 产品与模型发展。",
+      fingerprint: "manus-2-release",
+      eventType: "launch",
+      eventSubject: "Manus",
+      eventAction: "发布",
+      eventObject: "Manus 2.0 全家桶",
+      eventDate: "2026-04-20",
+      latestPublishedAt: new Date("2026-04-20T10:00:00.000Z"),
+    });
+    const signals = getClusterMergePairAuditSignals(left, right);
+    const sparseSelection = buildClusterMergeCandidateSelection([left, right], {
+      liveClusterIds: [left.id],
+    });
+    const denseSelection = buildClusterMergeCandidateSelection([left, right], {
+      liveClusterIds: [left.id],
+      vectorNeighbors: new Map([[left.id, [{ id: right.id, sim: 0.99 }]]]),
+    });
+
+    expect(signals).toMatchObject({
+      subject: { similar: false },
+      object: { similar: false },
+      textOverlap: { strong: true },
+      multiSubjectBridge: false,
+      safety: { rejected: true, rejectedReason: "unrelated_subjects" },
+    });
+    expect(sparseSelection.allowedPairs).toEqual([]);
+    expect(denseSelection.allowedPairs).toHaveLength(1);
+    expect(denseSelection.allowedPairs[0]).toMatchObject({
+      leftId: left.id,
+      rightId: right.id,
+      recallChannels: ["vector"],
+      vectorSimilarity: 0.99,
+    });
+  });
+
   it("emits only local related pair edges for AI merge input", () => {
     const selection = buildClusterMergeCandidateSelection([
       createCandidate({
@@ -293,7 +248,7 @@ describe("buildClusterMergeCandidates", () => {
     ).toEqual(["zibo-ai-comic-base"]);
   });
 
-  it("rejects multi-subject bridge pairs lacking a shared object anchor", () => {
+  it("BM25 recalls multi-subject bridge pairs that pass hard safety guards", () => {
     const candidates = buildClusterMergeCandidates([
       createCandidate({
         id: "openai-stargate-shift",
@@ -320,7 +275,80 @@ describe("buildClusterMergeCandidates", () => {
       }),
     ]);
 
-    expect(candidates).toEqual([]);
+    expect(candidates.map((candidate) => candidate.id).sort()).toEqual([
+      "openai-stargate-shift",
+      "oracle-stargate-infra",
+    ]);
+  });
+
+  it("orders live merge neighbors by BM25 shared-term relevance", () => {
+    const selection = buildClusterMergeCandidateSelection([
+      createCandidate({
+        id: "source",
+        title: "Orion quantum accelerator launch",
+        summary: "Orion accelerator release.",
+      }),
+      createCandidate({
+        id: "strong-neighbor",
+        title: "Orion quantum accelerator launches",
+        summary: "Orion accelerator launch.",
+      }),
+      createCandidate({
+        id: "weak-neighbor",
+        title: "Orion strategy update",
+        summary: "Orion company announcement.",
+      }),
+    ], { liveClusterIds: ["source"] });
+
+    expect(selection.allowedPairs[0]).toMatchObject({
+      leftId: "source",
+      rightId: "strong-neighbor",
+      selectionPaths: ["live"],
+      recallChannels: ["bm25"],
+      bm25Score: expect.any(Number),
+      vectorSimilarity: null,
+    });
+  });
+
+  it("allows vector recall through object conflict when subject signatures are missing", () => {
+    const left = createCandidate({
+      id: "vector-left",
+      title: "Orion announces a satellite launch",
+      summary: "A satellite enters orbit.",
+      eventType: "launch",
+      eventSubject: null,
+      eventAction: "launches",
+      eventObject: "satellite constellation",
+    });
+    const right = createCandidate({
+      id: "vector-right",
+      title: "Medical device receives approval",
+      summary: "A device passes regulatory review.",
+      eventType: "approval",
+      eventSubject: null,
+      eventAction: "receives approval",
+      eventObject: "medical device",
+    });
+    const selection = buildClusterMergeCandidateSelection([left, right], {
+      liveClusterIds: [left.id],
+      vectorNeighbors: new Map([[left.id, [{ id: right.id, sim: 0.84 }]]]),
+    });
+
+    expect(selection.allowedPairs[0]).toMatchObject({
+      leftId: left.id,
+      rightId: right.id,
+      selectionPaths: ["live"],
+      recallChannels: ["vector"],
+      bm25Score: 0,
+      vectorSimilarity: 0.84,
+    });
+
+    const signals = getClusterMergePairAuditSignals(left, right);
+    expect(signals).toMatchObject({
+      safety: { rejected: true, rejectedReason: "object_conflict" },
+      object: { similar: false, strong: false },
+      dateConflict: false,
+    });
   });
 
   it("accepts equivalent and lower-precision dates after canonicalization", () => {
@@ -752,7 +780,7 @@ describe("buildClusterMergeCandidates", () => {
     expect(candidates).toHaveLength(CLUSTER_MERGE_CANDIDATE_LIMIT);
   });
 
-  it("does not hard-reject a date-conflicted same-signature pair; it scores lower", () => {
+  it("does not hard-reject a date-conflicted same-signature pair", () => {
     const fp = "date-conflict-fp";
     const april = createCandidate({
       id: "release-april",
@@ -788,7 +816,7 @@ describe("buildClusterMergeCandidates", () => {
     expect(result.allowedPairs).toHaveLength(1);
     // A same-signature pair without the shared-date bonus still clears the
     // strong-match floor granted by the event fingerprint path.
-    expect(result.allowedPairs[0]?.score).toBeGreaterThanOrEqual(95);
+    expect(result.allowedPairs[0]?.score).toBeGreaterThan(0);
   });
 
   it("force-pairs clusters sharing the same event fingerprint (fragmentation fix)", () => {
@@ -845,6 +873,6 @@ describe("buildClusterMergeCandidates", () => {
     // Same-signature fragments must be paired even though hashes are clean.
     expect(selection.candidates.map((c) => c.id).sort()).toEqual(["frag-a", "frag-b"]);
     expect(selection.allowedPairs).toHaveLength(1);
-    expect(selection.allowedPairs[0]?.score).toBeGreaterThanOrEqual(95);
+    expect(selection.allowedPairs[0]?.score).toBeGreaterThan(0);
   });
 });

@@ -1,12 +1,48 @@
+import crypto from "node:crypto";
 import { z } from "zod";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
-import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
-import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
-import type { ClusterMergeDecision } from "@/lib/ai/provider-types";
+import {
+  CLUSTER_MERGE_REASON_CODES,
+  getJsonParseErrorMessage,
+  InvalidJsonModelResponseError,
+} from "@/lib/ai/provider-types";
+import type { ClusterMergeDecision, ClusterMergeDecisionVerdict, ClusterMergeReasonCode } from "@/lib/ai/provider-types";
 
 export const CLUSTER_MATCH_SCHEMA = z.object({
   clusterId: z.string().nullable(),
 });
+
+export const CLUSTER_MERGE_DECISIONS_SCHEMA = z.object({
+  decisions: z.array(z.object({
+    pair_id: z.string().min(1),
+    verdict: z.enum(["approved", "declined", "ambiguous"]),
+    confidence: z.number().min(0).max(100),
+    reasonCode: z.enum(CLUSTER_MERGE_REASON_CODES),
+    reasonText: z.string().trim().min(1),
+  }).strict()),
+}).strict();
+
+export function makeClusterMergePairId(leftClusterId: string, rightClusterId: string) {
+  const [left, right] = [leftClusterId, rightClusterId].sort();
+  const digest = crypto.createHash("sha256").update(`${left}\0${right}`).digest("hex");
+  return `merge_pair_${digest}`;
+}
+
+export function splitClusterMergeInputBatches(clustersJson: string, batchSize: number) {
+  const parsed = JSON.parse(clustersJson) as Record<string, unknown>;
+  if (!Array.isArray(parsed.pairs)) {
+    throw new InvalidJsonModelResponseError("聚合合并输入 pairs 必须是数组。");
+  }
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new Error("聚合合并 AI batchSize 必须是正整数。");
+  }
+
+  const batches: string[] = [];
+  for (let index = 0; index < parsed.pairs.length; index += batchSize) {
+    batches.push(JSON.stringify({ ...parsed, pairs: parsed.pairs.slice(index, index + batchSize) }));
+  }
+  return batches;
+}
 
 export function compactClusterMergeInputForModel(clustersJson: string) {
   const parsed = JSON.parse(clustersJson) as Record<string, unknown>;
@@ -14,6 +50,11 @@ export function compactClusterMergeInputForModel(clustersJson: string) {
     ? parsed.pairs.map((pair) => {
         if (!pair || typeof pair !== "object" || Array.isArray(pair)) return pair;
         const inputPair = pair as Record<string, unknown>;
+        const left = inputPair.left as Record<string, unknown> | null;
+        const right = inputPair.right as Record<string, unknown> | null;
+        if (!left || typeof left.id !== "string" || !right || typeof right.id !== "string") {
+          throw new InvalidJsonModelResponseError("聚合合并 Pair 缺少有效的 left/right cluster ID。");
+        }
         const stripClusterId = (cluster: unknown) => {
           if (!cluster || typeof cluster !== "object" || Array.isArray(cluster)) return cluster;
           const withoutId = { ...(cluster as Record<string, unknown>) };
@@ -22,8 +63,9 @@ export function compactClusterMergeInputForModel(clustersJson: string) {
         };
         return {
           ...inputPair,
-          ...(Object.hasOwn(inputPair, "left") ? { left: stripClusterId(inputPair.left) } : {}),
-          ...(Object.hasOwn(inputPair, "right") ? { right: stripClusterId(inputPair.right) } : {}),
+          pair_id: makeClusterMergePairId(left.id, right.id),
+          left: stripClusterId(left),
+          right: stripClusterId(right),
         };
       })
     : parsed.pairs;
@@ -59,8 +101,8 @@ export function parseClusterSummaryOutput(rawContent: string): string {
   return JSON.stringify({ title, summary });
 }
 
-type ClusterMergeInputMetadata = {
-  pairs: Array<{ leftClusterId: string; rightClusterId: string }>;
+export type ClusterMergeInputMetadata = {
+  pairs: Array<{ pairId: string; leftClusterId: string; rightClusterId: string }>;
 };
 
 function buildClusterMergeGroupsFromApprovedEdges(
@@ -139,77 +181,111 @@ export function buildClusterMergeGroupsFromDecisions(
 
 export function parseClusterMergeInputMetadata(clustersJson: string): ClusterMergeInputMetadata {
   const parsed = JSON.parse(clustersJson) as unknown;
-  const pairs: Array<{ leftClusterId: string; rightClusterId: string }> = [];
-
   if (!parsed || typeof parsed !== "object" || !("pairs" in parsed) || !Array.isArray(parsed.pairs)) {
-    return { pairs };
+    throw new InvalidJsonModelResponseError("聚合合并输入 pairs 必须是数组。");
   }
 
+  const pairs: ClusterMergeInputMetadata["pairs"] = [];
+  const seenPairIds = new Set<string>();
   for (const pair of parsed.pairs) {
-    if (!pair || typeof pair !== "object") {
-      continue;
-    }
-
-    const left = "left" in pair ? pair.left : null;
-    const right = "right" in pair ? pair.right : null;
+    const left = pair && typeof pair === "object" && "left" in pair ? pair.left : null;
+    const right = pair && typeof pair === "object" && "right" in pair ? pair.right : null;
     const leftId = left && typeof left === "object" && "id" in left && typeof left.id === "string" ? left.id : null;
     const rightId = right && typeof right === "object" && "id" in right && typeof right.id === "string" ? right.id : null;
-
-    if (leftId && rightId && leftId !== rightId) {
-      pairs.push({ leftClusterId: leftId, rightClusterId: rightId });
+    if (!leftId || !rightId || leftId === rightId) {
+      throw new InvalidJsonModelResponseError("聚合合并输入 Pair 缺少有效的 left/right cluster ID。");
     }
+
+    const pairId = makeClusterMergePairId(leftId, rightId);
+    if (seenPairIds.has(pairId)) {
+      throw new InvalidJsonModelResponseError(`聚合合并输入存在重复 pair_id：${pairId}`);
+    }
+    seenPairIds.add(pairId);
+    pairs.push({ pairId, leftClusterId: leftId, rightClusterId: rightId });
   }
 
   return { pairs };
 }
 
-export function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeInputMetadata) {
+export function parseClusterMergeDecisions(rawContent: string, metadata: ClusterMergeInputMetadata): ClusterMergeDecision[] {
   const normalized = normalizeModelResponseText(rawContent);
-  let parsed: { verdicts?: unknown };
+  let parsed: unknown;
 
   try {
-    parsed = JSON.parse(normalized) as { verdicts?: unknown };
+    parsed = JSON.parse(normalized) as unknown;
   } catch (error) {
     throw new InvalidJsonModelResponseError(
-      `Invalid cluster merge verdict JSON: ${getJsonParseErrorMessage(error)}`,
+      `Invalid cluster merge decision JSON: ${getJsonParseErrorMessage(error)}`,
     );
   }
 
-  // verdicts 缺失或不是数组属于整体协议失败，交由上层 JSON 重试。
-  const verdicts = parsed.verdicts;
-  if (!Array.isArray(verdicts)) {
-    throw new InvalidJsonModelResponseError("聚合合并 verdicts 必须是数组。");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new InvalidJsonModelResponseError("聚合合并 decisions 必须是对象。");
   }
-
+  const schemaResult = CLUSTER_MERGE_DECISIONS_SCHEMA.safeParse(parsed);
+  if (!schemaResult.success) {
+    throw new InvalidJsonModelResponseError(`聚合合并 decisions 格式无效：${schemaResult.error.message}`);
+  }
+  const outputDecisions = schemaResult.data.decisions;
   if (metadata.pairs.length === 0) {
+    if (outputDecisions.length !== 0) {
+      throw new InvalidJsonModelResponseError("空聚合合并输入不得返回 decisions。");
+    }
     return [];
   }
+  if (outputDecisions.length !== metadata.pairs.length) {
+    throw new InvalidJsonModelResponseError("聚合合并 decisions 数量必须与输入 pair 数量完全一致。");
+  }
 
-  // 数量不齐或个别判定非法时逐 pair 抢救：只保留合法判定，缺失/非法对不做账本
-  // 记录、交由下一轮重新评估，不阻断其余 pair 的合并。
-  const decisions = [];
-  for (let index = 0; index < Math.min(metadata.pairs.length, verdicts.length); index += 1) {
-    const pair = metadata.pairs[index]!;
-    const verdict = verdicts[index];
-    if (verdict !== "approved" && verdict !== "declined" && verdict !== "ambiguous") {
-      continue;
+  const expectedById = new Map(metadata.pairs.map((pair) => [pair.pairId, pair]));
+  const decisionsById = new Map<string, ClusterMergeDecision>();
+  for (const rawDecision of outputDecisions) {
+    if (!rawDecision || typeof rawDecision !== "object" || Array.isArray(rawDecision)) {
+      throw new InvalidJsonModelResponseError("聚合合并 decision 必须是对象。");
+    }
+    const decision = rawDecision as Record<string, unknown>;
+    if (typeof decision.pair_id !== "string" || !expectedById.has(decision.pair_id)) {
+      throw new InvalidJsonModelResponseError("聚合合并 decision 包含未知或缺失的 pair_id。");
+    }
+    if (decisionsById.has(decision.pair_id)) {
+      throw new InvalidJsonModelResponseError(`聚合合并 decision 出现重复 pair_id：${decision.pair_id}`);
+    }
+    if (decision.verdict !== "approved" && decision.verdict !== "declined" && decision.verdict !== "ambiguous") {
+      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 verdict 无效。`);
+    }
+    if (typeof decision.confidence !== "number" || decision.confidence < 0 || decision.confidence > 100) {
+      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 confidence 必须在 0 到 100 之间。`);
+    }
+    if (typeof decision.reasonCode !== "string" || !CLUSTER_MERGE_REASON_CODES.includes(decision.reasonCode as ClusterMergeReasonCode)) {
+      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 reasonCode 无效。`);
+    }
+    const reasonText = typeof decision.reasonText === "string" ? decision.reasonText.trim() : "";
+    if (!reasonText) {
+      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 缺少 reasonText。`);
+    }
+    if (
+      (decision.verdict === "approved" && decision.reasonCode !== "same_event") ||
+      (decision.verdict === "ambiguous" && decision.reasonCode !== "insufficient_evidence") ||
+      (decision.verdict === "declined" && (decision.reasonCode === "same_event" || decision.reasonCode === "insufficient_evidence"))
+    ) {
+      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 verdict 与 reasonCode 不匹配。`);
     }
 
-    decisions.push({
+    const pair = expectedById.get(decision.pair_id)!;
+    decisionsById.set(decision.pair_id, {
       leftClusterId: pair.leftClusterId,
       rightClusterId: pair.rightClusterId,
-      verdict,
-      confidence: null,
-      reasonCode: null,
-      reasonText: null,
+      verdict: decision.verdict as ClusterMergeDecisionVerdict,
+      confidence: decision.confidence,
+      reasonCode: decision.reasonCode as ClusterMergeReasonCode,
+      reasonText,
     });
   }
 
-  if (decisions.length === 0 && metadata.pairs.length > 0) {
-    throw new InvalidJsonModelResponseError("聚合合并 verdicts 不含任何合法判定。");
+  if (decisionsById.size !== expectedById.size) {
+    throw new InvalidJsonModelResponseError("聚合合并 decisions 缺少输入 pair_id。");
   }
-
-  return decisions;
+  return metadata.pairs.map((pair) => decisionsById.get(pair.pairId)!);
 }
 
 export function parseClusterMatchCandidateId(rawContent: string, candidateIds: string[]): string | null {

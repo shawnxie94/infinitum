@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAiProvider } from "@/lib/ai/provider-next";
+import { makeClusterMergePairId } from "@/lib/ai/protocols/cluster";
 import { createAiSdkTransport, normalizeUsage } from "@infinitum/ai/provider/transports";
 import { ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE } from "@/config/prompts";
 import {
@@ -236,9 +237,12 @@ describe("ai provider quality rubric integration", () => {
     expect(request.max_tokens).toBe(8000);
   });
 
-  it("parses compact cluster merge verdicts by input pair order", async () => {
+  it("parses compact cluster merge decisions by pair ID", async () => {
     const create = vi.fn().mockResolvedValue({
-      choices: [{ message: { content: JSON.stringify({ verdicts: ["approved", "ambiguous"] }) } }],
+      choices: [{ message: { content: JSON.stringify({ decisions: [
+        { pair_id: makeClusterMergePairId("left-2", "right-2"), verdict: "ambiguous", confidence: 70, reasonCode: "insufficient_evidence", reasonText: "证据不足。" },
+        { pair_id: makeClusterMergePairId("left-1", "right-1"), verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "主体、对象一致。" },
+      ] }) } }],
     });
     const provider = createAiProvider(
       modelApiConfig,
@@ -258,52 +262,42 @@ describe("ai provider quality rubric integration", () => {
         leftClusterId: "left-1",
         rightClusterId: "right-1",
         verdict: "approved",
-        confidence: null,
-        reasonCode: null,
-        reasonText: null,
+        confidence: 95,
+        reasonCode: "same_event",
+        reasonText: "主体、对象一致。"
       },
       {
         leftClusterId: "left-2",
         rightClusterId: "right-2",
         verdict: "ambiguous",
-        confidence: null,
-        reasonCode: null,
-        reasonText: null,
+        confidence: 70,
+        reasonCode: "insufficient_evidence",
+        reasonText: "证据不足。"
       },
     ]);
     const request = create.mock.calls[0]?.[0] as {
       messages?: Array<{ role: string; content: string }>;
     };
     const systemPrompt = request.messages?.find((message) => message.role === "system")?.content ?? "";
-    expect(systemPrompt).toContain('"verdicts"');
-    expect(systemPrompt).not.toContain("reasonText");
+    expect(systemPrompt).toContain('"decisions"');
+    expect(systemPrompt).toContain("pair_id");
+    expect(systemPrompt).toContain("reasonText");
   });
 
-  it("salvages aligned prefix when merge verdict count is less than input pairs", async () => {
-    const create = mockModelResponse({ verdicts: ["approved"] });
+  it("rejects incomplete pair-ID response sets", async () => {
+    const create = mockModelResponse({ decisions: [{ pair_id: makeClusterMergePairId("left-1", "right-1"), verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件。" }] });
     const provider = createAiProvider(
       modelApiConfig,
       undefined,
       { chat: { completions: { create } } },
     );
 
-    const decisions = await provider.assessClusterMergePairs(JSON.stringify({
+    await expect(provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         { left: { id: "left-1" }, right: { id: "right-1" }, score: 90 },
         { left: { id: "left-2" }, right: { id: "right-2" }, score: 70 },
       ],
-    }));
-
-    expect(decisions).toEqual([
-      {
-        leftClusterId: "left-1",
-        rightClusterId: "right-1",
-        verdict: "approved",
-        confidence: null,
-        reasonCode: null,
-        reasonText: null,
-      },
-    ]);
+    }))).rejects.toThrow(/数量必须/);
   });
 
   it("locks the entity alias check to temperature 0 with a bounded token budget", async () => {

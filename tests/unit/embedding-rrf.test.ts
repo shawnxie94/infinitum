@@ -42,26 +42,25 @@ function buildScored(
     dateCompatible: true,
     preciseDateDrift: false,
     hardConflict: false,
-    strongMatch: false,
     ...overrides,
   };
 }
 
 describe("fuseOrdersByRrf", () => {
   it("merges both lists with reciprocal rank fusion", () => {
-    // rule: a(1/61) b(1/62)；vec: b(1/61) c(1/62)
+    // sparse: a(1/61) b(1/62)；vec: b(1/61) c(1/62)
     // b = 1/62 + 1/61 ≈ 0.03225 > a = c ≈ 0.01639
     const fused = fuseOrdersByRrf(["a", "b"], ["b", "c"], 60);
     expect(fused[0]).toBe("b");
     expect(fused.slice(1).sort()).toEqual(["a", "c"]);
   });
 
-  it("keeps rule leader ahead when vec list is empty", () => {
+  it("keeps sparse order when the vector list is empty", () => {
     expect(fuseOrdersByRrf(["a", "b", "c"], [], 60)).toEqual(["a", "b", "c"]);
   });
 
-  it("breaks score ties by rule position", () => {
-    // vec#1 与 rule#1 同分（1/61），并列时 rule 优先
+  it("breaks score ties by sparse position", () => {
+    // vec#1 与 sparse#1 同分（1/61），并列时保留 sparse 优先
     const fused = fuseOrdersByRrf(["a", "b"], ["x", "y"], 60);
     expect(fused).toEqual(["a", "x", "b", "y"]);
   });
@@ -139,7 +138,7 @@ describe("resolveMergePairAdmission", () => {
     expect(admission).toEqual({ admitted: true, priorityScore: 80, source: "vector" });
   });
 
-  it("vetoes object_conflict pairs below the override similarity", () => {
+  it("admits object_conflict pairs when vector similarity reaches its own threshold", () => {
     const admission = resolveMergePairAdmission(
       { rejected: true, rejectedReason: "object_conflict", score: 0 },
       0.85,
@@ -147,10 +146,21 @@ describe("resolveMergePairAdmission", () => {
       VEC,
       OVERRIDE,
     );
-    expect(admission.admitted).toBe(false);
+    expect(admission).toEqual({ admitted: true, priorityScore: 85, source: "vector" });
   });
 
-  it("treats very-high-similarity object_conflict as extraction noise and admits", () => {
+  it("admits unrelated structured subjects through the independent vector lane", () => {
+    const admission = resolveMergePairAdmission(
+      { rejected: true, rejectedReason: "unrelated_subjects", score: 0 },
+      1,
+      GRAY,
+      VEC,
+      OVERRIDE,
+    );
+    expect(admission).toEqual({ admitted: true, priorityScore: 100, source: "vector" });
+  });
+
+  it("admits high-similarity object_conflict pairs through the vector lane", () => {
     const admission = resolveMergePairAdmission(
       { rejected: true, rejectedReason: "object_conflict", score: 0 },
       0.95,
@@ -175,78 +185,74 @@ describe("selectAiCandidatesWithEmbeddingRecall", () => {
   const makeEntry = (id: string, score: number, flags: Partial<ScoredClusterCandidate> = {}) =>
     buildScored(buildCandidate({ id }), { score, ...flags });
 
-  it("promotes a vec-strong candidate that fails the rule score gate", async () => {
-    const ruleTop = makeEntry("rule-top", 90);
-    const vecOnly = makeEntry("vec-only", 10); // 低于 35，规则不可见
-    const noise = makeEntry("noise-1", 60);
-    const ruleRanked = [ruleTop, noise, vecOnly];
-    const ruleQualified = [ruleTop, noise];
-
-    const embedTexts = async (texts: string[]) => {
-      // texts = [item, rule-top, noise-1, vec-only]：item 与 vec-only 语义相同
-      return texts.map((_, index) => (index === 0 || index === 3 ? [1, 0] : [0, 1]));
-    };
+  it("keeps zero-overlap candidates available to the independent vector lane", async () => {
+    const sparseTop = makeEntry("sparse-top", 900);
+    const vectorOnly = makeEntry("vector-only", 0);
+    const eligibleCandidates = [sparseTop, vectorOnly];
+    const sparseCandidates = [sparseTop];
+    const embedTexts = async (texts: string[]) =>
+      texts.map((_, index) => (index === 0 || index === 2 ? [1, 0] : [0, 1]));
 
     const slice = await selectAiCandidatesWithEmbeddingRecall({
       embedTexts,
       itemTitle: "item",
-      itemSummary: "vec-only",
-      ruleRanked,
-      ruleQualified,
+      itemSummary: "vector-only",
+      eligibleCandidates,
+      sparseCandidates,
       rrfK: 60,
       limit: 10,
     });
 
-    expect(slice[0]!.candidate.id).toBe("rule-top"); // 规则首位钉住
-    expect(slice.map((entry) => entry.candidate.id)).toContain("vec-only");
+    expect(slice.map((entry) => entry.candidate.id)).toContain("vector-only");
   });
 
-  it("falls back to rule slice when embeddings are unavailable", async () => {
-    const ruleTop = makeEntry("rule-top", 90);
-    const vecOnly = makeEntry("vec-only", 10);
+  it("falls back to positive BM25 sparse matches when embeddings are unavailable", async () => {
+    const sparseTop = makeEntry("sparse-top", 900);
+    const zeroOverlap = makeEntry("zero-overlap", 0);
     const embedTexts = async () => null;
 
     const slice = await selectAiCandidatesWithEmbeddingRecall({
       embedTexts,
       itemTitle: "item",
-      itemSummary: "vec-only",
-      ruleRanked: [ruleTop, vecOnly],
-      ruleQualified: [ruleTop],
+      itemSummary: "zero-overlap",
+      eligibleCandidates: [sparseTop, zeroOverlap],
+      sparseCandidates: [sparseTop],
       rrfK: 60,
       limit: 10,
     });
 
-    expect(slice.map((entry) => entry.candidate.id)).toEqual(["rule-top"]);
+    expect(slice.map((entry) => entry.candidate.id)).toEqual(["sparse-top"]);
   });
 
-  it("never admits hard-conflict candidates even when vec-similar", async () => {
-    const conflict = makeEntry("conflict", 10, { hardConflict: true, dateCompatible: false });
-    const ruleTop = makeEntry("rule-top", 90);
+  it("never sends date-incompatible or hard-conflict candidates through vector recall", async () => {
+    const conflict = makeEntry("conflict", 0, { hardConflict: true });
+    const dateMismatch = makeEntry("date-mismatch", 0, { dateCompatible: false });
+    const sparseTop = makeEntry("sparse-top", 900);
     const embedTexts = async (texts: string[]) => texts.map(() => [1, 0]);
 
     const slice = await selectAiCandidatesWithEmbeddingRecall({
       embedTexts,
       itemTitle: "item",
       itemSummary: "conflict",
-      ruleRanked: [ruleTop, conflict],
-      ruleQualified: [ruleTop],
+      eligibleCandidates: [sparseTop, conflict, dateMismatch],
+      sparseCandidates: [sparseTop],
       rrfK: 60,
       limit: 10,
     });
 
-    expect(slice.map((entry) => entry.candidate.id)).toEqual(["rule-top"]);
+    expect(slice.map((entry) => entry.candidate.id)).toEqual(["sparse-top"]);
   });
 
-  it("caps the slice at limit and pins the rule leader", async () => {
-    const entries = Array.from({ length: 20 }, (_, index) => makeEntry(`c${String(index).padStart(2, "0")}`, 100 - index));
+  it("fuses sparse and vector orders before applying the candidate limit", async () => {
+    const entries = Array.from({ length: 20 }, (_, index) => makeEntry(`c${String(index).padStart(2, "0")}`, 2_000 - index));
     const embedTexts = async (texts: string[]) => texts.map((_, index) => (index === 0 ? [0, 1] : [Math.exp(-index), 1]));
 
     const slice = await selectAiCandidatesWithEmbeddingRecall({
       embedTexts,
       itemTitle: "item",
       itemSummary: "c00",
-      ruleRanked: entries,
-      ruleQualified: entries,
+      eligibleCandidates: entries,
+      sparseCandidates: entries,
       rrfK: 60,
       limit: 5,
     });
@@ -255,8 +261,8 @@ describe("selectAiCandidatesWithEmbeddingRecall", () => {
     expect(slice[0]!.candidate.id).toBe("c00");
   });
 
-  it("returns rule slice when every candidate is vetoed", async () => {
-    const conflict = makeEntry("conflict", 90, { hardConflict: true, dateCompatible: false });
+  it("returns no candidates when all candidates fail the safety guards", async () => {
+    const conflict = makeEntry("conflict", 0, { hardConflict: true, dateCompatible: false });
     const embedTexts = async () => {
       throw new Error("should not be called");
     };
@@ -265,8 +271,8 @@ describe("selectAiCandidatesWithEmbeddingRecall", () => {
       embedTexts,
       itemTitle: "item",
       itemSummary: "conflict",
-      ruleRanked: [conflict],
-      ruleQualified: [],
+      eligibleCandidates: [conflict],
+      sparseCandidates: [],
       rrfK: 60,
       limit: 10,
     });

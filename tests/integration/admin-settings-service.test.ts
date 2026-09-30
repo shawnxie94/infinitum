@@ -237,8 +237,8 @@ describe("admin settings service", () => {
       where: { id: `prompt-previous-cluster-merge-${variant}` },
     });
     expect(upgraded.systemPrompt).toBe(DEFAULT_CLUSTER_MERGE_PROMPT);
-    expect(upgraded.systemPrompt).toContain('"verdicts"');
-    expect(upgraded.systemPrompt).not.toContain('"decisions"');
+    expect(upgraded.systemPrompt).toContain('"decisions"');
+    expect(upgraded.systemPrompt).not.toContain('"verdicts"');
 
     await ensureRuntimeConfigSeeded();
     const afterSecondRun = await prisma.promptConfig.findUniqueOrThrow({

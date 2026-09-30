@@ -552,6 +552,9 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("model_api_configs", "dimensions", "INTEGER");
   addColumnIfMissing("model_api_configs", "batchSize", "INTEGER");
   addColumnIfMissing("model_api_configs", "timeoutMs", "INTEGER");
+  addColumnIfMissing("cluster_merge_clean_pair_candidates", "recallSource", "TEXT");
+  addColumnIfMissing("cluster_merge_clean_pair_candidates", "bm25Score", "INTEGER");
+  addColumnIfMissing("cluster_merge_clean_pair_candidates", "vectorSimilarity", "REAL");
   runSqlite([dbPath], {
     input: 'CREATE INDEX IF NOT EXISTS "daily_reports_currentRevisionId_idx" ON "daily_reports"("currentRevisionId");\n',
   });

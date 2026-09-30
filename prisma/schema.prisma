@@ -339,6 +339,9 @@ model ClusterMergeCleanPairCandidate {
   leftInputHash   String
   rightInputHash  String
   score           Int
+  recallSource    String?
+  bm25Score       Int?
+  vectorSimilarity Float?
   attemptCount    Int            @default(0)
   lastEvaluatedAt DateTime?
   expiresAt       DateTime

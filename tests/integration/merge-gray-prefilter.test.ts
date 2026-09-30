@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { AiProvider } from "@/lib/ai/provider-types";
 import { buildClusterMergeCandidateInputHash, scoreClusterMergeCandidatePair } from "@/lib/clusters/helpers";
 import type { EmbedTextsFn } from "@/lib/ai/embeddings";
-import { precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
+import { executeClusterMerge, precomputeClusterMergeCleanPairs } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
 
 const NOW = new Date("2026-09-19T08:00:00.000Z");
@@ -86,18 +87,17 @@ async function seedClusterWithItem(fixture: FixtureCluster) {
 const BLIND_PAIR: [FixtureCluster, FixtureCluster] = [
   {
     id: "blind-a",
-    title: "OpenAI 宣布重组核心领导团队并成立四个全新研究部门",
-    summary: "山姆·奥尔特曼在一封全员信中公布了新的组织架构。",
+    title: "OpenAI reorganizes internal engineering units",
+    summary: "Sam Altman sends a private memo to staff.",
   },
   {
     id: "blind-b",
-    title: "萨姆·奥尔特曼重塑公司治理架构，研究板块拆分为四个部门",
-    summary: "这家 ChatGPT 开发商本周确认了内部组织的一系列调整。",
+    title: "萨姆·奥尔特曼调整安全研究团队部署",
+    summary: "该企业重新安排实验室人员组合。",
   },
 ];
 
-// 实体冲突的一对：对象零共享词（无关系词桥接），确保规则 early-reject object_conflict；
-// 向量再相似也不得提名
+// 主体与对象均不相关的一对：词面/向量召回都不能绕过主体关系硬门。
 const CONFLICT_PAIR: [FixtureCluster, FixtureCluster] = [
   {
     id: "conflict-a",
@@ -169,10 +169,13 @@ function scoreRawPair(left: NonNullable<Awaited<ReturnType<typeof prisma.content
 }
 
 afterEach(async () => {
+  await prisma.clusterDecision.deleteMany({ where: { kind: "cluster_pair" } });
+  await prisma.entityAlias.deleteMany({ where: { aliasNormalized: "starlight" } });
+  await prisma.entity.deleteMany({ where: { normalized: "nova systems" } });
   await prisma.clusterMergeCleanPairCandidate.deleteMany({});
   await prisma.item.deleteMany({ where: { source: { rssUrl: { contains: "merge-gray.example.com" } } } });
   await prisma.source.deleteMany({ where: { rssUrl: { contains: "merge-gray.example.com" } } });
-  await prisma.contentCluster.deleteMany({ where: { id: { in: ["blind-a", "blind-b", "conflict-a", "conflict-b"] } } });
+  await prisma.contentCluster.deleteMany({ where: { id: { in: ["blind-a", "blind-b", "conflict-a", "conflict-b", "bm25-a", "bm25-b", "both-a", "both-b", "alias-a", "alias-b"] } } });
 });
 
 describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
@@ -194,7 +197,104 @@ describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
       where: { leftClusterId: "blind-a", rightClusterId: "blind-b" },
     });
     expect(stored).not.toBeNull();
-    expect(stored!.score).toBe(100); // sim=1 → round(100)
+    expect(stored!.score).toBe(10_000_000); // vector priority × BM25 fixed-point scale
+    expect(stored!.recallSource).toBe("vector");
+    expect(stored!.bm25Score).toBe(0);
+    expect(stored!.vectorSimilarity).toBeCloseTo(1);
+  });
+
+  it("canonicalizes configured subject aliases before precompute admission", async () => {
+    const entity = await prisma.entity.create({
+      data: { name: "Nova Systems", normalized: "nova systems" },
+    });
+    await prisma.entityAlias.create({
+      data: {
+        entityId: entity.id,
+        aliasName: "Starlight",
+        aliasNormalized: "starlight",
+        createdBy: "test",
+      },
+    });
+    await seedClusterWithItem({
+      id: "alias-a",
+      title: "Nova Systems launches Atlas 4 AI model",
+      summary: "Nova Systems announces an Atlas 4 AI model launch with enterprise features.",
+      eventType: "launch",
+      eventSubject: "Nova Systems",
+      eventAction: "launches",
+    });
+    await seedClusterWithItem({
+      id: "alias-b",
+      title: "Starlight launches Atlas 4 AI model",
+      summary: "Starlight announces an Atlas 4 AI model launch with enterprise features.",
+      eventType: "launch",
+      eventSubject: "Starlight",
+      eventAction: "launches",
+    });
+
+    const result = await precomputeClusterMergeCleanPairs(NOW, { embedTexts: async () => null });
+    const stored = await prisma.clusterMergeCleanPairCandidate.findFirst({
+      where: { leftClusterId: "alias-a", rightClusterId: "alias-b" },
+    });
+
+    expect(result.storedPairs).toBeGreaterThan(0);
+    expect(stored).toMatchObject({ recallSource: "bm25" });
+  });
+
+  it("persists BM25-only and combined-channel provenance", async () => {
+    await seedClusterWithItem({
+      id: "bm25-a",
+      title: "Acme launches Orion satellite",
+      summary: "Acme launches the Orion satellite.",
+      eventType: "launch",
+      eventSubject: "Acme",
+      eventAction: "launches",
+      eventObject: "Orion satellite",
+    });
+    await seedClusterWithItem({
+      id: "bm25-b",
+      title: "Acme launches Orion satellite update",
+      summary: "Acme launches an update for the Orion satellite.",
+      eventType: "launch",
+      eventSubject: "Acme",
+      eventAction: "launches",
+      eventObject: "Orion satellite",
+    });
+    await precomputeClusterMergeCleanPairs(NOW, { embedTexts: async () => null });
+    const bm25Stored = await prisma.clusterMergeCleanPairCandidate.findFirstOrThrow({
+      where: { leftClusterId: "bm25-a", rightClusterId: "bm25-b" },
+    });
+    expect(bm25Stored.recallSource).toBe("bm25");
+    expect(bm25Stored.bm25Score).toBeGreaterThan(0);
+    expect(bm25Stored.vectorSimilarity).toBeNull();
+
+    await seedClusterWithItem({
+      id: "both-a",
+      title: "Acme launches Orion satellite",
+      summary: "Acme launches the Orion satellite.",
+      eventType: "launch",
+      eventSubject: "Acme",
+      eventAction: "launches",
+      eventObject: "Orion satellite",
+    });
+    await seedClusterWithItem({
+      id: "both-b",
+      title: "Acme launches Orion satellite update",
+      summary: "Acme launches an update for the Orion satellite.",
+      eventType: "launch",
+      eventSubject: "Acme",
+      eventAction: "launches",
+      eventObject: "Orion satellite",
+    });
+    await precomputeClusterMergeCleanPairs(NOW, {
+      embedTexts: async (texts) => texts.map(() => [1, 0]),
+    });
+    const bothStored = await prisma.clusterMergeCleanPairCandidate.findFirstOrThrow({
+      where: { leftClusterId: "both-a", rightClusterId: "both-b" },
+    });
+    expect(bothStored.recallSource).toBe("bm25+vector");
+    expect(bothStored.bm25Score).toBeGreaterThan(0);
+    expect(bothStored.vectorSimilarity).toBeCloseTo(1);
   });
 
   it("falls back to pure rule behavior when embeddings are unavailable", async () => {
@@ -213,15 +313,15 @@ describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
     expect(stored).toBeNull();
   });
 
-  it("vetoes object-conflict pairs below the override similarity", async () => {
+  it("rejects unrelated structured subjects below the vector threshold", async () => {
     await seedClusterWithItem(CONFLICT_PAIR[0]);
     await seedClusterWithItem(CONFLICT_PAIR[1]);
     const left = await prisma.contentCluster.findUnique({ where: { id: CONFLICT_PAIR[0].id } });
     const right = await prisma.contentCluster.findUnique({ where: { id: CONFLICT_PAIR[1].id } });
-    // 前置条件：规则确实以 object_conflict 拒绝该对
-    expect(scoreRawPair(left!, right!).rejectedReason).toBe("object_conflict");
+    // 前置条件：主体关系硬门拒绝该对
+    expect(scoreRawPair(left!, right!).rejectedReason).toBe("unrelated_subjects");
 
-    // cos ≈ 0.65（< 0.72 豁免线，B4 校准后豁免线与向量准入线对齐）：实体冲突仍否决
+    // 低于向量准入线时同样不创建候选
     const result = await precomputeClusterMergeCleanPairs(NOW, {
       embedTexts: fakeEmbedTexts({
         "苹果": [1, 0],
@@ -265,11 +365,11 @@ describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
     expect(result.vectorAdmittedPairs).toBe(1);
   });
 
-  it("nominates object-conflict pairs at very high similarity (extraction noise)", async () => {
+  it("admits high-similarity unrelated subjects through vector-only precompute", async () => {
     await seedClusterWithItem(CONFLICT_PAIR[0]);
     await seedClusterWithItem(CONFLICT_PAIR[1]);
 
-    // cos ≈ 0.995（≥ 0.9 豁免线）：视为抽取噪声，提名交 LLM 终审
+    // 向量通道独立于主体安全门；候选交 AI 终审
     const result = await precomputeClusterMergeCleanPairs(NOW, {
       embedTexts: fakeEmbedTexts({
         "苹果": [1, 0],
@@ -280,7 +380,33 @@ describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
     const stored = await prisma.clusterMergeCleanPairCandidate.findFirst({
       where: { leftClusterId: "conflict-a", rightClusterId: "conflict-b" },
     });
-    expect(stored).not.toBeNull();
+    expect(stored).toMatchObject({ recallSource: "vector" });
+    expect(stored?.vectorSimilarity).toBeCloseTo(0.995);
     expect(result.vectorAdmittedPairs).toBe(1);
+
+    let reachedAi = false;
+    const aiProvider = {
+      assessClusterMergePairs: async (clustersJson: string) => {
+        const input = JSON.parse(clustersJson) as {
+          pairs: Array<{ left: { id: string }; right: { id: string } }>;
+        };
+        expect(input.pairs).toHaveLength(1);
+        expect([input.pairs[0]!.left.id, input.pairs[0]!.right.id].sort()).toEqual(["conflict-a", "conflict-b"]);
+        reachedAi = true;
+        return [{
+          leftClusterId: "conflict-a",
+          rightClusterId: "conflict-b",
+          verdict: "declined" as const,
+          confidence: 99,
+          reasonCode: "subject_conflict",
+          reasonText: "主体不同，事件无关",
+        }];
+      },
+    } as unknown as AiProvider;
+    const mergeResult = await executeClusterMerge(aiProvider, NOW);
+
+    expect(reachedAi).toBe(true);
+    expect(mergeResult).toMatchObject({ skipped: false, mergedCount: 0 });
+    await expect(prisma.contentCluster.count({ where: { id: { in: ["conflict-a", "conflict-b"] } } })).resolves.toBe(2);
   });
 });

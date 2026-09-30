@@ -2,29 +2,25 @@ import type { EmbedTextsFn } from "@/lib/ai/embeddings";
 import { buildEmbeddingText, cosineSimilarity } from "@/lib/ai/embeddings";
 import type { ClusterAssignmentCandidate } from "@/lib/clusters/repository";
 
-/** scoreClusterCandidate 返回项的结构化子集（rule 排序单元） */
+/** item-assignment 候选：BM25 稀疏排序分与独立安全判定。 */
 export type ScoredClusterCandidate = {
   candidate: ClusterAssignmentCandidate;
   score: number;
   dateCompatible: boolean;
   preciseDateDrift: boolean;
   hardConflict: boolean;
-  strongMatch: boolean;
 };
 
-/**
- * Reciprocal Rank Fusion：对两条候选 id 排序做 RRF 融合。
- * 分数 = Σ 1/(k + position)，position 从 1 计；并列时保持 rule 顺序优先。
- */
-export function fuseOrdersByRrf(ruleOrder: string[], vecOrder: string[], k: number): string[] {
-  const entries = new Map<string, { score: number; rulePos: number; vecPos: number }>();
-  ruleOrder.forEach((id, index) => {
-    entries.set(id, { score: 1 / (k + index + 1), rulePos: index, vecPos: Number.MAX_SAFE_INTEGER });
+/** Reciprocal Rank Fusion：稀疏 BM25 顺序与向量顺序按倒数排名融合。 */
+export function fuseOrdersByRrf(sparseOrder: string[], vecOrder: string[], k: number): string[] {
+  const entries = new Map<string, { score: number; sparsePos: number; vecPos: number }>();
+  sparseOrder.forEach((id, index) => {
+    entries.set(id, { score: 1 / (k + index + 1), sparsePos: index, vecPos: Number.MAX_SAFE_INTEGER });
   });
   vecOrder.forEach((id, index) => {
     const entry = entries.get(id) ?? {
       score: 0,
-      rulePos: Number.MAX_SAFE_INTEGER,
+      sparsePos: Number.MAX_SAFE_INTEGER,
       vecPos: Number.MAX_SAFE_INTEGER,
     };
     entry.score += 1 / (k + index + 1);
@@ -36,7 +32,7 @@ export function fuseOrdersByRrf(ruleOrder: string[], vecOrder: string[], k: numb
     .sort(
       (left, right) =>
         right[1].score - left[1].score ||
-        left[1].rulePos - right[1].rulePos ||
+        left[1].sparsePos - right[1].sparsePos ||
         left[1].vecPos - right[1].vecPos ||
         left[0].localeCompare(right[0]),
     )
@@ -44,10 +40,8 @@ export function fuseOrdersByRrf(ruleOrder: string[], vecOrder: string[], k: numb
 }
 
 /**
- * 合并预筛准入判定：规则灰区（score ≥ grayScore 且非 rejected）或向量相似
- * （sim ≥ vectorGraySim）任一命中即提名。object_conflict（实体冲突）否决向量
- * 路径，但 sim ≥ conflictOverrideSim 时视为 AI 抽取噪声、降级为可提名（仍由
- * LLM 终审）；no_event_anchor（词汇锚点不足）不否决向量路径。
+ * 合并候选召回：稀疏规则路径必须通过 safety 并达到 grayScore；稠密路径只看
+ * 向量相似度是否达到 vectorGraySim，不受主体/对象规则拒绝影响。两路提名都只送 AI 终审。
  * 向量独占提名的对以 sim*100 作为优先级分（与规则分同数量级，供灰区排序）。
  */
 export function resolveMergePairAdmission(
@@ -55,16 +49,14 @@ export function resolveMergePairAdmission(
   vectorSim: number | null,
   grayScore: number,
   vectorGraySim: number,
-  conflictOverrideSim: number,
+  /** @deprecated Accepted for compatibility; dense admission no longer depends on sparse conflict overrides. */
+  _conflictOverrideSim?: number,
 ): { admitted: boolean; priorityScore: number; source: "rule" | "vector" } {
   if (!rule.rejected && rule.score >= grayScore) {
     return { admitted: true, priorityScore: rule.score, source: "rule" };
   }
 
-  const conflictVeto =
-    rule.rejectedReason === "object_conflict" &&
-    (vectorSim === null || vectorSim < conflictOverrideSim);
-  if (vectorSim !== null && vectorSim >= vectorGraySim && !conflictVeto) {
+  if (vectorSim !== null && vectorSim >= vectorGraySim) {
     return { admitted: true, priorityScore: Math.round(vectorSim * 100), source: "vector" };
   }
 
@@ -72,10 +64,8 @@ export function resolveMergePairAdmission(
 }
 
 /**
- * 语义召回 + RRF 融合选取送入 LLM 的候选切片。
- * - 语义排序范围：通过硬性否决（日期冲突/硬冲突）的全部候选，不受规则最低分限制；
- * - 规则切片首位（direct-match 同源的 ruleQualified[0]）始终钉在切片首位；
- * - embedding 未启用、调用失败或返回不齐时返回规则切片（降级）。
+ * 独立向量召回与 BM25 稀疏列表做 RRF 融合，再返回 AI 判断的 Top-N。
+ * 日期不兼容与硬冲突候选不能进入任一通道；无向量时降级为正分 BM25 列表。
  */
 export async function selectAiCandidatesWithEmbeddingRecall(input: {
   embedTexts: EmbedTextsFn;
@@ -88,16 +78,20 @@ export async function selectAiCandidatesWithEmbeddingRecall(input: {
     eventObject?: string | null;
     eventDate?: string | null;
   };
-  ruleRanked: ScoredClusterCandidate[];
-  ruleQualified: ScoredClusterCandidate[];
+  eligibleCandidates: ScoredClusterCandidate[];
+  sparseCandidates: ScoredClusterCandidate[];
   rrfK: number;
   limit: number;
 }): Promise<ScoredClusterCandidate[]> {
-  const { embedTexts, itemTitle, itemSummary, itemEvent, ruleRanked, ruleQualified, rrfK, limit } = input;
-  const vetoPassed = ruleRanked.filter((entry) => entry.dateCompatible && !entry.hardConflict);
+  const { embedTexts, itemTitle, itemSummary, itemEvent, eligibleCandidates, sparseCandidates, rrfK, limit } = input;
+  const vetoPassed = eligibleCandidates.filter((entry) => entry.dateCompatible && !entry.hardConflict);
+  const sparseFallback = sparseCandidates
+    .filter((entry) => entry.score > 0 && entry.dateCompatible && !entry.hardConflict)
+    .slice(0, limit);
+  const sparseOrder = sparseFallback.map((entry) => entry.candidate.id);
 
   if (vetoPassed.length === 0) {
-    return ruleQualified;
+    return sparseFallback;
   }
 
   const texts = [
@@ -112,17 +106,11 @@ export async function selectAiCandidatesWithEmbeddingRecall(input: {
   ];
   const vectors = await embedTexts(texts);
 
-  if (!vectors || vectors.length !== texts.length) {
-    return ruleQualified;
+  if (!vectors || vectors.length !== texts.length || !vectors[0]) {
+    return sparseFallback;
   }
 
-  // 查询向量（item 自身）缺失时无法计算相似度，退回规则切片
   const itemVector = vectors[0];
-  if (!itemVector) {
-    return ruleQualified;
-  }
-
-  // 候选向量缺失的条目不参与向量排序（仅失去向量加成，规则融合不受影响）
   const vecOrder = vetoPassed
     .map((entry, index) => {
       const vector = vectors[index + 1];
@@ -145,18 +133,8 @@ export async function selectAiCandidatesWithEmbeddingRecall(input: {
     .map((entry) => entry.id);
 
   const entryById = new Map(vetoPassed.map((entry) => [entry.candidate.id, entry]));
-  const fusedIds = fuseOrdersByRrf(
-    ruleQualified.map((entry) => entry.candidate.id),
-    vecOrder,
-    rrfK,
-  );
-  const fusedEntries = fusedIds
+  return fuseOrdersByRrf(sparseOrder, vecOrder, rrfK)
     .map((id) => entryById.get(id))
-    .filter((entry): entry is ScoredClusterCandidate => Boolean(entry));
-  const pinned = ruleQualified[0] ?? null;
-  const ordered = pinned
-    ? [pinned, ...fusedEntries.filter((entry) => entry.candidate.id !== pinned.candidate.id)]
-    : fusedEntries;
-
-  return ordered.slice(0, limit);
+    .filter((entry): entry is ScoredClusterCandidate => Boolean(entry))
+    .slice(0, limit);
 }

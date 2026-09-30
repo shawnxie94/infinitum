@@ -58,15 +58,6 @@ export const CLUSTER_LOOKBACK_MS = 7 * DAY_MS;
 /** 聚类 AI 候选限制 */
 export const CLUSTER_AI_CANDIDATE_LIMIT = 10;
 
-/** 聚类直接匹配最小分数 */
-export const CLUSTER_DIRECT_MATCH_MIN_SCORE = 105;
-
-/** 聚类直接匹配最小差距 */
-export const CLUSTER_DIRECT_MATCH_MIN_GAP = 20;
-
-/** 聚类 AI 最小分数 */
-export const CLUSTER_AI_MIN_SCORE = 35;
-
 /** 语义召回 RRF 融合常数：越大越平滑，排名差异对融合分的影响越小 */
 export const CLUSTER_EMBEDDING_RRF_K = 60;
 
@@ -98,6 +89,9 @@ export const CLUSTER_MERGE_SCAN_CLUSTER_LIMIT = 2500;
 
 /** 单次聚合合并最多消费的预计算 clean-clean 候选对 */
 export const CLUSTER_MERGE_PRECOMPUTED_CLEAN_PAIR_LIMIT = 20;
+
+/** 每次发送给 AI 的聚合合并候选对上限 */
+export const CLUSTER_MERGE_AI_PAIR_BATCH_SIZE = 5;
 
 /** 单个 dirty 聚合组在主链路最多实时评分的邻居数 */
 export const CLUSTER_MERGE_DIRTY_NEIGHBOR_SCAN_LIMIT = 400;

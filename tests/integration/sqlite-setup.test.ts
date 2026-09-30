@@ -40,6 +40,44 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = 'items_fts'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name = '_prisma_migrations'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('model_api_configs') WHERE "name" IN ('type', 'dimensions', 'batchSize', 'timeoutMs')`)).toBe("4");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_merge_clean_pair_candidates') WHERE "name" IN ('recallSource', 'bm25Score', 'vectorSimilarity')`)).toBe("3");
+  }, 30_000);
+
+  it("upgrades legacy merge candidate cache rows without inferring their provenance", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-merge-cache-upgrade-"));
+    const dbPath = path.join(tempDir, "legacy-merge-cache.db");
+
+    tempDirs.push(tempDir);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    runSqlite(
+      dbPath,
+      `
+      ALTER TABLE "cluster_merge_clean_pair_candidates" DROP COLUMN "recallSource";
+      ALTER TABLE "cluster_merge_clean_pair_candidates" DROP COLUMN "bm25Score";
+      ALTER TABLE "cluster_merge_clean_pair_candidates" DROP COLUMN "vectorSimilarity";
+      INSERT INTO "cluster_merge_clean_pair_candidates" (
+        "id", "pairKey", "leftClusterId", "rightClusterId", "leftInputHash", "rightInputHash",
+        "score", "attemptCount", "expiresAt", "createdAt", "updatedAt"
+      ) VALUES (
+        'legacy-candidate', 'legacy-pair', 'left-cluster', 'right-cluster', 'left-hash', 'right-hash',
+        123, 2, '2026-10-01T00:00:00.000Z', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      `,
+    );
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      });
+    }
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_merge_clean_pair_candidates') WHERE "name" IN ('recallSource', 'bm25Score', 'vectorSimilarity')`)).toBe("3");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "cluster_merge_clean_pair_candidates" WHERE "id" = 'legacy-candidate' AND "recallSource" IS NULL AND "bm25Score" IS NULL AND "vectorSimilarity" IS NULL AND "score" = 123 AND "attemptCount" = 2`)).toBe("1");
   }, 30_000);
 
   it("serializes concurrent setup runs with a lock", { timeout: 30000 }, async () => {

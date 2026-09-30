@@ -1,17 +1,19 @@
 import { Prisma } from "@prisma/client";
 import {
+  buildClusterMergeBm25Index,
+  CLUSTER_MERGE_BM25_CACHE_VERSION,
+  CLUSTER_MERGE_BM25_SCORE_SCALE,
+  scoreClusterMergeBm25Pair,
+} from "@/lib/clusters/bm25";
+import {
   CLUSTER_AI_CANDIDATE_LIMIT,
-  CLUSTER_AI_MIN_SCORE,
-  CLUSTER_DIRECT_MATCH_MIN_GAP,
-  CLUSTER_DIRECT_MATCH_MIN_SCORE,
   CLUSTER_EMBEDDING_RRF_K,
   CLUSTER_LOOKBACK_MS,
-  CLUSTER_MERGE_AI_PAIR_GRAY_SCORE,
-  CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM,
   CLUSTER_MERGE_VECTOR_GRAY_SIM,
   CLUSTER_MERGE_CANDIDATE_LIMIT,
   CLUSTER_MERGE_CLEAN_PAIR_TTL_MS,
   CLUSTER_MERGE_CLEAN_PAIR_MAX_ATTEMPTS,
+  CLUSTER_MERGE_AI_PAIR_BATCH_SIZE,
   CLUSTER_MERGE_PRECOMPUTE_BATCH_DELAY_MS,
   CLUSTER_MERGE_PRECOMPUTE_BATCH_SIZE,
   CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_DELAY_MS,
@@ -21,7 +23,11 @@ import {
   CLUSTER_MERGE_SCAN_CLUSTER_LIMIT,
 } from "@/config/constants";
 
-import { buildClusterMergeGroupsFromDecisions } from "@/lib/ai/protocols/cluster";
+import {
+  buildClusterMergeGroupsFromDecisions,
+  makeClusterMergePairId,
+  splitClusterMergeInputBatches,
+} from "@/lib/ai/protocols/cluster";
 import { createAiProvider } from "@/lib/ai/provider-next";
 import { type AiCallUsage, type AiEventSignature, type AiProvider, type ClusterMergeDecision } from "@/lib/ai/provider-types";
 import {
@@ -34,6 +40,9 @@ import {
   buildClusterMatchInput,
   buildClusterMergeCandidateInputHash,
   buildClusterMergeCandidateSelection,
+  getClusterMergePairAuditSignals,
+  checkClusterMergePairSafety,
+  scoreClusterMergeCandidatePair,
   buildClusterMergeInput,
   buildClusterSummaryInputHash,
   buildEventDisplayTitle,
@@ -44,16 +53,18 @@ import {
   getEventIdentityAnchor,
   getClusterAssignmentWindowKeys,
   getItemEventSignature,
+  getClusterAssignmentCandidateSafety,
   hasCompleteClusterMatchSignature,
   type ClusterAssignmentCoordinator,
   type ItemWithSource,
   normalizeFingerprint,
-  rankClusterCandidates,
+  rankItemAssignmentCandidatesWithBm25,
   rememberRecentCandidate,
-  scoreClusterMergeCandidatePair,
   toClusterAssignmentCandidate,
   type ClusterMergeCandidate,
   type ClusterMergeCandidateEdge,
+  type ClusterMergeRecallChannel,
+  type ClusterMergeSelectionPath,
 } from "@/lib/clusters/helpers";
 import {
   createCannotLinkForClusters,
@@ -69,6 +80,10 @@ import {
 } from "@/lib/clusters/decisions";
 import { buildEventIdentity } from "@/lib/clusters/identity";
 import { loadMentionResolver } from "@/lib/entities/mention-resolution";
+import {
+  reconcileApprovedClusterMergeDecision,
+  type ClusterMergeDecisionConsistencyAudit,
+} from "@/lib/clusters/merge-decision-safety";
 import { buildEmbeddingText, type EmbedTextsFn } from "@/lib/ai/embeddings";
 import {
   type ClusterAssignmentCandidate,
@@ -94,7 +109,7 @@ import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { enqueueTaskRun } from "@/lib/tasks/service";
 const clusterAssignmentQueues = new Map<string, Promise<void>>();
 
-type ClusterAssignmentSource = "exact_match" | "cheap_rank_direct" | "ai_match";
+type ClusterAssignmentSource = "exact_match" | "ai_match";
 
 type ClusterAssignmentResult = {
   clusterId: string | null;
@@ -187,14 +202,14 @@ async function findClusterForItem(
   if (titleFallback) {
     const titleMatch = await findActiveClusterByTitle(titleFallback, since, until, timeField);
     const titleMatchCandidate = titleMatch ? toClusterAssignmentCandidate(titleMatch) : null;
-    const titleMatchRank = titleMatchCandidate && options.eventSignature
-      ? rankClusterCandidates(item, options.eventSignature, [titleMatchCandidate])[0]
+    const titleMatchSafety = titleMatchCandidate && options.eventSignature
+      ? getClusterAssignmentCandidateSafety(item, options.eventSignature, titleMatchCandidate)
       : null;
 
     if (
       titleMatchCandidate &&
-      (!titleMatchRank ||
-        (titleMatchRank.dateCompatible && !titleMatchRank.preciseDateDrift && !titleMatchRank.hardConflict))
+      (!titleMatchSafety ||
+        (titleMatchSafety.dateCompatible && !titleMatchSafety.preciseDateDrift && !titleMatchSafety.hardConflict))
     ) {
       return {
         cluster: titleMatchCandidate,
@@ -238,8 +253,7 @@ async function findClusterForItem(
     options.coordinator?.recentCandidates.set(rangeKey, recentCandidateEntry);
   }
 
-  const recentCandidates = recentCandidateEntry.candidates;
-  const candidates = recentCandidates;
+  const candidates = recentCandidateEntry.candidates.filter((candidate) => candidate.id !== item.clusterId);
 
   if (candidates.length === 0) {
     return {
@@ -250,30 +264,13 @@ async function findClusterForItem(
     };
   }
 
-  const ruleRanked = rankClusterCandidates(item, options.eventSignature!, candidates);
-  const rankedCandidates = ruleRanked.filter(
-    (entry) => entry.score >= CLUSTER_AI_MIN_SCORE && entry.dateCompatible && !entry.hardConflict,
+  const { eligibleCandidates, sparseCandidates } = rankItemAssignmentCandidatesWithBm25(
+    item,
+    options.eventSignature!,
+    candidates,
   );
-
-  const topCandidate = rankedCandidates[0];
-  const secondCandidateScore = rankedCandidates[1]?.score ?? Number.NEGATIVE_INFINITY;
-
-  if (
-    topCandidate &&
-    topCandidate.strongMatch &&
-    topCandidate.score >= CLUSTER_DIRECT_MATCH_MIN_SCORE &&
-    topCandidate.score - secondCandidateScore >= CLUSTER_DIRECT_MATCH_MIN_GAP
-  ) {
-    return {
-      cluster: topCandidate.candidate,
-      fingerprint,
-      matchSource: "cheap_rank_direct" as const,
-      skippedIncompleteSignature: false,
-    };
-  }
-
   const embedTexts = options.aiProvider?.embedTexts;
-  if (!embedTexts && rankedCandidates.length === 0) {
+  if (!embedTexts && sparseCandidates.length === 0) {
     return {
       cluster: null,
       fingerprint,
@@ -288,12 +285,12 @@ async function findClusterForItem(
         itemTitle: getDisplayTitle(item.originalTitle, item.translatedTitle),
         itemSummary: buildItemSummary(item),
         itemEvent: options.eventSignature ?? undefined,
-        ruleRanked,
-        ruleQualified: rankedCandidates,
+        eligibleCandidates,
+        sparseCandidates,
         rrfK: CLUSTER_EMBEDDING_RRF_K,
         limit: CLUSTER_AI_CANDIDATE_LIMIT,
       })
-    : rankedCandidates;
+    : sparseCandidates.slice(0, CLUSTER_AI_CANDIDATE_LIMIT);
   const aiCandidates = aiEntries.slice(0, CLUSTER_AI_CANDIDATE_LIMIT).map((entry) => entry.candidate);
   if (aiCandidates.length === 0) {
     return {
@@ -500,7 +497,7 @@ export async function assignItemToCluster(
     await setItemCluster(item.id, cluster.id);
     await recordClusterDecision({
       kind: "item_cluster",
-      source: matchSource === "ai_match" ? "llm" : matchSource === "cheap_rank_direct" ? "local_rule" : "system",
+      source: matchSource === "ai_match" ? "llm" : "system",
       verdict: "approved",
       leftItemId: item.id,
       leftClusterId: cluster.id,
@@ -1140,6 +1137,7 @@ export type ClusterMergePassResult = {
   itemsMoved: number;
   failedGroups: number;
   affectedClusterIds: string[];
+  pairDiagnostics: ClusterMergePairDiagnostic[];
   refreshItemCountsMs: number;
   loadClustersMs: number;
   candidateSelectionMs: number;
@@ -1149,6 +1147,27 @@ export type ClusterMergePassResult = {
   aiMergeMs: number;
   applyMergeMs: number;
   markEvaluatedMs: number;
+};
+
+export type ClusterMergePairDiagnostic = {
+  pairId: string;
+  pairKey: string;
+  leftClusterId: string;
+  rightClusterId: string;
+  selectionPaths: ClusterMergeSelectionPath[];
+  recallChannels: ClusterMergeRecallChannel[];
+  selectionScore: number;
+  cachePriorityScore: number | null;
+  bm25Score: number | null;
+  vectorSimilarity: number | null;
+  signals: ReturnType<typeof getClusterMergePairAuditSignals>;
+  decision: {
+    verdict: ClusterMergeDecision["verdict"] | "failed";
+    confidence: number | null;
+    reasonCode: string | null;
+    reasonText: string | null;
+    consistency?: ClusterMergeDecisionConsistencyAudit;
+  };
 };
 
 type EvaluatedClusterMergeCandidate = Parameters<typeof buildClusterMergeCandidateInputHash>[0] & {
@@ -1167,6 +1186,9 @@ type StoredCleanMergePair = {
   leftInputHash: string;
   rightInputHash: string;
   score: number;
+  recallSource: string | null;
+  bm25Score: number | null;
+  vectorSimilarity: number | null;
   attemptCount: number;
 };
 
@@ -1178,6 +1200,34 @@ type PrecomputedCleanPairSelection = {
   attemptSkipped: number;
   invalidSkipped: number;
 };
+
+function parseStoredRecallChannels(source: string | null): ClusterMergeRecallChannel[] {
+  switch (source) {
+    case "bm25":
+      return ["bm25"];
+    case "vector":
+      return ["vector"];
+    case "bm25+vector":
+      return ["bm25", "vector"];
+    default:
+      return ["unknown"];
+  }
+}
+
+function addPrecomputedAttribution(
+  edge: ClusterMergeCandidateEdge,
+  pair: StoredCleanMergePair,
+  recallChannels: ClusterMergeRecallChannel[],
+): ClusterMergeCandidateEdge {
+  return {
+    ...edge,
+    selectionPaths: [...new Set([...(edge.selectionPaths ?? []), "precomputed_cache" as const])],
+    recallChannels: [...new Set([...(edge.recallChannels ?? []), ...recallChannels])],
+    bm25Score: edge.bm25Score ?? pair.bm25Score,
+    vectorSimilarity: edge.vectorSimilarity ?? pair.vectorSimilarity,
+    cachePriorityScore: pair.score,
+  };
+}
 
 function addClusterMergeCandidate(candidateMap: Map<string, ClusterMergeCandidate>, candidate: ClusterMergeCandidate) {
   if (candidateMap.size >= CLUSTER_MERGE_CANDIDATE_LIMIT && !candidateMap.has(candidate.id)) {
@@ -1201,6 +1251,7 @@ async function loadStoredCleanMergePairs(now: Date) {
   return prisma.clusterMergeCleanPairCandidate.findMany({
     where: {
       expiresAt: { gt: now },
+      pairKey: { startsWith: `${CLUSTER_MERGE_BM25_CACHE_VERSION}:` },
     },
     orderBy: [
       { score: "desc" },
@@ -1215,10 +1266,12 @@ function mergePrecomputedCleanPairs(input: {
   liveCandidates: ClusterMergeCandidate[];
   liveAllowedPairs: ClusterMergeCandidateEdge[];
   recentClusters: ClusterMergeCandidate[];
+  canonicalRecentClusters: ClusterMergeCandidate[];
   storedPairs: StoredCleanMergePair[];
 }): PrecomputedCleanPairSelection {
   const candidateMap = new Map(input.liveCandidates.map((candidate) => [candidate.id, candidate]));
   const clustersById = new Map(input.recentClusters.map((cluster) => [cluster.id, cluster]));
+  const canonicalClustersById = new Map(input.canonicalRecentClusters.map((cluster) => [cluster.id, cluster]));
   const edgeMap = new Map(
     input.liveAllowedPairs.map((edge) => [buildClusterMergeEdgeKey(edge.leftId, edge.rightId), edge]),
   );
@@ -1252,19 +1305,54 @@ function mergePrecomputedCleanPairs(input: {
       continue;
     }
 
-    const edgeKey = buildClusterMergeEdgeKey(left.id, right.id);
-    if (edgeMap.has(edgeKey)) {
+    const canonicalLeft = canonicalClustersById.get(left.id) ?? left;
+    const canonicalRight = canonicalClustersById.get(right.id) ?? right;
+    const currentScore = scoreClusterMergeCandidatePair(canonicalLeft, canonicalRight);
+    const currentSafety = checkClusterMergePairSafety(canonicalLeft, canonicalRight);
+    const vectorAdmitted = pair.vectorSimilarity !== null &&
+      pair.vectorSimilarity >= CLUSTER_MERGE_VECTOR_GRAY_SIM;
+    const sparseSafetyPassed = !currentScore.rejected && !currentSafety.rejected;
+    const bm25Admitted = sparseSafetyPassed && pair.bm25Score !== null && pair.bm25Score > 0;
+    // 兼容早期无归因字段的缓存：只在稀疏安全门通过时按 legacy candidate 处理。
+    const legacyAdmitted = pair.recallSource === null && pair.bm25Score === null &&
+      pair.vectorSimilarity === null && sparseSafetyPassed;
+    const recallChannels: ClusterMergeRecallChannel[] = [
+      ...(bm25Admitted ? ["bm25" as const] : []),
+      ...(vectorAdmitted ? ["vector" as const] : []),
+      ...(legacyAdmitted ? ["unknown" as const] : []),
+    ];
+    if (recallChannels.length === 0) {
+      invalidSkipped += 1;
       continue;
     }
 
-    if (!addClusterMergeCandidate(candidateMap, left) || !addClusterMergeCandidate(candidateMap, right)) {
+    const edgeKey = buildClusterMergeEdgeKey(left.id, right.id);
+    const existingEdge = edgeMap.get(edgeKey);
+    if (existingEdge) {
+      edgeMap.set(edgeKey, addPrecomputedAttribution(existingEdge, pair, recallChannels));
+      continue;
+    }
+
+    if (!addClusterMergeCandidate(candidateMap, canonicalLeft) || !addClusterMergeCandidate(candidateMap, canonicalRight)) {
       break;
     }
 
+    const densePriority = vectorAdmitted && pair.vectorSimilarity !== null
+      ? Math.round(pair.vectorSimilarity * 100) * CLUSTER_MERGE_BM25_SCORE_SCALE
+      : 0;
     edgeMap.set(edgeKey, {
       leftId: left.id,
       rightId: right.id,
-      score: pair.score,
+      score: Math.max(
+        bm25Admitted ? pair.bm25Score! : 0,
+        densePriority,
+        legacyAdmitted ? currentScore.score : 0,
+      ),
+      selectionPaths: ["precomputed_cache"],
+      recallChannels,
+      bm25Score: pair.bm25Score,
+      vectorSimilarity: pair.vectorSimilarity,
+      cachePriorityScore: pair.score,
     });
     usedPairIdsByEdgeKey.set(edgeKey, pair.id);
     usedCount += 1;
@@ -1463,6 +1551,44 @@ function countClusterMergeDecisionVerdicts(
   };
 }
 
+function buildClusterMergePairDiagnostics(
+  candidatesById: Map<string, ClusterMergeCandidate>,
+  allowedPairs: ClusterMergeCandidateEdge[],
+  decisions: Array<Awaited<ReturnType<typeof recordClusterDecision>>>,
+  consistencyAudits: ReadonlyMap<string, ClusterMergeDecisionConsistencyAudit> = new Map(),
+): ClusterMergePairDiagnostic[] {
+  const decisionsByPairKey = new Map(decisions.map((decision) => [decision.pairKey, decision]));
+
+  return allowedPairs.flatMap((edge) => {
+    const left = candidatesById.get(edge.leftId);
+    const right = candidatesById.get(edge.rightId);
+    const pairKey = buildClusterMergeEdgeKey(edge.leftId, edge.rightId);
+    const decision = decisionsByPairKey.get(pairKey);
+    if (!left || !right || !decision) return [];
+
+    return [{
+      pairId: makeClusterMergePairId(edge.leftId, edge.rightId),
+      pairKey,
+      leftClusterId: edge.leftId,
+      rightClusterId: edge.rightId,
+      selectionPaths: edge.selectionPaths ?? [],
+      recallChannels: edge.recallChannels ?? ["unknown"],
+      selectionScore: edge.score,
+      cachePriorityScore: edge.cachePriorityScore ?? null,
+      bm25Score: edge.bm25Score ?? null,
+      vectorSimilarity: edge.vectorSimilarity ?? null,
+      signals: getClusterMergePairAuditSignals(left, right),
+      decision: {
+        verdict: decision.verdict,
+        confidence: decision.confidence,
+        reasonCode: decision.reasonCode,
+        reasonText: decision.reasonText,
+        ...(consistencyAudits.has(pairKey) ? { consistency: consistencyAudits.get(pairKey)! } : {}),
+      },
+    }];
+  });
+}
+
 async function refreshRecentClusterItemCounts(lookbackSince: Date) {
   // Refresh itemCount for clusters in the lookback window.
   // Newly created clusters only get fully refreshed during cluster_finalize,
@@ -1478,6 +1604,28 @@ async function refreshRecentClusterItemCounts(lookbackSince: Date) {
     WHERE status = 'active'
     AND latestPublishedAt >= ${lookbackSince.getTime()}
   `;
+}
+
+async function canonicalizeClusterMergeEntityMentions(clusters: ClusterMergeCandidate[]) {
+  try {
+    const resolveMention = await loadMentionResolver(
+      clusters.flatMap((cluster) => [cluster.eventSubject, cluster.eventObject]),
+    );
+    return clusters.map((cluster) => {
+      const subject = resolveMention(cluster.eventSubject);
+      const object = resolveMention(cluster.eventObject);
+      if (subject === null && object === null) {
+        return cluster;
+      }
+      return {
+        ...cluster,
+        eventSubject: subject ?? cluster.eventSubject,
+        eventObject: object ?? cluster.eventObject,
+      };
+    });
+  } catch {
+    return clusters;
+  }
 }
 
 async function loadRecentMergeClusters(lookbackSince: Date, affectedClusterIds?: Iterable<string>) {
@@ -1555,6 +1703,7 @@ export async function executeClusterMerge(
   const loadStartedAt = Date.now();
   const recentClusters = await loadRecentMergeClusters(lookbackSince, liveClusterIds ?? undefined);
   timings.loadClustersMs = Date.now() - loadStartedAt;
+  const canonicalRecentClusters = await canonicalizeClusterMergeEntityMentions(recentClusters);
   const liveClusters = liveClusterIds
     ? recentClusters.filter((cluster) => liveClusterIds.has(cluster.id))
     : recentClusters;
@@ -1563,13 +1712,15 @@ export async function executeClusterMerge(
   // live 扫描的向量通道：给 dirty 聚类注入向量近邻，绕过词汇排名截断；
   // embedding 不可用时保持纯词汇扫描行为
   let vectorNeighbors: Map<string, Array<{ id: string; sim: number }>> | undefined;
+  let vectorMatrix: { flat: Float32Array; dim: number } | null = null;
   if (aiProvider?.embedTexts && recentClusters.length > 1) {
     try {
       const vectors = await aiProvider.embedTexts(
         recentClusters.map((cluster) => buildEmbeddingText(cluster.title, cluster.summary)),
       );
-      const matrix = vectors ? buildNormalizedVectorMatrix(recentClusters, vectors) : null;
-      if (matrix) {
+      vectorMatrix = vectors ? buildNormalizedVectorMatrix(recentClusters, vectors) : null;
+      if (vectorMatrix) {
+        const matrix = vectorMatrix;
         vectorNeighbors = new Map();
         for (let i = 0; i < recentClusters.length; i += 1) {
           for (let j = i + 1; j < recentClusters.length; j += 1) {
@@ -1595,14 +1746,25 @@ export async function executeClusterMerge(
     }
   }
 
-  const liveSelection = buildClusterMergeCandidateSelection(recentClusters, {
+  const liveSelection = buildClusterMergeCandidateSelection(canonicalRecentClusters, {
     liveClusterIds: liveClusterIds ?? undefined,
     vectorNeighbors,
   });
+  if (vectorMatrix) {
+    const indexByClusterId = new Map(recentClusters.map((cluster, index) => [cluster.id, index]));
+    for (const edge of liveSelection.allowedPairs) {
+      const leftIndex = indexByClusterId.get(edge.leftId);
+      const rightIndex = indexByClusterId.get(edge.rightId);
+      if (leftIndex !== undefined && rightIndex !== undefined) {
+        edge.vectorSimilarity = dotAt(vectorMatrix.flat, vectorMatrix.dim, leftIndex, rightIndex);
+      }
+    }
+  }
   const precomputedSelection = mergePrecomputedCleanPairs({
     liveCandidates: liveSelection.candidates,
     liveAllowedPairs: liveSelection.allowedPairs,
     recentClusters,
+    canonicalRecentClusters,
     storedPairs: await loadStoredCleanMergePairs(now),
   });
   timings.candidateSelectionMs = Date.now() - selectionStartedAt;
@@ -1641,6 +1803,7 @@ export async function executeClusterMerge(
     decisionsDeclined: 0,
     decisionsAmbiguous: 0,
     decisionsFailed: 0,
+    pairDiagnostics: [],
     dirtyPairs: diagnostics.dirtyPairs,
     preLimitCandidates: diagnostics.preLimitCandidates,
     postLimitCandidates: allCandidates.length,
@@ -1713,10 +1876,29 @@ export async function executeClusterMerge(
   timings.promptChars = clustersJson.length;
   let mergeGroups: string[][];
   let mergeDecisions: ClusterMergeDecision[] | undefined;
+  const consistencyAudits = new Map<string, ClusterMergeDecisionConsistencyAudit>();
 
   const aiMergeStartedAt = Date.now();
   try {
-    mergeDecisions = await aiProvider.assessClusterMergePairs(clustersJson);
+    const batchDecisions: ClusterMergeDecision[] = [];
+    for (const batchInput of splitClusterMergeInputBatches(clustersJson, CLUSTER_MERGE_AI_PAIR_BATCH_SIZE)) {
+      batchDecisions.push(...await aiProvider.assessClusterMergePairs(batchInput));
+    }
+    mergeDecisions = batchDecisions.map((decision) => {
+      const left = candidatesById.get(decision.leftClusterId);
+      const right = candidatesById.get(decision.rightClusterId);
+      const result = reconcileApprovedClusterMergeDecision(
+        decision,
+        left && right ? checkClusterMergePairSafety(left, right).rejectedReason : null,
+      );
+      if (result.audit) {
+        consistencyAudits.set(
+          buildClusterMergeEdgeKey(decision.leftClusterId, decision.rightClusterId),
+          result.audit,
+        );
+      }
+      return result.decision;
+    });
     const itemCounts = new Map(allCandidates.map((candidate) => [candidate.id, candidate.itemCount]));
     mergeGroups = buildClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
   } catch (error) {
@@ -1735,6 +1917,7 @@ export async function executeClusterMerge(
     return {
       ...baseResult,
       ...countClusterMergeDecisionVerdicts(failedDecisions),
+      pairDiagnostics: buildClusterMergePairDiagnostics(candidatesById, allowedPairs, failedDecisions),
       ...timings,
       aiMergeGroups: 0,
       skipped: true,
@@ -1846,6 +2029,12 @@ export async function executeClusterMerge(
   return {
     ...baseResult,
     ...countClusterMergeDecisionVerdicts(recordedMergeDecisions),
+    pairDiagnostics: buildClusterMergePairDiagnostics(
+      candidatesById,
+      allowedPairs,
+      recordedMergeDecisions,
+      consistencyAudits,
+    ),
     ...timings,
     aiMergeGroups: mergeGroups.filter((group) => group.length >= 2).length,
     skipped: false,
@@ -1868,7 +2057,12 @@ export type ClusterMergeCleanPairPrecomputeResult = {
   durationMs: number;
 };
 
-function toCleanPairCandidateRecord(left: ClusterMergeCandidate, right: ClusterMergeCandidate, score: number) {
+function toCleanPairCandidateRecord(
+  left: ClusterMergeCandidate,
+  right: ClusterMergeCandidate,
+  score: number,
+  provenance: { recallSource: "bm25" | "vector" | "bm25+vector"; bm25Score: number; vectorSimilarity: number | null },
+) {
   const [first, second] = [left, right].sort((a, b) => a.id.localeCompare(b.id));
 
   return {
@@ -1878,6 +2072,7 @@ function toCleanPairCandidateRecord(left: ClusterMergeCandidate, right: ClusterM
     leftInputHash: buildClusterMergeCandidateInputHash(first),
     rightInputHash: buildClusterMergeCandidateInputHash(second),
     score,
+    ...provenance,
   };
 }
 
@@ -1903,6 +2098,9 @@ async function upsertCleanPairCandidates(input: {
           leftInputHash: pair.leftInputHash,
           rightInputHash: pair.rightInputHash,
           score: pair.score,
+          recallSource: pair.recallSource,
+          bm25Score: pair.bm25Score,
+          vectorSimilarity: pair.vectorSimilarity,
           expiresAt: input.expiresAt,
         },
       }),
@@ -1969,31 +2167,14 @@ export async function precomputeClusterMergeCleanPairs(
   let scoredPairsInSlice = 0;
   let vectorAdmittedPairs = 0;
 
-  // 实体 Mention 规范化（AGG-01）：subject/object 先解析为 canonical 实体名再评分，
-  // 同实体异名（如 智谱/Z.ai）不再因 Mention 字符串不同而丢分；不可解析回退原字符串，
-  // 行为单调（canonical 名不同当且仅当实体不同）。记录的 inputHash 仍取原始聚类。
-  let canonicalClusters = cleanClusters;
-  try {
-    const resolveMention = await loadMentionResolver(
-      cleanClusters.flatMap((cluster) => [cluster.eventSubject, cluster.eventObject]),
-    );
-    canonicalClusters = cleanClusters.map((cluster) => {
-      const subject = resolveMention(cluster.eventSubject);
-      const object = resolveMention(cluster.eventObject);
-      if (subject === null && object === null) {
-        return cluster;
-      }
-      return {
-        ...cluster,
-        eventSubject: subject ?? cluster.eventSubject,
-        eventObject: object ?? cluster.eventObject,
-      };
-    });
-  } catch {
-    canonicalClusters = cleanClusters;
-  }
+  // 评分使用 canonical 实体名；缓存 inputHash 仍使用原始聚类字段。
+  const canonicalCorpusClusters = await canonicalizeClusterMergeEntityMentions(recentClusters);
+  const canonicalById = new Map(canonicalCorpusClusters.map((cluster) => [cluster.id, cluster]));
+  const canonicalClusters = cleanClusters.map((cluster) => canonicalById.get(cluster.id) ?? cluster);
 
-  // 向量预筛通道：与规则灰区并集提名；embedding 不可用时保持纯规则行为
+  const bm25Index = buildClusterMergeBm25Index(canonicalCorpusClusters);
+
+  // 向量预筛通道：与 BM25 lexical recall 并集提名；embedding 不可用时保持纯 BM25 行为
   let vecMatrix: { flat: Float32Array; dim: number } | null = null;
   if (options?.embedTexts && cleanClusters.length > 1) {
     try {
@@ -2016,20 +2197,19 @@ export async function precomputeClusterMergeCleanPairs(
 
       for (let rightIndex = leftIndex + 1; rightIndex < cleanClusters.length; rightIndex += 1) {
         const right = cleanClusters[rightIndex]!;
-        const result = scoreClusterMergeCandidatePair(
-          canonicalClusters[leftIndex]!,
-          canonicalClusters[rightIndex]!,
-        );
+        const leftCanonical = canonicalClusters[leftIndex]!;
+        const rightCanonical = canonicalClusters[rightIndex]!;
+        const safety = checkClusterMergePairSafety(leftCanonical, rightCanonical);
+        const bm25Score = scoreClusterMergeBm25Pair(bm25Index, leftCanonical.id, rightCanonical.id);
         scoredPairs += 1;
         scoredPairsInSlice += 1;
 
         const vectorSim = vecMatrix ? dotAt(vecMatrix.flat, vecMatrix.dim, leftIndex, rightIndex) : null;
         const admission = resolveMergePairAdmission(
-          result,
+          { ...safety, score: bm25Score },
           vectorSim,
-          CLUSTER_MERGE_AI_PAIR_GRAY_SCORE,
+          Number.MIN_VALUE,
           CLUSTER_MERGE_VECTOR_GRAY_SIM,
-          CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM,
         );
 
         if (!admission.admitted) {
@@ -2046,7 +2226,21 @@ export async function precomputeClusterMergeCleanPairs(
         if (admission.source === "vector") {
           vectorAdmittedPairs += 1;
         }
-        candidates.push(toCleanPairCandidateRecord(left, right, admission.priorityScore));
+        const vectorAdmitted = vectorSim !== null && vectorSim >= CLUSTER_MERGE_VECTOR_GRAY_SIM;
+        const bm25Admitted = !safety.rejected && bm25Score > 0;
+        const recallSource = bm25Admitted && vectorAdmitted
+          ? "bm25+vector"
+          : vectorAdmitted
+            ? "vector"
+            : "bm25";
+        const priorityScore = admission.source === "vector"
+          ? admission.priorityScore * CLUSTER_MERGE_BM25_SCORE_SCALE
+          : admission.priorityScore;
+        candidates.push(toCleanPairCandidateRecord(left, right, priorityScore, {
+          recallSource,
+          bm25Score,
+          vectorSimilarity: vectorSim,
+        }));
         if (
           scoredPairsInSlice >= CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_SIZE &&
           CLUSTER_MERGE_PRECOMPUTE_PAIR_SLICE_DELAY_MS > 0
