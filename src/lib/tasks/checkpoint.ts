@@ -1,6 +1,17 @@
 import { DAILY_REPORT_RECOVERY_STAGES, DAILY_REPORT_LEGACY_RECOVERY_STAGES } from "@/lib/tasks/types";
 import type { TaskPipelineCheckpoint, TaskWorkflowCheckpoint } from "@/lib/tasks/types";
 
+const REVIEW_STATUSES = ["disabled", "passed", "rejected", "unavailable"] as const;
+
+// stageLoop 承载恢复断点；仅校验驱动恢复循环的必填结构，消息/违规等负载保持透明。
+function isStageLoopLike(value: unknown): value is NonNullable<TaskPipelineCheckpoint["stageLoop"]> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const stageLoop = value as Record<string, unknown>;
+  return (stageLoop.stage === "assess" || stageLoop.stage === "plan" || stageLoop.stage === "write")
+    && typeof stageLoop.repairRound === "number" && Number.isFinite(stageLoop.repairRound)
+    && typeof stageLoop.cleanRetryAttempt === "number" && Number.isFinite(stageLoop.cleanRetryAttempt);
+}
+
 export function parseTaskPipelineCheckpointJson(value: string | null | undefined): TaskPipelineCheckpoint | null {
   if (!value) return null;
   try {
@@ -36,9 +47,7 @@ export function parseTaskPipelineCheckpointJson(value: string | null | undefined
         : String(parsed.resumeFrom) === DAILY_REPORT_LEGACY_RECOVERY_STAGES[0]
           ? { resumeFrom: "write" as const }
           : {}),
-      ...(parsed.stageLoop && typeof parsed.stageLoop === "object" && !Array.isArray(parsed.stageLoop)
-        ? { stageLoop: parsed.stageLoop as TaskPipelineCheckpoint["stageLoop"] }
-        : {}),
+      ...(isStageLoopLike(parsed.stageLoop) ? { stageLoop: parsed.stageLoop } : {}),
       ...(parsed.stageAttempts && typeof parsed.stageAttempts === "object" && !Array.isArray(parsed.stageAttempts)
         ? { stageAttempts: Object.fromEntries(Object.entries(parsed.stageAttempts).filter(([, attempt]) => typeof attempt === "number" && Number.isFinite(attempt))) as Record<string, number> }
         : {}),
@@ -50,7 +59,9 @@ export function parseTaskPipelineCheckpointJson(value: string | null | undefined
       ...(parsed.plan !== undefined ? { plan: parsed.plan } : {}),
       ...(parsed.draft !== undefined ? { draft: parsed.draft } : {}),
       ...(Array.isArray(parsed.violations) ? { violations: parsed.violations } : {}),
-      ...(typeof parsed.reviewStatus === "string" ? { reviewStatus: parsed.reviewStatus as TaskPipelineCheckpoint["reviewStatus"] } : {}),
+      ...(typeof parsed.reviewStatus === "string" && REVIEW_STATUSES.includes(parsed.reviewStatus)
+        ? { reviewStatus: parsed.reviewStatus as TaskPipelineCheckpoint["reviewStatus"] }
+        : {}),
       ...(typeof parsed.reviewAttempts === "number" ? { reviewAttempts: parsed.reviewAttempts } : {}),
       ...(typeof parsed.reviewRetryStage === "string" && (parsed.reviewRetryStage === "plan" || parsed.reviewRetryStage === "write")
         ? { reviewRetryStage: parsed.reviewRetryStage as TaskPipelineCheckpoint["reviewRetryStage"] }

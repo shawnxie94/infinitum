@@ -36,10 +36,7 @@ import {
   type BackgroundTaskMonitorSnapshot,
   type EnqueueTaskRunInput,
   type TaskStageTimingSnapshot,
-  type TaskTimelineMetricSnapshot,
-  type TaskTimelineNodeKey,
   type TaskTimelineNodeSnapshot,
-  type TaskTimelineNodeStatus,
   type TaskPipelineCheckpoint,
   type TaskCheckpointSummary,
   type TaskRunSnapshot,
@@ -54,6 +51,12 @@ import {
   parseTaskWorkflowCheckpointJson,
   serializeTaskPipelineCheckpoint,
 } from "@/lib/tasks/checkpoint";
+import {
+  parseTaskStageTimingsJson,
+  parseTaskTimelineJson,
+  serializeTaskStageTimings,
+  serializeTaskTimeline,
+} from "@/lib/tasks/json-contracts";
 import { DAILY_REPORT_RECOVERY_STAGE_LABELS, getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
 
 export const TASK_RUN_CANCELLED_MESSAGE = "管理员手动终止任务。";
@@ -71,13 +74,6 @@ const TASK_AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
   daily_report_plan: "规划",
   daily_report_write: "写作",
   daily_report_repair: "修复",
-  daily_report_review: "审核",
-};
-
-const DAILY_REPORT_TIMELINE_LABELS: Partial<Record<TaskTimelineNodeKey, string>> = {
-  daily_report_assess: "评估",
-  daily_report_plan: "规划",
-  daily_report_write: "写作",
   daily_report_review: "审核",
 };
 
@@ -182,214 +178,6 @@ function serializeTaskAiCallBreakdown(value: TaskAiCallBreakdownSnapshot[] | nul
   }
 
   return JSON.stringify(value);
-}
-
-function normalizeTaskStageTimingSnapshot(value: unknown): TaskStageTimingSnapshot | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const maybeSnapshot = value as Record<string, unknown>;
-
-  if (typeof maybeSnapshot.key !== "string" || typeof maybeSnapshot.label !== "string") {
-    return null;
-  }
-
-  const startedAt =
-    typeof maybeSnapshot.startedAt === "string" || maybeSnapshot.startedAt === null
-      ? maybeSnapshot.startedAt
-      : null;
-  const finishedAt =
-    typeof maybeSnapshot.finishedAt === "string" || maybeSnapshot.finishedAt === null
-      ? maybeSnapshot.finishedAt
-      : null;
-  const durationMs =
-    typeof maybeSnapshot.durationMs === "number" && Number.isFinite(maybeSnapshot.durationMs)
-      ? maybeSnapshot.durationMs
-      : null;
-
-  const status = maybeSnapshot.status === "pending"
-    || maybeSnapshot.status === "running"
-    || maybeSnapshot.status === "succeeded"
-    || maybeSnapshot.status === "failed"
-    || maybeSnapshot.status === "partial"
-    || maybeSnapshot.status === "cancelled"
-    || maybeSnapshot.status === "skipped"
-    ? maybeSnapshot.status
-    : undefined;
-  const detail = typeof maybeSnapshot.detail === "string" ? maybeSnapshot.detail.slice(0, 300) : undefined;
-
-  return {
-    key: maybeSnapshot.key,
-    label: maybeSnapshot.label,
-    startedAt,
-    finishedAt,
-    durationMs,
-    ...(status ? { status } : {}),
-    ...(detail ? { detail } : {}),
-  };
-}
-
-function parseTaskStageTimingsJson(value: string | null | undefined): TaskStageTimingSnapshot[] {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .map(normalizeTaskStageTimingSnapshot)
-      .filter((snapshot): snapshot is TaskStageTimingSnapshot => snapshot !== null);
-  } catch {
-    return [];
-  }
-}
-
-function serializeTaskStageTimings(stageTimings: TaskStageTimingSnapshot[] | null) {
-  if (!stageTimings) {
-    return null;
-  }
-
-  return JSON.stringify(stageTimings);
-}
-
-function normalizeTaskTimelineMetricSnapshot(value: unknown): TaskTimelineMetricSnapshot | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const maybeMetric = value as Record<string, unknown>;
-
-  if (typeof maybeMetric.label !== "string") {
-    return null;
-  }
-
-  return {
-    label: maybeMetric.label,
-    value:
-      typeof maybeMetric.value === "number" && Number.isFinite(maybeMetric.value)
-        ? maybeMetric.value
-        : 0,
-  };
-}
-
-function normalizeTaskTimelineNodeSnapshot(value: unknown): TaskTimelineNodeSnapshot | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const maybeNode = value as Record<string, unknown>;
-  const key = maybeNode.key;
-  const status = maybeNode.status;
-  const supportedKeys = new Set<TaskTimelineNodeKey>([
-    "daily_report_generate",
-    "daily_report_prepare",
-    "daily_report_assess",
-    "daily_report_merge",
-    "daily_report_plan",
-    "daily_report_plan_validate",
-    "daily_report_validate",
-    "daily_report_write",
-    "daily_report_review",
-    "daily_report_repair",
-    "daily_report_persist_publish",
-    "task_finished",
-    "source_fetch",
-    "rule_filter",
-    "item_understanding",
-    "cluster_assignment",
-    "cluster_merge",
-    "cluster_finalize",
-  ]);
-  const supportedStatuses = new Set<TaskTimelineNodeStatus>([
-    "pending",
-    "running",
-    "succeeded",
-    "failed",
-    "partial",
-    "cancelled",
-    "skipped",
-  ]);
-
-  if (
-    typeof key !== "string" ||
-    !supportedKeys.has(key as TaskTimelineNodeKey) ||
-    typeof maybeNode.label !== "string" ||
-    typeof status !== "string" ||
-    !supportedStatuses.has(status as TaskTimelineNodeStatus)
-  ) {
-    return null;
-  }
-
-  const startedAt =
-    typeof maybeNode.startedAt === "string" || maybeNode.startedAt === null
-      ? maybeNode.startedAt
-      : null;
-  const finishedAt =
-    typeof maybeNode.finishedAt === "string" || maybeNode.finishedAt === null
-      ? maybeNode.finishedAt
-      : null;
-  const durationMs =
-    typeof maybeNode.durationMs === "number" && Number.isFinite(maybeNode.durationMs)
-      ? maybeNode.durationMs
-      : null;
-  const modelName =
-    typeof maybeNode.modelName === "string" || maybeNode.modelName === null
-      ? maybeNode.modelName
-      : null;
-  const metrics = Array.isArray(maybeNode.metrics)
-    ? maybeNode.metrics
-        .map(normalizeTaskTimelineMetricSnapshot)
-        .filter((metric): metric is TaskTimelineMetricSnapshot => metric !== null)
-    : [];
-  const audit = maybeNode.audit && typeof maybeNode.audit === "object" && !Array.isArray(maybeNode.audit)
-    ? maybeNode.audit as Record<string, unknown>
-    : undefined;
-
-  return {
-    key: key as TaskTimelineNodeKey,
-    label: DAILY_REPORT_TIMELINE_LABELS[key as TaskTimelineNodeKey] ?? maybeNode.label,
-    status: status as TaskTimelineNodeStatus,
-    startedAt,
-    finishedAt,
-    durationMs,
-    modelName,
-    metrics,
-    ...(audit ? { audit } : {}),
-  };
-}
-
-function parseTaskTimelineJson(value: string | null | undefined): TaskTimelineNodeSnapshot[] {
-  if (!value) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .map(normalizeTaskTimelineNodeSnapshot)
-      .filter((node): node is TaskTimelineNodeSnapshot => node !== null);
-  } catch {
-    return [];
-  }
-}
-
-function serializeTaskTimeline(taskTimeline: TaskTimelineNodeSnapshot[] | null) {
-  if (!taskTimeline) {
-    return null;
-  }
-
-  return JSON.stringify(taskTimeline);
 }
 
 export function parseDailyReportChannelIdsJson(value: string | null | undefined) {
