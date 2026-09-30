@@ -298,6 +298,10 @@ function median(values: number[]): number {
   return sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2;
 }
 
+function roundedMetric(value: number, digits: number): number | null {
+  return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
 function metrics(rows: ScoredPair[], scoreOf: (row: ScoredPair) => number) {
   const same = rows.filter((row) => row.label === "same").map(scoreOf);
   const diff = rows.filter((row) => row.label === "diff").map(scoreOf);
@@ -305,12 +309,12 @@ function metrics(rows: ScoredPair[], scoreOf: (row: ScoredPair) => number) {
     pairs: rows.length,
     same: same.length,
     diff: diff.length,
-    auc: Number(auc(same, diff).toFixed(4)),
-    medianSame: Number(median(same).toFixed(3)),
-    medianDiff: Number(median(diff).toFixed(3)),
-    recallAtFpr1: Number(recallAtFpr(same, diff, 0.01).toFixed(1)),
-    recallAtFpr5: Number(recallAtFpr(same, diff, 0.05).toFixed(1)),
-    recallAtFpr10: Number(recallAtFpr(same, diff, 0.1).toFixed(1)),
+    auc: roundedMetric(auc(same, diff), 4),
+    medianSame: roundedMetric(median(same), 3),
+    medianDiff: roundedMetric(median(diff), 3),
+    recallAtFpr1: roundedMetric(recallAtFpr(same, diff, 0.01), 1),
+    recallAtFpr5: roundedMetric(recallAtFpr(same, diff, 0.05), 1),
+    recallAtFpr10: roundedMetric(recallAtFpr(same, diff, 0.1), 1),
   };
 }
 
@@ -363,9 +367,20 @@ async function main() {
   ];
   const scoringStartedAt = performance.now();
   const summaries: Record<string, unknown> = {};
+  const notEvaluatedDatasets = new Set<string>();
   const allRows: ScoredPair[] = [];
 
   for (const dataset of datasets) {
+    if (dataset.pairs.length === 0) {
+      summaries[dataset.name] = {
+        status: "not_evaluated",
+        pairs: 0,
+        reason: "no labeled same/diff pairs",
+      };
+      notEvaluatedDatasets.add(dataset.name);
+      continue;
+    }
+
     const scored = dataset.pairs.map((pair): ScoredPair => {
       const left = toCandidate(pair.a);
       const right = toCandidate(pair.b);
@@ -387,6 +402,8 @@ async function main() {
       strata[stratum] = metrics(scored.filter((row) => row.stratum === stratum), (row) => row.bm25Score);
     }
     summaries[dataset.name] = {
+      status: "evaluated",
+      pairs: scored.length,
       current: metrics(scored, (row) => row.currentRejected ? -1e9 : row.currentScore),
       bm25: metrics(scored, (row) => row.bm25Score),
       candidateCounts: {
@@ -417,8 +434,12 @@ async function main() {
   fs.writeFileSync(args.out, JSON.stringify(result, null, 2));
   console.log(`[bm25-replay] corpus=${index.docCount} avgDocLen=${index.averageDocumentLength.toFixed(1)} index=${indexBuildMs}ms scoring=${scoringMs}ms`);
   for (const dataset of datasets) {
-    const summary = summaries[dataset.name] as { current: { auc: number }; bm25: { auc: number }; candidateCounts: { current: { admittedPairs: number; selectedWithinTopK: number }; bm25: { admittedPairs: number; selectedWithinTopK: number } } };
-    console.log(`[${dataset.name}] pairs=${dataset.pairs.length} currentAUC=${summary.current.auc} bm25AUC=${summary.bm25.auc} admissions=${summary.candidateCounts.current.admittedPairs}->${summary.candidateCounts.bm25.admittedPairs} topK=${summary.candidateCounts.current.selectedWithinTopK}->${summary.candidateCounts.bm25.selectedWithinTopK}`);
+    if (notEvaluatedDatasets.has(dataset.name)) {
+      console.log(`[${dataset.name}] status=not_evaluated pairs=0 reason=no_labeled_same_diff_pairs`);
+      continue;
+    }
+    const summary = summaries[dataset.name] as { current: { auc: number | null }; bm25: { auc: number | null }; candidateCounts: { current: { admittedPairs: number; selectedWithinTopK: number }; bm25: { admittedPairs: number; selectedWithinTopK: number } } };
+    console.log(`[${dataset.name}] pairs=${dataset.pairs.length} currentAUC=${summary.current.auc ?? "n/a"} bm25AUC=${summary.bm25.auc ?? "n/a"} admissions=${summary.candidateCounts.current.admittedPairs}->${summary.candidateCounts.bm25.admittedPairs} topK=${summary.candidateCounts.current.selectedWithinTopK}->${summary.candidateCounts.bm25.selectedWithinTopK}`);
   }
   console.log(`[bm25-replay] excluded human labels=${JSON.stringify(hardCases.excludedLabels)} output=${args.out}`);
 }
