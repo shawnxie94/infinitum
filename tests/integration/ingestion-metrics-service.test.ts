@@ -235,6 +235,40 @@ describe("ingestion metrics service - AI usage aggregation", () => {
     });
   });
 
+  it("does not let corrupted breakdown entries pollute or truncate AI usage counts", async () => {
+    const today = new Date();
+    today.setUTCHours(10, 0, 0, 0);
+    await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "ingestion",
+        triggerType: "scheduled",
+        status: "succeeded",
+        label: "损坏 breakdown",
+        aiCallCountActual: 3,
+        aiCallBreakdownJson: JSON.stringify([
+          null,
+          { key: "item_understanding" },
+          { key: "item_understanding", actual: 1, estimated: 1 },
+          { key: "cluster_match", actual: "2", label: 3 },
+          { key: "cluster_merge", actual: 2, estimated: 1e309 },
+          { key: "daily_report", actual: 1 },
+        ]),
+        createdAt: today,
+      },
+    });
+
+    const metrics = await getIngestionMetrics(7);
+    const stat = metrics.dailyAiUsageStats.find((s) => s.date === today.toISOString().slice(0, 10));
+
+    expect(stat).toBeDefined();
+    expect(stat).toMatchObject({
+      itemUnderstandings: 1, // 缺失 actual 的坏项回退 0，不产生 NaN
+      clusterMatches: 0, // 非法 actual 字符串回退 0
+      clusterMerges: 2, // 坏项不中断循环，后续仍累计
+      dailyReports: 1,
+    });
+  });
+
   it("returns zero counts for dates with no qualifying task runs", async () => {
     const today = new Date("2026-06-16T10:00:00.000Z");
     // Only an irrelevant task kind, no AI-relevant rows

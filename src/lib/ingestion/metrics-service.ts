@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { buildFeedQualityScoreSql } from "@/lib/feed/quality-score";
+import { parseTaskAiCallBreakdownJson } from "@/lib/tasks/ai-usage-contracts";
 
 export type DailyArticleStat = {
   date: string;
@@ -73,29 +74,25 @@ function parseAiBreakdown(json: string | null): AiBreakdown {
   };
   if (!json) return result;
 
-  try {
-    const breakdown = JSON.parse(json) as { key: string; actual: number }[];
-    for (const item of breakdown) {
-      switch (item.key) {
-        case "item_understanding":
-          result.itemUnderstandings += item.actual;
-          break;
-        case "cluster_match":
-          result.clusterMatches += item.actual;
-          break;
-        case "cluster_merge":
-          result.clusterMerges += item.actual;
-          break;
-        case "cluster_summary":
-          result.clusterSummaries += item.actual;
-          break;
-        case "daily_report":
-          result.dailyReports += item.actual;
-          break;
-      }
+  // 逐项容错：坏项（含 null/非对象/非法数值）只丢弃自身，不中断后续累计。
+  for (const item of parseTaskAiCallBreakdownJson(json, { mode: "lenient" })) {
+    switch (item.key) {
+      case "item_understanding":
+        result.itemUnderstandings += item.actual;
+        break;
+      case "cluster_match":
+        result.clusterMatches += item.actual;
+        break;
+      case "cluster_merge":
+        result.clusterMerges += item.actual;
+        break;
+      case "cluster_summary":
+        result.clusterSummaries += item.actual;
+        break;
+      case "daily_report":
+        result.dailyReports += item.actual;
+        break;
     }
-  } catch {
-    // ignore parse errors — breakdown is best-effort
   }
 
   return result;

@@ -31,7 +31,6 @@ import {
   DEFAULT_INGESTION_SCHEDULE_KEY,
   DEFAULT_DAILY_REPORT_SCHEDULE_KEY,
   DEFAULT_ITEM_CLEANUP_SCHEDULE_KEY,
-  type TaskAiCallBreakdownKey,
   type TaskAiCallBreakdownSnapshot,
   type BackgroundTaskMonitorSnapshot,
   type EnqueueTaskRunInput,
@@ -57,96 +56,17 @@ import {
   serializeTaskStageTimings,
   serializeTaskTimeline,
 } from "@/lib/tasks/json-contracts";
+import {
+  getDefaultTaskAiCallBreakdown,
+  parseTaskAiCallBreakdownArray,
+} from "@/lib/tasks/ai-usage-contracts";
 import { DAILY_REPORT_RECOVERY_STAGE_LABELS, getDailyReportRecoveryStages } from "@/lib/daily-report/recovery";
 
 export const TASK_RUN_CANCELLED_MESSAGE = "管理员手动终止任务。";
 export const TASK_RUN_CANCELLED_LABEL = "任务已终止";
 const DEFAULT_DAILY_REPORT_CHANNEL_IDS = ["important"];
 
-const TASK_AI_CALL_BREAKDOWN_LABELS: Record<TaskAiCallBreakdownKey, string> = {
-  item_understanding: "条目理解",
-  cluster_match: "聚合匹配",
-  cluster_summary: "聚合摘要",
-  cluster_merge: "聚合合并",
-  entity_alias_check: "实体别名判定",
-  daily_report: "AI 日报",
-  daily_report_assess: "评估",
-  daily_report_plan: "规划",
-  daily_report_write: "写作",
-  daily_report_repair: "修复",
-  daily_report_review: "审核",
-};
-
-function getDefaultTaskAiCallBreakdown(): TaskAiCallBreakdownSnapshot[] {
-  return (Object.keys(TASK_AI_CALL_BREAKDOWN_LABELS) as TaskAiCallBreakdownKey[]).map((key) => ({
-    key,
-    label: TASK_AI_CALL_BREAKDOWN_LABELS[key],
-    actual: 0,
-    estimated: 0,
-  }));
-}
-
-function normalizeTokenField(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
-}
-
-function normalizeTaskAiCallBreakdownSnapshot(value: unknown): TaskAiCallBreakdownSnapshot | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const maybeSnapshot = value as Record<string, unknown>;
-  const rawKey = maybeSnapshot.key;
-
-  // 允许键以标签表为单一源（其类型绑定 TaskAiCallBreakdownKey），避免新增用量 key 时白名单漂移。
-  if (typeof rawKey !== "string" || !(rawKey in TASK_AI_CALL_BREAKDOWN_LABELS)) {
-    return null;
-  }
-
-  const key = rawKey as TaskAiCallBreakdownKey;
-
-  const promptTokens = normalizeTokenField(maybeSnapshot.promptTokens);
-  const completionTokens = normalizeTokenField(maybeSnapshot.completionTokens);
-  const totalTokens = normalizeTokenField(maybeSnapshot.totalTokens);
-  const cachedTokens = normalizeTokenField(maybeSnapshot.cachedTokens);
-  const tokenUsageSource = maybeSnapshot.tokenUsageSource === "provider"
-    || maybeSnapshot.tokenUsageSource === "estimated"
-    || maybeSnapshot.tokenUsageSource === "mixed"
-    ? maybeSnapshot.tokenUsageSource
-    : undefined;
-  const cachedTokensStatus = maybeSnapshot.cachedTokensStatus === "provider"
-    || maybeSnapshot.cachedTokensStatus === "partial"
-    || maybeSnapshot.cachedTokensStatus === "unavailable"
-    ? maybeSnapshot.cachedTokensStatus
-    : undefined;
-  const modelNames = Array.isArray(maybeSnapshot.modelNames)
-    ? [...new Set(maybeSnapshot.modelNames.filter((model): model is string => typeof model === "string" && model.trim().length > 0).map((model) => model.trim()))]
-    : [];
-  return {
-    key,
-    label: TASK_AI_CALL_BREAKDOWN_LABELS[key],
-    ...(modelNames.length > 0 ? { modelNames } : {}),
-    actual:
-      typeof maybeSnapshot.actual === "number" && Number.isFinite(maybeSnapshot.actual)
-        ? maybeSnapshot.actual
-        : 0,
-    estimated:
-      typeof maybeSnapshot.estimated === "number" && Number.isFinite(maybeSnapshot.estimated)
-        ? maybeSnapshot.estimated
-        : 0,
-    ...(totalTokens !== undefined || promptTokens !== undefined || completionTokens !== undefined
-      ? {
-          promptTokens: promptTokens ?? 0,
-          completionTokens: completionTokens ?? 0,
-          totalTokens: totalTokens ?? (promptTokens ?? 0) + (completionTokens ?? 0),
-          cachedTokens: cachedTokens ?? 0,
-          ...(cachedTokensStatus ? { cachedTokensStatus } : {}),
-          ...(tokenUsageSource ? { tokenUsageSource } : {}),
-        }
-      : {}),
-  };
-}
-
+/** monitor 展示路径：仅已知 key、默认 11 键兜底、标签表顺序，last-key-wins。 */
 function parseTaskAiCallBreakdownJson(value: string | null | undefined): TaskAiCallBreakdownSnapshot[] {
   const defaultBreakdown = getDefaultTaskAiCallBreakdown();
 
@@ -156,16 +76,12 @@ function parseTaskAiCallBreakdownJson(value: string | null | undefined): TaskAiC
 
   try {
     const parsed = JSON.parse(value) as unknown;
-
     if (!Array.isArray(parsed)) {
       return defaultBreakdown;
     }
-
-    const parsedEntries = parsed
-      .map(normalizeTaskAiCallBreakdownSnapshot)
-      .filter((snapshot): snapshot is TaskAiCallBreakdownSnapshot => snapshot !== null);
-    const parsedMap = new Map(parsedEntries.map((entry) => [entry.key, entry]));
-
+    const parsedMap = new Map(
+      parseTaskAiCallBreakdownArray(parsed).map((entry) => [entry.key, entry]),
+    );
     return defaultBreakdown.map((entry) => parsedMap.get(entry.key) ?? entry);
   } catch {
     return defaultBreakdown;

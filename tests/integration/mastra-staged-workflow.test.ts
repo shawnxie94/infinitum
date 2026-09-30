@@ -4,6 +4,7 @@ const mockState = vi.hoisted(() => ({
   runtimeConfig: null as unknown,
   rssItems: [] as unknown[],
   dailyReportOutcome: null as "partial" | "rejected" | "unavailable" | null,
+  aliasPairCalls: 0,
 }));
 
 vi.mock("@/lib/daily-report/generation", async (importOriginal) => {
@@ -43,6 +44,7 @@ vi.mock("@/lib/ai/provider-next", async (importOriginal) => ({
     get: (_target, property) => {
       if (property === "assessEntityAliasPairs") {
         return async (input: { pairs: Array<{ aName: string; bName: string }> }) => {
+          mockState.aliasPairCalls += 1;
           options?.onUsage?.({
             promptTokens: 640,
             completionTokens: 90,
@@ -157,7 +159,7 @@ vi.mock("@/lib/clusters/service", async (importOriginal) => ({
 
 import { prisma } from "@/lib/db";
 import { ensureDefaultDailyReportSchedule } from "@/lib/tasks/service";
-import { triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
+import { getAiRuntime, triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
 import {
   createItemReanalyzeWorkflowDefinition,
   createItemRegenerationWorkflowDefinition,
@@ -168,6 +170,7 @@ describe("Mastra staged task workflows", () => {
     mockState.runtimeConfig = null;
     mockState.rssItems = [];
     mockState.dailyReportOutcome = null;
+    mockState.aliasPairCalls = 0;
     await prisma.item.deleteMany();
     await prisma.fetchRun.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();
@@ -539,6 +542,49 @@ describe("Mastra staged task workflows", () => {
     expect(timings.find((timing) => timing.key === "entity_alias_check")?.detail).toContain("别名候选 1");
   });
 
+  it("preserves valid base usage totals and drops corrupted entries when projecting new AI usage", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "precompute",
+        triggerType: "manual",
+        status: "queued",
+        label: "预计算",
+        aiCallCountActual: 4,
+        aiCallCountEstimated: 2,
+        pipelineCheckpointJson: JSON.stringify({
+          __mastra: {
+            aiUsageBase: {
+              actual: 4,
+              estimated: 2,
+              breakdown: [
+                { key: "item_understanding", actual: 4, estimated: 2 },
+                { key: "legacy_unknown_stage", label: "历史阶段", actual: 2, estimated: 0 },
+                { key: "corrupted", actual: "9", estimated: -1 },
+              ],
+            },
+            aiUsageByStep: {},
+          },
+        }),
+      },
+    });
+
+    const result = await triggerTaskWorkflow("precompute", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const breakdown = JSON.parse(stored.aiCallBreakdownJson ?? "[]") as Array<{ key: string; actual: number }>;
+
+    expect(result.status).toBe("succeeded");
+    // base totals 保留，新 step（entity_alias_check=1）在其上累计
+    expect(stored.aiCallCountActual).toBe(5);
+    expect(stored.aiCallCountEstimated).toBe(3);
+    const keys = new Set(breakdown.map((entry) => entry.key));
+    expect(keys).toContain("item_understanding");
+    expect(keys).toContain("entity_alias_check");
+    // 宽松解析：未知历史 key 与合法计数保留
+    expect(breakdown.find((entry) => entry.key === "legacy_unknown_stage")).toMatchObject({ actual: 2 });
+    // 非法数值归零后无法通过 compact，不进入展示
+    expect(keys).not.toContain("corrupted");
+  });
+
   it("projects cluster summary AI usage onto the task run", async () => {
     const clusterId = "staged-cluster-summary-usage";
     const publishedAt = new Date("2026-06-30T00:00:00.000Z");
@@ -629,5 +675,172 @@ describe("Mastra staged task workflows", () => {
     expect(stageTimings.find((timing) => timing.key === "writeback")?.detail).toBe("聚类摘要已写回");
 
     await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
+  });
+
+  function precomputeRuntimeConfig() {
+    return {
+      modelApi: { apiKey: "test-key", baseURL: "https://example.test/v1", model: "test-model" },
+      ingestion: { aggregationSplitMaxEvents: 20 },
+      embedding: null,
+    };
+  }
+
+  type UsageByStep = Record<string, unknown>;
+
+  function readUsageByStep(stored: { pipelineCheckpointJson: string | null }): UsageByStep {
+    const checkpoint = JSON.parse(stored.pipelineCheckpointJson ?? "{}") as {
+      __mastra?: { aiUsageByStep?: UsageByStep };
+    };
+    return checkpoint.__mastra?.aiUsageByStep ?? {};
+  }
+
+  async function resetTaskForReplay(taskRunId: string) {
+    await prisma.backgroundTaskRun.update({
+      where: { id: taskRunId },
+      data: { status: "queued", cancelRequestedAt: null },
+    });
+  }
+
+  it("replaying the same workflow identity does not double-count persisted usage", async () => {
+    mockState.runtimeConfig = precomputeRuntimeConfig();
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "precompute",
+        triggerType: "manual",
+        status: "queued",
+        label: "预计算",
+        aiCallCountActual: 4,
+        aiCallCountEstimated: 2,
+        pipelineCheckpointJson: JSON.stringify({
+          __mastra: {
+            aiUsageBase: {
+              actual: 4,
+              estimated: 2,
+              breakdown: [
+                { key: "item_understanding", actual: 4, estimated: 2 },
+                { key: "corrupted", actual: "9", estimated: -1 },
+              ],
+            },
+            aiUsageByStep: {
+              "legacy-run:precompute-entity_alias_check:1:0": {
+                actual: -5,
+                estimated: "not-a-number",
+                breakdown: [{ key: "entity_alias_check", actual: -1, totalTokens: "bad" }],
+              },
+              "legacy-run2:precompute-entity_alias_check:1:0": {
+                actual: 2,
+                estimated: 1,
+                breakdown: [{ key: "entity_alias_check", actual: 2, promptTokens: 100, completionTokens: 20, totalTokens: 120 }],
+              },
+              "legacy-run3:ingestion-ai_call:1:0": { actual: 3, estimated: 0, breakdown: [] },
+            },
+          },
+        }),
+      },
+    });
+
+    const workflow = getAiRuntime().mastra.getWorkflow("precompute");
+    const run = await workflow.createRun();
+    await run.start({ inputData: { taskRunId: taskRun.id } });
+    const afterFirst = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const byStepFirst = readUsageByStep(afterFirst);
+    const realKeys = Object.keys(byStepFirst).filter((key) => !key.startsWith("legacy-"));
+    const breakdownFirst = JSON.parse(afterFirst.aiCallBreakdownJson ?? "[]") as Array<{
+      key: string;
+      actual: number;
+      estimated?: number;
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      label?: string;
+    }>;
+
+    // 合法 base totals 保留（不从损坏后的不完整 breakdown 重算），合法 byStep 各自累计
+    expect(afterFirst.aiCallCountActual).toBe(10);
+    expect(afterFirst.aiCallCountEstimated).toBe(4);
+    // 同 workflowRunId/stepId/attempt/retryCount 的真实 identity 恰好落一个 key
+    expect(realKeys).toHaveLength(1);
+    expect(realKeys[0]).toMatch(/:precompute-entity_alias_check:1:0$/);
+    // 损坏 byStep 原样滞留 checkpoint（读取边界归零），但不参与累计；合法 byStep 保留且 tokens 精确
+    expect(Object.keys(byStepFirst)).toHaveLength(4);
+    expect(byStepFirst["legacy-run:precompute-entity_alias_check:1:0"]).toMatchObject({ actual: -5 });
+    expect(byStepFirst["legacy-run2:precompute-entity_alias_check:1:0"]).toMatchObject({
+      actual: 2,
+      estimated: 1,
+    });
+    const entity = breakdownFirst.find((entry) => entry.key === "entity_alias_check");
+    expect(entity).toMatchObject({
+      actual: 3,
+      promptTokens: 740,
+      completionTokens: 110,
+      totalTokens: 850,
+    });
+    // 空breakdown 的合法 byStep（ingestion-ai_call actual 3）只累计 totals，不产生 breakdown 条目
+    expect(breakdownFirst.find((entry) => entry.key === "item_understanding")).toMatchObject({ actual: 4 });
+    expect(breakdownFirst.find((entry) => entry.key === "corrupted")).toBeUndefined();
+
+    // 重置任务状态后重放同一 run：identity 相同，不得重复累计
+    expect(mockState.aliasPairCalls).toBe(1);
+    await resetTaskForReplay(taskRun.id);
+    await run.start({ inputData: { taskRunId: taskRun.id } });
+    const afterReplay = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+
+    // stage 确实真实重放（fake 被再次调用、再次 emit usage），但相同 identity 命中既有 key 被去重
+    expect(mockState.aliasPairCalls).toBe(2);
+    expect(afterReplay.aiCallCountActual).toBe(10);
+    expect(afterReplay.aiCallCountEstimated).toBe(4);
+    expect(JSON.parse(afterReplay.aiCallBreakdownJson ?? "[]")).toEqual(breakdownFirst);
+    expect(Object.keys(readUsageByStep(afterReplay))).toEqual(Object.keys(byStepFirst));
+  });
+
+  it("accumulates usage under a new identity when attempt/retryCount differ for the same run and step", async () => {
+    mockState.runtimeConfig = precomputeRuntimeConfig();
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: { kind: "precompute", triggerType: "manual", status: "queued", label: "预计算" },
+    });
+
+    const workflow = getAiRuntime().mastra.getWorkflow("precompute");
+    const run = await workflow.createRun();
+    // 同一 workflowRunId + stepId，仅 attempt/retryCount 不同的 identity 预置合法投影
+    const seedKey = `${run.runId}:precompute-entity_alias_check:2:3`;
+    await prisma.backgroundTaskRun.update({
+      where: { id: taskRun.id },
+      data: {
+        pipelineCheckpointJson: JSON.stringify({
+          __mastra: {
+            aiUsageByStep: {
+              [seedKey]: {
+                actual: 1,
+                estimated: 1,
+                breakdown: [{ key: "entity_alias_check", actual: 1, promptTokens: 640, completionTokens: 90, totalTokens: 730 }],
+              },
+            },
+          },
+        }),
+      },
+    });
+
+    await run.start({ inputData: { taskRunId: taskRun.id } });
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const byStepKeys = Object.keys(readUsageByStep(stored));
+    const breakdown = JSON.parse(stored.aiCallBreakdownJson ?? "[]") as Array<{
+      key: string;
+      actual: number;
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+    }>;
+
+    // 真实运行 identity (:1:0) 与预置 attempt/retryCount identity (:2:3) 各自累计
+    expect(stored.aiCallCountActual).toBe(2);
+    expect(stored.aiCallCountEstimated).toBe(2);
+    expect(byStepKeys.filter((key) => key === seedKey)).toHaveLength(1);
+    expect(byStepKeys.filter((key) => key === `${run.runId}:precompute-entity_alias_check:1:0`)).toHaveLength(1);
+    expect(breakdown.find((entry) => entry.key === "entity_alias_check")).toMatchObject({
+      actual: 2,
+      promptTokens: 1280,
+      completionTokens: 180,
+      totalTokens: 1460,
+    });
   });
 });

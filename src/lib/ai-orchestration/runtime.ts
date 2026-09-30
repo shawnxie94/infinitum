@@ -9,6 +9,11 @@ import { createDomainTaskRunWorkflow } from "@infinitum/ai/orchestration/task-de
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
 import type { TaskStepIdentity, TaskStepLifecycleEvent } from "@infinitum/ai/orchestration/types";
 import type { TaskAiCallBreakdownSnapshot, TaskStageTimingSnapshot } from "@/lib/tasks/types";
+import {
+  normalizeAiUsageCount,
+  parseTaskAiCallBreakdownArray,
+  parseTaskAiCallBreakdownJson as parseAiBreakdownJsonLenient,
+} from "@/lib/tasks/ai-usage-contracts";
 
 /**
  * 主仓侧编排接线（spec P1b-P4/D11）：
@@ -131,21 +136,9 @@ async function projectTaskStepTiming(event: TaskStepLifecycleEvent) {
   });
 }
 
+// 历史存储可能包含未知 key 或缺失 label 的条目：宽松解析保留 key+计数，逐项容错。
 function parseAiBreakdown(value: string | null): TaskAiCallBreakdownSnapshot[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed)
-      ? parsed.filter((entry): entry is TaskAiCallBreakdownSnapshot => (
-        Boolean(entry)
-        && typeof entry === "object"
-        && typeof (entry as Record<string, unknown>).key === "string"
-        && typeof (entry as Record<string, unknown>).label === "string"
-      ))
-      : [];
-  } catch {
-    return [];
-  }
+  return parseAiBreakdownJsonLenient(value, { mode: "lenient" });
 }
 
 function compactAiBreakdown(entries: TaskAiCallBreakdownSnapshot[]) {
@@ -213,16 +206,9 @@ type AiUsageIdentity = TaskStepIdentity & { attempt: number; retryCount: number 
 function parseAiUsageProjection(value: unknown): AiUsageProjection | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as Record<string, unknown>;
-  const actual = typeof raw.actual === "number" && Number.isFinite(raw.actual) ? raw.actual : 0;
-  const estimated = typeof raw.estimated === "number" && Number.isFinite(raw.estimated) ? raw.estimated : 0;
-  const breakdown = Array.isArray(raw.breakdown)
-    ? compactAiBreakdown(raw.breakdown.filter((entry): entry is TaskAiCallBreakdownSnapshot => (
-      Boolean(entry)
-      && typeof entry === "object"
-      && typeof (entry as Record<string, unknown>).key === "string"
-      && typeof (entry as Record<string, unknown>).label === "string"
-    )))
-    : [];
+  const actual = normalizeAiUsageCount(raw.actual);
+  const estimated = normalizeAiUsageCount(raw.estimated);
+  const breakdown = compactAiBreakdown(parseTaskAiCallBreakdownArray(raw.breakdown, { mode: "lenient" }));
   return { actual, estimated, breakdown };
 }
 
