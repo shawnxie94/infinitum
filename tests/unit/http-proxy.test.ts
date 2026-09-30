@@ -62,7 +62,7 @@ describe("fetch proxy configuration", () => {
     expect(undiciMock.EnvHttpProxyAgent).toHaveBeenCalledWith({
       httpProxy: "http://proxy.example.com:8080",
       httpsProxy: "http://secure-proxy.example.com:8080",
-      noProxy: "localhost,127.0.0.1",
+      noProxy: "localhost,127.0.0.1,app",
     });
     expect(undiciMock.setGlobalDispatcher).toHaveBeenCalledWith(undiciMock.dispatcher);
   });
@@ -80,7 +80,19 @@ describe("fetch proxy configuration", () => {
     expect(undiciMock.EnvHttpProxyAgent).toHaveBeenCalledWith({
       httpProxy: "http://lowercase.example.com:8080",
       httpsProxy: undefined,
-      noProxy: "lowercase.local",
+      noProxy: "lowercase.local,app",
+    });
+  });
+
+  it("bypasses Docker-internal app even when no NO_PROXY value is configured", async () => {
+    const { configureFetchProxyFromEnv } = await importProxyModule();
+
+    configureFetchProxyFromEnv({ HTTP_PROXY: "http://proxy.example.com:8080" });
+
+    expect(undiciMock.EnvHttpProxyAgent).toHaveBeenCalledWith({
+      httpProxy: "http://proxy.example.com:8080",
+      httpsProxy: undefined,
+      noProxy: "app",
     });
   });
 

@@ -34,6 +34,19 @@ export function hasProxyEnvironment(env: ProxyEnvironment = process.env) {
   );
 }
 
+function ensureInternalAppBypass(noProxy: string | undefined) {
+  const entries = (noProxy ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (!entries.some((entry) => entry.toLowerCase() === "app")) {
+    entries.push("app");
+  }
+
+  return entries.join(",");
+}
+
 export function configureFetchProxyFromEnv(env: ProxyEnvironment = process.env): ProxyConfigurationResult {
   if (configuredDispatcher) {
     return {
@@ -52,7 +65,7 @@ export function configureFetchProxyFromEnv(env: ProxyEnvironment = process.env):
   const dispatcher = new EnvHttpProxyAgent({
     httpProxy: getProxyEnvironmentValue(env, "HTTP_PROXY", "http_proxy"),
     httpsProxy: getProxyEnvironmentValue(env, "HTTPS_PROXY", "https_proxy"),
-    noProxy: getProxyEnvironmentValue(env, "NO_PROXY", "no_proxy"),
+    noProxy: ensureInternalAppBypass(getProxyEnvironmentValue(env, "NO_PROXY", "no_proxy")),
   });
 
   setGlobalDispatcher(dispatcher);
