@@ -5,6 +5,7 @@ import {
   compactClusterMergeInputForModel,
   makeClusterMergePairId,
   parseClusterMergeDecisions,
+  resolveClusterMergeGroupsFromDecisions,
   parseClusterMergeInputMetadata,
   splitClusterMergeInputBatches,
 } from "@/lib/ai/protocols/cluster";
@@ -113,6 +114,36 @@ describe("cluster merge pair-id protocol", () => {
       ["amazfit-cluster", 1],
       ["razer-cluster", 1],
     ]))).toEqual([]);
+  });
+
+  it("blocks the full approved component when it contains a declined pair and preserves other components", () => {
+    const decisions = [
+      { leftClusterId: "A", rightClusterId: "B", verdict: "approved" as const },
+      { leftClusterId: "B", rightClusterId: "C", verdict: "approved" as const },
+      { leftClusterId: "A", rightClusterId: "C", verdict: "declined" as const },
+      { leftClusterId: "D", rightClusterId: "E", verdict: "approved" as const },
+    ];
+
+    expect(resolveClusterMergeGroupsFromDecisions(decisions, new Map([
+      ["A", 1], ["B", 1], ["C", 1], ["D", 1], ["E", 1],
+    ]))).toEqual({
+      groups: [["D", "E"]],
+      conflicts: [{
+        reason: "declined_pair_within_approved_component",
+        clusterIds: ["A", "B", "C"],
+        declinedPairs: [{ leftClusterId: "A", rightClusterId: "C" }],
+      }],
+    });
+    expect(decisions.map((decision) => decision.verdict)).toEqual(["approved", "approved", "declined", "approved"]);
+  });
+
+  it("keeps existing groups when declined pairs do not contradict an approved component", () => {
+    const result = resolveClusterMergeGroupsFromDecisions([
+      { leftClusterId: "A", rightClusterId: "B", verdict: "approved" },
+      { leftClusterId: "X", rightClusterId: "Y", verdict: "declined" },
+    ], new Map([["A", 1], ["B", 1]]));
+
+    expect(result).toEqual({ groups: [["A", "B"]], conflicts: [] });
   });
 
   it("splits model inputs into batches no larger than five pairs", () => {

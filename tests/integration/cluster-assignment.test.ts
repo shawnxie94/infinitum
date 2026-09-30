@@ -2242,7 +2242,7 @@ describe("cluster assignment", () => {
     { maxTarget: "A", counts: { A: 3, B: 2, C: 1 } },
     { maxTarget: "B", counts: { A: 2, B: 3, C: 1 } },
     { maxTarget: "C", counts: { A: 1, B: 2, C: 3 } },
-  ])("keeps an explicitly declined triangle pair separate when $maxTarget is the largest target", async ({ counts }) => {
+  ])("blocks the entire approved component when a triangle contains a declined pair (largest target: $maxTarget)", async ({ counts }) => {
     const source = await prisma.source.create({
       data: {
         name: "Transitive Conflict Feed",
@@ -2307,12 +2307,42 @@ describe("cluster assignment", () => {
       where: { id: { in: ["A-item-0", "B-item-0", "C-item-0"] } },
       select: { id: true, clusterId: true },
     });
+    const recordedDecisions = await prisma.clusterDecision.findMany({
+      where: {
+        kind: "cluster_pair",
+        leftClusterId: { in: clusterIds },
+        rightClusterId: { in: clusterIds },
+      },
+      select: { verdict: true },
+    });
 
     expect(assessClusterMergePairs).toHaveBeenCalledOnce();
-    expect(result.mergedCount).toBe(1);
-    expect(remainingClusters).toHaveLength(2);
-    expect(itemClusters.find((item) => item.id === "A-item-0")?.clusterId)
-      .not.toBe(itemClusters.find((item) => item.id === "C-item-0")?.clusterId);
+    expect(result).toMatchObject({
+      skipped: false,
+      aiMergeGroups: 0,
+      mergedCount: 0,
+      decisionsApproved: 2,
+      decisionsDeclined: 1,
+    });
+    expect(result.pairDiagnostics).toHaveLength(3);
+    expect(result.pairDiagnostics.map((diagnostic) => diagnostic.decision.verdict).sort())
+      .toEqual(["approved", "approved", "declined"]);
+    expect(result.pairDiagnostics.every((diagnostic) =>
+      diagnostic.groupConflict?.reason === "declined_pair_within_approved_component"
+    )).toBe(true);
+    expect(result.pairDiagnostics[0]?.groupConflict).toEqual({
+      reason: "declined_pair_within_approved_component",
+      clusterIds: ["A", "B", "C"],
+      declinedPairs: [{ leftClusterId: "A", rightClusterId: "C" }],
+    });
+    expect(recordedDecisions.map((decision) => decision.verdict).sort())
+      .toEqual(["approved", "approved", "declined"]);
+    expect(remainingClusters.map((cluster) => cluster.id).sort()).toEqual(["A", "B", "C"]);
+    expect(Object.fromEntries(itemClusters.map((item) => [item.id, item.clusterId]))).toEqual({
+      "A-item-0": "A",
+      "B-item-0": "B",
+      "C-item-0": "C",
+    });
   });
 
   it("uses vector recall when no BM25 sparse candidate exists", async () => {

@@ -24,9 +24,10 @@ import {
 } from "@/config/constants";
 
 import {
-  buildClusterMergeGroupsFromDecisions,
   makeClusterMergePairId,
+  resolveClusterMergeGroupsFromDecisions,
   splitClusterMergeInputBatches,
+  type ClusterMergeGroupConflict,
 } from "@/lib/ai/protocols/cluster";
 import { createAiProvider } from "@/lib/ai/provider-next";
 import { type AiCallUsage, type AiEventSignature, type AiProvider, type ClusterMergeDecision } from "@/lib/ai/provider-types";
@@ -1161,6 +1162,7 @@ export type ClusterMergePairDiagnostic = {
   bm25Score: number | null;
   vectorSimilarity: number | null;
   signals: ReturnType<typeof getClusterMergePairAuditSignals>;
+  groupConflict?: ClusterMergeGroupConflict;
   decision: {
     verdict: ClusterMergeDecision["verdict"] | "failed";
     confidence: number | null;
@@ -1556,6 +1558,7 @@ function buildClusterMergePairDiagnostics(
   allowedPairs: ClusterMergeCandidateEdge[],
   decisions: Array<Awaited<ReturnType<typeof recordClusterDecision>>>,
   consistencyAudits: ReadonlyMap<string, ClusterMergeDecisionConsistencyAudit> = new Map(),
+  groupConflicts: ClusterMergeGroupConflict[] = [],
 ): ClusterMergePairDiagnostic[] {
   const decisionsByPairKey = new Map(decisions.map((decision) => [decision.pairKey, decision]));
 
@@ -1565,6 +1568,9 @@ function buildClusterMergePairDiagnostics(
     const pairKey = buildClusterMergeEdgeKey(edge.leftId, edge.rightId);
     const decision = decisionsByPairKey.get(pairKey);
     if (!left || !right || !decision) return [];
+    const groupConflict = groupConflicts.find((conflict) =>
+      conflict.clusterIds.includes(edge.leftId) && conflict.clusterIds.includes(edge.rightId)
+    );
 
     return [{
       pairId: makeClusterMergePairId(edge.leftId, edge.rightId),
@@ -1578,6 +1584,7 @@ function buildClusterMergePairDiagnostics(
       bm25Score: edge.bm25Score ?? null,
       vectorSimilarity: edge.vectorSimilarity ?? null,
       signals: getClusterMergePairAuditSignals(left, right),
+      ...(groupConflict ? { groupConflict } : {}),
       decision: {
         verdict: decision.verdict,
         confidence: decision.confidence,
@@ -1876,6 +1883,7 @@ export async function executeClusterMerge(
   timings.promptChars = clustersJson.length;
   let mergeGroups: string[][];
   let mergeDecisions: ClusterMergeDecision[] | undefined;
+  let groupConflicts: ClusterMergeGroupConflict[] = [];
   const consistencyAudits = new Map<string, ClusterMergeDecisionConsistencyAudit>();
 
   const aiMergeStartedAt = Date.now();
@@ -1900,7 +1908,9 @@ export async function executeClusterMerge(
       return result.decision;
     });
     const itemCounts = new Map(allCandidates.map((candidate) => [candidate.id, candidate.itemCount]));
-    mergeGroups = buildClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
+    const groupResolution = resolveClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
+    mergeGroups = groupResolution.groups;
+    groupConflicts = groupResolution.conflicts;
   } catch (error) {
     timings.aiMergeMs = Date.now() - aiMergeStartedAt;
     const failureReason = error instanceof Error ? error.message : "Unknown cluster merge AI error";
@@ -2034,6 +2044,7 @@ export async function executeClusterMerge(
       allowedPairs,
       recordedMergeDecisions,
       consistencyAudits,
+      groupConflicts,
     ),
     ...timings,
     aiMergeGroups: mergeGroups.filter((group) => group.length >= 2).length,

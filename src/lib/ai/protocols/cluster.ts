@@ -105,39 +105,37 @@ export type ClusterMergeInputMetadata = {
   pairs: Array<{ pairId: string; leftClusterId: string; rightClusterId: string }>;
 };
 
-function buildClusterMergeGroupsFromApprovedEdges(
-  approvedEdges: Array<[string, string]>,
-  metadata: { itemCounts: Map<string, number>; preservePairOrder?: boolean },
-) {
-  const adjacency = new Map<string, Set<string>>();
+export type ClusterMergeGroupConflict = {
+  reason: "declined_pair_within_approved_component";
+  clusterIds: string[];
+  declinedPairs: Array<{ leftClusterId: string; rightClusterId: string }>;
+};
 
+type ApprovedClusterMergeGraph = {
+  adjacency: Map<string, Set<string>>;
+  components: string[][];
+};
+
+function buildApprovedClusterMergeGraph(approvedEdges: Array<[string, string]>): ApprovedClusterMergeGraph {
+  const adjacency = new Map<string, Set<string>>();
   for (const [leftId, rightId] of approvedEdges) {
-    if (!adjacency.has(leftId)) {
-      adjacency.set(leftId, new Set());
-    }
-    if (!adjacency.has(rightId)) {
-      adjacency.set(rightId, new Set());
-    }
+    if (!adjacency.has(leftId)) adjacency.set(leftId, new Set());
+    if (!adjacency.has(rightId)) adjacency.set(rightId, new Set());
     adjacency.get(leftId)!.add(rightId);
     adjacency.get(rightId)!.add(leftId);
   }
 
   const visited = new Set<string>();
-  const groups: string[][] = [];
-
+  const components: string[][] = [];
   for (const clusterId of adjacency.keys()) {
-    if (visited.has(clusterId)) {
-      continue;
-    }
+    if (visited.has(clusterId)) continue;
 
     const component: string[] = [];
     const stack = [clusterId];
     visited.add(clusterId);
-
     while (stack.length > 0) {
       const currentId = stack.pop()!;
       component.push(currentId);
-
       for (const nextId of adjacency.get(currentId) ?? []) {
         if (!visited.has(nextId)) {
           visited.add(nextId);
@@ -145,10 +143,21 @@ function buildClusterMergeGroupsFromApprovedEdges(
         }
       }
     }
+    components.push(component);
+  }
 
-    if (component.length < 2) {
-      continue;
-    }
+  return { adjacency, components };
+}
+
+function buildClusterMergeGroupsFromApprovedEdges(
+  approvedEdges: Array<[string, string]>,
+  metadata: { itemCounts: Map<string, number>; preservePairOrder?: boolean },
+) {
+  const { adjacency, components } = buildApprovedClusterMergeGraph(approvedEdges);
+  const groups: string[][] = [];
+
+  for (const component of components) {
+    if (component.length < 2) continue;
 
     const targetId = [...component].sort((leftId, rightId) => {
       const itemCountDiff = (metadata.itemCounts.get(rightId) ?? 0) - (metadata.itemCounts.get(leftId) ?? 0);
@@ -158,25 +167,57 @@ function buildClusterMergeGroupsFromApprovedEdges(
       const itemCountDiff = (metadata.itemCounts.get(rightId) ?? 0) - (metadata.itemCounts.get(leftId) ?? 0);
       return itemCountDiff || (metadata.preservePairOrder ? 0 : leftId.localeCompare(rightId));
     });
-
-    if (directSources.length > 0) {
-      groups.push([targetId, ...directSources]);
-    }
+    if (directSources.length > 0) groups.push([targetId, ...directSources]);
   }
 
   return groups;
+}
+
+export function resolveClusterMergeGroupsFromDecisions(
+  decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "verdict">>,
+  itemCounts: Map<string, number>,
+) {
+  const approvedEdges = decisions
+    .filter((decision) => decision.verdict === "approved")
+    .map((decision) => [decision.leftClusterId, decision.rightClusterId] as [string, string]);
+  const approvedComponents = buildApprovedClusterMergeGraph(approvedEdges).components;
+  const conflicts: ClusterMergeGroupConflict[] = [];
+
+  for (const component of approvedComponents) {
+    const members = new Set(component);
+    const declinedPairs = decisions
+      .filter((decision) =>
+        decision.verdict === "declined" &&
+        members.has(decision.leftClusterId) &&
+        members.has(decision.rightClusterId)
+      )
+      .map(({ leftClusterId, rightClusterId }) => ({ leftClusterId, rightClusterId }))
+      .sort((left, right) =>
+        left.leftClusterId.localeCompare(right.leftClusterId) || left.rightClusterId.localeCompare(right.rightClusterId)
+      );
+    if (declinedPairs.length === 0) continue;
+
+    conflicts.push({
+      reason: "declined_pair_within_approved_component",
+      clusterIds: [...component].sort(),
+      declinedPairs,
+    });
+  }
+
+  const conflictedClusterIds = new Set(conflicts.flatMap((conflict) => conflict.clusterIds));
+  const safeApprovedEdges = approvedEdges.filter(([leftId]) => !conflictedClusterIds.has(leftId));
+  const groups = buildClusterMergeGroupsFromApprovedEdges(
+    safeApprovedEdges,
+    { itemCounts, preservePairOrder: true },
+  );
+  return { groups, conflicts };
 }
 
 export function buildClusterMergeGroupsFromDecisions(
   decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "verdict">>,
   itemCounts: Map<string, number>,
 ) {
-  return buildClusterMergeGroupsFromApprovedEdges(
-    decisions
-      .filter((decision) => decision.verdict === "approved")
-      .map((decision) => [decision.leftClusterId, decision.rightClusterId]),
-    { itemCounts, preservePairOrder: true },
-  );
+  return resolveClusterMergeGroupsFromDecisions(decisions, itemCounts).groups;
 }
 
 export function parseClusterMergeInputMetadata(clustersJson: string): ClusterMergeInputMetadata {
