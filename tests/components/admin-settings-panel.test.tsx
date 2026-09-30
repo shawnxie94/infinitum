@@ -1814,6 +1814,7 @@ describe("AdminSettingsPanel", () => {
     await user.click(screen.getByRole("tab", { name: "速览配置" }));
 
     const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText("配置速览的展示规则和频道。")).toBeInTheDocument();
     expect(within(panel).queryByText("事件偏好")).not.toBeInTheDocument();
     expect(within(panel).getByText("速览频道")).toBeInTheDocument();
     expect(within(panel).queryByRole("button", { name: "偏好建议" })).not.toBeInTheDocument();

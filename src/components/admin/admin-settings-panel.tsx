@@ -1320,7 +1320,7 @@ export function AdminSettingsPanel({
                     速览配置
                   </h2>
                   <p className="text-sm text-[var(--text-3)]">
-                    配置速览的展示规则、频道和事件偏好。
+                    配置速览的展示规则和频道。
                   </p>
                 </div>
                 <Button
