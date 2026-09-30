@@ -1,24 +1,10 @@
 #!/usr/bin/env node
 /**
- * Embedding + RRF 融合召回评估（Phase 1）。
+ * Cluster-pair embedding recall historical evaluation.
  *
- * 在生产快照（只读）上对比两种候选切片策略：
- *   rule  : 现行规则排序 + score>=CLUSTER_AI_MIN_SCORE 准入（生产现状）
- *   fused : 规则排序与向量相似度排序做 RRF 融合（本次改造）
- *
- * 分层（银标，非人工全量真值）：
- *   gray-positives : cluster_merge_clean_pair_candidates（双侧存活，规则分>=灰区）
- *   declined-negs  : cluster_decisions verdict=declined 且双侧存活（不应被召回）
- *   csv-approved / csv-declined : --csv 标注集（eval-sample-30d + 向量挖掘标注集）
- *   feedback-approved / feedback-declined : cluster_pair_labels（Phase 3 人工反馈，
- *     来自管理台复核/拆分/移动动作的回写；旧快照无此表则自动跳过）
- *
- * 每个分层输出 rule分带(B侧) 分布（≥95/55-95/35-55/<35/rejected）——人工判定
- * 落在规则分轴的哪个位置，即阈值校准视图。
- *
- * 口径说明：approved 决策对的被合并侧 cluster 已删除、无法取文本，因此正例主要来自
- * 灰区候选表；「规则完全漏掉但语义同事件」的增量召回无法用生产数据度量，
- * 需等 Phase 3 人工反馈闭环积累真值。
+ * Compares the legacy pair-score baseline with vector/RRF ranking on read-only snapshots.
+ * This offline tool does not describe the current item-assignment production path.
+ * The stored score bands and 35-point floor are historical comparison settings only.
  *
  * Usage:
  *   npx tsx scripts/eval-embedding-recall.ts --db <snapshot> [--days 30] \
@@ -41,7 +27,7 @@ import { DatabaseSync } from "node:sqlite";
 type SqlRow = Record<string, any>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const RULE_MIN_SCORE = 35; // CLUSTER_AI_MIN_SCORE：生产切片的规则准入线
+const LEGACY_PAIR_SCORE_MIN = 35;
 
 function parseArgs(argv: string[]) {
   const args: {
@@ -530,7 +516,7 @@ async function main() {
           return {
             ...entry,
             conflictVeto,
-            eligible: !conflictVeto && entry.result.score >= RULE_MIN_SCORE,
+            eligible: !conflictVeto && entry.result.score >= LEGACY_PAIR_SCORE_MIN,
           };
         });
 
@@ -540,7 +526,7 @@ async function main() {
         if (bEntry.result.rejected) bands.rejected += 1;
         else if (bEntry.result.score >= 95) bands.strong += 1;
         else if (bEntry.result.score >= 55) bands.gray += 1;
-        else if (bEntry.result.score >= RULE_MIN_SCORE) bands.low += 1;
+        else if (bEntry.result.score >= LEGACY_PAIR_SCORE_MIN) bands.low += 1;
         else bands.below += 1;
       }
 

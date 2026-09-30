@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "dataset": "item-assignment-bm25-human-review",
+  "sourceSnapshotSha256": "5498fc863e0ec29eee59ed5c9ce1916e6c7433079f4640ae14f4e2b2bac4e2d6",
+  "sourceSnapshot": "dev-read.db",
+  "seed": 260926,
+  "lookbackDays": 7,
+  "requestedItemGroups": 40,
+  "itemGroups": 40,
+  "reviewRows": 118,
+  "eligibleAssignedClusterItemsBeforeSignatureAndAlternativeFilters": 98,
+  "candidateConstruction": "For each sampled processed item, take the deduplicated union of its assigned active cluster, the raw current-rule top alternative, and the BM25 top alternative from the active 7-day candidate pool. This is a challenge set, not an estimate of production admission or prevalence; reviewer evidence lists sibling items only, excluding the anchor item.",
+  "labelInstructions": "Set humanLabel to same or diff for whether the item belongs to the candidate cluster as the same event. Use event identity, not broad topic similarity. Leave machine verdicts and ranking assumptions out of the judgment; explain edge cases in reviewNotes.",
+  "humanLabelValues": [
+    "same",
+    "diff"
+  ],
+  "labelsInitiallyBlank": true,
+  "csvSha256": "13918b65a21e5e71c1cbaa6c643151de2827cb7a36af0856b630f231a930996e"
+}
