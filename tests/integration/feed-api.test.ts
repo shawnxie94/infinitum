@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { refreshAllClusterFeedStats, refreshClusterFeedStats } from "@/lib/clusters/feed-stats";
 import { resolveFeedFilters } from "@/lib/feed/range";
@@ -576,6 +577,318 @@ describe("/api/feed", () => {
     }
   });
 
+  it("captures real candidate, page, group-count, and fallback SQL plans in both filtering modes", async () => {
+    const filters = resolveFeedFilters({ range: "all", sort: "time_desc", start: null, end: null, groupId: null, sourceId: null, title: null }, new Date("2026-04-10T12:00:00Z"));
+    const originalMode = process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED;
+    const allPlans: Array<{ mode: string; sql: string; values: unknown[]; details: string[] }> = [];
+    try {
+      for (const mode of ["enabled", "legacy"]) {
+        if (mode === "legacy") process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED = "false";
+        else delete process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED;
+        const querySpy = vi.spyOn(prisma, "$queryRaw");
+        await listFeedItems(filters, { page: 1, size: 2 });
+        const queries = querySpy.mock.calls.map(([query]) => query as Prisma.Sql);
+        querySpy.mockRestore();
+        expect(queries.length).toBeGreaterThanOrEqual(3);
+        expect(queries.some((query) => query.sql.includes("LIMIT") && query.sql.includes("OFFSET"))).toBe(true);
+        expect(queries.some((query) => query.sql.includes("grouped_entries"))).toBe(true);
+        expect(queries.some((query) => query.sql.includes("SELECT COUNT(*) AS total"))).toBe(true);
+        for (const [index, query] of queries.entries()) {
+          const plan = await prisma.$queryRaw<Array<{ detail: string }>>(Prisma.sql`EXPLAIN QUERY PLAN ${query}`);
+          allPlans.push({
+            mode,
+            sql: query.sql.replace(/\s+/g, " ").trim(),
+            values: query.values.map((value) => value instanceof Date ? value.toISOString() : value),
+            details: plan.map(({ detail }) => detail),
+          });
+          expect(index).toBeLessThan(4);
+        }
+      }
+    } finally {
+      vi.restoreAllMocks();
+      if (originalMode === undefined) delete process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED;
+      else process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED = originalMode;
+    }
+    const sqliteVersion = await prisma.$queryRaw<Array<{ version: string }>>(Prisma.sql`SELECT sqlite_version() AS version`);
+    expect({ sqliteVersion: sqliteVersion[0]?.version, plans: allPlans }).toMatchInlineSnapshot(`
+      {
+        "plans": [
+          {
+            "details": [
+              "CO-ROUTINE all_entry_candidates",
+              "COMPOUND QUERY",
+              "LEFT-MOST SUBQUERY",
+              "SEARCH cc USING INDEX content_clusters_status_latestCreatedAt_idx (status=? AND latestCreatedAt>?)",
+              "UNION ALL",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SCAN all_entry_candidates",
+              "USE TEMP B-TREE FOR ORDER BY",
+            ],
+            "mode": "enabled",
+            "sql": "WITH cluster_entries AS ( SELECT cc.id AS id, 'cluster' AS type, cc.id AS "clusterId", cc."latestPublishedAt" AS "latestPublishedAt", cc."latestCreatedAt" AS "createdAt", cc."displayAverageScore" AS score, cc."displaySourceCount" AS "sourceCount", cc."displayItemCount" AS "itemCount", cc."displayItemCount" AS "totalItemCount", cc."dominantGroupId" AS "entryGroupId", cc."displayQualityScore" AS "qualityScore" FROM "content_clusters" cc WHERE cc.status = ? AND cc."displayItemCount" > 1 AND cc."latestCreatedAt" IS NOT NULL ), single_entries AS ( SELECT i.id AS id, 'single' AS type, i."clusterId" AS "clusterId", i."publishedAt" AS "latestPublishedAt", i."createdAt" AS "createdAt", i."qualityScore" AS score, 1 AS "sourceCount", 1 AS "itemCount", s."groupId" AS "entryGroupId", CASE WHEN CAST(ROUND(i."qualityScore") AS INTEGER) > 100 THEN 100 WHEN CAST(ROUND(i."qualityScore") AS INTEGER) < 0 THEN 0 ELSE CAST(ROUND(i."qualityScore") AS INTEGER) END AS "qualityScore" FROM "items" i INNER JOIN "sources" s ON s.id = i."sourceId" LEFT JOIN "content_clusters" c ON c.id = i."clusterId" WHERE i.status = ? AND i."moderationStatus" IN (?,?) AND s.enabled = ? AND (i."clusterId" IS NULL OR c.status = ?) AND (i."clusterId" IS NULL OR COALESCE(c."displayItemCount", 0) <= 1) AND i."isAggregation" = ? ), all_entry_candidates AS ( SELECT id, type, NULL AS "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "qualityScore" FROM cluster_entries UNION ALL SELECT id, type, "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "qualityScore" FROM single_entries ), entry_candidates AS ( SELECT * FROM all_entry_candidates ) SELECT id, type AS "entryType", "clusterId", "latestPublishedAt", "createdAt", "qualityScore" AS score, "sourceCount", "itemCount", "totalItemCount", "qualityScore" FROM entry_candidates ORDER BY "createdAt" DESC, "qualityScore" DESC, "itemCount" DESC, id DESC LIMIT ? OFFSET ?",
+            "values": [
+              "active",
+              "processed",
+              "allowed",
+              "restored",
+              true,
+              "active",
+              false,
+              2,
+              0,
+            ],
+          },
+          {
+            "details": [
+              "CO-ROUTINE grouped_entries",
+              "MATERIALIZE all_entry_candidates",
+              "COMPOUND QUERY",
+              "LEFT-MOST SUBQUERY",
+              "SEARCH cc USING INDEX content_clusters_status_latestCreatedAt_idx (status=? AND latestCreatedAt>?)",
+              "UNION ALL",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SCAN all_entry_candidates",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "MATERIALIZE total_entries",
+              "SCAN all_entry_candidates",
+              "SCAN ge",
+              "SEARCH g USING INDEX sqlite_autoindex_source_groups_1 (id=?)",
+              "SCAN te",
+              "USE TEMP B-TREE FOR ORDER BY",
+            ],
+            "mode": "enabled",
+            "sql": "WITH cluster_entries AS ( SELECT cc.id AS id, 'cluster' AS type, cc.id AS "clusterId", cc."latestPublishedAt" AS "latestPublishedAt", cc."latestCreatedAt" AS "createdAt", cc."displayAverageScore" AS score, cc."displaySourceCount" AS "sourceCount", cc."displayItemCount" AS "itemCount", cc."displayItemCount" AS "totalItemCount", cc."dominantGroupId" AS "entryGroupId", cc."displayQualityScore" AS "qualityScore" FROM "content_clusters" cc WHERE cc.status = ? AND cc."displayItemCount" > 1 AND cc."latestCreatedAt" IS NOT NULL ), single_entries AS ( SELECT i.id AS id, 'single' AS type, i."clusterId" AS "clusterId", i."publishedAt" AS "latestPublishedAt", i."createdAt" AS "createdAt", i."qualityScore" AS score, 1 AS "sourceCount", 1 AS "itemCount", s."groupId" AS "entryGroupId", CASE WHEN CAST(ROUND(i."qualityScore") AS INTEGER) > 100 THEN 100 WHEN CAST(ROUND(i."qualityScore") AS INTEGER) < 0 THEN 0 ELSE CAST(ROUND(i."qualityScore") AS INTEGER) END AS "qualityScore" FROM "items" i INNER JOIN "sources" s ON s.id = i."sourceId" LEFT JOIN "content_clusters" c ON c.id = i."clusterId" WHERE i.status = ? AND i."moderationStatus" IN (?,?) AND s.enabled = ? AND (i."clusterId" IS NULL OR c.status = ?) AND (i."clusterId" IS NULL OR COALESCE(c."displayItemCount", 0) <= 1) AND i."isAggregation" = ? ), all_entry_candidates AS ( SELECT id, type, NULL AS "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "qualityScore" FROM cluster_entries UNION ALL SELECT id, type, "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "qualityScore" FROM single_entries ), entry_candidates AS ( SELECT * FROM all_entry_candidates ) , entry_count_candidates AS ( SELECT id, "entryGroupId" FROM entry_candidates ) , grouped_entries AS ( SELECT ecc."entryGroupId" AS id, COUNT(*) AS count FROM entry_count_candidates ecc WHERE ecc."entryGroupId" IS NOT NULL GROUP BY ecc."entryGroupId" ), total_entries AS ( SELECT COUNT(*) AS total FROM entry_count_candidates ) SELECT ge.id AS id, g.name AS name, g."sortOrder" AS "sortOrder", ge.count AS count, te.total AS total FROM grouped_entries ge INNER JOIN "source_groups" g ON g.id = ge.id CROSS JOIN total_entries te ORDER BY g."sortOrder" ASC, g.name ASC",
+            "values": [
+              "active",
+              "processed",
+              "allowed",
+              "restored",
+              true,
+              "active",
+              false,
+            ],
+          },
+          {
+            "details": [
+              "CO-ROUTINE all_entry_candidates",
+              "COMPOUND QUERY",
+              "LEFT-MOST SUBQUERY",
+              "SEARCH cc USING INDEX content_clusters_status_latestCreatedAt_idx (status=? AND latestCreatedAt>?)",
+              "UNION ALL",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SCAN all_entry_candidates",
+            ],
+            "mode": "enabled",
+            "sql": "WITH cluster_entries AS ( SELECT cc.id AS id, 'cluster' AS type, cc.id AS "clusterId", cc."latestPublishedAt" AS "latestPublishedAt", cc."latestCreatedAt" AS "createdAt", cc."displayAverageScore" AS score, cc."displaySourceCount" AS "sourceCount", cc."displayItemCount" AS "itemCount", cc."displayItemCount" AS "totalItemCount", cc."dominantGroupId" AS "entryGroupId", cc."displayQualityScore" AS "qualityScore" FROM "content_clusters" cc WHERE cc.status = ? AND cc."displayItemCount" > 1 AND cc."latestCreatedAt" IS NOT NULL ), single_entries AS ( SELECT i.id AS id, 'single' AS type, i."clusterId" AS "clusterId", i."publishedAt" AS "latestPublishedAt", i."createdAt" AS "createdAt", i."qualityScore" AS score, 1 AS "sourceCount", 1 AS "itemCount", s."groupId" AS "entryGroupId", CASE WHEN CAST(ROUND(i."qualityScore") AS INTEGER) > 100 THEN 100 WHEN CAST(ROUND(i."qualityScore") AS INTEGER) < 0 THEN 0 ELSE CAST(ROUND(i."qualityScore") AS INTEGER) END AS "qualityScore" FROM "items" i INNER JOIN "sources" s ON s.id = i."sourceId" LEFT JOIN "content_clusters" c ON c.id = i."clusterId" WHERE i.status = ? AND i."moderationStatus" IN (?,?) AND s.enabled = ? AND (i."clusterId" IS NULL OR c.status = ?) AND (i."clusterId" IS NULL OR COALESCE(c."displayItemCount", 0) <= 1) AND i."isAggregation" = ? ), all_entry_candidates AS ( SELECT id, type, NULL AS "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "qualityScore" FROM cluster_entries UNION ALL SELECT id, type, "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "qualityScore" FROM single_entries ), entry_candidates AS ( SELECT * FROM all_entry_candidates ) , entry_count_candidates AS ( SELECT id, "entryGroupId" FROM entry_candidates ) SELECT COUNT(*) AS total FROM entry_count_candidates",
+            "values": [
+              "active",
+              "processed",
+              "allowed",
+              "restored",
+              true,
+              "active",
+              false,
+            ],
+          },
+          {
+            "details": [
+              "CO-ROUTINE all_entry_candidates",
+              "COMPOUND QUERY",
+              "LEFT-MOST SUBQUERY",
+              "CO-ROUTINE cluster_groups",
+              "MATERIALIZE cluster_match_counts",
+              "MATERIALIZE relevant_clusters",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR DISTINCT",
+              "SCAN rc",
+              "SEARCH i USING INDEX items_clusterId_status_moderationStatus_updatedAt_idx (clusterId=? AND status=? AND moderationStatus=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "MATERIALIZE cluster_score_groups",
+              "SEARCH i USING INDEX items_status_moderationStatus_updatedAt_idx (status=? AND moderationStatus=?)",
+              "SEARCH rc USING AUTOMATIC COVERING INDEX (id=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH cc USING COVERING INDEX sqlite_autoindex_content_clusters_1 (id=?)",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "USE TEMP B-TREE FOR count(DISTINCT)",
+              "MATERIALIZE (subquery-8)",
+              "CO-ROUTINE (subquery-18)",
+              "CO-ROUTINE cluster_match_group_counts",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH rc USING AUTOMATIC COVERING INDEX (id=?)",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "SCAN cmgc",
+              "USE TEMP B-TREE FOR ORDER BY",
+              "SCAN (subquery-18)",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH cc USING COVERING INDEX sqlite_autoindex_content_clusters_1 (id=?)",
+              "SEARCH cmc USING AUTOMATIC COVERING INDEX (id=?) LEFT-JOIN",
+              "SEARCH csg USING AUTOMATIC COVERING INDEX (id=?) LEFT-JOIN",
+              "BLOOM FILTER ON (subquery-8) (rn=? AND clusterId=?)",
+              "SEARCH (subquery-8) USING AUTOMATIC PARTIAL COVERING INDEX (rn=? AND clusterId=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "SCAN cg",
+              "UNION ALL",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH cmc USING AUTOMATIC COVERING INDEX (id=?) LEFT-JOIN",
+              "SEARCH csg USING AUTOMATIC COVERING INDEX (id=?) LEFT-JOIN",
+              "SCAN all_entry_candidates",
+              "USE TEMP B-TREE FOR ORDER BY",
+            ],
+            "mode": "legacy",
+            "sql": "WITH matched_items AS ( SELECT i.id AS "itemId", i."clusterId" AS "clusterId", i."sourceId" AS "sourceId", i."publishedAt" AS "publishedAt", i."createdAt" AS "createdAt", i."qualityScore" AS "qualityScore", s."groupId" AS "sourceGroupId", NULL AS "originalTitle", NULL AS "translatedTitle", NULL AS "clusterTitle", NULL AS "clusterSummary" FROM "items" i INNER JOIN "sources" s ON s.id = i."sourceId" LEFT JOIN "content_clusters" c ON c.id = i."clusterId" WHERE i.status = ? AND i."moderationStatus" IN (?,?) AND s.enabled = ? AND (i."clusterId" IS NULL OR c.status = ?) AND i."isAggregation" = ? ), base_filtered_items AS ( SELECT mi."itemId", mi."clusterId", mi."sourceId", mi."publishedAt", mi."createdAt", mi."qualityScore", mi."originalTitle", mi."translatedTitle", mi."sourceGroupId", mi."clusterTitle", mi."clusterSummary" FROM matched_items mi ), filtered_items AS ( SELECT * FROM base_filtered_items ), relevant_clusters AS ( SELECT DISTINCT fi."clusterId" AS id FROM filtered_items fi WHERE fi."clusterId" IS NOT NULL ), cluster_score_items AS ( SELECT i."clusterId" AS "clusterId", i."sourceId" AS "sourceId", i."qualityScore" AS "qualityScore" FROM "items" i INNER JOIN relevant_clusters rc ON rc.id = i."clusterId" INNER JOIN "sources" s ON s.id = i."sourceId" WHERE i.status = ? AND i."moderationStatus" IN (?,?) AND s.enabled = ? ), cluster_score_groups AS ( SELECT csi."clusterId" AS id, CAST(ROUND(AVG(csi."qualityScore")) AS INTEGER) AS score, COUNT(*) AS "totalItemCount", COUNT(DISTINCT csi."sourceId") AS "sourceCount", -- 公开信息流评分 = 内容质量分 CASE WHEN CAST(ROUND(CAST(ROUND(AVG(csi."qualityScore")) AS INTEGER)) AS INTEGER) > 100 THEN 100 WHEN CAST(ROUND(CAST(ROUND(AVG(csi."qualityScore")) AS INTEGER)) AS INTEGER) < 0 THEN 0 ELSE CAST(ROUND(CAST(ROUND(AVG(csi."qualityScore")) AS INTEGER)) AS INTEGER) END AS "qualityScore" FROM cluster_score_items csi INNER JOIN "content_clusters" cc ON cc.id = csi."clusterId" GROUP BY csi."clusterId" ), cluster_match_group_counts AS ( SELECT mi."clusterId", mi."sourceGroupId" AS "groupId", COUNT(*) AS count, MIN(mi."createdAt") AS "firstCreatedAt" FROM matched_items mi INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId" WHERE mi."sourceGroupId" IS NOT NULL GROUP BY mi."clusterId", mi."sourceGroupId" ), cluster_dominant_groups AS ( SELECT "clusterId", "groupId" FROM ( SELECT cmgc."clusterId", cmgc."groupId", ROW_NUMBER() OVER ( PARTITION BY cmgc."clusterId" ORDER BY cmgc.count DESC, cmgc."firstCreatedAt" ASC, cmgc."groupId" ASC ) AS rn FROM cluster_match_group_counts cmgc ) WHERE rn = 1 ), cluster_match_counts AS ( SELECT mi."clusterId" AS id, COUNT(*) AS "matchedItemCount" FROM matched_items mi INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId" GROUP BY mi."clusterId" ), cluster_groups AS ( SELECT fi."clusterId" AS id, MAX(fi."publishedAt") AS "latestPublishedAt", MAX(fi."createdAt") AS "createdAt", MAX(COALESCE(csg.score, 0)) AS score, COUNT(*) AS "itemCount", MAX(COALESCE(cmc."matchedItemCount", 0)) AS "matchedItemCount", MAX(COALESCE(csg."sourceCount", 0)) AS "sourceCount", MAX(COALESCE(csg."totalItemCount", 0)) AS "totalItemCount", MIN(cdg."groupId") AS "entryGroupId", MAX(COALESCE(csg."qualityScore", 0)) AS "qualityScore" FROM filtered_items fi INNER JOIN "content_clusters" cc ON cc.id = fi."clusterId" LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId" LEFT JOIN cluster_score_groups csg ON csg.id = fi."clusterId" LEFT JOIN cluster_dominant_groups cdg ON cdg."clusterId" = fi."clusterId" WHERE fi."clusterId" IS NOT NULL GROUP BY fi."clusterId" ), single_entries AS ( SELECT fi."itemId" AS id, 'single' AS type, fi."clusterId" AS "clusterId", fi."publishedAt" AS "latestPublishedAt", fi."createdAt" AS "createdAt", fi."qualityScore" AS score, 1 AS "sourceCount", 1 AS "itemCount", fi."sourceGroupId" AS "entryGroupId", -- 公开信息流评分 = 内容质量分 CASE WHEN CAST(ROUND(fi."qualityScore") AS INTEGER) > 100 THEN 100 WHEN CAST(ROUND(fi."qualityScore") AS INTEGER) < 0 THEN 0 ELSE CAST(ROUND(fi."qualityScore") AS INTEGER) END AS "qualityScore" FROM filtered_items fi LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId" LEFT JOIN cluster_score_groups csg ON csg.id = fi."clusterId" WHERE fi."clusterId" IS NULL OR COALESCE(cmc."matchedItemCount", 1) <= 1 ), cluster_entries AS ( SELECT cg.id AS id, 'cluster' AS type, cg.id AS "clusterId", cg."latestPublishedAt" AS "latestPublishedAt", cg."createdAt" AS "createdAt", cg.score AS score, cg."sourceCount" AS "sourceCount", cg."itemCount" AS "itemCount", cg."totalItemCount" AS "totalItemCount", cg."entryGroupId" AS "entryGroupId", cg."qualityScore" AS "qualityScore" FROM cluster_groups cg WHERE cg."matchedItemCount" > 1 ), all_entry_candidates AS ( SELECT id, type, NULL AS "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "qualityScore" FROM cluster_entries UNION ALL SELECT id, type, "clusterId", "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", CAST(1 AS INTEGER) AS "totalItemCount", "entryGroupId", "qualityScore" FROM single_entries ), entry_candidates AS ( SELECT * FROM all_entry_candidates ) SELECT id, type AS "entryType", "clusterId", "latestPublishedAt", "createdAt", "qualityScore" AS score, "sourceCount", "itemCount", "totalItemCount", "qualityScore" FROM entry_candidates ORDER BY "createdAt" DESC, "qualityScore" DESC, "itemCount" DESC, id DESC LIMIT ? OFFSET ?",
+            "values": [
+              "processed",
+              "allowed",
+              "restored",
+              true,
+              "active",
+              false,
+              "processed",
+              "allowed",
+              "restored",
+              true,
+              2,
+              0,
+            ],
+          },
+          {
+            "details": [
+              "CO-ROUTINE grouped_entries",
+              "MATERIALIZE entry_count_candidates",
+              "COMPOUND QUERY",
+              "LEFT-MOST SUBQUERY",
+              "MATERIALIZE cluster_count_entries",
+              "MATERIALIZE cluster_match_counts",
+              "MATERIALIZE relevant_clusters",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR DISTINCT",
+              "SCAN rc",
+              "SEARCH i USING INDEX items_clusterId_status_moderationStatus_updatedAt_idx (clusterId=? AND status=? AND moderationStatus=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "MATERIALIZE (subquery-7)",
+              "CO-ROUTINE (subquery-16)",
+              "MATERIALIZE cluster_match_group_counts",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH rc USING AUTOMATIC COVERING INDEX (id=?)",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "SCAN cmgc",
+              "USE TEMP B-TREE FOR ORDER BY",
+              "SCAN (subquery-16)",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH cmc USING AUTOMATIC PARTIAL COVERING INDEX (id=?)",
+              "BLOOM FILTER ON (subquery-7) (rn=? AND clusterId=?)",
+              "SEARCH (subquery-7) USING AUTOMATIC PARTIAL COVERING INDEX (rn=? AND clusterId=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "SCAN cluster_count_entries",
+              "UNION ALL",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH cmc USING AUTOMATIC COVERING INDEX (id=?) LEFT-JOIN",
+              "SCAN ecc",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "MATERIALIZE total_entries",
+              "SCAN entry_count_candidates",
+              "SCAN ge",
+              "SEARCH g USING INDEX sqlite_autoindex_source_groups_1 (id=?)",
+              "SCAN te",
+              "USE TEMP B-TREE FOR ORDER BY",
+            ],
+            "mode": "legacy",
+            "sql": "WITH matched_items AS ( SELECT i.id AS "itemId", i."clusterId" AS "clusterId", i."publishedAt" AS "publishedAt", i."createdAt" AS "createdAt", i."originalTitle" AS "originalTitle", i."translatedTitle" AS "translatedTitle", i.author AS author, s."groupId" AS "sourceGroupId", c.title AS "clusterTitle" FROM "items" i INNER JOIN "sources" s ON s.id = i."sourceId" LEFT JOIN "content_clusters" c ON c.id = i."clusterId" WHERE i.status = ? AND i."moderationStatus" IN (?,?) AND s.enabled = ? AND (i."clusterId" IS NULL OR c.status = ?) AND i."isAggregation" = ? ), base_filtered_items AS ( SELECT mi."itemId", mi."clusterId", mi."publishedAt", mi."createdAt", mi."sourceGroupId" FROM matched_items mi ), filtered_items AS ( SELECT * FROM base_filtered_items ), relevant_clusters AS ( SELECT DISTINCT fi."clusterId" AS id FROM filtered_items fi WHERE fi."clusterId" IS NOT NULL ), cluster_match_counts AS ( SELECT mi."clusterId" AS id, COUNT(*) AS "matchedItemCount" FROM matched_items mi INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId" GROUP BY mi."clusterId" ), cluster_match_group_counts AS ( SELECT mi."clusterId", mi."sourceGroupId" AS "groupId", COUNT(*) AS count, MIN(mi."createdAt") AS "firstCreatedAt" FROM matched_items mi INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId" WHERE mi."sourceGroupId" IS NOT NULL GROUP BY mi."clusterId", mi."sourceGroupId" ), cluster_dominant_groups AS ( SELECT "clusterId", "groupId" FROM ( SELECT cmgc."clusterId", cmgc."groupId", ROW_NUMBER() OVER ( PARTITION BY cmgc."clusterId" ORDER BY cmgc.count DESC, cmgc."firstCreatedAt" ASC, cmgc."groupId" ASC ) AS rn FROM cluster_match_group_counts cmgc ) WHERE rn = 1 ), cluster_count_entries AS ( SELECT fi."clusterId" AS id, MIN(cdg."groupId") AS "entryGroupId" FROM filtered_items fi INNER JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId" LEFT JOIN cluster_dominant_groups cdg ON cdg."clusterId" = fi."clusterId" WHERE fi."clusterId" IS NOT NULL AND (cmc."matchedItemCount" > 1) GROUP BY fi."clusterId" ), single_count_entries AS ( SELECT fi."itemId" AS id, fi."sourceGroupId" AS "entryGroupId" FROM filtered_items fi LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId" WHERE fi."clusterId" IS NULL OR COALESCE(cmc."matchedItemCount", 1) <= 1 ), entry_count_candidates AS ( SELECT id, "entryGroupId" FROM cluster_count_entries UNION ALL SELECT id, "entryGroupId" FROM single_count_entries ) , grouped_entries AS ( SELECT ecc."entryGroupId" AS id, COUNT(*) AS count FROM entry_count_candidates ecc WHERE ecc."entryGroupId" IS NOT NULL GROUP BY ecc."entryGroupId" ), total_entries AS ( SELECT COUNT(*) AS total FROM entry_count_candidates ) SELECT ge.id AS id, g.name AS name, g."sortOrder" AS "sortOrder", ge.count AS count, te.total AS total FROM grouped_entries ge INNER JOIN "source_groups" g ON g.id = ge.id CROSS JOIN total_entries te ORDER BY g."sortOrder" ASC, g.name ASC",
+            "values": [
+              "processed",
+              "allowed",
+              "restored",
+              true,
+              "active",
+              false,
+            ],
+          },
+          {
+            "details": [
+              "CO-ROUTINE entry_count_candidates",
+              "COMPOUND QUERY",
+              "LEFT-MOST SUBQUERY",
+              "CO-ROUTINE cluster_count_entries",
+              "MATERIALIZE cluster_match_counts",
+              "MATERIALIZE relevant_clusters",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR DISTINCT",
+              "SCAN rc",
+              "SEARCH i USING INDEX items_clusterId_status_moderationStatus_updatedAt_idx (clusterId=? AND status=? AND moderationStatus=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "MATERIALIZE (subquery-7)",
+              "CO-ROUTINE (subquery-14)",
+              "CO-ROUTINE cluster_match_group_counts",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH rc USING AUTOMATIC COVERING INDEX (id=?)",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "SCAN cmgc",
+              "USE TEMP B-TREE FOR ORDER BY",
+              "SCAN (subquery-14)",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH cmc USING AUTOMATIC PARTIAL COVERING INDEX (id=?)",
+              "BLOOM FILTER ON (subquery-7) (rn=? AND clusterId=?)",
+              "SEARCH (subquery-7) USING AUTOMATIC PARTIAL COVERING INDEX (rn=? AND clusterId=?) LEFT-JOIN",
+              "USE TEMP B-TREE FOR GROUP BY",
+              "SCAN cluster_count_entries",
+              "UNION ALL",
+              "SEARCH i USING INDEX items_status_moderationStatus_isAggregation_createdAt_idx (status=? AND moderationStatus=? AND isAggregation=?)",
+              "SEARCH s USING INDEX sqlite_autoindex_sources_1 (id=?)",
+              "SEARCH c USING INDEX sqlite_autoindex_content_clusters_1 (id=?) LEFT-JOIN",
+              "SEARCH cmc USING AUTOMATIC COVERING INDEX (id=?) LEFT-JOIN",
+              "SCAN entry_count_candidates",
+            ],
+            "mode": "legacy",
+            "sql": "WITH matched_items AS ( SELECT i.id AS "itemId", i."clusterId" AS "clusterId", i."publishedAt" AS "publishedAt", i."createdAt" AS "createdAt", i."originalTitle" AS "originalTitle", i."translatedTitle" AS "translatedTitle", i.author AS author, s."groupId" AS "sourceGroupId", c.title AS "clusterTitle" FROM "items" i INNER JOIN "sources" s ON s.id = i."sourceId" LEFT JOIN "content_clusters" c ON c.id = i."clusterId" WHERE i.status = ? AND i."moderationStatus" IN (?,?) AND s.enabled = ? AND (i."clusterId" IS NULL OR c.status = ?) AND i."isAggregation" = ? ), base_filtered_items AS ( SELECT mi."itemId", mi."clusterId", mi."publishedAt", mi."createdAt", mi."sourceGroupId" FROM matched_items mi ), filtered_items AS ( SELECT * FROM base_filtered_items ), relevant_clusters AS ( SELECT DISTINCT fi."clusterId" AS id FROM filtered_items fi WHERE fi."clusterId" IS NOT NULL ), cluster_match_counts AS ( SELECT mi."clusterId" AS id, COUNT(*) AS "matchedItemCount" FROM matched_items mi INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId" GROUP BY mi."clusterId" ), cluster_match_group_counts AS ( SELECT mi."clusterId", mi."sourceGroupId" AS "groupId", COUNT(*) AS count, MIN(mi."createdAt") AS "firstCreatedAt" FROM matched_items mi INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId" WHERE mi."sourceGroupId" IS NOT NULL GROUP BY mi."clusterId", mi."sourceGroupId" ), cluster_dominant_groups AS ( SELECT "clusterId", "groupId" FROM ( SELECT cmgc."clusterId", cmgc."groupId", ROW_NUMBER() OVER ( PARTITION BY cmgc."clusterId" ORDER BY cmgc.count DESC, cmgc."firstCreatedAt" ASC, cmgc."groupId" ASC ) AS rn FROM cluster_match_group_counts cmgc ) WHERE rn = 1 ), cluster_count_entries AS ( SELECT fi."clusterId" AS id, MIN(cdg."groupId") AS "entryGroupId" FROM filtered_items fi INNER JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId" LEFT JOIN cluster_dominant_groups cdg ON cdg."clusterId" = fi."clusterId" WHERE fi."clusterId" IS NOT NULL AND (cmc."matchedItemCount" > 1) GROUP BY fi."clusterId" ), single_count_entries AS ( SELECT fi."itemId" AS id, fi."sourceGroupId" AS "entryGroupId" FROM filtered_items fi LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId" WHERE fi."clusterId" IS NULL OR COALESCE(cmc."matchedItemCount", 1) <= 1 ), entry_count_candidates AS ( SELECT id, "entryGroupId" FROM cluster_count_entries UNION ALL SELECT id, "entryGroupId" FROM single_count_entries ) SELECT COUNT(*) AS total FROM entry_count_candidates",
+            "values": [
+              "processed",
+              "allowed",
+              "restored",
+              true,
+              "active",
+              false,
+            ],
+          },
+        ],
+        "sqliteVersion": "3.46.0",
+      }
+    `);
+  });
+
   it("supports page and size parameters for feed pagination", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-10T12:00:00.000Z"));
@@ -647,6 +960,60 @@ describe("/api/feed", () => {
     }
   });
 
+  it.each(["time_desc", "score_desc"] as const)("keeps mixed entry ordering stable across pages for %s", async (sort) => {
+    const source = await prisma.source.findFirstOrThrow({ where: { rssUrl: "https://api.example.com/feed.xml" } });
+    await prisma.contentCluster.create({ data: {
+      id: "tie-cluster-z", kind: "topic", title: "Tied cluster", summary: "tie", score: 77, itemCount: 2,
+      latestPublishedAt: new Date("2026-04-10T10:00:00Z"), status: "active", fingerprint: "tie-cluster",
+    } });
+    await prisma.item.createMany({ data: ["tie-single-a", "tie-single-z", "tie-cluster-item-a", "tie-cluster-item-z"].map((id) => ({
+      id, sourceId: source.id, clusterId: id.startsWith("tie-cluster-item") ? "tie-cluster-z" : null,
+      originalUrl: `https://api.example.com/${id}`, canonicalUrl: `https://api.example.com/${id}`, urlHash: id,
+      originalTitle: id, translatedTitle: id, publishedAt: new Date("2026-04-10T10:00:00Z"), summaryText: "tie",
+      status: "processed", moderationStatus: "allowed", qualityScore: 77, qualityRationale: "tie", language: "en",
+      createdAt: new Date("2026-04-10T10:00:00Z"),
+    })) });
+    await refreshClusterFeedStats(["tie-cluster-z"]);
+    const filters = resolveFeedFilters({ range: "all", sort, start: null, end: null, groupId: null, sourceId: null, title: null }, new Date("2026-04-10T12:00:00.000Z"));
+    const firstPage = await listFeedItems(filters, { page: 1, size: 2 });
+    const pageNumbers = Array.from({ length: firstPage.pagination.totalPages }, (_, index) => index + 1);
+    const pages = await Promise.all(pageNumbers.map((page) => listFeedItems(filters, { page, size: 2 })));
+    const repeatedPages = await Promise.all(pageNumbers.map((page) => listFeedItems(filters, { page, size: 2 })));
+    const ids = pages.flatMap(({ items }) => items.map(({ id }) => id));
+    if (sort === "time_desc") {
+      expect(ids).toMatchInlineSnapshot(`
+        [
+          "tie-cluster-z",
+          "tie-single-z",
+          "tie-single-a",
+          "cluster-a",
+          "item-timezone-created",
+          "item-b1",
+          "item-c1",
+          "item-created-too-old",
+        ]
+      `);
+    } else {
+      expect(ids).toMatchInlineSnapshot(`
+        [
+          "item-c1",
+          "cluster-a",
+          "tie-cluster-z",
+          "tie-single-z",
+          "tie-single-a",
+          "item-timezone-created",
+          "item-created-too-old",
+          "item-b1",
+        ]
+      `);
+    }
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.filter((id) => id.startsWith("tie-") || id === "tie-cluster-z")).toEqual([
+      "tie-cluster-z", "tie-single-z", "tie-single-a",
+    ]);
+    expect(repeatedPages.flatMap(({ items }) => items.map(({ id }) => id))).toEqual(ids);
+  });
+
   it("filters the mixed feed by a custom start and end date range", async () => {
     const { GET } = await import("@/app/api/feed/route");
     const response = await GET(new Request("http://localhost/api/feed?range=7d&start=2026-04-10&end=2026-04-10"));
@@ -665,6 +1032,59 @@ describe("/api/feed", () => {
     });
     expect(json.start).toBe("2026-04-10");
     expect(json.end).toBe("2026-04-10");
+    expect(json.items.map((item: { id: string }) => item.id)).toEqual(["cluster-a", "item-timezone-created"]);
+  });
+
+  it("includes exact Shanghai custom-day createdAt boundaries for singles and clusters", async () => {
+    const source = await prisma.source.findFirstOrThrow({ where: { rssUrl: "https://api.example.com/feed.xml" } });
+    const start = new Date("2026-04-09T16:00:00.000Z");
+    const end = new Date("2026-04-10T15:59:59.999Z");
+    await prisma.contentCluster.createMany({ data: [
+      { id: "cluster-boundary-start", kind: "topic", title: "Start boundary", summary: "boundary", score: 80, itemCount: 2, latestPublishedAt: new Date("2025-01-01T00:00:00Z"), status: "active", fingerprint: "cluster-start" },
+      { id: "cluster-boundary-end", kind: "topic", title: "End boundary", summary: "boundary", score: 80, itemCount: 2, latestPublishedAt: new Date("2025-01-01T00:00:00Z"), status: "active", fingerprint: "cluster-end" },
+      { id: "cluster-boundary-before", kind: "topic", title: "Before boundary", summary: "boundary", score: 80, itemCount: 2, latestPublishedAt: new Date("2025-01-01T00:00:00Z"), status: "active", fingerprint: "cluster-before" },
+      { id: "cluster-boundary-after", kind: "topic", title: "After boundary", summary: "boundary", score: 80, itemCount: 2, latestPublishedAt: new Date("2025-01-01T00:00:00Z"), status: "active", fingerprint: "cluster-after" },
+    ] });
+    const rows = [
+      ["single-boundary-start", null, start], ["single-boundary-end", null, end],
+      ["single-boundary-before", null, new Date(start.getTime() - 1)], ["single-boundary-after", null, new Date(end.getTime() + 1)],
+      ["cluster-start-item-a", "cluster-boundary-start", start], ["cluster-start-item-b", "cluster-boundary-start", start],
+      ["cluster-end-item-a", "cluster-boundary-end", end], ["cluster-end-item-b", "cluster-boundary-end", end],
+      ["cluster-before-item-a", "cluster-boundary-before", new Date(start.getTime() - 1)], ["cluster-before-item-b", "cluster-boundary-before", new Date(start.getTime() - 1)],
+      ["cluster-after-item-a", "cluster-boundary-after", new Date(end.getTime() + 1)], ["cluster-after-item-b", "cluster-boundary-after", new Date(end.getTime() + 1)],
+    ] as const;
+    await prisma.item.createMany({ data: rows.map(([id, clusterId, createdAt]) => ({
+      id, sourceId: source.id, clusterId, originalUrl: `https://api.example.com/${id}`, canonicalUrl: `https://api.example.com/${id}`,
+      urlHash: id, originalTitle: id, translatedTitle: id, publishedAt: new Date("2030-01-01T00:00:00Z"),
+      summaryText: id, status: "processed", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "boundary",
+      language: "en", createdAt,
+    })) });
+    await refreshClusterFeedStats(["cluster-boundary-start", "cluster-boundary-end", "cluster-boundary-before", "cluster-boundary-after"]);
+    const originalMode = process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED;
+    try {
+      const { GET } = await import("@/app/api/feed/route");
+      for (const mode of ["default", "legacy"] as const) {
+        if (mode === "legacy") process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED = "false";
+        else delete process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED;
+        const response = await GET(new Request("http://localhost/api/feed?range=7d&start=2026-04-10&end=2026-04-10"));
+        const json = await response.json();
+        const ids = json.items.map((item: { id: string }) => item.id);
+        expect([...ids].sort()).toEqual([
+          "cluster-a", "cluster-boundary-end", "cluster-boundary-start", "item-timezone-created",
+          "single-boundary-end", "single-boundary-start",
+        ].sort());
+        for (const id of [
+          "single-boundary-before", "single-boundary-after",
+          "cluster-boundary-before", "cluster-boundary-after",
+          "cluster-before-item-a", "cluster-before-item-b", "cluster-after-item-a", "cluster-after-item-b",
+        ]) expect(ids).not.toContain(id);
+        expect(json.items.find((item: { id: string }) => item.id === "cluster-boundary-start")).toMatchObject({ type: "cluster", itemCount: 2 });
+        expect(json.items.find((item: { id: string }) => item.id === "cluster-boundary-end")).toMatchObject({ type: "cluster", itemCount: 2 });
+      }
+    } finally {
+      if (originalMode === undefined) delete process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED;
+      else process.env.FEED_CLUSTER_ENTITY_FILTERING_ENABLED = originalMode;
+    }
   });
 
   it("filters by item createdAt using the default Asia/Shanghai day boundary", async () => {
@@ -968,8 +1388,14 @@ describe("/api/feed", () => {
       const researchOption = defaultJson.groups.find((group: { id: string }) => group.id === researchGroup.id);
 
       expect(defaultJson.pagination.total).toBe(1);
+      expect(defaultJson.groupTotalCount).toBe(1);
+      expect(defaultJson.items.map((item: { id: string }) => item.id)).toEqual(["cluster-cross-group-count"]);
       expect(aiJson.pagination.total).toBe(1);
+      expect(aiJson.groupTotalCount).toBe(defaultJson.groupTotalCount);
+      expect(aiJson.groups).toEqual(defaultJson.groups);
       expect(researchJson.pagination.total).toBe(0);
+      expect(researchJson.groupTotalCount).toBe(defaultJson.groupTotalCount);
+      expect(researchJson.groups).toEqual(defaultJson.groups);
       expect(aiOption).toMatchObject({
         id: aiGroup.id,
         count: 1,
@@ -1496,8 +1922,9 @@ describe("/api/feed", () => {
       const response = await GET(new Request("http://localhost/api/feed?range=7d"));
       const json = await response.json();
 
-      expect(json.groupTotalCount).toBeGreaterThanOrEqual(2);
-      expect(json.groups).toEqual(expect.any(Array));
+      expect(json.groupTotalCount).toBe(6);
+      expect(json.pagination.total).toBe(6);
+      expect(json.groups).toEqual([]);
     } finally {
       vi.useRealTimers();
     }
