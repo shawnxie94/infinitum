@@ -662,18 +662,11 @@ export async function replacePreparedItemEntitiesInTransaction(
   );
   if (aliasesToCheck.length > 0) {
     const aliasKeys = aliasesToCheck.map((alias) => alias.aliasNormalized);
-    const existingAliases = await tx.entityAlias.findMany({
-      where: { aliasNormalized: { in: aliasKeys } },
-      select: { aliasNormalized: true },
-    });
     const conflictingEntities = await tx.entity.findMany({
       where: { normalized: { in: aliasKeys } },
       select: { normalized: true },
     });
-    const blockedAliases = new Set([
-      ...existingAliases.map((alias) => alias.aliasNormalized),
-      ...conflictingEntities.map((entity) => entity.normalized),
-    ]);
+    const blockedAliases = new Set(conflictingEntities.map((entity) => entity.normalized));
     const aliasData = aliasesToCheck.flatMap((alias) => {
       const entityId = entityIdByNormalized.get(alias.targetNormalized);
       if (!entityId || blockedAliases.has(alias.aliasNormalized)) {
@@ -687,8 +680,14 @@ export async function replacePreparedItemEntitiesInTransaction(
         createdBy: "system:auto-canonical",
       }];
     });
-    if (aliasData.length > 0) {
-      await tx.entityAlias.createMany({ data: aliasData });
+    for (const alias of aliasData) {
+      // A concurrent item transaction may insert this normalized alias after the
+      // conflict precheck. Empty update preserves the first mapping without P2002.
+      await tx.entityAlias.upsert({
+        where: { aliasNormalized: alias.aliasNormalized },
+        create: alias,
+        update: {},
+      });
     }
   }
 
@@ -1528,19 +1527,24 @@ export async function autoNormalizeEntityAliases(
 
     const shouldAutoAlias = decision.confidence === "high" && canonicalNameMatched;
     if (shouldAutoAlias) {
-      try {
-        await prisma.entityAlias.create({
-          data: {
+      const aliasWhere = { aliasNormalized: sourceEntity.normalized };
+      const existingAlias = await prisma.entityAlias.findUnique({
+        where: aliasWhere,
+        select: { id: true },
+      });
+      if (!existingAlias) {
+        await prisma.entityAlias.upsert({
+          where: aliasWhere,
+          create: {
             entityId: targetEntity.id,
             aliasName: sourceEntity.name,
             aliasNormalized: sourceEntity.normalized,
             createdBy: "auto-llm",
           },
+          // Another precompute round may win after the lookup; keep its mapping.
+          update: {},
         });
         autoMergedAliases += 1;
-      } catch (error) {
-        // 并发轮次可能已写入同一别名；唯一冲突视为成功
-        if ((error as { code?: string }).code !== "P2002") throw error;
       }
       continue;
     }

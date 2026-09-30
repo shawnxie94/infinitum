@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createEmbedTexts, type EmbedTextsFn } from "@/lib/ai/embeddings";
 import type { AiProvider, EntityAliasCheckDecision } from "@/lib/ai/provider-types";
@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import {
   autoNormalizeEntityAliases,
   persistEntitySuggestionCandidates,
+  replacePreparedItemEntitiesInTransaction,
   precomputeEntitySuggestionCandidates,
 } from "@/lib/entities/service";
 import { loadMentionResolver, resetMentionResolverCache } from "@/lib/entities/mention-resolution";
@@ -92,7 +93,7 @@ afterEach(async () => {
   resetMentionResolverCache();
   await prisma.entityAlias.deleteMany({ where: { createdBy: "auto-llm" } });
   await prisma.entitySuggestionDecision.deleteMany({ where: { decidedBy: "auto-llm" } });
-  await prisma.entity.deleteMany({ where: { normalized: { in: ["智谱", "z.ai", "alphagrid", "alpha grid"] } } });
+  await prisma.entity.deleteMany({ where: { normalized: { in: ["智谱", "z.ai", "alphagrid", "alpha grid", "aliasalpha", "aliasmiddle", "aliaszulu"] } } });
   await prisma.item.deleteMany({ where: { id: { in: created.items } } });
   await prisma.contentCluster.deleteMany({ where: { id: { in: created.clusters } } });
   await prisma.source.deleteMany({ where: { id: { in: created.sources } } });
@@ -139,6 +140,65 @@ describe("autoNormalizeEntityAliases", () => {
     // 缓存已被重置：解析层立即可见新别名
     const resolverAfter = await loadMentionResolver(["Z.ai"]);
     expect(resolverAfter("Z.ai")).toBe("智谱");
+  });
+
+  it("keeps the first alias mapping when concurrent item assignments race after the precheck", async () => {
+    const aliases = new Map<string, { id: string; entityId: string; aliasName: string; aliasNormalized: string; createdBy: string }>();
+    const transaction = {
+      entity: {
+        upsert: vi.fn(async ({ create }: { create: { name: string; normalized: string } }) => ({
+          ...create,
+          id: `entity:${create.normalized}`,
+        })),
+        findMany: vi.fn(async () => []),
+      },
+      entityAlias: {
+        // Simulate both transactions reading before either commits its alias.
+        findMany: vi.fn(async () => []),
+        createMany: vi.fn(async ({ data }: { data: Array<{ entityId: string; aliasName: string; aliasNormalized: string; createdBy: string }> }) => {
+          for (const alias of data) {
+            if (aliases.has(alias.aliasNormalized)) {
+              throw Object.assign(new Error("Unique constraint failed on aliasNormalized"), { code: "P2002" });
+            }
+            aliases.set(alias.aliasNormalized, { id: `alias:${alias.aliasNormalized}`, ...alias });
+          }
+          return { count: data.length };
+        }),
+        upsert: vi.fn(async ({ where, create }: { where: { aliasNormalized: string }; create: { entityId: string; aliasName: string; aliasNormalized: string; createdBy: string } }) => {
+          const existing = aliases.get(where.aliasNormalized);
+          if (existing) return existing;
+          const alias = { id: `alias:${where.aliasNormalized}`, ...create };
+          aliases.set(where.aliasNormalized, alias);
+          return alias;
+        }),
+      },
+      itemEntity: {
+        findMany: vi.fn(async ({ where }: { where: { itemId: { in: string[] } } }) =>
+          where.itemId.in.map((itemId) => ({
+            itemId,
+            entityId: `entity:${itemId === "item-a" ? "canonical-a" : "canonical-b"}`,
+          }))),
+      },
+    } as unknown as Parameters<typeof replacePreparedItemEntitiesInTransaction>[0];
+
+    const assignment = (itemId: string, targetNormalized: string) => [{
+      itemId,
+      replacement: {
+        entities: [{ name: targetNormalized, normalized: targetNormalized }],
+        autoCanonicalAliases: [{
+          targetNormalized,
+          aliasName: "Shared alias",
+          aliasNormalized: "shared-alias",
+        }],
+      },
+    }];
+
+    await replacePreparedItemEntitiesInTransaction(transaction, assignment("item-a", "canonical-a"));
+    await expect(
+      replacePreparedItemEntitiesInTransaction(transaction, assignment("item-b", "canonical-b")),
+    ).resolves.toBeDefined();
+
+    expect(aliases.get("shared-alias")).toMatchObject({ entityId: "entity:canonical-a" });
   });
 
   it("uses canonicalName to choose the existing target entity", async () => {

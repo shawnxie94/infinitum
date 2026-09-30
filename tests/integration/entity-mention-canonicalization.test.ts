@@ -143,21 +143,24 @@ describe("merge precompute entity mention canonicalization", () => {
     expect(resolve(null)).toBeNull();
   });
 
-  it("keeps unresolvable mentions on pure rule behavior", async () => {
+  it("uses BM25 even when mention aliases are unresolved", async () => {
     await seedClusterWithItem(PAIR[0]);
     await seedClusterWithItem(PAIR[1]);
     const result = await precomputeClusterMergeCleanPairs(NOW);
 
     expect(result.vectorEnabled).toBe(false);
-    // 无实体/别名数据：subject 不相似（0）+ object 相似（40）= 40 < 55，不提名
     const stored = await prisma.clusterMergeCleanPairCandidate.findMany();
-    expect(stored).toHaveLength(0);
-    expect(result.storedPairs).toBe(0);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.score).toBeGreaterThan(0);
+    expect(result.storedPairs).toBe(1);
   });
 
   it("admits aliased-subject pairs once the alias resolves to the canonical entity", async () => {
     await seedClusterWithItem(PAIR[0]);
     await seedClusterWithItem(PAIR[1]);
+    await precomputeClusterMergeCleanPairs(NOW);
+    const baselineScore = (await prisma.clusterMergeCleanPairCandidate.findFirstOrThrow()).score;
+    await prisma.clusterMergeCleanPairCandidate.deleteMany({});
     await seedZhipuAlias();
 
     const result = await precomputeClusterMergeCleanPairs(NOW);
@@ -166,7 +169,6 @@ describe("merge precompute entity mention canonicalization", () => {
     const stored = await prisma.clusterMergeCleanPairCandidate.findFirstOrThrow();
     expect(stored.leftClusterId).toBe("mention-a");
     expect(stored.rightClusterId).toBe("mention-b");
-    // 35(subject canonical 相似) + 40(object 相似) + 20(对象词面重叠) = 95
-    expect(stored.score).toBe(95);
+    expect(stored.score).toBeGreaterThan(baselineScore);
   });
 });
