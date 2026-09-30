@@ -112,6 +112,40 @@ describe("daily report template config", () => {
     expect(template.recentTopicRules[0]).toContain("历史主题召回窗口");
   });
 
+  it("backfills default global rules when missing from older blocks template json", () => {
+    const oldTemplate = {
+      blocks: [
+        {
+          type: "section",
+          title: "自定义栏目",
+          description: "聚焦自定义主题。",
+          key: "custom-section",
+          required: true,
+          minItems: 1,
+          maxItems: 3,
+          item: {
+            bodyInstruction: "说明自定义条目。",
+            notes: [],
+          },
+        },
+      ],
+      globalRules: ["管理员自定义规则。"],
+    };
+    const withoutGlobalRules = JSON.parse(JSON.stringify(oldTemplate)) as Record<string, unknown>;
+    delete withoutGlobalRules.globalRules;
+
+    const template = parseDailyReportTemplateJson(JSON.stringify(withoutGlobalRules))!;
+
+    expect(template.globalRules).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE.globalRules);
+    expect(template.blocks).toHaveLength(1);
+    expect(template.blocks[0]).toMatchObject({ type: "section", title: "自定义栏目", key: "custom-section" });
+
+    expect(() => parseDailyReportTemplateJson(JSON.stringify({ ...withoutGlobalRules, globalRules: null })))
+      .toThrow("正文写作规则必须是数组。");
+    expect(() => parseDailyReportTemplateJson(JSON.stringify({ ...withoutGlobalRules, globalRules: "规则" })))
+      .toThrow("正文写作规则必须是数组。");
+  });
+
   it("updates wording for an untouched official default template only", () => {
     const template = parseDailyReportTemplateJson(DEFAULT_DAILY_REPORT_TEMPLATE_JSON)!;
     const legacyDescriptions = [

@@ -501,6 +501,8 @@ function withDailyReportTemplateCompatibilityDefaults(template: Record<string, u
     recentTopicRules: Array.isArray(template.recentTopicRules)
       ? template.recentTopicRules
       : [...DEFAULT_DAILY_REPORT_TEMPLATE.recentTopicRules],
+    globalRules:
+      template.globalRules === undefined ? [...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules] : template.globalRules,
   };
 }
 
