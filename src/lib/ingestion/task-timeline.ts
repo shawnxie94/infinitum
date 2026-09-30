@@ -51,7 +51,6 @@ export type IngestionTimelineCounters = {
   };
   clusterAssignment: {
     exactMatch: number;
-    cheapRankDirect: number;
     aiMatch: number;
     skippedIncompleteSignature: number;
     newCluster: number;
@@ -78,6 +77,7 @@ export type IngestionTimelineCounters = {
     decisionsDeclined: number;
     decisionsAmbiguous: number;
     decisionsFailed: number;
+    pairDiagnostics: unknown[];
     dirtyPairs: number;
     preLimitCandidates: number;
     postLimitCandidates: number;
@@ -162,7 +162,6 @@ export function createIngestionTimelineCounters(): IngestionTimelineCounters {
     },
     clusterAssignment: {
       exactMatch: 0,
-      cheapRankDirect: 0,
       aiMatch: 0,
       skippedIncompleteSignature: 0,
       newCluster: 0,
@@ -189,6 +188,7 @@ export function createIngestionTimelineCounters(): IngestionTimelineCounters {
       decisionsDeclined: 0,
       decisionsAmbiguous: 0,
       decisionsFailed: 0,
+      pairDiagnostics: [],
       dirtyPairs: 0,
       preLimitCandidates: 0,
       postLimitCandidates: 0,
@@ -360,7 +360,6 @@ export function buildIngestionTaskTimeline(input: {
         stageTiming: stages.itemProcessing,
         successCount:
           counters.clusterAssignment.exactMatch +
-          counters.clusterAssignment.cheapRankDirect +
           counters.clusterAssignment.aiMatch +
           counters.clusterAssignment.skippedIncompleteSignature +
           counters.clusterAssignment.newCluster,
@@ -369,7 +368,6 @@ export function buildIngestionTaskTimeline(input: {
       modelName: modelNames.clusterMatch,
       metrics: [
         { label: "指纹命中", value: counters.clusterAssignment.exactMatch },
-        { label: "本地直连", value: counters.clusterAssignment.cheapRankDirect },
         { label: "AI归组", value: counters.clusterAssignment.aiMatch },
         { label: "跳过", value: counters.clusterAssignment.skippedIncompleteSignature },
         { label: "新建", value: counters.clusterAssignment.newCluster },
@@ -391,6 +389,9 @@ export function buildIngestionTaskTimeline(input: {
           : "running"
         : "pending",
       ...toNodeTiming(stages.clusterMerge),
+      ...(counters.clusterMerge.pairDiagnostics.length > 0
+        ? { audit: { pairs: counters.clusterMerge.pairDiagnostics } }
+        : {}),
       modelName: modelNames.clusterMerge,
       metrics: [
         { label: "基础池", value: counters.clusterMerge.baseClusters },

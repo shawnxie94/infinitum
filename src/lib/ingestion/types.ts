@@ -87,7 +87,6 @@ export type ProcessedItemRecord = {
     };
     clusterAssignment?: {
       exactMatch: number;
-      cheapRankDirect: number;
       aiMatch: number;
       skippedIncompleteSignature: number;
       newCluster: number;

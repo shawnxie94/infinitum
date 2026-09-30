@@ -198,7 +198,7 @@ function buildMonitorSnapshot(): BackgroundTaskMonitorSnapshot {
               { label: "模型调用ms", value: 180000 },
               { label: "执行合并ms", value: 400 },
               { label: "标记Hashms", value: 90 },
-              { label: "AI返回组", value: 2 },
+              { label: "决策生成合并组", value: 2 },
               { label: "跳过", value: 0 },
               { label: "合并后", value: 9 },
               { label: "移动条目", value: 6 },

@@ -409,7 +409,7 @@ function formatTaskTimelineDetail(task: TaskRunSnapshot, node: NonNullable<TaskR
       ];
 
       parts.push(
-        `AI返回 ${getValue("AI返回组")}`,
+        `AI返回 ${getValue(["决策生成合并组", "AI返回组"])}`,
         `移动 ${getValue("移动条目")}`,
         `失败 ${getValue("失败组")}`,
         getValue("跳过") ? "已跳过" : "已合并",

@@ -14,7 +14,13 @@ import {
   executeIngestionWorkflowStage,
   findOrCreateIngestionFetchRun,
   mergeIngestionStageAiBreakdown,
+  type IngestionWorkflowPayload,
 } from "@/lib/ingestion/workflow-stages";
+import {
+  buildIngestionTaskTimeline,
+  createIngestionTimelineCounters,
+  createIngestionTimelineModelNames,
+} from "@/lib/ingestion/task-timeline";
 import type { RunIngestionOptions } from "@/lib/ingestion/types";
 import { buildDedupeKeys } from "@/lib/ingestion/dedupe";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
@@ -23,6 +29,7 @@ async function runIngestionWorkflowStagesForTest(
   inputOrOptions?: BackgroundTaskRun | Partial<RunIngestionOptions>,
   explicitOptions?: Partial<RunIngestionOptions>,
   controller = new AbortController(),
+  payloadOverrides: Partial<IngestionWorkflowPayload> = {},
 ) {
   const taskRun = inputOrOptions && "id" in inputOrOptions && "triggerType" in inputOrOptions
     ? inputOrOptions as BackgroundTaskRun
@@ -71,7 +78,10 @@ async function runIngestionWorkflowStagesForTest(
       throw new Error("Task cancellation requested");
     },
   };
-  let payload = await executeIngestionWorkflowStage("source_sync", taskRun, context, options);
+  let payload = {
+    ...await executeIngestionWorkflowStage("source_sync", taskRun, context, options),
+    ...payloadOverrides,
+  };
   for (const stage of ["item_processing", "cluster_merge", "cluster_finalize"] as const) {
     try {
       payload = await executeIngestionWorkflowStage(stage, payload, context, options);
@@ -93,6 +103,180 @@ describe("ingestion workflow stages", () => {
     ["incomplete signatures", { summaryFailed: 0, analysisFailed: 0, aggregationParseFailed: 0, skippedIncompleteSignature: 1 }, true],
   ])("uses recovery criteria for %s", (_label, counters, expected) => {
     expect(shouldEnqueueProcessingRecoveryFromIngestion(counters)).toBe(expected);
+  });
+
+  it("surfaces the live candidate source and AI verdict in persisted ingestion task audit", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Merge Audit Feed",
+        rssUrl: "https://merge-audit.example.com/feed.xml",
+        siteUrl: "https://merge-audit.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    const publishedAt = new Date("2026-09-26T00:00:00.000Z");
+    await prisma.contentCluster.createMany({
+      data: [
+        {
+          id: "audit-left-cluster",
+          kind: "topic",
+          title: "Acme launches Orion satellite",
+          summary: "Acme launches the Orion satellite.",
+          score: 80,
+          itemCount: 1,
+          latestPublishedAt: publishedAt,
+          status: "active",
+          fingerprint: "audit-left",
+          eventType: "launch",
+          eventSubject: "Acme",
+          eventAction: "launches",
+          eventObject: "Orion satellite",
+        },
+        {
+          id: "audit-right-cluster",
+          kind: "topic",
+          title: "Acme launches Orion satellite update",
+          summary: "Acme launches an update for the Orion satellite.",
+          score: 80,
+          itemCount: 1,
+          latestPublishedAt: new Date(publishedAt.getTime() + 60 * 60 * 1000),
+          status: "active",
+          fingerprint: "audit-right",
+          eventType: "launch",
+          eventSubject: "Acme",
+          eventAction: "launches",
+          eventObject: "Orion satellite",
+        },
+      ],
+    });
+    await prisma.item.createMany({
+      data: [
+        {
+          id: "audit-left-item",
+          sourceId: source.id,
+          clusterId: "audit-left-cluster",
+          originalUrl: "https://merge-audit.example.com/left",
+          canonicalUrl: "https://merge-audit.example.com/left",
+          urlHash: "audit-left-hash",
+          originalTitle: "Acme launches Orion satellite",
+          publishedAt,
+          summaryText: "Acme launches the Orion satellite.",
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          qualityRationale: "test",
+        },
+        {
+          id: "audit-right-item",
+          sourceId: source.id,
+          clusterId: "audit-right-cluster",
+          originalUrl: "https://merge-audit.example.com/right",
+          canonicalUrl: "https://merge-audit.example.com/right",
+          urlHash: "audit-right-hash",
+          originalTitle: "Acme launches Orion satellite update",
+          publishedAt: new Date(publishedAt.getTime() + 60 * 60 * 1000),
+          summaryText: "Acme launches an update for the Orion satellite.",
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          qualityRationale: "test",
+        },
+      ],
+    });
+    const assessClusterMergePairs = vi.fn().mockImplementation(async (input: string) => {
+      const parsed = JSON.parse(input) as { pairs: Array<{ left: { id: string }; right: { id: string } }> };
+      return parsed.pairs.map(({ left, right }) => ({
+        leftClusterId: left.id,
+        rightClusterId: right.id,
+        verdict: "declined" as const,
+        confidence: 83,
+        reasonCode: "different_events",
+        reasonText: "AI 判断为不同事件",
+      }));
+    });
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: { kind: "ingestion", triggerType: "manual", status: "queued", label: "合并审计测试" },
+    });
+
+    await runIngestionWorkflowStagesForTest(taskRun, {
+      parser: { parseURL: vi.fn().mockResolvedValue({ items: [] }) },
+      articleFetcher: vi.fn(),
+      aiProvider: buildAiProviderMock({ assessClusterMergePairs }),
+      sourceConfigs: [
+        {
+          name: "Merge Audit Feed",
+          rssUrl: "https://merge-audit.example.com/feed.xml",
+          siteUrl: "https://merge-audit.example.com",
+          enabled: true,
+          aiParsingEnabled: true,
+          aggregationEnabled: true,
+        },
+      ],
+      blacklist: [],
+      now: new Date("2026-09-26T12:00:00.000Z"),
+    }, undefined, { affectedClusterIds: ["audit-left-cluster"] });
+
+    const storedTaskRun = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const timeline = JSON.parse(storedTaskRun.taskTimelineJson ?? "[]") as Array<{
+      key: string;
+      audit?: { pairs?: Array<Record<string, unknown>> };
+    }>;
+    const diagnostics = timeline.find((node) => node.key === "cluster_merge")?.audit?.pairs ?? [];
+
+    expect(assessClusterMergePairs).toHaveBeenCalledTimes(1);
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      selectionPaths: ["live"],
+      recallChannels: expect.arrayContaining(["bm25"]),
+      decision: {
+        verdict: "declined",
+        confidence: 83,
+        reasonCode: "different_events",
+        reasonText: "AI 判断为不同事件",
+      },
+    });
+  });
+
+  it("surfaces per-pair merge diagnostics through the task timeline audit field", () => {
+    const pairDiagnostic = {
+      pairId: "merge-pair-example",
+      leftClusterId: "cluster-left",
+      rightClusterId: "cluster-right",
+      selectionPaths: ["precomputed_cache"],
+      recallChannels: ["unknown"],
+      bm25Score: null,
+      vectorSimilarity: null,
+      signals: { safety: { rejected: false, rejectedReason: null } },
+      decision: {
+        verdict: "declined",
+        confidence: 91,
+        reasonCode: "different_events",
+        reasonText: "事件不同",
+      },
+    };
+    const counters = createIngestionTimelineCounters();
+    counters.clusterMerge.pairDiagnostics = [pairDiagnostic];
+    const now = new Date("2026-09-26T12:00:00.000Z");
+    const timeline = buildIngestionTaskTimeline({
+      counters,
+      stages: {
+        sourceSync: null,
+        itemProcessing: null,
+        clusterMerge: {
+          key: "cluster_merge",
+          label: "聚合合并",
+          startedAt: now,
+          finishedAt: now,
+          durationMs: 0,
+        },
+        clusterFinalize: null,
+      },
+      modelNames: createIngestionTimelineModelNames(),
+    });
+
+    expect(timeline.find((node) => node.key === "cluster_merge")?.audit).toEqual({ pairs: [pairDiagnostic] });
   });
 
   beforeEach(async () => {
@@ -1278,7 +1462,7 @@ describe("ingestion workflow stages", () => {
 
     expect(storedItems).toHaveLength(2);
     expect(storedItems[0]?.clusterId).not.toBe(storedItems[1]?.clusterId);
-    expect(aiProvider.matchClusterCandidate).not.toHaveBeenCalled();
+    expect(aiProvider.matchClusterCandidate).toHaveBeenCalledTimes(1);
 
     const clusterCount = await prisma.contentCluster.count();
     expect(clusterCount).toBe(2);
@@ -1467,7 +1651,7 @@ describe("ingestion workflow stages", () => {
     expect(storedItem.lastProcessingError).toContain("incomplete_signature");
   });
 
-  it("uses cheap ranking to directly match the strongest cluster without ai", async () => {
+  it("sends a strong BM25 candidate to AI instead of score-based direct matching", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Existing Cluster Feed",
@@ -1482,7 +1666,7 @@ describe("ingestion workflow stages", () => {
       data: {
         id: "strong-cluster",
         kind: "topic",
-        title: "OpenAI 发布 toolkit",
+        title: "OpenAI 发布 toolkit 新版本",
         summary: "OpenAI 发布了 toolkit，并披露上线节奏。",
         score: 90,
         itemCount: 1,
@@ -1604,7 +1788,7 @@ describe("ingestion workflow stages", () => {
         }),
       }),
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
-      matchClusterCandidate: vi.fn().mockResolvedValue({summary: "weak-cluster", isAggregation: false}),
+      matchClusterCandidate: vi.fn().mockResolvedValue("strong-cluster"),
     });
 
     await runIngestionWorkflowStagesForTest({
@@ -1625,7 +1809,13 @@ describe("ingestion workflow stages", () => {
       now: new Date("2026-04-10T10:30:00.000Z"),
     });
 
-    expect(aiProvider.matchClusterCandidate).not.toHaveBeenCalled();
+    expect(aiProvider.matchClusterCandidate).toHaveBeenCalledTimes(1);
+    expect(aiProvider.matchClusterCandidate).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        candidates: expect.arrayContaining([expect.objectContaining({ id: "strong-cluster" })]),
+      }),
+    );
 
     const storedItem = await prisma.item.findFirstOrThrow({
       where: { originalTitle: "OpenAI ships a toolkit" },
@@ -1634,7 +1824,7 @@ describe("ingestion workflow stages", () => {
     expect(storedItem.clusterId).toBe("strong-cluster");
   });
 
-  it("sends only the top 10 cheap-ranked candidates to cluster match ai", async () => {
+  it("sends only the top 10 BM25/RRF-ranked candidates to cluster match ai", async () => {
     const source = await prisma.source.create({
       data: {
         name: "Existing Cluster Feed",
@@ -1662,7 +1852,7 @@ describe("ingestion workflow stages", () => {
           eventType: "launch",
           eventSubject: "OpenAI",
           eventAction: "发布",
-          eventObject: `toolkit variant ${index + 1}`,
+          eventObject: "toolkit",
         },
       });
 
@@ -1681,12 +1871,12 @@ describe("ingestion workflow stages", () => {
           status: "processed",
           moderationStatus: "allowed",
           qualityScore: 70 + index,
-          qualityRationale: "cheap ranking 候选",
+          qualityRationale: "BM25 候选",
           language: "zh",
           eventType: "launch",
           eventSubject: "OpenAI",
           eventAction: "发布",
-          eventObject: `toolkit variant ${index + 1}`,
+          eventObject: "toolkit",
         },
       });
     }
@@ -1711,6 +1901,7 @@ describe("ingestion workflow stages", () => {
       }),
     };
 
+    let selectedCandidateId: string | null = null;
     const aiProvider = buildAiProviderMock({
       summaryFixture: vi.fn().mockResolvedValue({summary: "OpenAI 发布 toolkit 产品线的新成员。", isAggregation: false}),
       analysisFixture: vi.fn().mockResolvedValue({
@@ -1730,8 +1921,8 @@ describe("ingestion workflow stages", () => {
       summarizeCluster: vi.fn().mockResolvedValue("不会被使用"),
       matchClusterCandidate: vi.fn().mockImplementation(async (_input: string, metadata: { candidates: Array<{ id: string }> }) => {
         expect(metadata.candidates).toHaveLength(10);
-        expect(metadata.candidates[0]?.id).toBe("ranked-cluster-12");
-        return metadata.candidates[0]?.id ?? null;
+        selectedCandidateId = metadata.candidates[0]?.id ?? null;
+        return selectedCandidateId;
       }),
     });
 
@@ -1754,12 +1945,13 @@ describe("ingestion workflow stages", () => {
     });
 
     expect(aiProvider.matchClusterCandidate).toHaveBeenCalledTimes(1);
+    expect(selectedCandidateId).not.toBeNull();
 
     const storedItem = await prisma.item.findFirstOrThrow({
       where: { originalTitle: "OpenAI updates toolkit line" },
     });
 
-    expect(storedItem.clusterId).toBe("ranked-cluster-12");
+    expect(storedItem.clusterId).toBe(selectedCandidateId);
   });
 
   it("falls back to processed items when article fetch and ai enrichment fail", async () => {

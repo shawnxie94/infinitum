@@ -411,7 +411,6 @@ export async function processFeedItem({
   const aggregationChildClusterIds = new Set<string>();
   const clusterAssignmentMetrics: NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["clusterAssignment"]> = {
     exactMatch: 0,
-    cheapRankDirect: 0,
     aiMatch: 0,
     skippedIncompleteSignature: 0,
     newCluster: 0,
@@ -716,7 +715,6 @@ export async function processFeedItem({
             });
             hasClusterAssignmentMetrics = true;
             clusterAssignmentMetrics.exactMatch += assignment.matchSource === "exact_match" ? 1 : 0;
-            clusterAssignmentMetrics.cheapRankDirect += assignment.matchSource === "cheap_rank_direct" ? 1 : 0;
             clusterAssignmentMetrics.aiMatch += assignment.matchSource === "ai_match" ? 1 : 0;
             clusterAssignmentMetrics.skippedIncompleteSignature += assignment.skippedIncompleteSignature ? 1 : 0;
             clusterAssignmentMetrics.newCluster += assignment.createdNewCluster ? 1 : 0;
@@ -869,7 +867,6 @@ export async function processFeedItem({
 
     hasClusterAssignmentMetrics = true;
     clusterAssignmentMetrics.exactMatch += clusterAssignment.matchSource === "exact_match" ? 1 : 0;
-    clusterAssignmentMetrics.cheapRankDirect += clusterAssignment.matchSource === "cheap_rank_direct" ? 1 : 0;
     clusterAssignmentMetrics.aiMatch += clusterAssignment.matchSource === "ai_match" ? 1 : 0;
     clusterAssignmentMetrics.skippedIncompleteSignature += clusterAssignment.skippedIncompleteSignature ? 1 : 0;
     clusterAssignmentMetrics.newCluster += clusterAssignment.createdNewCluster ? 1 : 0;

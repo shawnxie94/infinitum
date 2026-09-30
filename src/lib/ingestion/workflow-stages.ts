@@ -139,7 +139,6 @@ function accumulateItemTimelineMetrics(counters: IngestionTimelineCounters, resu
   counters.itemAnalysis.durationMs += Math.round(metrics.timings?.analysisMs ?? 0);
   counters.clusterAssignment.durationMs += Math.round(metrics.timings?.clusterAssignmentMs ?? 0);
   counters.clusterAssignment.exactMatch += metrics.clusterAssignment?.exactMatch ?? 0;
-  counters.clusterAssignment.cheapRankDirect += metrics.clusterAssignment?.cheapRankDirect ?? 0;
   counters.clusterAssignment.aiMatch += metrics.clusterAssignment?.aiMatch ?? 0;
   counters.clusterAssignment.skippedIncompleteSignature += metrics.clusterAssignment?.skippedIncompleteSignature ?? 0;
   counters.clusterAssignment.newCluster += metrics.clusterAssignment?.newCluster ?? 0;
@@ -562,6 +561,7 @@ async function runClusterMergeStage(
     decisionsDeclined: result.decisionsDeclined,
     decisionsAmbiguous: result.decisionsAmbiguous,
     decisionsFailed: result.decisionsFailed,
+    pairDiagnostics: result.pairDiagnostics,
     dirtyPairs: result.dirtyPairs,
     preLimitCandidates: result.preLimitCandidates,
     postLimitCandidates: result.candidates,
