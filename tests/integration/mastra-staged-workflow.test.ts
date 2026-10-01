@@ -158,8 +158,11 @@ vi.mock("@/lib/clusters/service", async (importOriginal) => ({
 }));
 
 import { prisma } from "@/lib/db";
+import { buildClusterSummaryInputHash } from "@/lib/clusters/helpers";
+import type { ClusterSummaryWorkflowPayload } from "@/lib/clusters/service";
 import { ensureDefaultDailyReportSchedule } from "@/lib/tasks/service";
 import { getAiRuntime, triggerTaskWorkflow } from "@/lib/ai-orchestration/runtime";
+import { createClusterSummaryWorkflowDefinition } from "@/lib/workflows/clusters";
 import {
   createItemReanalyzeWorkflowDefinition,
   createItemRegenerationWorkflowDefinition,
@@ -674,6 +677,138 @@ describe("Mastra staged task workflows", () => {
     expect(stageTimings.find((timing) => timing.key === "read")?.detail).toBeUndefined();
     expect(stageTimings.find((timing) => timing.key === "writeback")?.detail).toBe("聚类摘要已写回");
 
+    await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
+  });
+
+  async function createFailureFixtureCluster(storedHash: string | null) {
+    const clusterId = "staged-cluster-summary-failure";
+    const publishedAt = new Date("2026-06-30T00:00:00.000Z");
+    await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
+    const source = await prisma.source.create({
+      data: {
+        id: `${clusterId}-source`,
+        name: clusterId,
+        rssUrl: `https://staged.example.com/${clusterId}/rss`,
+        siteUrl: `https://staged.example.com/${clusterId}`,
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: true,
+      },
+    });
+    await prisma.contentCluster.create({
+      data: {
+        id: clusterId,
+        kind: "topic",
+        title: "staged 聚类失败用例",
+        summary: "staged 聚类失败用例备选",
+        score: 60,
+        itemCount: 2,
+        latestPublishedAt: publishedAt,
+        status: "active",
+        fingerprint: `fp-${clusterId}`,
+        summaryInputHash: storedHash,
+      },
+    });
+    await prisma.item.createMany({
+      data: [0, 1].map((index) => ({
+        id: `${clusterId}-item-${index}`,
+        sourceId: source.id,
+        clusterId,
+        originalUrl: `https://staged.example.com/${clusterId}/item-${index}`,
+        canonicalUrl: `https://staged.example.com/${clusterId}/item-${index}`,
+        urlHash: `${clusterId}-item-${index}-hash`,
+        originalTitle: `staged 聚类失败条目 ${index + 1}`,
+        status: "processed",
+        moderationStatus: "allowed",
+        publishedAt,
+      })),
+    });
+    return clusterId;
+  }
+
+  // mock provider 的 summarizeCluster 固定返回 null → 走 parse 失败 reason "empty"。
+  it("carries the failed summary reason through the staged cluster workflow and keeps a different old hash", async () => {
+    const clusterId = await createFailureFixtureCluster("old-success-hash");
+    const definition = createClusterSummaryWorkflowDefinition();
+    const [readStage, aiStage, writeStage] = definition.stages;
+
+    const payload = await readStage!.execute({ entityId: clusterId } as never, {} as never) as ClusterSummaryWorkflowPayload;
+    const generated = await aiStage!.execute(payload as never, {} as never) as ClusterSummaryWorkflowPayload;
+    expect(generated.presentation).toMatchObject({
+      summaryAttempted: true,
+      summarySucceeded: false,
+      failureReason: "empty",
+    });
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let persisted: { summaryFailureReason?: string };
+    let warnLines: string[];
+    try {
+      persisted = await writeStage!.execute(generated as never, { projectProgress: vi.fn() } as never) as {
+        summaryFailureReason?: string;
+      };
+      warnLines = warnSpy.mock.calls.map((args) => args.join(" "));
+    } finally {
+      warnSpy.mockRestore();
+    }
+    expect(persisted.summaryFailureReason).toBe("empty");
+    // 旧 hash 与当前 input 不同：失败写回保留旧 hash，缓存未被清除。
+    const notAdoptedWarn = warnLines.find((line) => line.includes("presentation_not_adopted"));
+    expect(notAdoptedWarn).toMatch(
+      /^\[ClusterSummary\] presentation_not_adopted clusterId=staged-cluster-summary-failure reason=empty cacheInvalidated=false$/,
+    );
+
+    const cluster = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+    // 失败写回不得把当前 input 固化成成功；不同的旧 hash 原样保留。
+    expect(cluster.summaryInputHash).toBe("old-success-hash");
+    await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
+  });
+
+  it("clears a固化 same-input hash when the staged cluster summary workflow fails end to end", async () => {
+    const clusterId = await createFailureFixtureCluster("stale-current-hash");
+    const clusterWithItems = await prisma.contentCluster.findUniqueOrThrow({
+      where: { id: clusterId },
+      include: { items: { orderBy: { publishedAt: "desc" }, include: { source: true } } },
+    });
+    // 模拟历史上失败被固化：旧 hash 恰等于当前 input hash。
+    await prisma.contentCluster.update({
+      where: { id: clusterId },
+      data: { summaryInputHash: buildClusterSummaryInputHash(clusterWithItems.items as never) },
+    });
+
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "cluster_regenerate_summary",
+        triggerType: "manual",
+        status: "queued",
+        label: "重新生成聚类摘要",
+        entityId: clusterId,
+      },
+    });
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let result: { status: string };
+    let warnLines: string[];
+    try {
+      result = await triggerTaskWorkflow("cluster_regenerate_summary", taskRun.id);
+      warnLines = warnSpy.mock.calls.map((args) => args.join(" "));
+    } finally {
+      warnSpy.mockRestore();
+    }
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const cluster = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+    const checkpoint = JSON.parse(stored.pipelineCheckpointJson ?? "{}") as { __mastra?: { step?: { stepId?: string } } };
+
+    // 摘要失败不等于任务失败，但同 input 固化 hash 必须清除，避免缓存阻断自动重试。
+    expect(result.status).toBe("succeeded");
+    expect(cluster.summaryInputHash).toBeNull();
+    // 同 input 固化 hash 被清除 → 日志必须如实标注 cacheInvalidated=true，且不得携带 secret。
+    const notAdoptedWarn = warnLines.find((line) => line.includes("presentation_not_adopted"));
+    expect(notAdoptedWarn).toMatch(
+      /^\[ClusterSummary\] presentation_not_adopted clusterId=staged-cluster-summary-failure reason=empty cacheInvalidated=true$/,
+    );
+    expect(checkpoint.__mastra?.step?.stepId).toBe("cluster_regenerate_summary-writeback");
+    // 框架 checkpoint 只保留 mastra step 投影，不落 stage payload（presentation.reason
+    // 由 persist 返回值与上一条 direct stage 测试覆盖）。
     await prisma.contentCluster.deleteMany({ where: { id: clusterId } });
   });
 

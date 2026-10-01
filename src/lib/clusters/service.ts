@@ -67,6 +67,7 @@ import {
   type ClusterMergeRecallChannel,
   type ClusterMergeSelectionPath,
   type ClusterSummaryFailureReason,
+  type ClusterSummaryPresentation,
 } from "@/lib/clusters/helpers";
 import {
   getDefaultClusterSummaryRetryGuard,
@@ -591,12 +592,19 @@ export async function recomputeCluster(
   const finalizeCluster = async (
     presentation: Awaited<ReturnType<typeof generateClusterPresentation>>,
   ): Promise<ClusterRecomputeResult> => {
-    // 只有成功采用模型结果、或单项 fallback 才允许推进缓存 hash；
-    // 失败 / 延后 / 多条无 provider 一律保留原成功 hash。
+    // 失败 / 延后 / 多条无 provider 一律保留原成功 hash；唯一例外是 force 失败
+    // 且旧 hash 恰好等于当前 input（历史上被固化成「成功」）：清除为 null，
+    // 否则缓存命中会阻止后续自动重试。只作用于这次明确 force 失败的 cluster。
+    const forceFailedStaleCurrentHash = !presentation.summarySucceeded
+      && !(isSingletonFallback && !generationAttempted)
+      && forceSummary
+      && cluster.summaryInputHash === summaryInputHash;
     const cacheableHash =
       presentation.summarySucceeded || (isSingletonFallback && !generationAttempted)
         ? summaryInputHash
-        : cluster.summaryInputHash;
+        : forceFailedStaleCurrentHash
+          ? null
+          : cluster.summaryInputHash;
     const eventSignature = buildClusterEventSignature(cluster.items);
     const score = Math.max(...cluster.items.map((item) => item.qualityScore));
     const latestPublishedAt = cluster.items[0]!.publishedAt;
@@ -1077,12 +1085,7 @@ export async function enqueueClusterSummaryTask(clusterId: string, label?: strin
 export type ClusterSummaryWorkflowPayload = {
   clusterId: string;
   summaryInputHash: string;
-  presentation?: {
-    title: string;
-    summary: string;
-    summaryAttempted: boolean;
-    summarySucceeded: boolean;
-  };
+  presentation?: ClusterSummaryPresentation;
 };
 
 export async function readClusterSummaryWorkflow(clusterId: string): Promise<ClusterSummaryWorkflowPayload> {
@@ -1122,10 +1125,31 @@ export async function generateClusterSummaryWorkflow(
   return { ...payload, presentation };
 }
 
-export async function persistClusterSummaryWorkflow(payload: ClusterSummaryWorkflowPayload) {
+export async function persistClusterSummaryWorkflow(payload: ClusterSummaryWorkflowPayload): Promise<{
+  clusterId: string;
+  deleted: boolean;
+  updated: boolean;
+  summaryAttempted?: boolean;
+  summarySucceeded?: boolean;
+  summaryFailureReason?: ClusterSummaryFailureReason;
+}> {
   const cluster = await getClusterWithItems(payload.clusterId);
   if (!cluster || cluster.items.length === 0) return { clusterId: payload.clusterId, deleted: true, updated: false };
   if (!payload.presentation) throw new Error("Cluster summary presentation is missing");
+  const presentation = payload.presentation;
+  // 手动 route 走 read → generate → persist 独立双路径，语义等同 forceSummary：
+  // 成功（或单项 fallback 未尝试）才允许推进缓存 hash；read 与 persist 之间
+  // items 可能变化，payload hash 与当前 input 不一致时不得把它伪装成当前成功。
+  const currentInputHash = buildClusterSummaryInputHash(cluster.items);
+  const isSingletonFallback = cluster.items.length < 2;
+  const cacheableHash =
+    presentation.summarySucceeded || (isSingletonFallback && !presentation.summaryAttempted)
+      ? payload.summaryInputHash === currentInputHash
+        ? payload.summaryInputHash
+        : cluster.summaryInputHash
+      : cluster.summaryInputHash === currentInputHash
+        ? null
+        : cluster.summaryInputHash;
   const eventSignature = buildClusterEventSignature(cluster.items);
   const score = Math.max(...cluster.items.map((item) => item.qualityScore));
   const latestPublishedAt = cluster.items[0]!.publishedAt;
@@ -1135,9 +1159,9 @@ export async function persistClusterSummaryWorkflow(payload: ClusterSummaryWorkf
   });
   const nextItemCount = cluster.items.length;
   await updateClusterSummary(payload.clusterId, {
-    title: payload.presentation.title,
-    summary: payload.presentation.summary,
-    summaryInputHash: payload.summaryInputHash,
+    title: presentation.title,
+    summary: presentation.summary,
+    summaryInputHash: cacheableHash,
     score,
     itemCount: nextItemCount,
     latestPublishedAt,
@@ -1149,13 +1173,23 @@ export async function persistClusterSummaryWorkflow(payload: ClusterSummaryWorkf
     eventFingerprint: eventIdentity?.eventFingerprint ?? null,
     eventBucket: eventIdentity?.eventBucket ?? null,
   });
+  // manual Mastra 路径不持久化 presentation.failureReason，DB 之外补一条
+  // 结构化安全日志（仅类别枚举，不含 title/summary/prompt/原始错误）。
+  if (presentation.summaryAttempted && !presentation.summarySucceeded) {
+    console.warn(
+      `[ClusterSummary] presentation_not_adopted clusterId=${payload.clusterId} reason=${presentation.failureReason ?? "provider_error"} cacheInvalidated=${cacheableHash === null}`,
+    );
+  }
   await refreshClusterFeedStatsSafely([payload.clusterId], "workflow cluster summary");
   return {
     clusterId: payload.clusterId,
     deleted: false,
     updated: true,
-    summaryAttempted: payload.presentation.summaryAttempted,
-    summarySucceeded: payload.presentation.summarySucceeded,
+    summaryAttempted: presentation.summaryAttempted,
+    summarySucceeded: presentation.summarySucceeded,
+    ...(presentation.summaryAttempted && !presentation.summarySucceeded
+      ? { summaryFailureReason: presentation.failureReason ?? "provider_error" }
+      : {}),
   };
 }
 

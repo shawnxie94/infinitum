@@ -38,9 +38,12 @@ import {
   assignItemToCluster,
   detachItemFromCluster,
   executeClusterMerge,
+  generateClusterSummaryWorkflow,
   mergeClusters,
   mergeSelectedItemsToLargestCluster,
+  persistClusterSummaryWorkflow,
   precomputeClusterMergeCleanPairs,
+  readClusterSummaryWorkflow,
   recomputeCluster,
   splitClusterIntoSingletons,
 } from "@/lib/clusters/service";
@@ -2804,6 +2807,31 @@ describe("cluster assignment", () => {
       expect(recovered.summarySucceeded).toBe(true);
     });
 
+    it("clears a固化 same-input hash when a forced summary fails so retries are not cache-blocked", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      // 模拟历史上失败被固化成「成功」：旧 hash 恰等于当前 input hash。
+      await prisma.contentCluster.update({
+        where: { id: clusterId },
+        data: { summaryInputHash: await currentInputHash(clusterId) },
+      });
+      const failingProvider = { summarizeCluster: buildSummarizeCluster("fail") } as never;
+
+      const forced = await recomputeCluster(clusterId, failingProvider, { forceSummary: true });
+      expect(forced.summaryAttempted).toBe(true);
+      expect(forced.summarySucceeded).toBe(false);
+      expect(forced.summaryFailureReason).toBe("provider_error");
+      const storedAfterForce = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(storedAfterForce.summaryInputHash).toBeNull();
+
+      // hash 已清除：后续成功重试不被缓存命中短路，仍会真正发起 provider 调用。
+      const summarizeCluster = buildSummarizeCluster("succeed");
+      const recovered = await recomputeCluster(clusterId, { summarizeCluster } as never, { forceSummary: true });
+      expect(recovered.summarySucceeded).toBe(true);
+      expect(summarizeCluster).toHaveBeenCalledTimes(1);
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(stored.summaryInputHash).toBe(await currentInputHash(clusterId));
+    });
+
     it("does not let a deferred recompute overwrite the inflight success presentation or hash", async () => {
       const clusterId = await createSummaryRetryCluster();
       let resolveSummary!: (value: string) => void;
@@ -2901,6 +2929,128 @@ describe("cluster assignment", () => {
       expect(stored.title).toBe("新的 AI 标题");
       expect(stored.summaryInputHash).toBe(await currentInputHash(clusterId));
     });
+
+  describe("manual regenerate summary workflow (read → generate → persist)", () => {
+    const failingProvider = { summarizeCluster: buildSummarizeCluster("fail") } as never;
+    const succeedingProvider = { summarizeCluster: buildSummarizeCluster("succeed") } as never;
+
+    async function storedHash(clusterId: string) {
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      return stored.summaryInputHash;
+    }
+
+    it("caches the input hash on a successful manual writeback", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      const payload = await readClusterSummaryWorkflow(clusterId);
+      const generated = await generateClusterSummaryWorkflow(payload, succeedingProvider);
+
+      const result = await persistClusterSummaryWorkflow(generated);
+      expect(result.summaryAttempted).toBe(true);
+      expect(result.summarySucceeded).toBe(true);
+      expect(result.summaryFailureReason).toBeUndefined();
+      expect(await storedHash(clusterId)).toBe(await currentInputHash(clusterId));
+    });
+
+    it("keeps a null hash null when the first manual summary fails and reports the safe reason", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      await prisma.contentCluster.update({ where: { id: clusterId }, data: { summaryInputHash: null } });
+      const payload = await readClusterSummaryWorkflow(clusterId);
+      const generated = await generateClusterSummaryWorkflow(payload, failingProvider);
+      expect(generated.presentation?.summarySucceeded).toBe(false);
+
+      const result = await persistClusterSummaryWorkflow(generated);
+      expect(result.summaryAttempted).toBe(true);
+      expect(result.summarySucceeded).toBe(false);
+      expect(result.summaryFailureReason).toBe("provider_error");
+      expect(await storedHash(clusterId)).toBeNull();
+    });
+
+    it("clears a固化 same-input hash on failed manual writeback but preserves a different old hash", async () => {
+      const staleClusterId = await createSummaryRetryCluster();
+      await prisma.contentCluster.update({
+        where: { id: staleClusterId },
+        data: { summaryInputHash: await currentInputHash(staleClusterId) },
+      });
+      const stalePayload = await readClusterSummaryWorkflow(staleClusterId);
+      const staleGenerated = await generateClusterSummaryWorkflow(stalePayload, failingProvider);
+
+      const staleResult = await persistClusterSummaryWorkflow(staleGenerated);
+      expect(staleResult.summaryFailureReason).toBe("provider_error");
+      // 同 input 固化 hash 不能继续冒充成功：清除，允许后续自动重试。
+      expect(await storedHash(staleClusterId)).toBeNull();
+
+      // 不同的旧 hash（对应旧 input 的真实成功）原样保留。
+      const otherClusterId = await createSummaryRetryCluster();
+      const otherPayload = await readClusterSummaryWorkflow(otherClusterId);
+      const otherGenerated = await generateClusterSummaryWorkflow(otherPayload, failingProvider);
+      await persistClusterSummaryWorkflow(otherGenerated);
+      expect(await storedHash(otherClusterId)).toBe("old-success-hash");
+    });
+
+    it("keeps the old hash for multi-item manual writeback without a provider", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      const payload = await readClusterSummaryWorkflow(clusterId);
+      // 多条但无 provider：generate 阶段产出未尝试的 fallback presentation
+      //（不走 generateClusterSummaryWorkflow，它会在有配置时自行解析 provider）。
+      const generated = {
+        ...payload,
+        presentation: {
+          title: "fallback 标题",
+          summary: "fallback 摘要。",
+          summaryAttempted: false,
+          summarySucceeded: false,
+        },
+      };
+      expect(generated.presentation.summaryAttempted).toBe(false);
+
+      const result = await persistClusterSummaryWorkflow(generated);
+      expect(result.summarySucceeded).toBe(false);
+      expect(result.summaryFailureReason).toBeUndefined();
+      expect(await storedHash(clusterId)).toBe("old-success-hash");
+    });
+
+    it("caches the singleton fallback hash without AI on manual writeback", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      await prisma.item.delete({ where: { id: `${clusterId}-item-1` } });
+      const payload = await readClusterSummaryWorkflow(clusterId);
+      const generated = await generateClusterSummaryWorkflow(payload, undefined);
+      expect(generated.presentation?.summaryAttempted).toBe(false);
+
+      await persistClusterSummaryWorkflow(generated);
+      expect(await storedHash(clusterId)).toBe(await currentInputHash(clusterId));
+    });
+
+    it("does not fake a current success when items changed between read and writeback", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      const payload = await readClusterSummaryWorkflow(clusterId);
+      // read 之后新增条目：payload hash 已过期，不得把旧 input hash 写成当前成功。
+      const source = await prisma.source.findFirstOrThrow({ where: { name: { startsWith: "Summary Retry Feed" } } });
+      await prisma.item.create({
+        data: {
+          id: `${clusterId}-item-late`,
+          sourceId: source.id,
+          clusterId,
+          originalUrl: `https://summary-retry.example.com/late`,
+          canonicalUrl: `https://summary-retry.example.com/late`,
+          urlHash: `${clusterId}-hash-late`,
+          originalTitle: "Acme 发布 Widget late",
+          publishedAt: new Date("2026-04-20T12:00:00.000Z"),
+          summaryText: "Acme 发布 Widget late 的详细报道。",
+          language: "zh",
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          qualityRationale: "relevant",
+        },
+      });
+
+      const generated = await generateClusterSummaryWorkflow(payload, succeedingProvider);
+      const result = await persistClusterSummaryWorkflow(generated);
+      expect(result.summarySucceeded).toBe(true);
+      // payload hash ≠ 当前 input hash：不缓存，保留旧 hash。
+      expect(await storedHash(clusterId)).toBe("old-success-hash");
+    });
+  });
   });
 
 });
