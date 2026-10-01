@@ -46,6 +46,7 @@ import { DEFAULT_FULL_TEXT_FETCH_THRESHOLD } from "@/lib/tasks/scheduler";
 import type { TaskAiCallBreakdownSnapshot, TaskStageTimingSnapshot, TaskTimelineNodeSnapshot } from "@/lib/tasks/types";
 import type { ProcessedItemRecord, RunIngestionOptions } from "@/lib/ingestion/types";
 import {
+  appendClusterFinalizeSummaryDiagnostic,
   buildIngestionTaskTimeline,
   createIngestionTimelineCounters,
   createIngestionTimelineModelNames,
@@ -606,6 +607,18 @@ async function runClusterFinalizeStage(
     timelineCounters.clusterFinalize.recomputed += 1;
     if (result.updated) timelineCounters.clusterFinalize.updated += 1;
     if (result.deleted) timelineCounters.clusterFinalize.deleted += 1;
+    if (result.retryDeferred) {
+      // Guard 冷却/窗口拦截：单独计数，不算新的失败尝试。
+      timelineCounters.clusterFinalize.summaryDeferred =
+        (timelineCounters.clusterFinalize.summaryDeferred ?? 0) + 1;
+      appendClusterFinalizeSummaryDiagnostic(timelineCounters, {
+        clusterId: result.clusterId,
+        // 延后不是 provider 失败：用独立 reason，避免诊断误报。
+        reason: "retry_deferred",
+        retryAfterMs: result.retryAfterMs ?? null,
+        attempts: result.attemptCount ?? 0,
+      });
+    }
     if (result.summaryAttempted) {
       timelineCounters.clusterFinalize.summaryAttempted =
         (timelineCounters.clusterFinalize.summaryAttempted ?? 0) + 1;
@@ -613,6 +626,12 @@ async function runClusterFinalizeStage(
         timelineCounters.clusterFinalize.summarySucceeded += 1;
       } else {
         timelineCounters.clusterFinalize.summaryFailed += 1;
+        appendClusterFinalizeSummaryDiagnostic(timelineCounters, {
+          clusterId: result.clusterId,
+          reason: result.summaryFailureReason ?? "provider_error",
+          retryAfterMs: null,
+          attempts: result.attemptCount ?? 0,
+        });
       }
     }
   }

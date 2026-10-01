@@ -11,6 +11,27 @@ export type IngestionStageTiming = {
   durationMs: number | null;
 };
 
+export type ClusterFinalizeSummaryDiagnostic = {
+  clusterId: string;
+  reason: string;
+  retryAfterMs: number | null;
+  attempts: number;
+};
+
+export const CLUSTER_FINALIZE_SUMMARY_DIAGNOSTICS_LIMIT = 20;
+
+type ClusterFinalizeCounters = {
+  recomputed: number;
+  updated: number;
+  deleted: number;
+  summaryAttempted: number;
+  summarySucceeded: number;
+  summaryFailed: number;
+  summaryDeferred: number;
+  summaryDiagnostics?: ClusterFinalizeSummaryDiagnostic[];
+  summaryDiagnosticsOverflow?: number;
+};
+
 export type IngestionTimelineCounters = {
   sourceFetch: {
     sourcesFetched: number;
@@ -97,14 +118,7 @@ export type IngestionTimelineCounters = {
     applyMergeMs: number;
     markEvaluatedMs: number;
   };
-  clusterFinalize: {
-    recomputed: number;
-    updated: number;
-    deleted: number;
-    summaryAttempted: number;
-    summarySucceeded: number;
-    summaryFailed: number;
-  };
+  clusterFinalize: ClusterFinalizeCounters;
 };
 
 export type IngestionTaskStageState = {
@@ -215,8 +229,25 @@ export function createIngestionTimelineCounters(): IngestionTimelineCounters {
       summaryAttempted: 0,
       summarySucceeded: 0,
       summaryFailed: 0,
+      summaryDeferred: 0,
+      summaryDiagnostics: [],
+      summaryDiagnosticsOverflow: 0,
     },
   };
+}
+
+// 有界追加 per-cluster 摘要失败诊断，超出上限只累加 overflow 计数，避免狂写。
+export function appendClusterFinalizeSummaryDiagnostic(
+  counters: IngestionTimelineCounters,
+  diagnostic: ClusterFinalizeSummaryDiagnostic,
+) {
+  const finalize = counters.clusterFinalize;
+  const diagnostics = finalize.summaryDiagnostics ?? (finalize.summaryDiagnostics = []);
+  if (diagnostics.length >= CLUSTER_FINALIZE_SUMMARY_DIAGNOSTICS_LIMIT) {
+    finalize.summaryDiagnosticsOverflow = (finalize.summaryDiagnosticsOverflow ?? 0) + 1;
+    return;
+  }
+  diagnostics.push(diagnostic);
 }
 
 export function createIngestionTimelineModelNames(): IngestionTimelineModelNames {
@@ -274,13 +305,17 @@ export function buildIngestionTaskTimeline(input: {
 }): TaskTimelineNodeSnapshot[] {
   const { counters, stages, modelNames } = input;
   const summaryAttempted = counters.clusterFinalize.summaryAttempted ?? 0;
+  const summaryDeferred = counters.clusterFinalize.summaryDeferred ?? 0;
+  const summaryDiagnostics = counters.clusterFinalize.summaryDiagnostics ?? [];
+  const summaryDiagnosticsOverflow = counters.clusterFinalize.summaryDiagnosticsOverflow ?? 0;
   const clusterFinalizeCounts =
     counters.clusterFinalize.recomputed +
     counters.clusterFinalize.updated +
     counters.clusterFinalize.deleted +
     summaryAttempted +
     counters.clusterFinalize.summarySucceeded +
-    counters.clusterFinalize.summaryFailed;
+    counters.clusterFinalize.summaryFailed +
+    summaryDeferred;
 
   return [
     {
@@ -448,12 +483,21 @@ export function buildIngestionTaskTimeline(input: {
       }),
       ...toNodeTiming(stages.clusterFinalize),
       modelName: modelNames.clusterSummary,
+      ...(summaryDiagnostics.length > 0
+        ? {
+            audit: {
+              summaryFailures: summaryDiagnostics,
+              ...(summaryDiagnosticsOverflow > 0 ? { overflow: summaryDiagnosticsOverflow } : {}),
+            },
+          }
+        : {}),
       metrics: [
         { label: "参与重算", value: counters.clusterFinalize.recomputed },
         { label: "完成更新", value: counters.clusterFinalize.updated },
         { label: "摘要尝试", value: summaryAttempted },
         { label: "摘要完成", value: counters.clusterFinalize.summarySucceeded },
         { label: "摘要未完成", value: counters.clusterFinalize.summaryFailed },
+        { label: "摘要延后", value: summaryDeferred },
         { label: "已删除", value: counters.clusterFinalize.deleted },
       ],
     },

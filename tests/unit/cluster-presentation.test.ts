@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import { generateClusterPresentation, type ItemWithSource } from "@/lib/clusters/helpers";
 
 function createItem(id: string, summaryText: string): ItemWithSource {
@@ -48,7 +49,162 @@ describe("generateClusterPresentation", () => {
       summary: "Nothing 发布 Phone (4b)，扩展其移动设备产品线。 Nothing 发布 Phone（4b），定价 329 欧元起。",
       summaryAttempted: true,
       summarySucceeded: false,
+      failureReason: "protocol_invalid",
     });
+  });
+
+  it("reports reasoning_marker when a JSON summary leaks reasoning text", async () => {
+    const leakedReasoning = JSON.stringify({
+      title: "Nothing 发布 Phone（4b）",
+      summary: "**分析请求**：基于多条候选内容撰写 summary，提炼共同事件。",
+    });
+    const summarizeCluster = vi.fn().mockResolvedValue(leakedReasoning);
+    const items = [
+      createItem("one", "Nothing 发布 Phone (4b)，扩展其移动设备产品线。"),
+      createItem("two", "Nothing 发布 Phone（4b），定价 329 欧元起。"),
+    ];
+
+    const result = await generateClusterPresentation(
+      items,
+      "Nothing 发布 Phone (4b",
+      { summarizeCluster },
+      { preferEventTitleFallback: true },
+    );
+
+    expect(result.summarySucceeded).toBe(false);
+    expect(result.failureReason).toBe("reasoning_marker");
+  });
+
+  it("reports empty when the model returns no usable content", async () => {
+    const summarizeCluster = vi.fn().mockResolvedValue("   ");
+    const items = [
+      createItem("one", "Nothing 发布 Phone (4b)，扩展其移动设备产品线。"),
+      createItem("two", "Nothing 发布 Phone（4b），定价 329 欧元起。"),
+    ];
+
+    const result = await generateClusterPresentation(
+      items,
+      "Nothing 发布 Phone (4b",
+      { summarizeCluster },
+      { preferEventTitleFallback: true },
+    );
+
+    expect(result.summaryAttempted).toBe(true);
+    expect(result.summarySucceeded).toBe(false);
+    expect(result.failureReason).toBe("empty");
+  });
+
+  it("reports protocol_invalid when the provider throws a JSON protocol error", async () => {
+    const summarizeCluster = vi.fn().mockRejectedValue(new InvalidJsonModelResponseError("bad json"));
+    const items = [
+      createItem("one", "Nothing 发布 Phone (4b)，扩展其移动设备产品线。"),
+      createItem("two", "Nothing 发布 Phone（4b），定价 329 欧元起。"),
+    ];
+
+    const result = await generateClusterPresentation(
+      items,
+      "Nothing 发布 Phone (4b",
+      { summarizeCluster },
+      { preferEventTitleFallback: true },
+    );
+
+    expect(result.summarySucceeded).toBe(false);
+    expect(result.failureReason).toBe("protocol_invalid");
+  });
+
+  it("reports provider_error as the safe code for other provider exceptions", async () => {
+    const summarizeCluster = vi.fn().mockRejectedValue(new Error("network exploded with secret detail"));
+    const items = [
+      createItem("one", "Nothing 发布 Phone (4b)，扩展其移动设备产品线。"),
+      createItem("two", "Nothing 发布 Phone（4b），定价 329 欧元起。"),
+    ];
+
+    const result = await generateClusterPresentation(
+      items,
+      "Nothing 发布 Phone (4b",
+      { summarizeCluster },
+      { preferEventTitleFallback: true },
+    );
+
+    expect(result.summarySucceeded).toBe(false);
+    expect(result.failureReason).toBe("provider_error");
+    expect(JSON.stringify(result)).not.toContain("secret detail");
+  });
+
+  it("reports non_chinese when the Chinese retry is exhausted", async () => {
+    const englishSummary = JSON.stringify({
+      title: "Nothing launches Phone (4b)",
+      summary: "Nothing launched the Phone (4b) with a new design and better cameras across markets.",
+    });
+    const summarizeCluster = vi.fn().mockResolvedValue(englishSummary);
+    const items = [
+      createItem("one", "Nothing 发布 Phone (4b)，扩展其移动设备产品线。"),
+      createItem("two", "Nothing 发布 Phone（4b），定价 329 欧元起。"),
+    ];
+
+    const result = await generateClusterPresentation(
+      items,
+      "Nothing 发布 Phone (4b",
+      { summarizeCluster },
+      { preferEventTitleFallback: true },
+    );
+
+    expect(summarizeCluster).toHaveBeenCalledTimes(2);
+    expect(result.summarySucceeded).toBe(false);
+    expect(result.failureReason).toBe("non_chinese");
+  });
+
+  it("reports no_change when the model output equals the fallback content", async () => {
+    const fallbackSummary = "Nothing 发布 Phone (4b)，扩展其移动设备产品线。 Nothing 发布 Phone（4b），定价 329 欧元起。";
+    const summarizeCluster = vi.fn().mockResolvedValue(
+      JSON.stringify({ title: "Nothing 发布 Phone (4b)", summary: fallbackSummary }),
+    );
+    const items = [
+      createItem("one", "Nothing 发布 Phone (4b)，扩展其移动设备产品线。"),
+      createItem("two", "Nothing 发布 Phone（4b），定价 329 欧元起。"),
+    ];
+
+    const result = await generateClusterPresentation(
+      items,
+      "Nothing 发布 Phone (4b",
+      { summarizeCluster },
+      { preferEventTitleFallback: true },
+    );
+
+    expect(result).toEqual({
+      title: "Nothing 发布 Phone (4b)",
+      summary: fallbackSummary,
+      summaryAttempted: true,
+      summarySucceeded: false,
+      failureReason: "no_change",
+    });
+  });
+
+  it("does not mark singleton or no-provider runs as attempted failures", async () => {
+    const items = [createItem("one", "单条内容摘要。")];
+    const singletonResult = await generateClusterPresentation(
+      items,
+      "单条标题",
+      { summarizeCluster: vi.fn() },
+      { preferEventTitleFallback: true },
+    );
+    expect(singletonResult.summaryAttempted).toBe(false);
+    expect(singletonResult.summarySucceeded).toBe(false);
+    expect(singletonResult.failureReason).toBeUndefined();
+
+    const multiItems = [
+      createItem("one", "Nothing 发布 Phone (4b)，扩展其移动设备产品线。"),
+      createItem("two", "Nothing 发布 Phone（4b），定价 329 欧元起。"),
+    ];
+    const noProviderResult = await generateClusterPresentation(
+      multiItems,
+      "Nothing 发布 Phone (4b",
+      undefined,
+      { preferEventTitleFallback: true },
+    );
+    expect(noProviderResult.summaryAttempted).toBe(false);
+    expect(noProviderResult.summarySucceeded).toBe(false);
+    expect(noProviderResult.failureReason).toBeUndefined();
   });
 
   it("clamps over-length summaries at a sentence boundary instead of dropping them", async () => {

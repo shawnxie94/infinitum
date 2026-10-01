@@ -8,7 +8,11 @@ import {
   CLUSTER_MERGE_RELATED_PAIR_LIMIT,
   CLUSTER_MERGE_VECTOR_GRAY_SIM,
 } from "@/config/constants";
-import { type AiEventSignature, type AiProvider } from "@/lib/ai/provider-types";
+import {
+  type AiEventSignature,
+  type AiProvider,
+  isInvalidJsonModelResponseError,
+} from "@/lib/ai/provider-types";
 import { shouldRegenerateChineseSummary } from "@/lib/ai/summary-language";
 import type { ClusterAssignmentCandidate } from "@/lib/clusters/repository";
 import {
@@ -563,39 +567,64 @@ function isAcceptableClusterPresentation(value: { title: string; summary: string
   return !CLUSTER_PRESENTATION_REASONING_MARKERS.some((marker) => normalizedSummary.includes(marker));
 }
 
+// 摘要失败的结构化原因：只表达可判别的失败类别，不携带模型原文或错误消息。
+export type ClusterSummaryFailureReason =
+  | "empty"
+  | "protocol_invalid"
+  | "reasoning_marker"
+  | "non_chinese"
+  | "provider_error"
+  | "no_change";
+
+type ClusterPresentationParseResult =
+  | { ok: true; presentation: { title: string; summary: string } }
+  | { ok: false; reason: "empty" | "protocol_invalid" | "reasoning_marker" };
+
 function parseClusterPresentationOutput(
   rawContent: string | null | undefined,
   fallback: { title: string; summary: string },
-) {
+): ClusterPresentationParseResult {
   const normalized = rawContent?.trim() ?? "";
 
   if (!normalized) {
-    return null;
+    return { ok: false, reason: "empty" };
   }
 
+  let parsed: {
+    title?: string | null;
+    summary?: string | null;
+  };
+
   try {
-    const parsed = JSON.parse(normalized) as {
+    parsed = JSON.parse(normalized) as {
       title?: string | null;
       summary?: string | null;
     };
+  } catch {
+    return { ok: false, reason: "protocol_invalid" };
+  }
 
-    const presentation = {
-      title: normalizePresentationTitle(parsed.title, fallback.title),
-      summary: parsed.summary?.trim() || fallback.summary,
-    };
+  const presentation = {
+    title: normalizePresentationTitle(parsed.title, fallback.title),
+    summary: parsed.summary?.trim() || fallback.summary,
+  };
 
-    if (!isAcceptableClusterPresentation(presentation)) {
-      return null;
-    }
+  if (!isAcceptableClusterPresentation(presentation)) {
+    const normalizedSummary = presentation.summary.trim().toLowerCase();
+    const hasReasoningMarker = CLUSTER_PRESENTATION_REASONING_MARKERS.some((marker) =>
+      normalizedSummary.includes(marker),
+    );
+    return { ok: false, reason: hasReasoningMarker ? "reasoning_marker" : "empty" };
+  }
 
-    // 长度超标不再整条拒绝：句子边界截断后采用，避免模型输出偏长时丢弃可用摘要。
-    return {
+  // 长度超标不再整条拒绝：句子边界截断后采用，避免模型输出偏长时丢弃可用摘要。
+  return {
+    ok: true,
+    presentation: {
       title: presentation.title.slice(0, CLUSTER_TITLE_MAX_LENGTH),
       summary: balanceEmphasisMarkers(truncateAtSentenceBoundary(presentation.summary, CLUSTER_SUMMARY_MAX_LENGTH)),
-    };
-  } catch {
-    return null;
-  }
+    },
+  };
 }
 
 type ClusterSummaryProvider = Pick<AiProvider, "summarizeCluster">;
@@ -628,12 +657,32 @@ export function buildClusterSummaryInputHash(clusterItems: ItemWithSource[]) {
     .digest("hex");
 }
 
+export type ClusterSummaryPresentation = {
+  title: string;
+  summary: string;
+  summaryAttempted: boolean;
+  summarySucceeded: boolean;
+  failureReason?: ClusterSummaryFailureReason;
+};
+
+function buildUnacceptedPresentation(
+  fallback: { title: string; summary: string },
+  reason: ClusterSummaryFailureReason,
+) {
+  return {
+    ...fallback,
+    summaryAttempted: true,
+    summarySucceeded: false,
+    failureReason: reason,
+  };
+}
+
 export async function generateClusterPresentation(
   clusterItems: ItemWithSource[],
   existingTitle?: string,
   aiProvider?: ClusterSummaryProvider,
   options?: { preferEventTitleFallback?: boolean },
-) {
+): Promise<ClusterSummaryPresentation> {
   const fallback = buildClusterFallback(clusterItems, existingTitle, options);
 
   if (!shouldGenerateAiClusterSummary(clusterItems, aiProvider)) {
@@ -649,46 +698,48 @@ export async function generateClusterPresentation(
   try {
     const summarySeed = buildClusterSummarySeed(clusterItems);
 
-    let aiPresentation = parseClusterPresentationOutput(
+    let parsed = parseClusterPresentationOutput(
       await summaryProvider.summarizeCluster(summarySeed, { title: fallback.title }),
       fallback,
     );
-    if (!aiPresentation) {
-      return {
-        ...fallback,
-        summaryAttempted: true,
-        summarySucceeded: false,
-      };
+    if (!parsed.ok) {
+      return buildUnacceptedPresentation(fallback, parsed.reason);
     }
+    let aiPresentation = parsed.presentation;
     if (shouldRegenerateChineseSummary(aiPresentation.summary)) {
-      aiPresentation = parseClusterPresentationOutput(
+      parsed = parseClusterPresentationOutput(
         await summaryProvider.summarizeCluster(summarySeed, { title: fallback.title }),
         fallback,
       );
+      if (!parsed.ok) {
+        return buildUnacceptedPresentation(fallback, parsed.reason);
+      }
+      aiPresentation = parsed.presentation;
     }
-    if (!aiPresentation || shouldRegenerateChineseSummary(aiPresentation.summary)) {
-      return {
-        ...fallback,
-        summaryAttempted: true,
-        summarySucceeded: false,
-      };
+    if (shouldRegenerateChineseSummary(aiPresentation.summary)) {
+      return buildUnacceptedPresentation(fallback, "non_chinese");
     }
     const useAiPresentation =
       Boolean(aiPresentation.summary.trim()) &&
       (aiPresentation.title !== fallback.title || aiPresentation.summary !== fallback.summary);
 
+    if (!useAiPresentation) {
+      return buildUnacceptedPresentation(fallback, "no_change");
+    }
+
     return {
-      title: useAiPresentation ? aiPresentation.title : fallback.title,
-      summary: useAiPresentation ? aiPresentation.summary : fallback.summary,
+      title: aiPresentation.title,
+      summary: aiPresentation.summary,
       summaryAttempted: true,
-      summarySucceeded: useAiPresentation,
+      summarySucceeded: true,
     };
-  } catch {
-    return {
-      ...fallback,
-      summaryAttempted: true,
-      summarySucceeded: false,
-    };
+  } catch (error) {
+    // 协议错误（网关判定的 JSON 解析失败）与 provider 异常分开归类；
+    // 只保留类别，不透出原始错误内容。
+    return buildUnacceptedPresentation(
+      fallback,
+      isInvalidJsonModelResponseError(error) ? "protocol_invalid" : "provider_error",
+    );
   }
 }
 

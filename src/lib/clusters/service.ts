@@ -66,7 +66,13 @@ import {
   type ClusterMergeCandidateEdge,
   type ClusterMergeRecallChannel,
   type ClusterMergeSelectionPath,
+  type ClusterSummaryFailureReason,
 } from "@/lib/clusters/helpers";
+import {
+  getDefaultClusterSummaryRetryGuard,
+  type ClusterSummaryRetryGuard,
+  type ClusterSummaryRetryVerdict,
+} from "@/lib/clusters/summary-retry-guard";
 import {
   createCannotLinkForClusters,
   createCannotLinksBetweenItemSets,
@@ -125,6 +131,10 @@ export type ClusterRecomputeResult = {
   updated: boolean;
   summaryAttempted: boolean;
   summarySucceeded: boolean;
+  summaryFailureReason?: ClusterSummaryFailureReason;
+  retryDeferred?: boolean;
+  retryAfterMs?: number | null;
+  attemptCount?: number;
 };
 
 async function findClusterForItem(
@@ -524,7 +534,10 @@ export async function assignItemToCluster(
 export async function recomputeCluster(
   clusterId: string,
   aiProvider?: AiProvider,
-  options?: { forceSummary?: boolean },
+  options?: {
+    forceSummary?: boolean;
+    retryGuard?: ClusterSummaryRetryGuard;
+  },
 ): Promise<ClusterRecomputeResult> {
   const cluster = await getClusterWithItems(clusterId);
 
@@ -550,77 +563,147 @@ export async function recomputeCluster(
   }
 
   const summaryInputHash = buildClusterSummaryInputHash(cluster.items);
-  const presentation =
-    !options?.forceSummary && cluster.summaryInputHash && cluster.summaryInputHash === summaryInputHash
-      ? {
-          title: cluster.title,
-          summary: cluster.summary,
-          summaryAttempted: false,
-          summarySucceeded: false,
-        }
-      : await generateClusterPresentation(cluster.items, cluster.title, aiProvider, {
-          preferEventTitleFallback: Boolean(options?.forceSummary),
-        });
-  const eventSignature = buildClusterEventSignature(cluster.items);
-  const score = Math.max(...cluster.items.map((item) => item.qualityScore));
-  const latestPublishedAt = cluster.items[0]!.publishedAt;
-  const eventIdentity = buildEventIdentity({
-    eventSignature,
-    publishedAt: getEventIdentityAnchor(
-      cluster.items.find((item) => item.publishedAtKnown) ?? cluster.items[0]!,
-    ),
-  });
-  const nextItemCount = cluster.items.length;
-  const shouldSkipUpdate =
-    cluster.title === presentation.title &&
-    cluster.summary === presentation.summary &&
-    cluster.score === score &&
-    cluster.itemCount === nextItemCount &&
-    cluster.latestPublishedAt.getTime() === latestPublishedAt.getTime() &&
-    cluster.eventType === (eventSignature?.eventType ?? null) &&
-    cluster.eventSubject === (eventSignature?.eventSubject ?? null) &&
-    cluster.eventAction === (eventSignature?.eventAction ?? null) &&
-    cluster.eventObject === (eventSignature?.eventObject ?? null) &&
-    cluster.eventDate === (eventSignature?.eventDate ?? null) &&
-    cluster.eventFingerprint === (eventIdentity?.eventFingerprint ?? null) &&
-    cluster.eventBucket === (eventIdentity?.eventBucket ?? null) &&
-    cluster.summaryInputHash === summaryInputHash;
+  const forceSummary = Boolean(options?.forceSummary);
+  const retryGuard = options?.retryGuard ?? getDefaultClusterSummaryRetryGuard();
+  const canAttemptAiSummary = Boolean(aiProvider) && cluster.items.length >= 2;
+  const isSingletonFallback = cluster.items.length < 2;
+  let retryVerdict: ClusterSummaryRetryVerdict | null = null;
+  let generationAttempted = false;
+  let guardOutcome: "success" | "failure" = "failure";
 
-  if (shouldSkipUpdate) {
-    await refreshClusterFeedStatsSafely([clusterId], "recompute unchanged cluster");
+  const buildResult = (
+    presentation: Awaited<ReturnType<typeof generateClusterPresentation>>,
+    updated: boolean,
+  ): ClusterRecomputeResult => ({
+    clusterId,
+    deleted: false,
+    updated,
+    summaryAttempted: presentation.summaryAttempted,
+    summarySucceeded: presentation.summarySucceeded,
+    ...(presentation.summaryAttempted && !presentation.summarySucceeded
+      ? { summaryFailureReason: presentation.failureReason ?? "provider_error" }
+      : {}),
+    ...(retryVerdict ? { attemptCount: retryVerdict.attemptsInWindow } : {}),
+  });
+
+  // presentation 之后的派生计算 + DB 持久化收尾；guard owner 的调用方
+  // 负责在 finally 里统一 finish，任何一步抛异常都不会泄漏 inflight。
+  const finalizeCluster = async (
+    presentation: Awaited<ReturnType<typeof generateClusterPresentation>>,
+  ): Promise<ClusterRecomputeResult> => {
+    // 只有成功采用模型结果、或单项 fallback 才允许推进缓存 hash；
+    // 失败 / 延后 / 多条无 provider 一律保留原成功 hash。
+    const cacheableHash =
+      presentation.summarySucceeded || (isSingletonFallback && !generationAttempted)
+        ? summaryInputHash
+        : cluster.summaryInputHash;
+    const eventSignature = buildClusterEventSignature(cluster.items);
+    const score = Math.max(...cluster.items.map((item) => item.qualityScore));
+    const latestPublishedAt = cluster.items[0]!.publishedAt;
+    const eventIdentity = buildEventIdentity({
+      eventSignature,
+      publishedAt: getEventIdentityAnchor(
+        cluster.items.find((item) => item.publishedAtKnown) ?? cluster.items[0]!,
+      ),
+    });
+    const nextItemCount = cluster.items.length;
+    const shouldSkipUpdate =
+      cluster.title === presentation.title &&
+      cluster.summary === presentation.summary &&
+      cluster.score === score &&
+      cluster.itemCount === nextItemCount &&
+      cluster.latestPublishedAt.getTime() === latestPublishedAt.getTime() &&
+      cluster.eventType === (eventSignature?.eventType ?? null) &&
+      cluster.eventSubject === (eventSignature?.eventSubject ?? null) &&
+      cluster.eventAction === (eventSignature?.eventAction ?? null) &&
+      cluster.eventObject === (eventSignature?.eventObject ?? null) &&
+      cluster.eventDate === (eventSignature?.eventDate ?? null) &&
+      cluster.eventFingerprint === (eventIdentity?.eventFingerprint ?? null) &&
+      cluster.eventBucket === (eventIdentity?.eventBucket ?? null) &&
+      cluster.summaryInputHash === cacheableHash;
+
+    if (shouldSkipUpdate) {
+      await refreshClusterFeedStatsSafely([clusterId], "recompute unchanged cluster");
+      return buildResult(presentation, false);
+    }
+
+    await updateClusterSummary(clusterId, {
+      title: presentation.title,
+      summary: presentation.summary,
+      summaryInputHash: cacheableHash,
+      score,
+      itemCount: nextItemCount,
+      latestPublishedAt,
+      eventType: eventSignature?.eventType ?? null,
+      eventSubject: eventSignature?.eventSubject ?? null,
+      eventAction: eventSignature?.eventAction ?? null,
+      eventObject: eventSignature?.eventObject ?? null,
+      eventDate: eventSignature?.eventDate ?? null,
+      eventFingerprint: eventIdentity?.eventFingerprint ?? null,
+      eventBucket: eventIdentity?.eventBucket ?? null,
+    });
+    await refreshClusterFeedStatsSafely([clusterId], "recompute cluster");
+    return buildResult(presentation, true);
+  };
+
+  if (!forceSummary && cluster.summaryInputHash && cluster.summaryInputHash === summaryInputHash) {
+    // 缓存命中：保留已有 hash 与内容，不做任何 generation 尝试。
+    return finalizeCluster({
+      title: cluster.title,
+      summary: cluster.summary,
+      summaryAttempted: false,
+      summarySucceeded: false,
+    });
+  }
+
+  if (!canAttemptAiSummary || isSingletonFallback) {
+    // 单项 fallback 可缓存新 hash；多条但无 provider 时不缓存（见 cacheableHash）。
+    return finalizeCluster(await generateClusterPresentation(cluster.items, cluster.title, undefined, {
+      preferEventTitleFallback: forceSummary,
+    }));
+  }
+
+  if (forceSummary) {
+    // 显式绕过 cache 与 guard，但仍不写失败 hash。
+    generationAttempted = true;
+    return finalizeCluster(await generateClusterPresentation(cluster.items, cluster.title, aiProvider, {
+      preferEventTitleFallback: true,
+    }));
+  }
+
+  const verdict = retryGuard.tryBegin(clusterId, summaryInputHash);
+  retryVerdict = verdict;
+  if (!verdict.allowed) {
+    // 延后请求：绝不写 presentation/hash（避免与 inflight 成功互相覆盖标题与摘要），
+    // 只刷新与展示无关的统计；当前有效展示原样保留。非 owner 不触碰 guard 状态。
+    await refreshClusterStats(clusterId);
     return {
       clusterId,
       deleted: false,
       updated: false,
-      summaryAttempted: presentation.summaryAttempted,
-      summarySucceeded: presentation.summarySucceeded,
+      summaryAttempted: false,
+      summarySucceeded: false,
+      retryDeferred: true,
+      retryAfterMs: verdict.retryAfterMs,
+      attemptCount: verdict.attemptsInWindow,
     } satisfies ClusterRecomputeResult;
   }
 
-  await updateClusterSummary(clusterId, {
-    title: presentation.title,
-    summary: presentation.summary,
-    summaryInputHash,
-    score,
-    itemCount: nextItemCount,
-    latestPublishedAt,
-    eventType: eventSignature?.eventType ?? null,
-    eventSubject: eventSignature?.eventSubject ?? null,
-    eventAction: eventSignature?.eventAction ?? null,
-    eventObject: eventSignature?.eventObject ?? null,
-    eventDate: eventSignature?.eventDate ?? null,
-    eventFingerprint: eventIdentity?.eventFingerprint ?? null,
-    eventBucket: eventIdentity?.eventBucket ?? null,
-  });
-  await refreshClusterFeedStatsSafely([clusterId], "recompute cluster");
-
-  return {
-    clusterId,
-    deleted: false,
-    updated: true,
-    summaryAttempted: presentation.summaryAttempted,
-    summarySucceeded: presentation.summarySucceeded,
-  } satisfies ClusterRecomputeResult;
+  // Guard owner：从取得所有权到最终结果整段由一个 outer try/finally 兜底，
+  // presentation 生成、派生计算、DB 写任意一步抛异常都释放 inflight 并按
+  // failure 记账；只有成功 summary 且完成 DB 写（或已持久化 skip）才 success。
+  try {
+    const presentation = await generateClusterPresentation(cluster.items, cluster.title, aiProvider, {
+      preferEventTitleFallback: false,
+    });
+    const result = await finalizeCluster(presentation);
+    if (presentation.summarySucceeded) {
+      guardOutcome = "success";
+    }
+    return result;
+  } finally {
+    retryGuard.finish(clusterId, summaryInputHash, guardOutcome);
+  }
 }
 
 async function refreshClusterStats(clusterId: string) {

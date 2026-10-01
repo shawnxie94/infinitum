@@ -3591,4 +3591,122 @@ describe("ingestion workflow stages", () => {
       "OpenAI 推出 Toolkit",
     ]);
   });
+
+  it("records deferred summary retries in cluster_finalize audit without raw provider errors", async () => {
+    const source = await prisma.source.create({
+      data: {
+        name: "Finalize Audit Feed",
+        rssUrl: "https://finalize-audit.example.com/feed.xml",
+        siteUrl: "https://finalize-audit.example.com",
+        enabled: true,
+        aiParsingEnabled: true,
+      },
+    });
+    const clusterId = "finalize-audit-cluster";
+    await prisma.contentCluster.create({
+      data: {
+        id: clusterId,
+        kind: "topic",
+        title: "旧的成功标题",
+        summary: "旧的成功摘要。",
+        score: 80,
+        itemCount: 2,
+        latestPublishedAt: new Date("2026-04-20T11:00:00.000Z"),
+        status: "active",
+        fingerprint: "finalize-audit",
+        summaryInputHash: "old-success-hash",
+      },
+    });
+    await prisma.item.createMany({
+      data: [0, 1].map((index) => ({
+        id: `${clusterId}-item-${index}`,
+        sourceId: source.id,
+        clusterId,
+        originalUrl: `https://finalize-audit.example.com/p${index}`,
+        canonicalUrl: `https://finalize-audit.example.com/p${index}`,
+        urlHash: `${clusterId}-hash-${index}`,
+        originalTitle: `Acme 发布 Widget ${index}`,
+        publishedAt: new Date(index === 0 ? "2026-04-20T11:00:00.000Z" : "2026-04-20T10:00:00.000Z"),
+        summaryText: `Acme 发布 Widget ${index} 的详细报道。`,
+        language: "zh",
+        status: "processed",
+        moderationStatus: "allowed",
+        qualityScore: 80,
+        qualityRationale: "relevant",
+      })),
+    });
+    const assessClusterMergePairs = vi.fn().mockResolvedValue([]);
+
+    const workflowOptions = {
+      trigger: "manual" as const,
+      parser: { parseURL: vi.fn().mockResolvedValue({ items: [] }) },
+      articleFetcher: vi.fn(),
+      aiProvider: buildAiProviderMock({
+        summarizeCluster: vi.fn().mockRejectedValue(new Error("provider exploded with secret detail")),
+        assessClusterMergePairs,
+      }),
+      sourceConfigs: [
+        {
+          name: "Finalize Audit Feed",
+          rssUrl: "https://finalize-audit.example.com/feed.xml",
+          siteUrl: "https://finalize-audit.example.com",
+          enabled: true,
+          aiParsingEnabled: true,
+        },
+      ],
+      blacklist: [],
+      now: new Date("2026-09-27T12:00:00.000Z"),
+    };
+    const payloadOverrides = { affectedClusterIds: [clusterId] };
+
+    // 第一轮：真实尝试并失败，hash 不推进；第二轮：guard 冷却拦截为 deferred。
+    await runIngestionWorkflowStagesForTest({ ...workflowOptions }, undefined, new AbortController(), payloadOverrides);
+    await runIngestionWorkflowStagesForTest({ ...workflowOptions }, undefined, new AbortController(), payloadOverrides);
+
+    const storedTaskRuns = await prisma.backgroundTaskRun.findMany({
+      where: { kind: "ingestion", label: "摄入阶段测试" },
+      orderBy: { createdAt: "asc" },
+    });
+    const parseTimeline = (taskTimelineJson: string | null) =>
+      JSON.parse(taskTimelineJson ?? "[]") as Array<{
+        key: string;
+        audit?: { summaryFailures?: Array<Record<string, unknown>> };
+        metrics?: Array<{ label: string; value: number }>;
+      }>;
+    const metric = (node: ReturnType<typeof parseTimeline>[number] | undefined, label: string) =>
+      node?.metrics?.find((entry) => entry.label === label)?.value;
+
+    const firstFinalize = parseTimeline(storedTaskRuns[0]!.taskTimelineJson ?? "[]")
+      .find((node) => node.key === "cluster_finalize");
+    expect(metric(firstFinalize, "摘要尝试")).toBe(1);
+    expect(metric(firstFinalize, "摘要未完成")).toBe(1);
+    expect(metric(firstFinalize, "摘要延后")).toBe(0);
+    const firstDiagnostics = firstFinalize?.audit?.summaryFailures ?? [];
+    expect(firstDiagnostics).toHaveLength(1);
+    expect(firstDiagnostics[0]).toMatchObject({
+      clusterId,
+      reason: "provider_error",
+      retryAfterMs: null,
+      attempts: 1,
+    });
+
+    const secondFinalize = parseTimeline(storedTaskRuns[1]!.taskTimelineJson ?? "[]")
+      .find((node) => node.key === "cluster_finalize");
+    expect(metric(secondFinalize, "摘要尝试")).toBe(0);
+    expect(metric(secondFinalize, "摘要未完成")).toBe(0);
+    expect(metric(secondFinalize, "摘要延后")).toBe(1);
+    const deferredDiagnostics = secondFinalize?.audit?.summaryFailures ?? [];
+    expect(deferredDiagnostics).toHaveLength(1);
+    // 延后是 guard 冷却拦截，不是真实尝试失败：reason 用独立的 retry_deferred。
+    expect(deferredDiagnostics[0]).toMatchObject({
+      clusterId,
+      reason: "retry_deferred",
+      attempts: 1,
+    });
+    expect((deferredDiagnostics[0].retryAfterMs as number | null) ?? 0).toBeGreaterThan(0);
+    expect(JSON.stringify(parseTimeline(storedTaskRuns[1]!.taskTimelineJson))).not.toContain("secret detail");
+
+    const storedCluster = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+    expect(storedCluster.summaryInputHash).toBe("old-success-hash");
+  });
 });

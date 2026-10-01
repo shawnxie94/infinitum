@@ -3,11 +3,37 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AiProvider } from "@/lib/ai/provider-types";
 import { CLUSTER_MERGE_SCAN_CLUSTER_LIMIT } from "@/config/constants";
 import { buildEventIdentity } from "@/lib/clusters/identity";
+
+// 允许单个测试把 generateClusterPresentation 替换为抛错版本，
+// 验证 generation helper 抛异常时 inflight 锁仍被释放；默认透传原实现。
+const helperOverrides = vi.hoisted(() => ({
+  failGenerate: null as Error | null,
+  failDerived: null as Error | null,
+}));
+vi.mock("@/lib/clusters/helpers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/clusters/helpers")>();
+  return {
+    ...actual,
+    generateClusterPresentation: ((...args: Parameters<typeof actual.generateClusterPresentation>) =>
+      helperOverrides.failGenerate
+        ? Promise.reject(helperOverrides.failGenerate)
+        : actual.generateClusterPresentation(...args)) as typeof actual.generateClusterPresentation,
+    // 允许单个测试把 presentation 成功后的纯派生计算替换为抛错版本，
+    // 验证派生计算抛异常时 inflight 锁仍被释放；默认透传原实现。
+    buildClusterEventSignature: ((...args: Parameters<typeof actual.buildClusterEventSignature>) => {
+      if (helperOverrides.failDerived) throw helperOverrides.failDerived;
+      return actual.buildClusterEventSignature(...args);
+    }) as typeof actual.buildClusterEventSignature,
+  };
+});
+
 import {
   buildClusterMergeCandidateInputHash,
   buildClusterMergeCleanPairKey,
+  buildClusterSummaryInputHash,
   normalizeFingerprint,
 } from "@/lib/clusters/helpers";
+import { createClusterSummaryRetryGuard } from "@/lib/clusters/summary-retry-guard";
 import {
   assignItemToCluster,
   detachItemFromCluster,
@@ -15,6 +41,7 @@ import {
   mergeClusters,
   mergeSelectedItemsToLargestCluster,
   precomputeClusterMergeCleanPairs,
+  recomputeCluster,
   splitClusterIntoSingletons,
 } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
@@ -2614,4 +2641,274 @@ describe("cluster assignment", () => {
     expect(newAssignment.clusterId).toBe(firstAssignment.clusterId);
   });
 
+  describe("recomputeCluster summary retry", () => {
+    let sequence = 0;
+
+    async function createSummaryRetryCluster() {
+      sequence += 1;
+      const suffix = String(sequence);
+      const source = await prisma.source.create({
+        data: {
+          name: `Summary Retry Feed ${suffix}`,
+          rssUrl: `https://summary-retry-${suffix}.example.com/feed.xml`,
+          siteUrl: `https://summary-retry-${suffix}.example.com`,
+          enabled: true,
+        },
+      });
+      const clusterId = `summary-retry-cluster-${suffix}`;
+      await prisma.contentCluster.create({
+        data: {
+          id: clusterId,
+          kind: "topic",
+          title: "旧的成功标题",
+          summary: "旧的成功摘要。",
+          score: 80,
+          itemCount: 2,
+          latestPublishedAt: new Date("2026-04-20T11:00:00.000Z"),
+          status: "active",
+          fingerprint: `summary-retry-${suffix}`,
+          summaryInputHash: "old-success-hash",
+        },
+      });
+      await prisma.item.createMany({
+        data: [0, 1].map((index) => ({
+          id: `${clusterId}-item-${index}`,
+          sourceId: source.id,
+          clusterId,
+          originalUrl: `https://summary-retry-${suffix}.example.com/p${index}`,
+          canonicalUrl: `https://summary-retry-${suffix}.example.com/p${index}`,
+          urlHash: `${clusterId}-hash-${index}`,
+          originalTitle: `Acme 发布 Widget ${index}`,
+          publishedAt: new Date(index === 0 ? "2026-04-20T11:00:00.000Z" : "2026-04-20T10:00:00.000Z"),
+          summaryText: `Acme 发布 Widget ${index} 的详细报道。`,
+          language: "zh",
+          status: "processed",
+          moderationStatus: "allowed",
+          qualityScore: 80,
+          qualityRationale: "relevant",
+        })),
+      });
+      return clusterId;
+    }
+
+    function buildSummarizeCluster(behavior: "fail" | "succeed") {
+      return behavior === "fail"
+        ? vi.fn().mockRejectedValue(new Error("provider down"))
+        : vi.fn().mockResolvedValue(JSON.stringify({
+            title: "新的 AI 标题",
+            summary: "这是模型生成的全新中文摘要内容。",
+          }));
+    }
+
+    it("keeps the previous success hash when the AI summary fails and defers the immediate retry", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      const aiProvider = { summarizeCluster: buildSummarizeCluster("fail") } as never;
+
+      const failed = await recomputeCluster(clusterId, aiProvider);
+      expect(failed.summaryAttempted).toBe(true);
+      expect(failed.summarySucceeded).toBe(false);
+      expect(failed.summaryFailureReason).toBe("provider_error");
+      expect(failed.attemptCount).toBe(1);
+      expect(failed.retryDeferred).toBeUndefined();
+      const storedAfterFailure = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(storedAfterFailure.summaryInputHash).toBe("old-success-hash");
+
+      const deferred = await recomputeCluster(clusterId, aiProvider);
+      expect(deferred.retryDeferred).toBe(true);
+      expect(deferred.summaryAttempted).toBe(false);
+      expect(deferred.summarySucceeded).toBe(false);
+      expect(deferred.retryAfterMs).toBeGreaterThan(0);
+      const storedAfterDeferred = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(storedAfterDeferred.summaryInputHash).toBe("old-success-hash");
+    });
+
+    it("retries after cooldown with a fake clock, caches success, and skips AI on cache hit", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      let currentTime = 1_000_000;
+      const retryGuard = createClusterSummaryRetryGuard({ now: () => currentTime });
+      const summarizeCluster = vi.fn()
+        .mockRejectedValueOnce(new Error("provider down"))
+        .mockResolvedValue(JSON.stringify({
+          title: "新的 AI 标题",
+          summary: "这是模型生成的全新中文摘要内容。",
+        }));
+      const aiProvider = { summarizeCluster } as never;
+
+      const failed = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(failed.summarySucceeded).toBe(false);
+
+      currentTime += 10 * 60 * 1000 + 1;
+      const recovered = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(recovered.summaryAttempted).toBe(true);
+      expect(recovered.summarySucceeded).toBe(true);
+      expect(recovered.summaryFailureReason).toBeUndefined();
+
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(stored.summaryInputHash).toBe(await currentInputHash(clusterId));
+      expect(stored.title).toBe("新的 AI 标题");
+
+      const cached = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(cached.summaryAttempted).toBe(false);
+      expect(summarizeCluster).toHaveBeenCalledTimes(2);
+    });
+
+    it("caches the singleton fallback hash without calling AI", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      await prisma.item.delete({ where: { id: `${clusterId}-item-1` } });
+      const summarizeCluster = buildSummarizeCluster("succeed");
+      const aiProvider = { summarizeCluster } as never;
+
+      const result = await recomputeCluster(clusterId, aiProvider);
+      expect(result.summaryAttempted).toBe(false);
+      expect(summarizeCluster).not.toHaveBeenCalled();
+
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(stored.summaryInputHash).toBe(await currentInputHash(clusterId));
+    });
+
+    it("keeps the old hash for multi-item clusters without a provider", async () => {
+      const clusterId = await createSummaryRetryCluster();
+
+      const result = await recomputeCluster(clusterId);
+      expect(result.summaryAttempted).toBe(false);
+      expect(result.summarySucceeded).toBe(false);
+      expect(result.retryDeferred).toBeUndefined();
+
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(stored.summaryInputHash).toBe("old-success-hash");
+    });
+
+    it("lets forceSummary bypass the guard cooldown and keeps the old hash on forced failure", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      let currentTime = 1_000_000;
+      const retryGuard = createClusterSummaryRetryGuard({ now: () => currentTime });
+      const failingProvider = { summarizeCluster: buildSummarizeCluster("fail") } as never;
+
+      await recomputeCluster(clusterId, failingProvider, { retryGuard });
+
+      // 冷却期内强制刷新仍会发起尝试。
+      const forced = await recomputeCluster(clusterId, failingProvider, { retryGuard, forceSummary: true });
+      expect(forced.summaryAttempted).toBe(true);
+      expect(forced.summarySucceeded).toBe(false);
+      expect(forced.retryDeferred).toBeUndefined();
+      const storedAfterForce = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(storedAfterForce.summaryInputHash).toBe("old-success-hash");
+
+      // 非强制调用仍被冷却拦截（force 不占用 guard 预算也不解除冷却）。
+      const deferred = await recomputeCluster(clusterId, failingProvider, { retryGuard });
+      expect(deferred.retryDeferred).toBe(true);
+
+      currentTime += 10 * 60 * 1000 + 1;
+      const successProvider = { summarizeCluster: buildSummarizeCluster("succeed") } as never;
+      const recovered = await recomputeCluster(clusterId, successProvider, { retryGuard });
+      expect(recovered.summarySucceeded).toBe(true);
+    });
+
+    it("does not let a deferred recompute overwrite the inflight success presentation or hash", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      let resolveSummary!: (value: string) => void;
+      const summarizeCluster = vi.fn().mockImplementation(
+        () => new Promise<string>((resolve) => {
+          resolveSummary = resolve;
+        }),
+      );
+      const aiProvider = { summarizeCluster } as never;
+
+      const first = recomputeCluster(clusterId, aiProvider);
+      await vi.waitFor(() => expect(summarizeCluster).toHaveBeenCalledTimes(1));
+
+      // 第一个请求仍在 inflight：第二个同 input 请求被延后，且不得写 presentation/hash。
+      const second = await recomputeCluster(clusterId, aiProvider);
+      expect(second.retryDeferred).toBe(true);
+      expect(second.summaryAttempted).toBe(false);
+      expect(second.summaryFailureReason).toBeUndefined();
+
+      resolveSummary(JSON.stringify({ title: "新的 AI 标题", summary: "这是模型生成的全新中文摘要内容。" }));
+      const firstResult = await first;
+      expect(firstResult.summarySucceeded).toBe(true);
+
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(stored.title).toBe("新的 AI 标题");
+      expect(stored.summary).toBe("这是模型生成的全新中文摘要内容。");
+      expect(stored.summaryInputHash).toBe(await currentInputHash(clusterId));
+    });
+
+    it("releases the guard and rethrows the original error when the summary DB write fails", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      let currentTime = 1_000_000;
+      const retryGuard = createClusterSummaryRetryGuard({ now: () => currentTime });
+      const aiProvider = { summarizeCluster: buildSummarizeCluster("succeed") } as never;
+      const updateSpy = vi.spyOn(prisma.contentCluster, "update").mockRejectedValueOnce(new Error("db write down"));
+
+      await expect(recomputeCluster(clusterId, aiProvider, { retryGuard })).rejects.toThrow("db write down");
+      updateSpy.mockRestore();
+
+      // inflight 已释放并记为失败：立即重试走冷却延后（retryAfterMs > 0），而非并发拦截。
+      const deferred = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(deferred.retryDeferred).toBe(true);
+      expect(deferred.retryAfterMs).toBeGreaterThan(0);
+
+      currentTime += 10 * 60 * 1000 + 1;
+      const recovered = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(recovered.summarySucceeded).toBe(true);
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(stored.summaryInputHash).toBe(await currentInputHash(clusterId));
+    });
+
+    it("releases the guard and rethrows when the presentation generation helper throws", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      const retryGuard = createClusterSummaryRetryGuard({ now: () => 1_000_000 });
+      const aiProvider = { summarizeCluster: buildSummarizeCluster("succeed") } as never;
+
+      helperOverrides.failGenerate = new Error("helper exploded");
+      try {
+        await expect(recomputeCluster(clusterId, aiProvider, { retryGuard })).rejects.toThrow("helper exploded");
+      } finally {
+        helperOverrides.failGenerate = null;
+      }
+
+      // inflight 已释放：立即重试进入失败冷却延后，而不是被并发锁卡住。
+      const deferred = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(deferred.retryDeferred).toBe(true);
+      expect(deferred.retryAfterMs).toBeGreaterThan(0);
+    });
+
+    it("releases the guard and retries after cooldown when a pure derived computation throws after presentation success", async () => {
+      const clusterId = await createSummaryRetryCluster();
+      let currentTime = 1_000_000;
+      const retryGuard = createClusterSummaryRetryGuard({ now: () => currentTime });
+      const aiProvider = { summarizeCluster: buildSummarizeCluster("succeed") } as never;
+
+      helperOverrides.failDerived = new Error("derived computation exploded");
+      try {
+        await expect(recomputeCluster(clusterId, aiProvider, { retryGuard })).rejects.toThrow(
+          "derived computation exploded",
+        );
+      } finally {
+        helperOverrides.failDerived = null;
+      }
+
+      // inflight 已释放：立即重试进入失败冷却延后，而不是被并发锁卡住。
+      const deferred = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(deferred.retryDeferred).toBe(true);
+      expect(deferred.retryAfterMs).toBeGreaterThan(0);
+
+      // 冷却过后 guard 可重试并成功持久化，没有永久泄漏。
+      currentTime += 10 * 60 * 1000 + 1;
+      const recovered = await recomputeCluster(clusterId, aiProvider, { retryGuard });
+      expect(recovered.summarySucceeded).toBe(true);
+      const stored = await prisma.contentCluster.findUniqueOrThrow({ where: { id: clusterId } });
+      expect(stored.title).toBe("新的 AI 标题");
+      expect(stored.summaryInputHash).toBe(await currentInputHash(clusterId));
+    });
+  });
+
 });
+
+async function currentInputHash(clusterId: string) {
+  const cluster = await prisma.contentCluster.findUniqueOrThrow({
+    where: { id: clusterId },
+    include: { items: { orderBy: { publishedAt: "desc" }, include: { source: true } } },
+  });
+  return buildClusterSummaryInputHash(cluster.items as never);
+}
