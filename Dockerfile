@@ -28,7 +28,9 @@ RUN npm run prisma:generate \
   && npm run schema:generate \
   && npm run build \
   && npm run build:worker \
-  && cp -R node_modules/.prisma/client .next/standalone/node_modules/.prisma/client
+  && cp -R node_modules/.prisma/client .next/standalone/node_modules/.prisma/client \
+  && find node_modules/@mastra node_modules/@libsql node_modules/ai node_modules/@ai-sdk -type f -name "*.map" -delete \
+  && rm -rf node_modules/@libsql/linux-*-gnu
 
 FROM base AS worker-deps
 
@@ -41,7 +43,9 @@ RUN node -e "const fs=require('fs'); const lock=require('./package-lock.json'); 
   && npm cache clean --force \
   && rm -rf /root/.npm node_modules/.cache \
   && find node_modules -type f -name "*.d.ts" -delete \
-  && find node_modules -type d \( -name docs -o -name examples \) -prune -exec rm -rf '{}' +
+  && find node_modules -type d \( -name docs -o -name examples \) -prune -exec rm -rf '{}' + \
+  && find node_modules -type f -name "*.map" -delete \
+  && rm -rf node_modules/@libsql/linux-*-gnu
 
 FROM alpine:3.23 AS runtime-base
 
@@ -87,6 +91,12 @@ COPY --from=builder /app/.next/static ./.next/static
 # Mastra/LibSQL 栈（含原生模块）：app 进程内嵌 runtime（D11），防 tracing 漏拷
 COPY --from=builder /app/node_modules/@mastra ./node_modules/@mastra
 COPY --from=builder /app/node_modules/@libsql ./node_modules/@libsql
+COPY --from=builder /app/node_modules/@neon-rs ./node_modules/@neon-rs
+COPY --from=builder /app/node_modules/detect-libc ./node_modules/detect-libc
+COPY --from=builder /app/node_modules/js-base64 ./node_modules/js-base64
+COPY --from=builder /app/node_modules/libsql ./node_modules/libsql
+COPY --from=builder /app/node_modules/promise-limit ./node_modules/promise-limit
+COPY --from=builder /app/node_modules/ws ./node_modules/ws
 COPY --from=builder /app/node_modules/ai ./node_modules/ai
 COPY --from=builder /app/node_modules/@ai-sdk ./node_modules/@ai-sdk
 
