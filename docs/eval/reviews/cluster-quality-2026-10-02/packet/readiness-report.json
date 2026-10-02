@@ -1,0 +1,17 @@
+{
+  "status": "insufficient_truth",
+  "qualityPassed": false,
+  "qualityPassedNote": "quality_passed is never emitted by this tool; the best outcome is ready_for_replay",
+  "aiCounts": "not_measured",
+  "aiCost": "not_measured",
+  "baseline": "deferred_not_completed",
+  "invalid": [],
+  "coverage": {
+    "total": 24,
+    "eligible": 24,
+    "reviewedUncertain": 0,
+    "pending": 0,
+    "excluded": 0
+  },
+  "metrics": null
+}

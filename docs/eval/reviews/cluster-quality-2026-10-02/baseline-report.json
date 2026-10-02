@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "stage": "production_candidate_selector_snapshot_counterfactual",
+  "status": "diagnostic_incomplete",
+  "releaseEligible": false,
+  "notMeasured": {
+    "aiCalls": "not_measured",
+    "aiTokens": "not_measured",
+    "modelCost": "not_measured",
+    "aiLatency": "not_measured",
+    "vectorRecallChannel": "disabled_not_measured"
+  },
+  "scenarioFaithfulness": {
+    "asOfBasis": "capture_utc_explicit",
+    "lookbackDays": 7,
+    "scanClusterLimit": 2500,
+    "candidateLimit": 80,
+    "relatedPairLimit": 3,
+    "liveEndpoints": "counterfactual_reviewed_endpoints_live",
+    "corpusSize": 99,
+    "liveClusterIdCount": 48,
+    "missingTables": [],
+    "itemsSourceFilter": "enforced_production_exists_filter",
+    "samplingBiasNote": "sampling strata are 18 high_bm25_near_neighbor + 4 low_similarity_coverage + 2 safety_rejected_related hard cases; rates are biased-sample diagnostics, not a global error rate",
+    "stageBoundaryNote": "admission counts candidate-selector pairs only; entity-alias normalization, cannot-link filtering, AI review, and final graph merging are out of stage and not measured"
+  },
+  "inputs": {
+    "frozenManifestSha256": "10fa0c8a69ea400d70e3e3e1c45f2a0dc9c1a9a3938f2b3a1554a165e36471d1",
+    "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+    "samplingManifestSha256": "54866e23d06193ff0dc2288bd18d83eb3369175eeb9bed6269e6f60144725fc5",
+    "labelsCsvSha256": "da2bd8b787ace6859fec45a32be474f11c70ba5f05aebe01ed49e33a916e3f9f",
+    "corpusFingerprint": "519bf71a2405417365c924462d763a669ce7f48590c7093d62c459dbe3413916",
+    "snapshotUnchangedAfterRun": true,
+    "sourceVersion": {
+      "gitHead": "35b8d41748070ff6b81ff618e063524b46079dd4",
+      "sourceCode": {
+        "src/lib/clusters/helpers.ts": "3078a1920a54a5d2ee8034bf2d5a3cb50fc09cc6728cd30c4fc9f25670ee9926",
+        "src/lib/clusters/bm25.ts": "a7a80ce0fb13fb5565505e877bf47b275cec22c2a30a264ac6ecaa938b1ec460",
+        "src/config/constants.ts": "8c1861399e9a37e55de5e433d5cf5d600478e3003366bc11d5f5f7e15dd9f3f2",
+        "scripts/eval-cluster-quality-baseline.ts": "7ccc348d8666cf06721098a3e90a010e889f2e2f67b68c28e02f1a1e16033f58"
+      }
+    }
+  },
+  "coverage": {
+    "total": 24,
+    "eligible": 24,
+    "uncertain": 0,
+    "invalid": [],
+    "snapshotFieldComparison": {
+      "comparedCases": 24,
+      "notComparedCases": 0,
+      "note": "snapshot field comparison only ran for cases passing cluster-presence and window checks; earlier-excluded cases are not compared and no no-drift claim is made for them"
+    },
+    "exclusions": [],
+    "bySplit": {
+      "dev": {
+        "total": 16,
+        "eligible": 16
+      },
+      "holdout": {
+        "total": 8,
+        "eligible": 8
+      }
+    }
+  },
+  "metrics": {
+    "dev": {
+      "aggregationOnly": false,
+      "eligible": 16,
+      "same": {
+        "total": 0,
+        "admitted": 0,
+        "notAdmitted": 0
+      },
+      "diff": {
+        "total": 16,
+        "admitted": 12,
+        "notAdmitted": 4
+      },
+      "sameEventCandidateAdmissionRecall": null,
+      "differentEventCandidateAdmissionRate": 0.75
+    },
+    "holdout": {
+      "aggregationOnly": true,
+      "eligible": 8,
+      "same": {
+        "total": 1,
+        "admitted": 1,
+        "notAdmitted": 0
+      },
+      "diff": {
+        "total": 7,
+        "admitted": 5,
+        "notAdmitted": 2
+      },
+      "sameEventCandidateAdmissionRecall": 1,
+      "differentEventCandidateAdmissionRate": 0.7142857142857143
+    }
+  },
+  "devRejectionReasons": [
+    {
+      "caseId": "CQ-023955463DF8",
+      "reason": "safety_rejected:unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-8019A69C2EB5",
+      "reason": "safety_rejected:unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-B29146173708",
+      "reason": "safety_rejected:unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-DCC1EC4B97F8",
+      "reason": "safety_rejected:unrelated_subjects"
+    }
+  ],
+  "diagnostics": {
+    "totalPairs": 4704,
+    "rejectedObjectConflict": 247,
+    "rejectedDateConflict": 0,
+    "rejectedNoEventAnchor": 4355,
+    "belowGrayScore": 0,
+    "relatedPairs": 102,
+    "aiEligiblePairs": 73,
+    "cleanPairsSkipped": 2550,
+    "dirtyPairs": 73,
+    "preLimitCandidates": 46,
+    "postLimitCandidates": 46,
+    "dirtyCandidateCount": 38
+  },
+  "stableDecisionDigest": "edb1fab7207bdf133d6835ffb25f69a1068a40800cdcb6661f66079faccb9797",
+  "offlineRuntimeMs": 368
+}

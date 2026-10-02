@@ -1,0 +1,396 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Private frozen fixture for cluster-quality human review; do not hand to blind reviewers.",
+  "createdAt": "2026-10-02T12:20:43.383Z",
+  "asOf": "2026-10-02T11:41:35.000Z",
+  "baseCommit": "35b8d41748070ff6b81ff618e063524b46079dd4",
+  "methodVersion": "a9a305d857ecd0ffa726e6c92d5fdb90258836fb9833b41b08ec9c7907ce58fd",
+  "strategyNote": "Split policy code is frozen via methodVersion; current git HEAD is recorded as a parameter only. The legacy lexical scorer in eval-bm25-vs-lexical.ts is NOT the current production strategy.",
+  "snapshot": {
+    "path": "docs/eval/snapshots/local-qualification-snapshot-2026-10-02.db",
+    "sha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd"
+  },
+  "sourceFiles": {
+    "pendingCsv": {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-02/sources/pending-review.csv",
+      "sha256": "bc358419046baf1d811ed35f0147dbc0ff62934225e97c0a95837d1b1228308d"
+    },
+    "samplingManifest": {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-02/sources/sampling-manifest.json",
+      "sha256": "54866e23d06193ff0dc2288bd18d83eb3369175eeb9bed6269e6f60144725fc5"
+    }
+  },
+  "baseline": {
+    "status": "deferred",
+    "note": "Baseline deferred, not completed: no human labels exist yet. The legacy replay output would be diagnostic_only (legacy lexical vs BM25), not the current end-to-end AI pipeline, and must never be presented as a quality result.",
+    "legacyCli": {
+      "path": "/Users/shawn/Developer/GitHub/products/infinitum/scripts/eval-bm25-vs-lexical.ts",
+      "sha256": "5f88a876f5ac18acb8edcd20d4f0cc801b7156028bf6d87c26ff21219d2c3da1"
+    }
+  },
+  "splitPolicy": "whole connected components over shared cluster ids; deterministic 2:1 dev:holdout strata balancing; no component spans splits",
+  "clusterComponents": [
+    {
+      "caseIds": [
+        "CQ-023955463DF8"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-0B9362D73DCB"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-257FD0C0E6C3"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-27508F845338"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-55314A6C8274"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-5DD3AEFCD19F"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-5FABBD61A6FF"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-6132734C4657"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-797D646A0B12"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-8019A69C2EB5"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-84A7E5080BEE"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-890A28C03D70"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-89BBDCA0A83D"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-A6FBBFDD7999"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-B29146173708"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-BD76F1963CB7"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-C20C497A4569"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-DCC1EC4B97F8"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-E1F22FEBE0F0"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-E226F2C15D08"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-E4C9F4A71235"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-EA765AAED05A"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-F533F795AB8F"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-F925508932DB"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "CQ-023955463DF8",
+      "split": "dev",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "cfa701d2659564e35be79780dc1865342265354a855239c26600b2a425a900a8",
+      "clusterIds": [
+        "cmuhwmuji017bjv01iogc2r8u",
+        "cmuhwmum9017fjv01mgq87pkp"
+      ]
+    },
+    {
+      "caseId": "CQ-0B9362D73DCB",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "7f880cc5bd629dcfafde40fb1bafb3a2ac31d9b118aaa6a23435e5a16dae29bb",
+      "clusterIds": [
+        "cmunoqhw300xao301xw8grw71",
+        "cmunor2c300zuo301t607vwmv"
+      ]
+    },
+    {
+      "caseId": "CQ-257FD0C0E6C3",
+      "split": "holdout",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "8e834c1215e9f03f880f2582db9a97e830b4caad27d67ae5e9f95ede6c6ef53a",
+      "clusterIds": [
+        "cmugzqi9o1br4lf0170nme602",
+        "cmunoo17m00heo3013mtxr0a6"
+      ]
+    },
+    {
+      "caseId": "CQ-27508F845338",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "6b7f7b9377b028a71f21da08b85c00b910307f5df91fde8ac64fef7be162e883",
+      "clusterIds": [
+        "cmunopqml00olo301s0i5obin",
+        "cmunx6t3h01isrl01b9j8tsle"
+      ]
+    },
+    {
+      "caseId": "CQ-55314A6C8274",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "e18b2dca34538bebfbb22b30906531d9e6e80e826a98d4195f0c468d141e64a5",
+      "clusterIds": [
+        "cmu965xy82ojbo5012po6idnd",
+        "cmunop07g00lio301fl89dltj"
+      ]
+    },
+    {
+      "caseId": "CQ-5DD3AEFCD19F",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "96cb6e70c1b290f3fac1a086c08e6533ef2210adf091b2598c878ac7aca23c1a",
+      "clusterIds": [
+        "cmuhwmur6017jjv010cgohrjt",
+        "cmunor92v010bo301mus9e8gu"
+      ]
+    },
+    {
+      "caseId": "CQ-5FABBD61A6FF",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "5dfc74a26ec4756c5e95c3eed49207fa6433eb5e664c853d4ab863d1e7ec94ee",
+      "clusterIds": [
+        "cmuhwmurw017ljv0127yygkjx",
+        "cmunoqamo00v5o301lxh12b7l"
+      ]
+    },
+    {
+      "caseId": "CQ-6132734C4657",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "7b4e8bd8e6b63f95ec5e51a27212dfe061c4bc832c1f3b0f5e48fee318bc6923",
+      "clusterIds": [
+        "cmunoq73r00uro301yefgwdr5",
+        "cmunoq9ad00uvo301g6i2q7se"
+      ]
+    },
+    {
+      "caseId": "CQ-797D646A0B12",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "12ecd89041b48ac268f64dabb3e888516f273a6d393bec3290187348168af0cf",
+      "clusterIds": [
+        "cmunoq2b500tbo301lkng1ldc",
+        "cmunx555c015trl01m6ny7t8e"
+      ]
+    },
+    {
+      "caseId": "CQ-8019A69C2EB5",
+      "split": "dev",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "aec4ffa9c207101dbee04589aadbcc7f773b7244db450b22149ce223c2d92586",
+      "clusterIds": [
+        "cmue1dfkz0bzsqo016uh0r83d",
+        "cmunoq5b000tho301yyheqhd8"
+      ]
+    },
+    {
+      "caseId": "CQ-84A7E5080BEE",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "11a3d1a878b99711242992593684c933465dadf172aecfc7e9c3eb1adf6f7e9a",
+      "clusterIds": [
+        "cmuhwmuu2017njv01ioqlcbac",
+        "cmunooef700ixo301ie7e9bzv"
+      ]
+    },
+    {
+      "caseId": "CQ-890A28C03D70",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "43631845c4302dca2deb6811752dfb0cc6663e23287e62809dea4bb917a3f8e4",
+      "clusterIds": [
+        "cmuhwmuim0179jv011azh46ut",
+        "cmunoqa1e00v3o301khzs96o9"
+      ]
+    },
+    {
+      "caseId": "CQ-89BBDCA0A83D",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "bee237816f098270db2d0a8cdca2f257452a046e29c7554dc0c9ed4e9a895858",
+      "clusterIds": [
+        "cmunoo9ba00iao301nq8a4eeq",
+        "cmunoouuo00kuo3018koilvva"
+      ]
+    },
+    {
+      "caseId": "CQ-A6FBBFDD7999",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "881f257957348ff12c7e45f679d6f2bfee5b0bf47ffad78109dfd204e410032d",
+      "clusterIds": [
+        "cmunop4md00lyo301n75zq0kc",
+        "cmunor6v60105o301ow430fjx"
+      ]
+    },
+    {
+      "caseId": "CQ-B29146173708",
+      "split": "dev",
+      "sourceStratum": "safety_rejected_related",
+      "inputSha256": "f7fc6ff5c13e13606739ff966dc593802ac6bd4070b860288050c75982c41972",
+      "clusterIds": [
+        "cmunoomxt00jto301phnvq9md",
+        "cmunoork700k9o301mujr73xt"
+      ]
+    },
+    {
+      "caseId": "CQ-BD76F1963CB7",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "1b4904b7c420fee92fec539bfaf1d92ab44080e1ae15e11a0203eab6fff5be00",
+      "clusterIds": [
+        "cmunopoj100ofo301kzyf7zal",
+        "cmunopppu00ojo3018u9g02x8"
+      ]
+    },
+    {
+      "caseId": "CQ-C20C497A4569",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "91b33caf84fc5403592f6de879d15e8ffe2232b53d325433caff984fa068f4dc",
+      "clusterIds": [
+        "cmuhwmulk017djv018dyibkws",
+        "cmunooij400jdo301cxkksqlw"
+      ]
+    },
+    {
+      "caseId": "CQ-DCC1EC4B97F8",
+      "split": "dev",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "e97150302b621db16b1959bdbf0df911ea047b58e824be29a8b4b0dcc60a2a55",
+      "clusterIds": [
+        "cmudvpikc032xo601d6tqvxu0",
+        "cmunonbco00dmo301s8sdsnf9"
+      ]
+    },
+    {
+      "caseId": "CQ-E1F22FEBE0F0",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "dbed25440e6f35d138cf3aa129eeac2a03e9624f41ae014808eeb9b7403c9f5d",
+      "clusterIds": [
+        "cmunopy8b00slo301v0ndv8hp",
+        "cmunor50q00zzo301k3c5q7fd"
+      ]
+    },
+    {
+      "caseId": "CQ-E226F2C15D08",
+      "split": "holdout",
+      "sourceStratum": "safety_rejected_related",
+      "inputSha256": "257f3c975643db3b95c20927e207a39d0132192950f2e5c88cd8f475dc603fbd",
+      "clusterIds": [
+        "cmunoni8000eso301v2h8lu34",
+        "cmunonj0r00ewo301k14ciqb7"
+      ]
+    },
+    {
+      "caseId": "CQ-E4C9F4A71235",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "b80932d98cfe3a192e6e9fef5d72108ddc12ea44e6b8887ee1f1aac766e96551",
+      "clusterIds": [
+        "cmunopkg900nfo301jbks9pd8",
+        "cmunoqftr00x4o301fabpfrw4"
+      ]
+    },
+    {
+      "caseId": "CQ-EA765AAED05A",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "3fdd47a8daee2b67297daf90eb2be8adccd7acbbd239ddb779022a6b645f3555",
+      "clusterIds": [
+        "cmunonu0v00fko301z4n9kw5v",
+        "cmunoq6fv00upo301rr52jdlg"
+      ]
+    },
+    {
+      "caseId": "CQ-F533F795AB8F",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "8d5f5a89fcc83c78fe5cc8218be63de325fdc133aa74ee3a10d57624e1c43adb",
+      "clusterIds": [
+        "cmunopxkz00sjo3019liyjt17",
+        "cmunopzbl00spo301zyobysox"
+      ]
+    },
+    {
+      "caseId": "CQ-F925508932DB",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "93e6463feaa8df33235cac6a6219906821ab22259b7dcec2889bfa3995a75e9a",
+      "clusterIds": [
+        "cmunooq0n00k1o301d8nceaos",
+        "cmuoqjgzs2cmto501hvpf49wp"
+      ]
+    }
+  ]
+}

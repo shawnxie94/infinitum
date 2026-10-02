@@ -1,0 +1,2 @@
+# Eval review CSV fixtures: retain original bytes (CRLF/trailing whitespace), do not normalize.
+docs/eval/reviews/**/*.csv -text whitespace=cr-at-eol,-blank-at-eol

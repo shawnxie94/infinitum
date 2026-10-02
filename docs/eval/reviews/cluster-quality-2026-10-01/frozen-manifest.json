@@ -1,0 +1,548 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Private frozen fixture for cluster-quality human review; do not hand to blind reviewers.",
+  "createdAt": "2026-10-01T13:49:35.873Z",
+  "asOf": "2026-09-26T06:39:09.566850+00:00",
+  "baseCommit": "35b8d41748070ff6b81ff618e063524b46079dd4",
+  "methodVersion": "d0dba2ddbaa96093913e64a76cf5bd173de14fbd53c853cd4991da0181fb17ee",
+  "strategyNote": "Split policy code is frozen via methodVersion; current git HEAD is recorded as a parameter only. The legacy lexical scorer in eval-bm25-vs-lexical.ts is NOT the current production strategy.",
+  "snapshot": {
+    "path": "docs/eval/snapshots/prod-snapshot-2026-09-21.db",
+    "sha256": "72c7049ace08654bf327f346d11d1fc63fcf294d01e2882c9a130755ea29828e"
+  },
+  "sourceFiles": {
+    "pendingCsv": {
+      "path": "docs/eval/bm25-hard-cases-review-2026-09-26.csv",
+      "sha256": "f9bb59478e7281fb446d7eb2f3dd612fc41d947afeaab6bd3c2e17145063c3ea"
+    },
+    "samplingManifest": {
+      "path": "docs/eval/bm25-hard-cases-manifest-2026-09-26.json",
+      "sha256": "769d3fd1af09b9be8c1a2b135bdc52bddc814c556251ab71b71096d5c8956d7d"
+    }
+  },
+  "baseline": {
+    "status": "deferred",
+    "note": "Baseline deferred, not completed: no human labels exist yet. The legacy replay output would be diagnostic_only (legacy lexical vs BM25), not the current end-to-end AI pipeline, and must never be presented as a quality result.",
+    "legacyCli": {
+      "path": "/Users/shawn/Developer/GitHub/products/infinitum/scripts/eval-bm25-vs-lexical.ts",
+      "sha256": "5f88a876f5ac18acb8edcd20d4f0cc801b7156028bf6d87c26ff21219d2c3da1"
+    }
+  },
+  "splitPolicy": "whole connected components over shared cluster ids; deterministic 2:1 dev:holdout strata balancing; no component spans splits",
+  "clusterComponents": [
+    {
+      "caseIds": [
+        "HC-52E07A585A16",
+        "HC-63195647AA27",
+        "HC-75CB4B7DB1C8",
+        "HC-9B25C6270D8A",
+        "HC-C12C652E8E35"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-04354A47EF0A",
+        "HC-B20B8201316B",
+        "HC-B2654445C25E",
+        "HC-BCA6A381B52D"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-000B133C2FA2"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-000D87D27A1B"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-001AD14F3C5B"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-004456E4D7CC"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-00473323E101"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0077178B1484"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-019FE79C1DF8"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-01EC4296156F"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-02EDC075CD4E"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0351A9118D80"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0413ECFDBB0D"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-067A095E2261"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-06B78550A7D9"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-075AC49FD115"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0A393FE95C21"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0A39B2C1016C"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0C336C936642"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0CC4B6EA59B1"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-0E25358D2FB3"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-10510E2DBA9F"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-1077A537BBFD"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-164A7BEDA674"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-1ADF3AA98CA8"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-31E428990DE4"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-44B794FBCD60"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-51002F655647"
+      ]
+    },
+    {
+      "caseIds": [
+        "HC-AE0623F64D50"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "HC-000B133C2FA2",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "dd30948ecfb787b27cdf3e0dd7618fa4c60bc93c8e8f12a434db6ed2ca12c26f",
+      "clusterIds": [
+        "cmtvh9ptbyw7dnr01qs4z4pou",
+        "cmtvh9rrcyw7rnr01lmsrzxar"
+      ]
+    },
+    {
+      "caseId": "HC-000D87D27A1B",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "d6d476045292f51e290268072dc03a6fd80574f3e4c3617f3b62890c5921664f",
+      "clusterIds": [
+        "cmt80u92n0b8io701tm3q2em3",
+        "cmt80u9gp0b8ko7012b5kerln"
+      ]
+    },
+    {
+      "caseId": "HC-001AD14F3C5B",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "b0bbacb67bc8a97c577ed62ef25ef4ae4f1161bb21415a0462eb2b6142b0b71a",
+      "clusterIds": [
+        "cmtbcy3j6gcfdnr011vmhrmr1",
+        "cmtbcyb08gcg1nr01xkuxgvhv"
+      ]
+    },
+    {
+      "caseId": "HC-004456E4D7CC",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "999112e2f936471abeb702a2f33a9ca26a3896e891da7d0f9d16e7647c40d45a",
+      "clusterIds": [
+        "cmta3sneh9ae0nr01om34ojul",
+        "cmta3spya9ae8nr01m7215nte"
+      ]
+    },
+    {
+      "caseId": "HC-00473323E101",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "3910a200e14437ef455f8f4c46b23895e727d125ca1bc220b64ca946189bb259",
+      "clusterIds": [
+        "cmu9ncr010uccpy01zm04h3sf",
+        "cmu9ph29w15topy017phhpb01"
+      ]
+    },
+    {
+      "caseId": "HC-0077178B1484",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "ef2aca7f2b882a8cf17d3456445827f174839b3ab8e3ce87915d7312ce754d3c",
+      "clusterIds": [
+        "cmtbnn7qfhz8fnr011zkyt3vd",
+        "cmtfpgxn8ih2knr01o65s0ont"
+      ]
+    },
+    {
+      "caseId": "HC-019FE79C1DF8",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "a688531005703eb8dc3bafb5173b7091745ae7ef98873ecac19733ed92733a40",
+      "clusterIds": [
+        "cmtvh9om7yw75nr01kmcp3itc",
+        "cmtvh9p7fyw79nr011okc5ap5"
+      ]
+    },
+    {
+      "caseId": "HC-01EC4296156F",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "8d8b304e11dffaa4c25233f9a4471ae5b7495e944c5b46a25f96b3d39ff2e64d",
+      "clusterIds": [
+        "cmtsdveyehmvwnr01nkjfk9lf",
+        "cmtsdvka0hmwcnr010hf9hi08"
+      ]
+    },
+    {
+      "caseId": "HC-02EDC075CD4E",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "102fed0260ad71f15cdeeaaf08d4d36a11e36f882e4e68dddedd7e0b774bd098",
+      "clusterIds": [
+        "cmu8mxi4m8tczlm01rx4ulbwi",
+        "cmua6nkso0nq2qw01kvm2e7o8"
+      ]
+    },
+    {
+      "caseId": "HC-0351A9118D80",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "39e0bc52e982d44e7c58d725b30296fde0e55ae5b97c7f568c36289337d1f4ad",
+      "clusterIds": [
+        "cmt7lv08cxy5oo7014x2m3etp",
+        "cmt7lv1vqxy5wo701o2kb6agc"
+      ]
+    },
+    {
+      "caseId": "HC-0413ECFDBB0D",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "032270140874c90bec50a87e7a2cf54aa5bfb33dd6bc1eaf5844f9f590705dba",
+      "clusterIds": [
+        "cmu9ahgl00jgyt801ztzo9ruy",
+        "cmuajizbt2moqqw01bhnf0tuc"
+      ]
+    },
+    {
+      "caseId": "HC-04354A47EF0A",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "ad95d71a8b9aba66a8091b70223034e3f18e0c8006580c38626e59437dcea2c7",
+      "clusterIds": [
+        "cmtluahfvgp9vnr01fmzzgdn0",
+        "cmtluavxigpadnr017gyzt7jk"
+      ]
+    },
+    {
+      "caseId": "HC-067A095E2261",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "64a418ca50859fa2a739bb718d4deae70ed747eb63ea91b3a9e9c08a5416f3be",
+      "clusterIds": [
+        "cmtqu1kwz8wmjnr01hxel1cll",
+        "cmtqwbdi89961nr01617ymjxe"
+      ]
+    },
+    {
+      "caseId": "HC-06B78550A7D9",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "28bb8976b4cac04979e3c335ee1d0a211bc3172e7449934c7787bb0d65591036",
+      "clusterIds": [
+        "cmtvd06jgy8k6nr01991pmf43",
+        "cmtvd0a5ry8kinr01ji1bjg46"
+      ]
+    },
+    {
+      "caseId": "HC-075AC49FD115",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "0ef7ca39de22d81bcc086a4570cd6e286e8ec0d338a2aaa3b51dee6b76bac3a1",
+      "clusterIds": [
+        "cmtt3is42lmtcnr01ne5pz9o8",
+        "cmttmxk5bono6nr01n51s80bu"
+      ]
+    },
+    {
+      "caseId": "HC-0A393FE95C21",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "22d4926b396e3c2675281bc4e9ee56fa2cc5774a92977f087ffbc701f20bea23",
+      "clusterIds": [
+        "cmu7kbhzp2kbblm01wrn9psxz",
+        "cmu9l6w4j0ip6py01uetbaanj"
+      ]
+    },
+    {
+      "caseId": "HC-0A39B2C1016C",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "95c3a66ba11c36b5430b8100c9d58e890cdbddb626d45ec41b2d296b8505fdbd",
+      "clusterIds": [
+        "cmtwhnuei4pugnr01zun52loo",
+        "cmtwho4p44puonr01qi2mz31j"
+      ]
+    },
+    {
+      "caseId": "HC-0C336C936642",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "efb227544db6e7e2b016bd072dd504a0ffc9f584583cd96d2ca7d1d75f92e831",
+      "clusterIds": [
+        "cmt6y6fgsubejo701ubcvuh5y",
+        "cmt6y70dvubfeo70112dl11pc"
+      ]
+    },
+    {
+      "caseId": "HC-0CC4B6EA59B1",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "1226f7496a40f5edcd799950cf4193c8ced301969bcfbb2fc735e71fe064c4e1",
+      "clusterIds": [
+        "cmtdodmax6yk2nr01jnurwt34",
+        "cmtdodmmn6yk4nr01d2siyp83"
+      ]
+    },
+    {
+      "caseId": "HC-0E25358D2FB3",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "87f256e63f5e806fd0d9491ae30fc42038843f6938b7a80c961c0b3093366178",
+      "clusterIds": [
+        "cmu8xm9qfakfplm01r7rtmana",
+        "cmua4hb8y0brfqw0181nw5yec"
+      ]
+    },
+    {
+      "caseId": "HC-10510E2DBA9F",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "f130057b1c7c70b3d8866311a03aa07377d63698f2be712c52d6033b45664688",
+      "clusterIds": [
+        "cmtqwbe9g9963nr01m2uaus4u",
+        "cmtqyecem9ksznr01h1cr2ayf"
+      ]
+    },
+    {
+      "caseId": "HC-1077A537BBFD",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "6f81df0a76c7fa7ae0498fc2fee8accd4d7f3b90f83b8c97aad65e668ceaac39",
+      "clusterIds": [
+        "cmu9trsn70e9hpg01d8qn4s4l",
+        "cmuaf7t5d1yx9qw010c2djqh3"
+      ]
+    },
+    {
+      "caseId": "HC-164A7BEDA674",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "def99929e4f40a2d889e0238a17a8a594a77be0546e929be01c81e7a9ca01e1d",
+      "clusterIds": [
+        "cmt8ftufc2o9fo701twxolp26",
+        "cmt8fturl2o9ho701u9vyel9i"
+      ]
+    },
+    {
+      "caseId": "HC-1ADF3AA98CA8",
+      "split": "holdout",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "87c46110aed6512874b9660cae5eeea74795913d3c512b42b72baeabcb21a494",
+      "clusterIds": [
+        "cmtv6km5ix8h7nr010bxdwev5",
+        "cmtv6lj6zx8imnr01twcqis7i"
+      ]
+    },
+    {
+      "caseId": "HC-31E428990DE4",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "069f62b96c7ed7722b963f5ce24c4b27a0528ea1a837e286afe440f7b8c95a82",
+      "clusterIds": [
+        "cmu5s2amagks2od01w0ij98b8",
+        "cmu6bezd8jnpqod016sakrxsx"
+      ]
+    },
+    {
+      "caseId": "HC-44B794FBCD60",
+      "split": "dev",
+      "sourceStratum": "high_lexical_score_declined",
+      "inputSha256": "ef4481579c69fa9ad53171b7b300107b1f1d09b4e5533f46a3fdb0fd8dd9ea12",
+      "clusterIds": [
+        "cmth2o3a1q6lynr01q5k5s2vf",
+        "cmth2o3zfq6m2nr01d4v5hhil"
+      ]
+    },
+    {
+      "caseId": "HC-51002F655647",
+      "split": "holdout",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "ba5908fd779943fc0ffcbf0b698e39f0d6729d285fc8cb61d18c32bed0740926",
+      "clusterIds": [
+        "cmtr2ns68a99cnr0149113p8c",
+        "cmtr2ok1ga9apnr01xia17h0c"
+      ]
+    },
+    {
+      "caseId": "HC-52E07A585A16",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "645b548f88da578384280fea6583e03df41fe721c07ea4347242e25f5aa536de",
+      "clusterIds": [
+        "cmtm91sn0iyy0nr01e2o224at",
+        "cmts0z5p9fnvenr01upfa88rz"
+      ]
+    },
+    {
+      "caseId": "HC-63195647AA27",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "846501c2572f0ac12d0a952438808db854fe1d267020317864be59b62aa9bed6",
+      "clusterIds": [
+        "cmtmshtsilwq4nr01jzc57aj4",
+        "cmts0z5p9fnvenr01upfa88rz"
+      ]
+    },
+    {
+      "caseId": "HC-75CB4B7DB1C8",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "41c04c14bf91938315083224bb4c358cefe312fed1f0ede961fdaa0f80d3fe4d",
+      "clusterIds": [
+        "cmtm6vfd8iminnr01p3ys3slg",
+        "cmts0z5p9fnvenr01upfa88rz"
+      ]
+    },
+    {
+      "caseId": "HC-9B25C6270D8A",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "860df604eb24f8cb4d8d9ee3a8d1b4a3deb9e2d3258c4a20e5b929ba2acd9fc0",
+      "clusterIds": [
+        "cmtmq9gvxll03nr01sfe2qxfe",
+        "cmts0z5p9fnvenr01upfa88rz"
+      ]
+    },
+    {
+      "caseId": "HC-AE0623F64D50",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "5fb4cd79ca1d8e8e9ddce8c1cd5345d4b5ab0f4293000830f4785e8849a6e28a",
+      "clusterIds": [
+        "cmtutnuxev7ajnr01lop8rawo",
+        "cmu0f4c31los8od018i013up3"
+      ]
+    },
+    {
+      "caseId": "HC-B20B8201316B",
+      "split": "holdout",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "56bb46ec68d2acfe7e94cc0e9545b217092c5349308c2668a8eb5bab80bd3956",
+      "clusterIds": [
+        "cmtluavxigpadnr017gyzt7jk",
+        "cmtm90yw7iywynr01ffrkxmm3"
+      ]
+    },
+    {
+      "caseId": "HC-B2654445C25E",
+      "split": "holdout",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "276eec6b7a6f5889bd43d326dd35fc8d16b2fcf2a3acd732844e2842b5e7c4e0",
+      "clusterIds": [
+        "cmtaxu547e1khnr016fxuy9g3",
+        "cmtluavxigpadnr017gyzt7jk"
+      ]
+    },
+    {
+      "caseId": "HC-BCA6A381B52D",
+      "split": "holdout",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "3159bea735d97fe3871015491b36a38b36fa3289cc437adc3dcbfb19cf3228bd",
+      "clusterIds": [
+        "cmtaxu547e1khnr016fxuy9g3",
+        "cmtm90yw7iywynr01ffrkxmm3"
+      ]
+    },
+    {
+      "caseId": "HC-C12C652E8E35",
+      "split": "dev",
+      "sourceStratum": "same_event_fingerprint_split_or_collision",
+      "inputSha256": "dfc05a1a35eed63268a776fd36d3cdd24a6734adf2787fc2e37b14ee624521e2",
+      "clusterIds": [
+        "cmtm6w5skimjjnr01eccpcp5n",
+        "cmts0z5p9fnvenr01upfa88rz"
+      ]
+    }
+  ]
+}

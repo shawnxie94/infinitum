@@ -1,0 +1,32 @@
+{
+  "status": "ready_for_replay",
+  "qualityPassed": false,
+  "qualityPassedNote": "quality_passed is never emitted by this tool; the best outcome is ready_for_replay",
+  "aiCounts": "not_measured",
+  "aiCost": "not_measured",
+  "baseline": "deferred_not_completed",
+  "invalid": [],
+  "coverage": {
+    "total": 36,
+    "eligible": 36,
+    "reviewedUncertain": 0,
+    "pending": 0,
+    "excluded": 0
+  },
+  "metrics": {
+    "dev": {
+      "scorable": true,
+      "eligible": 24,
+      "same": 10,
+      "diff": 14,
+      "uncertain": 0
+    },
+    "holdout": {
+      "scorable": true,
+      "eligible": 12,
+      "same": 4,
+      "diff": 8,
+      "uncertain": 0
+    }
+  }
+}

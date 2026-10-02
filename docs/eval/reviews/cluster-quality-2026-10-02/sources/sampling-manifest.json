@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 1,
+  "stage": "local_qualification_snapshot_sampler",
+  "purpose": "Private sampling manifest for the cluster-quality blind review (weak scheduling hints only; never human truth). Source of the frozen packet.",
+  "createdAt": "2026-10-02T11:41:35.000Z",
+  "asOfMs": 1790941295000,
+  "windowDays": 7,
+  "seed": "cluster-quality-fresh-sample",
+  "snapshot": {
+    "path": "docs/eval/snapshots/local-qualification-snapshot-2026-10-02.db",
+    "sha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd"
+  },
+  "selection": {
+    "targetCaseCount": 24,
+    "actualCaseCount": 24,
+    "universeSize": 4851,
+    "stratumCounts": {
+      "low_similarity_coverage": 4,
+      "high_bm25_near_neighbor": 18,
+      "safety_rejected_related": 2
+    },
+    "quotaStats": {
+      "high_similarity_or_same_fp": {
+        "requested": 18,
+        "actual": 18
+      },
+      "safety_rejected_related": {
+        "requested": 2,
+        "actual": 2
+      },
+      "low_similarity_coverage": {
+        "requested": 4,
+        "actual": 4
+      }
+    },
+    "note": "strata follow explicit quotas (at target 24: 18 high-similarity/same-FP + 2 safety-rejected-related + 4 low-similarity coverage); they are weak sampling-bias diagnostics from the current production BM25+safety stack, intentionally NOT population rates; controls are not gold labels and weak signals never reach the blind CSV"
+  },
+  "reviewInstructions": {
+    "rule": "Decide independently from the visible pair snapshot; do not treat the source or any weak verdict as gold. Mark uncertain when event boundary/evidence is insufficient."
+  },
+  "caseCount": 24,
+  "cases": [
+    {
+      "caseId": "CQ-023955463DF8",
+      "pairKey": "cmuhwmuji017bjv01iogc2r8u|cmuhwmum9017fjv01mgq87pkp",
+      "leftClusterId": "cmuhwmuji017bjv01iogc2r8u",
+      "rightClusterId": "cmuhwmum9017fjv01mgq87pkp",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-0B9362D73DCB",
+      "pairKey": "cmunoqhw300xao301xw8grw71|cmunor2c300zuo301t607vwmv",
+      "leftClusterId": "cmunoqhw300xao301xw8grw71",
+      "rightClusterId": "cmunor2c300zuo301t607vwmv",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 2601892,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-257FD0C0E6C3",
+      "pairKey": "cmugzqi9o1br4lf0170nme602|cmunoo17m00heo3013mtxr0a6",
+      "leftClusterId": "cmugzqi9o1br4lf0170nme602",
+      "rightClusterId": "cmunoo17m00heo3013mtxr0a6",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-27508F845338",
+      "pairKey": "cmunopqml00olo301s0i5obin|cmunx6t3h01isrl01b9j8tsle",
+      "leftClusterId": "cmunopqml00olo301s0i5obin",
+      "rightClusterId": "cmunx6t3h01isrl01b9j8tsle",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 3200929,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-55314A6C8274",
+      "pairKey": "cmu965xy82ojbo5012po6idnd|cmunop07g00lio301fl89dltj",
+      "leftClusterId": "cmu965xy82ojbo5012po6idnd",
+      "rightClusterId": "cmunop07g00lio301fl89dltj",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 2180646,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-5DD3AEFCD19F",
+      "pairKey": "cmuhwmur6017jjv010cgohrjt|cmunor92v010bo301mus9e8gu",
+      "leftClusterId": "cmuhwmur6017jjv010cgohrjt",
+      "rightClusterId": "cmunor92v010bo301mus9e8gu",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 3693790,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-5FABBD61A6FF",
+      "pairKey": "cmuhwmurw017ljv0127yygkjx|cmunoqamo00v5o301lxh12b7l",
+      "leftClusterId": "cmuhwmurw017ljv0127yygkjx",
+      "rightClusterId": "cmunoqamo00v5o301lxh12b7l",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 502767,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-6132734C4657",
+      "pairKey": "cmunoq73r00uro301yefgwdr5|cmunoq9ad00uvo301g6i2q7se",
+      "leftClusterId": "cmunoq73r00uro301yefgwdr5",
+      "rightClusterId": "cmunoq9ad00uvo301g6i2q7se",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 5074967,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-797D646A0B12",
+      "pairKey": "cmunoq2b500tbo301lkng1ldc|cmunx555c015trl01m6ny7t8e",
+      "leftClusterId": "cmunoq2b500tbo301lkng1ldc",
+      "rightClusterId": "cmunx555c015trl01m6ny7t8e",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 1703363,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-8019A69C2EB5",
+      "pairKey": "cmue1dfkz0bzsqo016uh0r83d|cmunoq5b000tho301yyheqhd8",
+      "leftClusterId": "cmue1dfkz0bzsqo016uh0r83d",
+      "rightClusterId": "cmunoq5b000tho301yyheqhd8",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-84A7E5080BEE",
+      "pairKey": "cmuhwmuu2017njv01ioqlcbac|cmunooef700ixo301ie7e9bzv",
+      "leftClusterId": "cmuhwmuu2017njv01ioqlcbac",
+      "rightClusterId": "cmunooef700ixo301ie7e9bzv",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 3673751,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-890A28C03D70",
+      "pairKey": "cmuhwmuim0179jv011azh46ut|cmunoqa1e00v3o301khzs96o9",
+      "leftClusterId": "cmuhwmuim0179jv011azh46ut",
+      "rightClusterId": "cmunoqa1e00v3o301khzs96o9",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 1912954,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-89BBDCA0A83D",
+      "pairKey": "cmunoo9ba00iao301nq8a4eeq|cmunoouuo00kuo3018koilvva",
+      "leftClusterId": "cmunoo9ba00iao301nq8a4eeq",
+      "rightClusterId": "cmunoouuo00kuo3018koilvva",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 3134205,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-A6FBBFDD7999",
+      "pairKey": "cmunop4md00lyo301n75zq0kc|cmunor6v60105o301ow430fjx",
+      "leftClusterId": "cmunop4md00lyo301n75zq0kc",
+      "rightClusterId": "cmunor6v60105o301ow430fjx",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 1200043,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-B29146173708",
+      "pairKey": "cmunoomxt00jto301phnvq9md|cmunoork700k9o301mujr73xt",
+      "leftClusterId": "cmunoomxt00jto301phnvq9md",
+      "rightClusterId": "cmunoork700k9o301mujr73xt",
+      "sourceStratum": "safety_rejected_related",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 12106463,
+      "reasonCode": "safety_rejected_related",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-BD76F1963CB7",
+      "pairKey": "cmunopoj100ofo301kzyf7zal|cmunopppu00ojo3018u9g02x8",
+      "leftClusterId": "cmunopoj100ofo301kzyf7zal",
+      "rightClusterId": "cmunopppu00ojo3018u9g02x8",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 4998037,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-C20C497A4569",
+      "pairKey": "cmuhwmulk017djv018dyibkws|cmunooij400jdo301cxkksqlw",
+      "leftClusterId": "cmuhwmulk017djv018dyibkws",
+      "rightClusterId": "cmunooij400jdo301cxkksqlw",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 1502751,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-DCC1EC4B97F8",
+      "pairKey": "cmudvpikc032xo601d6tqvxu0|cmunonbco00dmo301s8sdsnf9",
+      "leftClusterId": "cmudvpikc032xo601d6tqvxu0",
+      "rightClusterId": "cmunonbco00dmo301s8sdsnf9",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-E1F22FEBE0F0",
+      "pairKey": "cmunopy8b00slo301v0ndv8hp|cmunor50q00zzo301k3c5q7fd",
+      "leftClusterId": "cmunopy8b00slo301v0ndv8hp",
+      "rightClusterId": "cmunor50q00zzo301k3c5q7fd",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 941104,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-E226F2C15D08",
+      "pairKey": "cmunoni8000eso301v2h8lu34|cmunonj0r00ewo301k14ciqb7",
+      "leftClusterId": "cmunoni8000eso301v2h8lu34",
+      "rightClusterId": "cmunonj0r00ewo301k14ciqb7",
+      "sourceStratum": "safety_rejected_related",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 8517027,
+      "reasonCode": "safety_rejected_related",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-E4C9F4A71235",
+      "pairKey": "cmunopkg900nfo301jbks9pd8|cmunoqftr00x4o301fabpfrw4",
+      "leftClusterId": "cmunopkg900nfo301jbks9pd8",
+      "rightClusterId": "cmunoqftr00x4o301fabpfrw4",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 2746205,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-EA765AAED05A",
+      "pairKey": "cmunonu0v00fko301z4n9kw5v|cmunoq6fv00upo301rr52jdlg",
+      "leftClusterId": "cmunonu0v00fko301z4n9kw5v",
+      "rightClusterId": "cmunoq6fv00upo301rr52jdlg",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 1250652,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-F533F795AB8F",
+      "pairKey": "cmunopxkz00sjo3019liyjt17|cmunopzbl00spo301zyobysox",
+      "leftClusterId": "cmunopxkz00sjo3019liyjt17",
+      "rightClusterId": "cmunopzbl00spo301zyobysox",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 4944542,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-F925508932DB",
+      "pairKey": "cmunooq0n00k1o301d8nceaos|cmuoqjgzs2cmto501hvpf49wp",
+      "leftClusterId": "cmunooq0n00k1o301d8nceaos",
+      "rightClusterId": "cmuoqjgzs2cmto501hvpf49wp",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "weakBm25Score": 624597,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    }
+  ]
+}
