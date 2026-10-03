@@ -48,11 +48,13 @@
     "generatedAt": "2026-09-18T13:35:41.067Z"
   },
   "snapshot_freeze": {
-    "db_path": "/tmp/infinitum-prod/dev-read.db（2026-09-18 生产快照，本地产物不 git 化）",
-    "freeze_file": "docs/eval/baseline-snapshot-2026-09-18.json",
-    "pairs": 2190,
-    "generatedAt": "2026-09-18T00:00:00.000Z",
-    "usage": "npx tsx scripts/snapshot-gate.ts --snapshot <同 db> --freeze docs/eval/baseline-snapshot-2026-09-18.json [--strict]",
-    "note": "快照维度：对同一冻结快照重放当前代码，逐 pair 判定变化（score 跨95 / reject 翻转）即回归信号；无数据漂移。默认阈值 10（小噪声容忍），--strict 阈值 0。换基线时用 eval --freeze 重建此文件。"
+    "db_path": "docs/eval/snapshots/prod-snapshot-2026-09-21.db（2026-09-21 生产快照，46MB，gitignored 本地产物）",
+    "freeze_file": "docs/eval/baseline-snapshot-2026-10-03.json",
+    "pairs": 2195,
+    "generatedAt": "2026-09-21T01:02:25.766Z",
+    "usage": "npx tsx scripts/snapshot-gate.ts --snapshot docs/eval/snapshots/prod-snapshot-2026-09-21.db --freeze docs/eval/baseline-snapshot-2026-10-03.json [--strict]",
+    "note": "快照维度：对同一冻结快照重放当前代码，逐 pair 判定变化（score 跨95 / reject 翻转）即回归信号；无数据漂移。默认阈值 10（小噪声容忍），--strict 阈值 0。换基线时用 eval --freeze 重建此文件。",
+    "warning": "快照 DB 位于 gitignored 目录，git clean -xfd 会将其删除；丢失后无法从生产重建（生产数据已演进），届时需重新导出生产快照并重冻基线。",
+    "history": "2026-09-18 冻结（2190 对，--freeze 生成于 /tmp/infinitum-prod/dev-read.db）已随 /tmp 清理丢失；2026-10-03 以同一 09-21 快照重冻，差异为用户确认有意加入的 unrelated_subjects 安全拒绝层（reject 变化 1422、score 跨 95 为 0、verdict 变化 9），重冻后 --strict 判定变化 0。"
   }
 }

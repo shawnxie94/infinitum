@@ -7,7 +7,7 @@
 - `reviews/cluster-quality-composite-2026-10-03/` — 复合开发评测集（2026-10-01 dev 24 对 + 2026-10-02 dev 16 对；2026-10-02 holdout 8 对原样保留）；多来源 cohort 必须分层报告，1420 对稀疏门审查仅为 diagnostic-only、非人工 gold。目录内 `verify_set.py` 校验源文件哈希、标签、split 和 cluster 隔离
 - `eval-cluster-baseline.md` — 基线报告（主文档，含数据、方法、发现、结论）
 - `baseline-regression.json` — **回归守护基准**（sample_metrics + snapshot_freeze 说明，含 guard_rules）
-- `baseline-snapshot-2026-09-18.json` — 冻结快照 pair 级基线（2190 对，快照重放维度的对比基准）
+- `baseline-snapshot-2026-10-03.json` — 冻结快照 pair 级基线（2195 对，快照重放维度的对比基准）。对应快照 `docs/eval/snapshots/prod-snapshot-2026-09-21.db`（gitignored，46MB）；`git clean -xfd` 会删除该 DB，丢失后无法从生产重建
 - `embedding-recall-result.json` — Phase 1 语义召回评估结果（rule vs RRF 融合，见下文）
 - `merge-gray-gate-result.json` — 第二层灰区门评测结果（合并预筛 rule-only vs 规则+向量，见下文）
 - `embedding-mined-pairs.csv` — 向量挖掘扩充标注集（120 对高相似 ≥0.72 + 25 对中相似对照 0.60-0.72；AI 辅助标注 117 approved / 26 declined / 2 failed，待人工抽检）
@@ -33,7 +33,7 @@ npm run eval:baseline-gate
 # 重设样本基准：npm run eval:baseline-gate:init
 
 # 基线回归门（冻结快照重放维度，无漂移）——同一快照逐 pair 判定变化检测
-npm run eval:snapshot-gate -- --snapshot <快照db> --freeze docs/eval/baseline-snapshot-2026-09-18.json
+npm run eval:snapshot-gate -- --snapshot docs/eval/snapshots/prod-snapshot-2026-09-21.db --freeze docs/eval/baseline-snapshot-2026-10-03.json
 # 换基线时冻结新快照：npx tsx scripts/eval-cluster-baseline.ts --db <新快照> --days 30 --freeze docs/eval/baseline-snapshot-<date>.json
 
 # Phase 1 语义召回评估：同一快照上对比 rule 切片 vs embedding+RRF 融合切片
