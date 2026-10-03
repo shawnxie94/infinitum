@@ -8,6 +8,7 @@ const MODERATION_REASONS = new Set([
   "duplicate_noise",
   "rule_filter",
   "rule_blacklist",
+  "stale_content",
   "other",
 ]);
 const RANGE_DAYS = new Set([1, 3, 7]);

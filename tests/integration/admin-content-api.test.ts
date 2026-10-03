@@ -186,6 +186,47 @@ describe("/api/admin/items", () => {
     expect(json.items.map((item: { id: string }) => item.id)).not.toContain("item-filtered-old");
   });
 
+  it("filters filtered items by moderation reason, including stale_content", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+
+    const source = await prisma.source.findFirstOrThrow({
+      where: { name: "Review Feed" },
+    });
+    await prisma.item.create({
+      data: {
+        id: "item-filtered-stale",
+        sourceId: source.id,
+        originalUrl: "https://example.com/stale-filtered",
+        canonicalUrl: "https://example.com/stale-filtered",
+        urlHash: "hash-filtered-stale",
+        originalTitle: "Stale filtered item",
+        translatedTitle: "时效过时内容",
+        publishedAt: new Date("2026-04-10T09:00:00.000Z"),
+        status: "filtered",
+        moderationStatus: "filtered",
+        moderationReason: "stale_content",
+        filterReason: "stale_event_content",
+        moderationDetail: "事件时间距发布时间已有 30 天",
+        qualityScore: 40,
+        qualityRationale: "时效过时",
+        createdAt: new Date("2026-04-10T10:00:00.000Z"),
+        updatedAt: new Date("2026-04-10T10:00:00.000Z"),
+      },
+    });
+
+    const { GET } = await import("@/app/api/admin/items/route");
+    const response = await GET(
+      new Request("http://localhost/api/admin/items?moderationStatus=filtered&reason=stale_content"),
+    );
+    const json = await response.json();
+    const ids = json.items.map((item: { id: string }) => item.id);
+
+    expect(response.status).toBe(200);
+    expect(ids).toContain("item-filtered-stale");
+    // 原因筛选必须真正生效：不能退化成返回全部过滤内容
+    expect(ids).not.toContain("item-filtered");
+  });
+
   it("restores a filtered item for admins", async () => {
     requireAdmin.mockResolvedValue(undefined);
 
