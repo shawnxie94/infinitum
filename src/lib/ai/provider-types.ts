@@ -38,7 +38,7 @@ export type AiEventSignature = {
 export type AiEnrichment = {
   translatedTitle: string | null;
   moderationStatus: "allowed" | "filtered" | "restored";
-  moderationReason: "marketing" | "low_quality" | "duplicate_noise" | "rule_filter" | "rule_blacklist" | "other" | null;
+  moderationReason: "marketing" | "low_quality" | "duplicate_noise" | "rule_filter" | "rule_blacklist" | "stale_content" | "other" | null;
   moderationDetail: string | null;
   qualityScore: number;
   qualityRationale: string;

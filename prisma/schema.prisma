@@ -28,6 +28,7 @@ enum ModerationReason {
   duplicate_noise
   rule_filter
   rule_blacklist
+  stale_content
   other
 }
 

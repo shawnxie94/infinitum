@@ -494,3 +494,23 @@ export async function precomputeAdminEntitySuggestions() {
     "实体治理建议预计算失败。",
   );
 }
+
+export type AdminEntitySuggestionBatchResult = {
+  success?: boolean;
+  error?: string;
+  succeeded: string[];
+  failed: Array<{ id: string; error: string }>;
+  total: number;
+};
+
+export async function batchAdminEntitySuggestions(
+  action: "merge" | "ignore" | "keep",
+  suggestions: Array<{ sourceEntityId: string; targetEntityId: string }>,
+) {
+  return requestAdminSettingsJson<AdminEntitySuggestionBatchResult>(
+    "/api/admin/settings/entities/suggestions/batch",
+    "POST",
+    { action, suggestions },
+    "实体治理建议批量处理失败。",
+  );
+}

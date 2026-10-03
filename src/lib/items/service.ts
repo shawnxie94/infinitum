@@ -19,6 +19,7 @@ import { invalidateFeedCache } from "@/lib/feed/cache";
 import { archiveItemDedupeHistories } from "@/lib/feed/repository";
 import { shouldTranslateTitle } from "@/lib/feed/presentation";
 import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
+import { evaluateStaleContent, STALE_CONTENT_MODERATION_REASON } from "@/lib/ingestion/staleness";
 import { normalizeStoredEventType } from "@/lib/clusters/normalization";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { getItemEntityNamesFromEvent, replaceItemEntities } from "@/lib/entities/service";
@@ -589,9 +590,25 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     affectedClusterIds.add(previousClusterId);
   }
 
-  const moderationStatus = understanding.moderationStatus === "restored"
+  const modelModerationStatus = understanding.moderationStatus === "restored"
     ? "allowed"
     : understanding.moderationStatus;
+  // 时效过时判定与入库主路径保持一致；管理员已恢复的条目不再次打回。
+  const staleness = understanding.diagnostics.analysisValid
+    ? evaluateStaleContent({
+        eventDate: understanding.eventSignature?.eventDate,
+        publishedAt: item.publishedAt,
+        publishedAtKnown: item.publishedAtKnown,
+        restoredByAdminAt: item.restoredByAdminAt,
+        referenceAt: new Date(),
+      })
+    : null;
+  const moderationStatus = staleness?.stale ? "filtered" : modelModerationStatus;
+  const moderationReason = staleness?.stale
+    ? STALE_CONTENT_MODERATION_REASON
+    : understanding.moderationReason;
+  const moderationDetail = staleness?.stale ? staleness.detail : understanding.moderationDetail;
+  const stalenessFilterReason = staleness?.stale ? staleness.reason : null;
   const analysisStatus = understanding.diagnostics.analysisValid ? "succeeded" : "failed";
   const summaryStatus = understanding.diagnostics.summaryValid ? "succeeded" : "failed";
   const aggregationIsValid = aggregationDetectionEnabled && understanding.diagnostics.aggregationValid;
@@ -656,8 +673,9 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
         analysisStatus,
         status: "processed",
         moderationStatus,
-        moderationReason: understanding.moderationReason,
-        moderationDetail: understanding.moderationDetail,
+        moderationReason,
+        moderationDetail,
+        filterReason: stalenessFilterReason ?? item.filterReason,
         qualityScore: understanding.qualityScore,
         qualityRationale: understanding.qualityRationale,
         ...serializeEventSignature(understanding.eventSignature),
@@ -740,8 +758,9 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
         summaryStatus,
         analysisStatus,
         moderationStatus,
-        moderationReason: understanding.moderationReason,
-        moderationDetail: understanding.moderationDetail,
+        moderationReason,
+        moderationDetail,
+        filterReason: stalenessFilterReason ?? item.filterReason,
         qualityScore: understanding.qualityScore,
         qualityRationale: understanding.qualityRationale,
         ...serializeEventSignature(understanding.eventSignature),
@@ -783,8 +802,9 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
       summaryStatus,
       analysisStatus,
       moderationStatus,
-      moderationReason: understanding.moderationReason,
-      moderationDetail: understanding.moderationDetail,
+      moderationReason,
+      moderationDetail,
+      filterReason: stalenessFilterReason ?? item.filterReason,
       qualityScore: understanding.qualityScore,
       qualityRationale: understanding.qualityRationale,
       ...serializeEventSignature(understanding.eventSignature),

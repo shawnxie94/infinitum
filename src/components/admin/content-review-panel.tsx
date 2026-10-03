@@ -4,6 +4,8 @@ import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 
 import {
+  batchAggregationSplits,
+  batchClusterReviewCandidates,
   fetchAggregationSplitDetail,
   fetchAggregationSplits,
   fetchAdminCluster,
@@ -17,6 +19,7 @@ import {
   type ContentReviewActionPayload,
   type RequiredActionField,
 } from "@/components/admin/content-review-panel.api";
+import { BatchActionBar, type BatchActionDescriptor } from "@/components/admin/batch-action-bar";
 import { ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS } from "@/config/constants";
 import { ContentReviewMergeModal } from "@/components/admin/content-review-merge-modal";
 import { PageShell } from "@/components/ui/page-shell";
@@ -58,6 +61,7 @@ const reviewReasonLabels: Record<NonNullable<ReviewItemDTO["moderationReason"]>,
   duplicate_noise: "重复噪音",
   rule_filter: "规则过滤",
   rule_blacklist: "规则黑名单",
+  stale_content: "时效过时",
   other: "其他原因",
 };
 
@@ -67,6 +71,7 @@ const reviewReasonTone: Record<NonNullable<ReviewItemDTO["moderationReason"]>, "
   duplicate_noise: "neutral",
   rule_filter: "danger",
   rule_blacklist: "danger",
+  stale_content: "danger",
   other: "neutral",
 };
 
@@ -182,6 +187,36 @@ function getFilteredItemReasonLabel(item: ReviewItemDTO) {
   }
   return getReviewReasonLabel(item.moderationReason);
 }
+
+const SPLIT_BATCH_ACTIONS: BatchActionDescriptor[] = [
+  {
+    key: "reanalyze",
+    label: "批量重新分析",
+    confirmText: "会为选中的每条聚合父条目重新排队 AI 分析，重新判定是否需要拆分，并写入对应聚类。",
+    variant: "primary",
+  },
+  {
+    key: "cancel",
+    label: "批量取消拆分",
+    confirmText: "会把选中的聚合父条目标记为无需拆分，下线其拆分子条目。内容本身不会被删除。",
+    variant: "danger",
+  },
+];
+
+const REVIEW_CANDIDATE_BATCH_ACTIONS: BatchActionDescriptor[] = [
+  {
+    key: "merge",
+    label: "批量合并",
+    confirmText: "会把选中的每组候选按 AI 给出的方向合并为一个聚类组，合并后被并入的组不再单独存在。",
+    variant: "primary",
+  },
+  {
+    key: "ignore",
+    label: "批量忽略",
+    confirmText: "会判定选中的每组候选不是同一事件，并写入 cannot-link 约束，后续不再重复推荐这组配对。",
+    variant: "secondary",
+  },
+];
 
 const splitChildFilterReasonLabels: Record<string, string> = {
   reparsed_parent: "重拆下线",
@@ -701,6 +736,12 @@ type ClusterReviewModalProps = {
   onOpenCluster: (cluster: ClusterReviewCandidateDTO["leftCluster"]) => void;
   onMerge: (candidateId: string) => void;
   onIgnore: (candidateId: string) => void;
+  selectedIds: Set<string>;
+  isRunningBatch: boolean;
+  onToggleSelection: (candidateId: string) => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onRunBatch: (actionKey: string) => void;
 };
 
 function ClusterReviewModal({
@@ -718,6 +759,12 @@ function ClusterReviewModal({
   onOpenCluster,
   onMerge,
   onIgnore,
+  selectedIds,
+  isRunningBatch,
+  onToggleSelection,
+  onSelectAll,
+  onClearSelection,
+  onRunBatch,
 }: ClusterReviewModalProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -748,16 +795,45 @@ function ClusterReviewModal({
           </EmptyState>
         ) : (
           <div className="w-full overflow-x-auto rounded-lg border border-[color:var(--line)]">
+            <BatchActionBar
+              className="m-3 mb-0"
+              selectedCount={selectedIds.size}
+              totalCount={candidates.length}
+              actions={REVIEW_CANDIDATE_BATCH_ACTIONS}
+              isRunning={isRunningBatch}
+              onSelectAll={onSelectAll}
+              onClear={onClearSelection}
+              onRun={onRunBatch}
+            />
             <table className="w-full min-w-[64rem] table-fixed text-sm">
               <colgroup>
+                <col className="w-[4%]" />
                 <col className="w-[10%]" />
-                <col className="w-[25%]" />
-                <col className="w-[25%]" />
+                <col className="w-[23%]" />
+                <col className="w-[23%]" />
                 <col className="w-[30%]" />
                 <col className="w-[10%]" />
               </colgroup>
               <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
                 <tr>
+                  <th className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[var(--accent)]"
+                      aria-label="全选本页复核候选"
+                      checked={
+                        candidates.length > 0 && candidates.every((entry) => selectedIds.has(entry.id))
+                      }
+                      disabled={isRunningBatch}
+                      onChange={(event) => {
+                        if (event.target.checked) {
+                          onSelectAll();
+                          return;
+                        }
+                        onClearSelection();
+                      }}
+                    />
+                  </th>
                   <th className="whitespace-nowrap px-3 py-2 text-left">判定</th>
                   <th className="px-3 py-2 text-left">左聚合</th>
                   <th className="px-3 py-2 text-left">右聚合</th>
@@ -772,6 +848,16 @@ function ClusterReviewModal({
 
                   return (
                     <tr key={candidate.id} className="align-top transition-colors hover:bg-[var(--bg-muted)]">
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-[var(--accent)]"
+                          aria-label={`选择复核候选 ${candidate.leftCluster.title}`}
+                          checked={selectedIds.has(candidate.id)}
+                          disabled={isRunningBatch}
+                          onChange={() => onToggleSelection(candidate.id)}
+                        />
+                      </td>
                       <td className="px-3 py-3">
                         <StatusTag tone={reviewCandidateVerdictTone[candidate.verdict]}>
                           {reviewCandidateVerdictLabels[candidate.verdict]}
@@ -929,6 +1015,12 @@ function ContentReviewContent({
   const [reviewCandidatePendingId, setReviewCandidatePendingId] = useState<string | null>(null);
   const [splittingClusterId, setSplittingClusterId] = useState<string | null>(null);
   const [cancellingSplitId, setCancellingSplitId] = useState<string | null>(null);
+
+  // Batch selection states
+  const [selectedSplitIds, setSelectedSplitIds] = useState<Set<string>>(new Set());
+  const [selectedReviewCandidateIds, setSelectedReviewCandidateIds] = useState<Set<string>>(new Set());
+  const [isRunningSplitBatch, setIsRunningSplitBatch] = useState(false);
+  const [isRunningReviewBatch, setIsRunningReviewBatch] = useState(false);
 
   // Merge modal states
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
@@ -1458,6 +1550,94 @@ function ContentReviewContent({
           fetchData();
         }
       });
+    });
+  };
+
+  const reportBatchResult = (result: { succeeded: string[]; failed: Array<{ id: string; error: string }> }, actionLabel: string) => {
+    const { succeeded, failed } = result;
+
+    if (failed.length === 0) {
+      showToast(`${actionLabel}完成，成功 ${succeeded.length} 条。`, "success");
+      return;
+    }
+
+    const firstError = failed[0]?.error ?? "未知原因";
+    showToast(
+      `${actionLabel}部分失败：成功 ${succeeded.length} 条，失败 ${failed.length} 条（首个原因：${firstError}）。`,
+      "error",
+    );
+  };
+
+  const toggleSplitSelection = (itemId: string) => {
+    setSelectedSplitIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  const handleRunSplitBatch = (actionKey: string) => {
+    const ids = [...selectedSplitIds];
+    if (ids.length === 0) {
+      return;
+    }
+
+    runTransition(async () => {
+      setIsRunningSplitBatch(true);
+      try {
+        const result = await batchAggregationSplits(
+          actionKey === "cancel" ? "cancel" : "reanalyze",
+          ids,
+        );
+        reportBatchResult(result, actionKey === "cancel" ? "批量取消拆分" : "批量重新分析");
+        setSelectedSplitIds(new Set());
+        fetchData();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "批量拆分操作失败。", "error");
+      } finally {
+        setIsRunningSplitBatch(false);
+      }
+    });
+  };
+
+  const toggleReviewCandidateSelection = (candidateId: string) => {
+    setSelectedReviewCandidateIds((current) => {
+      const next = new Set(current);
+      if (next.has(candidateId)) {
+        next.delete(candidateId);
+      } else {
+        next.add(candidateId);
+      }
+      return next;
+    });
+  };
+
+  const handleRunReviewCandidateBatch = (actionKey: string) => {
+    const ids = [...selectedReviewCandidateIds];
+    if (ids.length === 0) {
+      return;
+    }
+
+    runTransition(async () => {
+      setIsRunningReviewBatch(true);
+      try {
+        const result = await batchClusterReviewCandidates(
+          actionKey === "merge" ? "merge" : "ignore",
+          ids,
+        );
+        reportBatchResult(result, actionKey === "merge" ? "批量合并" : "批量忽略");
+        setSelectedReviewCandidateIds(new Set());
+        await loadClusterReviewCandidates();
+        fetchData();
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "批量聚合复核操作失败。", "error");
+      } finally {
+        setIsRunningReviewBatch(false);
+      }
     });
   };
 
@@ -2039,10 +2219,39 @@ function ContentReviewContent({
         </div>
       ) : (
         <div className="w-full overflow-x-auto">
+          <BatchActionBar
+            className="mb-3"
+            selectedCount={selectedSplitIds.size}
+            totalCount={paginatedItems.length}
+            actions={SPLIT_BATCH_ACTIONS}
+            isRunning={isRunningSplitBatch}
+            onSelectAll={() => setSelectedSplitIds(new Set(paginatedItems.map((item) => item.id)))}
+            onClear={() => setSelectedSplitIds(new Set())}
+            onRun={handleRunSplitBatch}
+          />
           <table className="w-full table-auto text-sm">
             <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
               <tr>
-                <th className="w-[38%] text-left px-4 py-3">标题</th>
+                <th className="w-[4%] px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-[var(--accent)]"
+                    aria-label="全选本页拆分记录"
+                    checked={
+                      paginatedItems.length > 0 &&
+                      paginatedItems.every((item) => selectedSplitIds.has(item.id))
+                    }
+                    disabled={isRunningSplitBatch}
+                    onChange={(event) => {
+                      setSelectedSplitIds(
+                        event.target.checked
+                          ? new Set(paginatedItems.map((item) => item.id))
+                          : new Set(),
+                      );
+                    }}
+                  />
+                </th>
+                <th className="w-[34%] text-left px-4 py-3">标题</th>
                 <th className="w-[16%] whitespace-nowrap text-left px-4 py-3">来源</th>
                 <th className="w-[12%] whitespace-nowrap text-left px-4 py-3">子事件</th>
                 <th className="w-[12%] whitespace-nowrap text-left px-4 py-3">状态</th>
@@ -2053,6 +2262,16 @@ function ContentReviewContent({
             <tbody className="divide-y divide-[color:var(--line)]">
               {(paginatedItems as AggregationSplitParentDTO[]).map((item) => (
                 <tr key={item.id} className="hover:bg-[var(--bg-muted)] transition-colors">
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[var(--accent)]"
+                      aria-label={`选择拆分记录 ${item.title}`}
+                      checked={selectedSplitIds.has(item.id)}
+                      disabled={isRunningSplitBatch}
+                      onChange={() => toggleSplitSelection(item.id)}
+                    />
+                  </td>
                   <td className="px-4 py-3 max-w-0">
                     <button
                       type="button"
@@ -2184,6 +2403,14 @@ function ContentReviewContent({
         onOpenCluster={handleOpenClusterReviewDetail}
         onMerge={openConfirmMergeReviewCandidate}
         onIgnore={openConfirmIgnoreReviewCandidate}
+        selectedIds={selectedReviewCandidateIds}
+        isRunningBatch={isRunningReviewBatch}
+        onToggleSelection={toggleReviewCandidateSelection}
+        onSelectAll={() =>
+          setSelectedReviewCandidateIds(new Set(clusterReviewCandidates.map((entry) => entry.id)))
+        }
+        onClearSelection={() => setSelectedReviewCandidateIds(new Set())}
+        onRunBatch={handleRunReviewCandidateBatch}
       />
 
       {/* Confirmation Modal */}

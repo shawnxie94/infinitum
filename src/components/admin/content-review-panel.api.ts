@@ -41,6 +41,39 @@ type MergeClustersPayload = {
   error?: string;
 };
 
+export type BatchActionResult = {
+  succeeded: string[];
+  failed: Array<{ id: string; error: string }>;
+  total: number;
+};
+
+export type BatchResponsePayload = BatchActionResult & {
+  success?: boolean;
+  error?: string;
+};
+
+async function postBatch(url: string, body: unknown, fallbackMessage: string) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  return parseJsonResponse<BatchResponsePayload>(response, fallbackMessage);
+}
+
+export function batchAggregationSplits(action: "cancel" | "reanalyze", ids: string[]) {
+  return postBatch("/api/admin/items/aggregation/batch", { action, ids }, "批量拆分操作失败。");
+}
+
+export function batchClusterReviewCandidates(action: "merge" | "ignore", ids: string[]) {
+  return postBatch(
+    "/api/admin/clusters/review-candidates/batch",
+    { action, ids },
+    "批量聚合复核操作失败。",
+  );
+}
+
 async function parseJsonResponse<T extends { error?: string }>(
   response: Response,
   fallbackMessage: string,

@@ -15,6 +15,10 @@ import { shouldTranslateTitle, stripHtmlTags } from "@/lib/feed/presentation";
 import { shouldSkipJinaForUrl } from "@/lib/ingestion/article";
 import { buildDedupeKeys, shouldFetchFullText } from "@/lib/ingestion/dedupe";
 import { evaluateRuleFilter } from "@/lib/ingestion/filtering";
+import {
+  evaluateStaleContent,
+  STALE_CONTENT_MODERATION_REASON,
+} from "@/lib/ingestion/staleness";
 import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
 import {
   classifyItemProcessingRecoveryReasons,
@@ -614,6 +618,21 @@ export async function processFeedItem({
         qualityRationale = understanding.qualityRationale;
         eventSignature = understanding.eventSignature;
         itemEntities = getItemEntityNamesFromEvent(understanding.eventSignature);
+
+        // 时效过时：AI 给出了明确事件时间，且早于基准时间超过阈值，判为旧内容重新推送。
+        const staleness = evaluateStaleContent({
+          eventDate: understanding.eventSignature?.eventDate,
+          publishedAt: resolvedPublishedAt.value,
+          publishedAtKnown: resolvedPublishedAt.known,
+          restoredByAdminAt: existing?.restoredByAdminAt ?? null,
+          referenceAt: new Date(),
+        });
+        if (staleness.stale) {
+          moderationStatus = "filtered";
+          moderationReason = STALE_CONTENT_MODERATION_REASON;
+          moderationDetail = staleness.detail;
+          filterReason = staleness.reason;
+        }
       }
       analysisStatus = understanding.diagnostics.analysisValid ? "succeeded" : "failed";
       analysisCompleted = understanding.diagnostics.analysisValid;

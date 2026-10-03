@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 
 import {
   addAdminEntityAlias,
+  batchAdminEntitySuggestions,
   deleteAdminEntityAlias,
   dismissAdminEntitySuggestion,
   type AdminEntity,
@@ -15,6 +16,7 @@ import {
   mergeAdminEntities,
   precomputeAdminEntitySuggestions,
 } from "@/components/admin/admin-settings-panel.api";
+import { BatchActionBar, type BatchActionDescriptor } from "@/components/admin/batch-action-bar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterInput } from "@/components/ui/filter-input";
@@ -41,6 +43,27 @@ const ENTITY_SORT_OPTIONS: Array<{ value: AdminEntitySort; label: string }> = [
 const SUGGESTION_SORT_OPTIONS: Array<{ value: AdminEntitySuggestionSort; label: string }> = [
   { value: "confidence_desc", label: "置信度倒序" },
   { value: "affected_desc", label: "影响条数倒序" },
+];
+
+const ENTITY_SUGGESTION_BATCH_ACTIONS: BatchActionDescriptor[] = [
+  {
+    key: "merge",
+    label: "批量合并",
+    confirmText: "会按每条建议给出的方向，把来源实体并入目标实体。合并后来源实体不再独立存在。",
+    variant: "primary",
+  },
+  {
+    key: "ignore",
+    label: "批量忽略",
+    confirmText: "会判定选中的建议不是同一实体，后续不再重复推荐这组配对。",
+    variant: "secondary",
+  },
+  {
+    key: "keep",
+    label: "批量保留为不同实体",
+    confirmText: "会确认选中的建议确实是不同实体，保持现状不做合并。",
+    variant: "ghost",
+  },
 ];
 
 function formatEntityCount(count: number) {
@@ -78,6 +101,12 @@ type EntitySuggestionPanelProps = {
   onOpenMergeChoice: (suggestion: AdminEntitySuggestion) => void;
   onOpenDismissChoice: (suggestion: AdminEntitySuggestion) => void;
   onRefresh: () => void;
+  selectedIds: Set<string>;
+  isRunningBatch: boolean;
+  onToggleSelection: (suggestionId: string) => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onRunBatch: (actionKey: string) => void;
 };
 
 function EntitySuggestionModal({
@@ -98,6 +127,12 @@ function EntitySuggestionModal({
   onOpenMergeChoice,
   onOpenDismissChoice,
   onRefresh,
+  selectedIds,
+  isRunningBatch,
+  onToggleSelection,
+  onSelectAll,
+  onClearSelection,
+  onRunBatch,
 }: EntitySuggestionPanelProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
@@ -150,20 +185,58 @@ function EntitySuggestionModal({
           </EmptyState>
         ) : (
           <div className="w-full overflow-x-auto">
+            <BatchActionBar
+              className="mb-3"
+              selectedCount={selectedIds.size}
+              totalCount={suggestions.length}
+              actions={ENTITY_SUGGESTION_BATCH_ACTIONS}
+              isRunning={isRunningBatch}
+              onSelectAll={onSelectAll}
+              onClear={onClearSelection}
+              onRun={onRunBatch}
+            />
             <table className="w-full table-auto text-sm">
               <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
                 <tr>
-                  <th className="w-[22%] px-3 py-2 text-left">来源实体</th>
-                  <th className="w-[22%] px-3 py-2 text-left">目标实体</th>
+                  <th className="w-[4%] px-3 py-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[var(--accent)]"
+                      aria-label="全选本页治理建议"
+                      checked={
+                        suggestions.length > 0 && suggestions.every((entry) => selectedIds.has(entry.id))
+                      }
+                      disabled={isRunningBatch}
+                      onChange={(event) => {
+                        if (event.target.checked) {
+                          onSelectAll();
+                          return;
+                        }
+                        onClearSelection();
+                      }}
+                    />
+                  </th>
+                  <th className="w-[20%] px-3 py-2 text-left">来源实体</th>
+                  <th className="w-[20%] px-3 py-2 text-left">目标实体</th>
                   <th className="w-[10%] whitespace-nowrap px-3 py-2 text-left">置信度</th>
-                  <th className="w-[12%] whitespace-nowrap px-3 py-2 text-left">影响</th>
-                  <th className="w-[22%] px-3 py-2 text-left">原因</th>
+                  <th className="w-[10%] whitespace-nowrap px-3 py-2 text-left">影响</th>
+                  <th className="w-[24%] px-3 py-2 text-left">原因</th>
                   <th className="w-[12%] whitespace-nowrap px-3 py-2 text-right">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--line)]">
                 {suggestions.map((suggestion) => (
                   <tr key={suggestion.id} className="align-top transition-colors hover:bg-[var(--bg-muted)]">
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-[var(--accent)]"
+                        aria-label={`选择治理建议 ${suggestion.sourceEntity.name}`}
+                        checked={selectedIds.has(suggestion.id)}
+                        disabled={isRunningBatch}
+                        onChange={() => onToggleSelection(suggestion.id)}
+                      />
+                    </td>
                     <td className="px-3 py-3">
                       <div className="font-medium text-[var(--foreground)]">{suggestion.sourceEntity.name}</div>
                       <div className="mt-1 text-xs text-[var(--muted)]">
@@ -730,6 +803,8 @@ export function EntitySettingsPanel({
   const [mergeChoiceSuggestion, setMergeChoiceSuggestion] = useState<AdminEntitySuggestion | null>(null);
   const [dismissChoiceSuggestion, setDismissChoiceSuggestion] = useState<AdminEntitySuggestion | null>(null);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<Set<string>>(new Set());
+  const [isRunningSuggestionBatch, setIsRunningSuggestionBatch] = useState(false);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const managingEntity = useMemo(
@@ -883,6 +958,61 @@ export function EntitySettingsPanel({
         await action();
       } catch (actionError) {
         showToast(actionError instanceof Error ? actionError.message : "操作失败。", "error");
+      }
+    });
+  }
+
+  function toggleSuggestionSelection(suggestionId: string) {
+    setSelectedSuggestionIds((current) => {
+      const next = new Set(current);
+      if (next.has(suggestionId)) {
+        next.delete(suggestionId);
+      } else {
+        next.add(suggestionId);
+      }
+      return next;
+    });
+  }
+
+  function handleRunSuggestionBatch(actionKey: string) {
+    const action = actionKey === "merge" ? "merge" : actionKey === "keep" ? "keep" : "ignore";
+    const targets = suggestions.filter((entry) => selectedSuggestionIds.has(entry.id));
+    if (targets.length === 0) {
+      return;
+    }
+
+    const payload = targets.map((entry) => ({
+      sourceEntityId: entry.sourceEntity.id,
+      targetEntityId: entry.targetEntity.id,
+    }));
+
+    startTransition(async () => {
+      setIsRunningSuggestionBatch(true);
+      try {
+        const result = await batchAdminEntitySuggestions(action, payload);
+        const succeededCount = result.succeeded?.length ?? 0;
+        const failedCount = result.failed?.length ?? 0;
+
+        if (failedCount === 0) {
+          showToast(`批量处理完成，成功 ${succeededCount} 条。`, "success");
+        } else {
+          const firstError = result.failed[0]?.error ?? "未知原因";
+          showToast(
+            `批量处理部分失败：成功 ${succeededCount} 条，失败 ${failedCount} 条（首个原因：${firstError}）。`,
+            "error",
+          );
+        }
+
+        setSelectedSuggestionIds(new Set());
+        await loadSuggestions();
+        await loadEntities();
+      } catch (batchError) {
+        showToast(
+          batchError instanceof Error ? batchError.message : "实体治理建议批量处理失败。",
+          "error",
+        );
+      } finally {
+        setIsRunningSuggestionBatch(false);
       }
     });
   }
@@ -1071,6 +1201,12 @@ export function EntitySettingsPanel({
         onOpenMergeChoice={setMergeChoiceSuggestion}
         onOpenDismissChoice={setDismissChoiceSuggestion}
         onRefresh={() => runModalAction(handleRefreshSuggestions)}
+        selectedIds={selectedSuggestionIds}
+        isRunningBatch={isRunningSuggestionBatch}
+        onToggleSelection={toggleSuggestionSelection}
+        onSelectAll={() => setSelectedSuggestionIds(new Set(suggestions.map((entry) => entry.id)))}
+        onClearSelection={() => setSelectedSuggestionIds(new Set())}
+        onRunBatch={handleRunSuggestionBatch}
       />
 
       <SuggestionMergeChoiceModal
