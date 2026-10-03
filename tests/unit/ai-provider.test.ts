@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAiProvider } from "@/lib/ai/provider-next";
-import { makeClusterMergePairId } from "@/lib/ai/protocols/cluster";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import type { DailyReportReviewInput } from "@/lib/daily-report/types";
 
-function makeMergeDecision(leftId: string, rightId: string, verdict: "approved" | "declined" | "ambiguous") {
+function makeMergeDecision(pairRef: string, verdict: "approved" | "declined" | "ambiguous") {
   const reasonCode = verdict === "approved" ? "same_event" : verdict === "ambiguous" ? "insufficient_evidence" : "different_event";
   return {
-    pair_id: makeClusterMergePairId(leftId, rightId),
+    pair_id: pairRef,
     verdict,
     confidence: 95,
     reasonCode,
@@ -344,7 +343,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("cluster-a", "cluster-b", "approved"), makeMergeDecision("cluster-b", "cluster-c", "approved")] }),
+            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), makeMergeDecision("p2", "approved")] }),
           },
         },
       ],
@@ -390,15 +389,17 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain("\"pairs\"");
     expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).not.toContain("cluster-a");
     expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).not.toContain("cluster-b");
-    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain('"pair_id":"merge_pair_');
-    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain('"pair_id":"merge_pair_');
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain('"pair_id":"p1"');
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).toContain('"pair_id":"p2"');
+    // 批内短 ref：不应再让模型回抄 64 位摘要
+    expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).not.toContain("merge_pair_");
   });
 
   it("parses explicit cluster merge verdicts including ambiguous pairs", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
         message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("cluster-a", "cluster-b", "approved"), makeMergeDecision("cluster-a", "cluster-c", "ambiguous")] }),
+            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), makeMergeDecision("p2", "ambiguous")] }),
         },
       }],
     });
@@ -445,7 +446,7 @@ describe("ai provider", () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
         message: {
-          content: JSON.stringify({ decisions: [makeMergeDecision("cluster-a", "cluster-b", "declined")] }),
+          content: JSON.stringify({ decisions: [makeMergeDecision("p1", "declined")] }),
         },
       }],
     });
@@ -477,7 +478,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("cluster-a", "cluster-b", "approved"), makeMergeDecision("extra-a", "extra-b", "approved")] }),
+            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), makeMergeDecision("p9", "approved")] }),
           },
         },
       ],
@@ -556,7 +557,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("cluster-a", "cluster-b", "approved"), { ...makeMergeDecision("cluster-c", "cluster-d", "declined"), verdict: "approve" }, makeMergeDecision("cluster-e", "cluster-f", "declined")] }),
+            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), { ...makeMergeDecision("p2", "declined"), verdict: "approve" }, makeMergeDecision("p3", "declined")] }),
           },
         },
       ],
@@ -697,7 +698,7 @@ describe("ai provider", () => {
         choices: [
           {
             message: {
-              content: JSON.stringify({ decisions: [makeMergeDecision("cluster-a", "cluster-b", "approved")] }),
+              content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved")] }),
             },
           },
         ],

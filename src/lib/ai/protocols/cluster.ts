@@ -22,10 +22,22 @@ export const CLUSTER_MERGE_DECISIONS_SCHEMA = z.object({
   }).strict()),
 }).strict();
 
+/**
+ * 内部稳定标识：用于审计/诊断记录，不参与模型交互，也不出系统。
+ */
 export function makeClusterMergePairId(leftClusterId: string, rightClusterId: string) {
   const [left, right] = [leftClusterId, rightClusterId].sort();
   const digest = crypto.createHash("sha256").update(`${left}\0${right}`).digest("hex");
   return `merge_pair_${digest}`;
+}
+
+/**
+ * 批次内序号 ref：唯一需要模型回抄的标识，作用域仅限单次 AI 调用的那一批。
+ * 刻意用最短形式（p1/p2/p3）——64 位十六进制摘要会让模型逐字复抄 64 个字符，
+ * 既多花 token 又平白增加抄错概率，而显式路由的收益只需要一个批内唯一短串。
+ */
+export function makeClusterMergePairRef(indexInBatch: number) {
+  return `p${indexInBatch + 1}`;
 }
 
 export function splitClusterMergeInputBatches(clustersJson: string, batchSize: number) {
@@ -47,7 +59,7 @@ export function splitClusterMergeInputBatches(clustersJson: string, batchSize: n
 export function compactClusterMergeInputForModel(clustersJson: string) {
   const parsed = JSON.parse(clustersJson) as Record<string, unknown>;
   const pairs = Array.isArray(parsed.pairs)
-    ? parsed.pairs.map((pair) => {
+    ? parsed.pairs.map((pair, index) => {
         if (!pair || typeof pair !== "object" || Array.isArray(pair)) return pair;
         const inputPair = pair as Record<string, unknown>;
         const left = inputPair.left as Record<string, unknown> | null;
@@ -63,7 +75,7 @@ export function compactClusterMergeInputForModel(clustersJson: string) {
         };
         return {
           ...inputPair,
-          pair_id: makeClusterMergePairId(left.id, right.id),
+          pair_id: makeClusterMergePairRef(index),
           left: stripClusterId(left),
           right: stripClusterId(right),
         };
@@ -227,8 +239,9 @@ export function parseClusterMergeInputMetadata(clustersJson: string): ClusterMer
   }
 
   const pairs: ClusterMergeInputMetadata["pairs"] = [];
-  const seenPairIds = new Set<string>();
-  for (const pair of parsed.pairs) {
+  // pair_id 是批内序号，天然不会重复；真正需要防的是同一对 cluster 在一批里出现两次。
+  const seenPairKeys = new Set<string>();
+  for (const [index, pair] of parsed.pairs.entries()) {
     const left = pair && typeof pair === "object" && "left" in pair ? pair.left : null;
     const right = pair && typeof pair === "object" && "right" in pair ? pair.right : null;
     const leftId = left && typeof left === "object" && "id" in left && typeof left.id === "string" ? left.id : null;
@@ -237,11 +250,12 @@ export function parseClusterMergeInputMetadata(clustersJson: string): ClusterMer
       throw new InvalidJsonModelResponseError("聚合合并输入 Pair 缺少有效的 left/right cluster ID。");
     }
 
-    const pairId = makeClusterMergePairId(leftId, rightId);
-    if (seenPairIds.has(pairId)) {
-      throw new InvalidJsonModelResponseError(`聚合合并输入存在重复 pair_id：${pairId}`);
+    const pairId = makeClusterMergePairRef(index);
+    const pairKey = `${leftId}\0${rightId}`;
+    if (seenPairKeys.has(pairKey)) {
+      throw new InvalidJsonModelResponseError(`聚合合并输入存在重复 pair：${leftId} / ${rightId}`);
     }
-    seenPairIds.add(pairId);
+    seenPairKeys.add(pairKey);
     pairs.push({ pairId, leftClusterId: leftId, rightClusterId: rightId });
   }
 

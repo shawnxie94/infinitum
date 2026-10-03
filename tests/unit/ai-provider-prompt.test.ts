@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createAiProvider } from "@/lib/ai/provider-next";
-import { makeClusterMergePairId } from "@/lib/ai/protocols/cluster";
+import { makeClusterMergePairRef } from "@/lib/ai/protocols/cluster";
 import { createAiSdkTransport, normalizeUsage } from "@infinitum/ai/provider/transports";
 import { ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE } from "@/config/prompts";
 import {
@@ -240,8 +240,8 @@ describe("ai provider quality rubric integration", () => {
   it("parses compact cluster merge decisions by pair ID", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{ message: { content: JSON.stringify({ decisions: [
-        { pair_id: makeClusterMergePairId("left-2", "right-2"), verdict: "ambiguous", confidence: 70, reasonCode: "insufficient_evidence", reasonText: "证据不足。" },
-        { pair_id: makeClusterMergePairId("left-1", "right-1"), verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "主体、对象一致。" },
+        { pair_id: makeClusterMergePairRef(1), verdict: "ambiguous", confidence: 70, reasonCode: "insufficient_evidence", reasonText: "证据不足。" },
+        { pair_id: makeClusterMergePairRef(0), verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "主体、对象一致。" },
       ] }) } }],
     });
     const provider = createAiProvider(
@@ -286,7 +286,7 @@ describe("ai provider quality rubric integration", () => {
 
   it("salvages answered pairs from an incomplete pair-ID response set", async () => {
     // 逐 pair 抢救：未返回的 pair 不连坐已回答的 pair，缺失的交由下一轮重新评估。
-    const create = mockModelResponse({ decisions: [{ pair_id: makeClusterMergePairId("left-1", "right-1"), verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件。" }] });
+    const create = mockModelResponse({ decisions: [{ pair_id: makeClusterMergePairRef(0), verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件。" }] });
     const provider = createAiProvider(
       modelApiConfig,
       undefined,

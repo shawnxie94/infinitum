@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   buildClusterMergeGroupsFromDecisions,
   compactClusterMergeInputForModel,
-  makeClusterMergePairId,
   parseClusterMergeDecisions,
   resolveClusterMergeGroupsFromDecisions,
   parseClusterMergeInputMetadata,
@@ -40,7 +39,9 @@ describe("cluster merge pair-id protocol", () => {
     const second = compactClusterMergeInputForModel(input) as typeof first;
 
     expect(first.pairs.map((pair) => pair.pair_id)).toEqual(second.pairs.map((pair) => pair.pair_id));
-    expect(first.pairs[0]?.pair_id).toBe(makeClusterMergePairId("cluster-left-0", "cluster-right-0"));
+    expect(first.pairs[0]?.pair_id).toBe("p1");
+    // 批内序号 ref：模型只需回抄 2 个字符，不存在抄错 64 位摘要的可能
+    expect(first.pairs.map((pair) => pair.pair_id)).toEqual(["p1", "p2"]);
     expect(first.pairs[0]?.left).not.toHaveProperty("id");
   });
 

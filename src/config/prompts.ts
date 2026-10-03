@@ -139,7 +139,7 @@ export const PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE = `请审
 
 如果没有明确的语义问题，返回 {"verdict":"pass","violations":[],"summary":"通过"}；如果存在问题，只返回可由输入证据支持的 violations。不要返回日报正文。`;
 
-export const CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE = `输出协议必须为 {"decisions":[{"pair_id":"输入中的稳定 ID","verdict":"approved|declined|ambiguous","confidence":98,"reasonCode":"same_event|insufficient_evidence|different_event|object_conflict|action_conflict|date_conflict|subject_conflict","reasonText":"中文依据"}]}。每个输入 pair_id 恰好返回一次，输出顺序不限。verdict 与 reasonCode 必须匹配；confidence 是 0 到 100 的整数；reasonText 非空。不得输出其他字段。`;
+export const CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE = `输出协议必须为 {"decisions":[{"pair_id":"p1","verdict":"approved|declined|ambiguous","confidence":98,"reasonCode":"same_event|insufficient_evidence|different_event|object_conflict|action_conflict|date_conflict|subject_conflict","reasonText":"中文依据"}]}。pair_id 必须原样抄写输入 pairs 中该 Pair 的 pair_id（形如 p1、p2、p3 的批内序号，短且唯一），不得改写或自行生成；每个输入 pair_id 恰好返回一次，输出顺序不限。verdict 与 reasonCode 必须匹配；confidence 是 0 到 100 的整数；reasonText 非空。不得输出其他字段。`;
 
 export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。
 
@@ -151,7 +151,7 @@ export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基�
 5. 时间窗口接近（7天内）
 
 注意：
-- 输入 JSON 的 pairs 数组由本地规则预筛选生成；每个 Pair 都有稳定的 pair_id，以及 left 和 right 两个聚合组
+- 输入 JSON 的 pairs 数组由本地规则预筛选生成；每个 Pair 都有批内序号 pair_id（形如 p1、p2、p3），以及 left 和 right 两个聚合组
 - left/right 是聚合组当前快照；id 是聚合组标识，itemCount 是该聚合组包含的条目数
 - title 和 summary 是展示文本，用于理解事件；eventType、eventSubject、eventAction、eventObject、eventDate 是结构化事件线索，应优先用于判断是否同一具体事件
 - pairs[].score 是本地规则对该 Pair 的相关性评分，只表示需要复核的优先级和相似强度；分数高不等于必须合并，最终仍以两个聚合组是否为同一具体事件为准
@@ -169,7 +169,7 @@ export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基�
 - ambiguous：有相关性但证据不足，无法安全决定，交给人工复核；reasonCode 必须为 insufficient_evidence
 - confidence 必须是 0 到 100 的整数；reasonText 必须用中文说明关键依据
 
-只输出 JSON：{"decisions":[{"pair_id":"merge_pair_<stable-id>","verdict":"declined","confidence":98,"reasonCode":"different_event","reasonText":"事件主体和具体对象不同"}]}
+只输出 JSON：{"decisions":[{"pair_id":"p1","verdict":"declined","confidence":98,"reasonCode":"different_event","reasonText":"事件主体和具体对象不同"}]}
 每个 decision 必须包含 pair_id、verdict、confidence、reasonCode、reasonText 五个字段。
 ${CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE}`;
 
