@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "id": "cluster-quality-composite-2026-10-03",
+  "status": "supplemental_development_set_not_release_gate",
+  "purpose": "Add prior reviewed development positives to the fresh diagnostic without mutating either frozen source packet.",
+  "splitPolicy": "Use only 2026-10-01 dev rows and 2026-10-02 dev+holdout rows. Keep 2026-10-01 holdout in its original packet; no source holdout is moved into dev. Preserve per-cohort snapshot/asOf/method and report metrics by cohort.",
+  "sourceCohorts": [
+    {
+      "cohortId": "2026-10-01",
+      "manifestPath": "docs/eval/reviews/cluster-quality-2026-10-01/frozen-manifest.json",
+      "labelsPath": "docs/eval/reviews/cluster-quality-2026-10-01/blind-review.csv",
+      "includeSplits": [
+        "dev"
+      ],
+      "sourceManifestSha256": "36fa4b92b314ace918683ebbdb23c6f6f8e3f994d5ed04cc9d81c5b4e8bff260",
+      "sourceLabelsSha256": "560649b6343c1a8558a0d8e0663aa29367875a57bfd183baf43bc91f71af6370",
+      "sourceAsOf": "2026-09-26T06:39:09.566850+00:00",
+      "sourceSnapshotPath": "docs/eval/snapshots/prod-snapshot-2026-09-21.db",
+      "sourceSnapshotSha256": "72c7049ace08654bf327f346d11d1fc63fcf294d01e2882c9a130755ea29828e",
+      "sourceMethodVersion": "d0dba2ddbaa96093913e64a76cf5bd173de14fbd53c853cd4991da0181fb17ee",
+      "sourceBaseCommit": "35b8d41748070ff6b81ff618e063524b46079dd4",
+      "includedCases": 24,
+      "includedLabelCounts": {
+        "dev": {
+          "diff": 14,
+          "same": 10
+        }
+      }
+    },
+    {
+      "cohortId": "2026-10-02",
+      "manifestPath": "docs/eval/reviews/cluster-quality-2026-10-02/packet/frozen-manifest.json",
+      "labelsPath": "docs/eval/reviews/cluster-quality-2026-10-02/packet/blind-review.csv",
+      "includeSplits": [
+        "dev",
+        "holdout"
+      ],
+      "sourceManifestSha256": "10fa0c8a69ea400d70e3e3e1c45f2a0dc9c1a9a3938f2b3a1554a165e36471d1",
+      "sourceLabelsSha256": "da2bd8b787ace6859fec45a32be474f11c70ba5f05aebe01ed49e33a916e3f9f",
+      "sourceAsOf": "2026-10-02T11:41:35.000Z",
+      "sourceSnapshotPath": "docs/eval/snapshots/local-qualification-snapshot-2026-10-02.db",
+      "sourceSnapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+      "sourceMethodVersion": "a9a305d857ecd0ffa726e6c92d5fdb90258836fb9833b41b08ec9c7907ce58fd",
+      "sourceBaseCommit": "35b8d41748070ff6b81ff618e063524b46079dd4",
+      "includedCases": 24,
+      "includedLabelCounts": {
+        "dev": {
+          "diff": 16
+        },
+        "holdout": {
+          "diff": 7,
+          "same": 1
+        }
+      }
+    }
+  ],
+  "expectedCounts": {
+    "dev": {
+      "total": 40,
+      "labels": {
+        "same": 10,
+        "diff": 30
+      },
+      "byCohort": {
+        "2026-10-01": {
+          "total": 24,
+          "labels": {
+            "same": 10,
+            "diff": 14
+          }
+        },
+        "2026-10-02": {
+          "total": 16,
+          "labels": {
+            "diff": 16
+          }
+        }
+      }
+    },
+    "holdout": {
+      "total": 8,
+      "labels": {
+        "same": 1,
+        "diff": 7
+      },
+      "byCohort": {
+        "2026-10-02": {
+          "total": 8,
+          "labels": {
+            "same": 1,
+            "diff": 7
+          }
+        }
+      }
+    },
+    "excludedOriginalHoldout": {
+      "2026-10-01": {
+        "total": 12,
+        "same": 4,
+        "diff": 8,
+        "reason": "retained in original frozen packet; not moved or copied into this suite"
+      }
+    }
+  },
+  "clusterDisjointness": {
+    "devClusterIds": 76,
+    "holdoutClusterIds": 16,
+    "intersectionCount": 0
+  },
+  "diagnosticOnly": {
+    "path": "diagnostic-only/unrelated-subjects-1420-reviewed.csv",
+    "rows": 1420,
+    "sha256": "e6f40bf94ad4b18919699edcdd4e006e3fb6f7a25aaaad63325e1febba9317a7",
+    "reviewType": "model-assisted diagnostic; not human gold; excluded from label totals",
+    "initialClassificationCounts": {
+      "not_same_event": 1419,
+      "uncertain": 1
+    },
+    "finalClassificationCounts": {
+      "not_same_event": 1420
+    },
+    "candidateRecallCases": 0,
+    "sourcesCheckedBorderline": 1
+  },
+  "outputs": {
+    "devCsvSha256": "e931619281b052d5bc3e3264fb4a6a105959fbd97a9ac040f9e3514cc132acbf",
+    "holdoutCsvSha256": "31a42f8e67ccb444660d352077e7a389010a43e1024328ff27a80684c50817ba"
+  },
+  "metricCautions": [
+    "Cohorts have different snapshots, asOf values, method versions, and sampling designs; do not pool performance rates as one production-population estimate.",
+    "The older cohort contributes only its original dev split; its holdout stays separate.",
+    "The 1,420-pair model-assisted review is diagnostic-only and not a human-label source.",
+    "This composite set does not by itself pass the quality or release gate."
+  ]
+}

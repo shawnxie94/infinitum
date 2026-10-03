@@ -4,6 +4,7 @@
 
 ## 文件
 
+- `reviews/cluster-quality-composite-2026-10-03/` — 复合开发评测集（2026-10-01 dev 24 对 + 2026-10-02 dev 16 对；2026-10-02 holdout 8 对原样保留）；多来源 cohort 必须分层报告，1420 对稀疏门审查仅为 diagnostic-only、非人工 gold。目录内 `verify_set.py` 校验源文件哈希、标签、split 和 cluster 隔离
 - `eval-cluster-baseline.md` — 基线报告（主文档，含数据、方法、发现、结论）
 - `baseline-regression.json` — **回归守护基准**（sample_metrics + snapshot_freeze 说明，含 guard_rules）
 - `baseline-snapshot-2026-09-18.json` — 冻结快照 pair 级基线（2190 对，快照重放维度的对比基准）
