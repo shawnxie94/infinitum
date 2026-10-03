@@ -263,53 +263,63 @@ export function parseClusterMergeDecisions(rawContent: string, metadata: Cluster
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new InvalidJsonModelResponseError("聚合合并 decisions 必须是对象。");
   }
-  const schemaResult = CLUSTER_MERGE_DECISIONS_SCHEMA.safeParse(parsed);
-  if (!schemaResult.success) {
-    throw new InvalidJsonModelResponseError(`聚合合并 decisions 格式无效：${schemaResult.error.message}`);
+  const outputDecisions = (parsed as { decisions?: unknown }).decisions;
+  if (!Array.isArray(outputDecisions)) {
+    throw new InvalidJsonModelResponseError("聚合合并 decisions 必须是数组。");
   }
-  const outputDecisions = schemaResult.data.decisions;
   if (metadata.pairs.length === 0) {
-    if (outputDecisions.length !== 0) {
-      throw new InvalidJsonModelResponseError("空聚合合并输入不得返回 decisions。");
-    }
     return [];
   }
-  if (outputDecisions.length !== metadata.pairs.length) {
-    throw new InvalidJsonModelResponseError("聚合合并 decisions 数量必须与输入 pair 数量完全一致。");
-  }
 
+  // 逐 pair 校验并抢救：单个 decision 非法只丢弃它自己，不连坐同批其他 pair。
+  // 丢弃的 pair 不做账本记录，交由下一轮重新评估（与 rc8 的容错基线一致）。
+  // 消费侧按 leftClusterId/rightClusterId 路由，不依赖返回顺序，故跳过不会造成错位。
   const expectedById = new Map(metadata.pairs.map((pair) => [pair.pairId, pair]));
   const decisionsById = new Map<string, ClusterMergeDecision>();
+  const dropped: string[] = [];
   for (const rawDecision of outputDecisions) {
+    const drop = (reason: string) => {
+      dropped.push(reason);
+      return null;
+    };
     if (!rawDecision || typeof rawDecision !== "object" || Array.isArray(rawDecision)) {
-      throw new InvalidJsonModelResponseError("聚合合并 decision 必须是对象。");
+      drop("decision 不是对象");
+      continue;
     }
     const decision = rawDecision as Record<string, unknown>;
     if (typeof decision.pair_id !== "string" || !expectedById.has(decision.pair_id)) {
-      throw new InvalidJsonModelResponseError("聚合合并 decision 包含未知或缺失的 pair_id。");
+      drop("pair_id 未知或缺失");
+      continue;
     }
     if (decisionsById.has(decision.pair_id)) {
-      throw new InvalidJsonModelResponseError(`聚合合并 decision 出现重复 pair_id：${decision.pair_id}`);
+      drop("pair_id 重复");
+      continue;
     }
     if (decision.verdict !== "approved" && decision.verdict !== "declined" && decision.verdict !== "ambiguous") {
-      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 verdict 无效。`);
+      drop("verdict 无效");
+      continue;
     }
-    if (typeof decision.confidence !== "number" || decision.confidence < 0 || decision.confidence > 100) {
-      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 confidence 必须在 0 到 100 之间。`);
+    if (typeof decision.confidence !== "number" || !Number.isFinite(decision.confidence) ||
+      decision.confidence < 0 || decision.confidence > 100) {
+      drop("confidence 越界");
+      continue;
     }
     if (typeof decision.reasonCode !== "string" || !CLUSTER_MERGE_REASON_CODES.includes(decision.reasonCode as ClusterMergeReasonCode)) {
-      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 reasonCode 无效。`);
+      drop("reasonCode 无效");
+      continue;
     }
     const reasonText = typeof decision.reasonText === "string" ? decision.reasonText.trim() : "";
     if (!reasonText) {
-      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 缺少 reasonText。`);
+      drop("缺少 reasonText");
+      continue;
     }
     if (
       (decision.verdict === "approved" && decision.reasonCode !== "same_event") ||
       (decision.verdict === "ambiguous" && decision.reasonCode !== "insufficient_evidence") ||
       (decision.verdict === "declined" && (decision.reasonCode === "same_event" || decision.reasonCode === "insufficient_evidence"))
     ) {
-      throw new InvalidJsonModelResponseError(`聚合合并 pair_id ${decision.pair_id} 的 verdict 与 reasonCode 不匹配。`);
+      drop("verdict 与 reasonCode 不匹配");
+      continue;
     }
 
     const pair = expectedById.get(decision.pair_id)!;
@@ -323,10 +333,20 @@ export function parseClusterMergeDecisions(rawContent: string, metadata: Cluster
     });
   }
 
-  if (decisionsById.size !== expectedById.size) {
-    throw new InvalidJsonModelResponseError("聚合合并 decisions 缺少输入 pair_id。");
+  const missing = metadata.pairs.length - decisionsById.size;
+  if (dropped.length > 0 || missing > 0) {
+    // 错位/协议缺陷的观测点：仅记录不阻断，历史上曾用于按数组下标配对导致的错位诊断。
+    const byReason = new Map<string, number>();
+    for (const reason of dropped) byReason.set(reason, (byReason.get(reason) ?? 0) + 1);
+    console.warn(
+      `[Cluster Merge] 协议抢救: 保留 ${decisionsById.size}/${metadata.pairs.length} 对, 丢弃 ${dropped.length} 条非法 decision, 缺失 ${missing} 对` +
+      ` (${[...byReason.entries()].map(([reason, count]) => `${reason}=${count}`).join(", ") || "无非法条目"})`,
+    );
   }
-  return metadata.pairs.map((pair) => decisionsById.get(pair.pairId)!);
+
+  return metadata.pairs
+    .map((pair) => decisionsById.get(pair.pairId))
+    .filter((decision): decision is ClusterMergeDecision => decision !== undefined);
 }
 
 export function parseClusterMatchCandidateId(rawContent: string, candidateIds: string[]): string | null {

@@ -90,8 +90,12 @@ export const CLUSTER_MERGE_SCAN_CLUSTER_LIMIT = 2500;
 /** 单次聚合合并最多消费的预计算 clean-clean 候选对 */
 export const CLUSTER_MERGE_PRECOMPUTED_CLEAN_PAIR_LIMIT = 20;
 
-/** 每次发送给 AI 的聚合合并候选对上限 */
-export const CLUSTER_MERGE_AI_PAIR_BATCH_SIZE = 5;
+/**
+ * 每次发送给 AI 的聚合合并候选对上限。
+ * 分片大小：批次越小，单批协议缺陷波及的 pair 越少，且模型在短上下文里回抄
+ * pair_id / reasonText 更稳。配合 service.ts 的分片隔离（单批失败不连坐）使用。
+ */
+export const CLUSTER_MERGE_AI_PAIR_BATCH_SIZE = 3;
 
 /** 单个 dirty 聚合组在主链路最多实时评分的邻居数 */
 export const CLUSTER_MERGE_DIRTY_NEIGHBOR_SCAN_LIMIT = 400;

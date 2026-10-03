@@ -284,7 +284,8 @@ describe("ai provider quality rubric integration", () => {
     expect(systemPrompt).toContain("reasonText");
   });
 
-  it("rejects incomplete pair-ID response sets", async () => {
+  it("salvages answered pairs from an incomplete pair-ID response set", async () => {
+    // 逐 pair 抢救：未返回的 pair 不连坐已回答的 pair，缺失的交由下一轮重新评估。
     const create = mockModelResponse({ decisions: [{ pair_id: makeClusterMergePairId("left-1", "right-1"), verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件。" }] });
     const provider = createAiProvider(
       modelApiConfig,
@@ -297,7 +298,11 @@ describe("ai provider quality rubric integration", () => {
         { left: { id: "left-1" }, right: { id: "right-1" }, score: 90 },
         { left: { id: "left-2" }, right: { id: "right-2" }, score: 70 },
       ],
-    }))).rejects.toThrow(/数量必须/);
+    }))).resolves.toEqual([expect.objectContaining({
+      leftClusterId: "left-1",
+      rightClusterId: "right-1",
+      verdict: "approved",
+    })]);
   });
 
   it("locks the entity alias check to temperature 0 with a bounded token budget", async () => {

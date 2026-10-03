@@ -1650,7 +1650,11 @@ async function recordClusterMergeDecisions(input: {
         localScore: edge.score,
         confidence: aiDecision?.confidence,
         reasonCode: aiDecision?.reasonCode ?? null,
-        reasonText: aiDecision?.reasonText ?? (verdict === "failed" ? input.failureReason ?? null : null),
+        // 失败必须可归因：历史上大量 failed 决策 reasonText 为 NULL，事后无法判断
+        // 是超时、限流还是协议缺陷，故对空原因补一个显式占位而不是留空。
+        reasonText: aiDecision?.reasonText ?? (verdict === "failed"
+          ? (input.failureReason?.trim() || "未记录失败原因（AI 未返回可用判定）")
+          : null),
         now: input.now,
       }),
     );
@@ -2006,8 +2010,27 @@ export async function executeClusterMerge(
   const aiMergeStartedAt = Date.now();
   try {
     const batchDecisions: ClusterMergeDecision[] = [];
+    const batchFailures: string[] = [];
+    let firstBatchError: unknown = null;
     for (const batchInput of splitClusterMergeInputBatches(clustersJson, CLUSTER_MERGE_AI_PAIR_BATCH_SIZE)) {
-      batchDecisions.push(...await aiProvider.assessClusterMergePairs(batchInput));
+      // 分片隔离：单批失败只影响该批的 pair，不再让 try 包住整个循环导致全量连坐。
+      try {
+        batchDecisions.push(...await aiProvider.assessClusterMergePairs(batchInput));
+      } catch (error) {
+        firstBatchError ??= error;
+        const reason = error instanceof Error ? error.message : "Unknown cluster merge AI error";
+        batchFailures.push(reason);
+        console.error(`[Cluster Merge] AI 批次失败（其余批次继续）: ${reason}`);
+      }
+    }
+    if (batchFailures.length > 0) {
+      if (batchDecisions.length === 0) {
+        // 整轮无一成功：按全量失败记账，并保留原始错误原因（不包装，便于归因）。
+        throw firstBatchError ?? new Error(batchFailures[0]!);
+      }
+      console.warn(
+        `[Cluster Merge] ${batchFailures.length} 个批次失败，已保留其余 ${batchDecisions.length} 条判定；失败批次的 pair 下一轮重新评估`,
+      );
     }
     mergeDecisions = batchDecisions.map((decision) => {
       const left = candidatesById.get(decision.leftClusterId);

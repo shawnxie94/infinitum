@@ -471,7 +471,8 @@ describe("ai provider", () => {
     })]);
   });
 
-  it("rejects extra merge decisions rather than salvaging an aligned prefix", async () => {
+  it("drops extra merge decisions that reference unknown pairs", async () => {
+    // 逐 pair 抢救：未知 pair_id 的 decision 被丢弃，已知 pair 仍保留。
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
@@ -505,10 +506,14 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }))).rejects.toThrow(/数量必须/);
+    }))).resolves.toEqual([expect.objectContaining({
+      leftClusterId: "cluster-a",
+      rightClusterId: "cluster-b",
+      verdict: "approved",
+    })]);
   });
 
-  it("rejects an incomplete merge decision set", async () => {
+  it("returns no decisions when the model answers with an empty decision set", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
@@ -534,6 +539,7 @@ describe("ai provider", () => {
       },
     );
 
+    // 缺失的 pair 交由下一轮重新评估，而不是抛错连坐同批其他判定。
     await expect(provider.assessClusterMergePairs(JSON.stringify({
       pairs: [
         {
@@ -542,10 +548,10 @@ describe("ai provider", () => {
           score: 95,
         },
       ],
-    }))).rejects.toThrow(/数量必须/);
+    }))).resolves.toEqual([]);
   });
 
-  it("rejects a batch containing an invalid verdict", async () => {
+  it("salvages the valid pairs in a batch containing an invalid verdict", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [
         {
@@ -589,7 +595,10 @@ describe("ai provider", () => {
           score: 88,
         },
       ],
-    }))).rejects.toThrow(/decision|verdict|格式无效/i);
+    }))).resolves.toEqual([
+      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-b", verdict: "approved" }),
+      expect.objectContaining({ leftClusterId: "cluster-e", rightClusterId: "cluster-f", verdict: "declined" }),
+    ]);
   });
 
   it("salvages aligned alias decisions when model returns fewer decisions than pairs", async () => {
