@@ -30,6 +30,11 @@ jobs:
       - name: Generate Prisma client
         run: npm run prisma:generate
 
+      # tsconfig include 了 .next/types/**/*.ts；App Router 的 RouteContext 等类型
+      # 由 next typegen 生成。本地因存在 .next 目录而侥幸通过，CI 必须显式生成。
+      - name: Generate Next.js route types
+        run: npx next typegen
+
       - name: Typecheck
         run: npx tsc --noEmit
 
