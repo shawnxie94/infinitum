@@ -161,7 +161,7 @@ describe("evaluateStaleContent", () => {
 
 /**
  * 线上真实回归：2026-10-04 部署后，极客公园 4 条当天新文章被误判为 stale_content。
- * 根因是模型把正文里的裸月日（如「北京时间 10 月 3 日」电头）当成事件时间，
+ * 根因是模型把正文里的裸月日（如正文开头的「北京时间 10 月 3 日」报道日期）当成事件时间，
  * 并凭空补了 2025 年（实测 4 条正文均不含 "2025"），导致偏差整年。
  * 以下正文节选取自真实库数据。
  */
@@ -238,14 +238,14 @@ describe("evaluateStaleContent 线上误杀回归", () => {
     expect(result.reason).toBe("stale_event_content");
   });
 
-  it("正文佐证年份但只有电头日期时按电头放行", () => {
+  it("正文佐证年份但只有报道日期时按报道日期放行", () => {
     const result = evaluateStaleContent({
       eventDate: "2024-03-15",
       publishedAt: new Date("2026-10-04T00:00:00.000Z"),
       publishedAtKnown: true,
       restoredByAdminAt: null,
       referenceAt: new Date("2026-10-04T00:00:00.000Z"),
-      // 年份有佐证，但事件日期线索是电头
+      // 年份有佐证，但事件日期线索是报道日期
       contentText: "2024 年行业回顾。北京时间 10 月 3 日消息，公司今日宣布调整。",
     });
 

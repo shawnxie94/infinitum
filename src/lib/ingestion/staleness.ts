@@ -28,7 +28,7 @@ export type StaleContentInput = {
   restoredByAdminAt: Date | null | undefined;
   /** 入库时刻，用于 publishedAt 未知时兜底。 */
   referenceAt?: Date | null;
-  /** 标题与正文全文，用于电头识别和年份佐证。 */
+  /** 标题与正文全文，用于报道日期识别和年份佐证。 */
   contentText?: string | null;
 };
 
@@ -66,10 +66,10 @@ function skip(
 }
 
 /**
- * 中文新闻电头。`10月3日消息`、`北京时间 10 月 3 日`、`当地时间 10 月 1 日`
+ * 报道日期。正文开头的「10月3日消息」「北京时间 10 月 3 日」「当地时间 10 月 1 日」
  * 表示的是**报道当天**，不是事件发生日，必须排除在事件时间之外。
  */
-const DATELINE_PATTERN =
+const REPORT_DATE_PATTERN =
   /(?:\d{1,2}\s*月\s*\d{1,2}\s*日\s*[^\d]{0,4}(?:消息|电|讯)|(?:北京时间|当地时间|今日|昨天)\s*[^\d]{0,6}\d{1,2}\s*月\s*\d{1,2}\s*日)/;
 
 /** 正文里带年份的日期：2025年、2025-10-03、2025/10/03。 */
@@ -104,7 +104,7 @@ function isEventYearCorroborated(contentText: string, eventDate: Date): boolean 
  *  2. 管理员未人工恢复过；
  *  3. 事件时间距基准超过阈值；
  *  4. 正文里存在该年份的带年份日期（排除模型凭空补年份）；
- *  5. 正文中的日期线索不是纯电头（电头是报道日，不是事件日）。
+ *  5. 正文中的日期线索不是报道日期（报道日期不是事件日期）。
  */
 export function evaluateStaleContent(input: StaleContentInput): StaleContentResult {
   const eventDate = parseEventDate(input.eventDate);
@@ -140,9 +140,9 @@ export function evaluateStaleContent(input: StaleContentInput): StaleContentResu
     return skip("year_unverified", ageDays, baselineLabel);
   }
 
-  // 护栏 4：正文只有电头日期时，说明 eventDate 取自报道日而非事件日。
+  // 护栏 4：正文只有报道日期时，说明 eventDate 取自报道日而非事件日。
   const hasBareDate = /\d{1,2}\s*月\s*\d{1,2}\s*日/.test(contentText);
-  if (hasBareDate && DATELINE_PATTERN.test(contentText)) {
+  if (hasBareDate && REPORT_DATE_PATTERN.test(contentText)) {
     return skip("dateline_only", ageDays, baselineLabel);
   }
 
