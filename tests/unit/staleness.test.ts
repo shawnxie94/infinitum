@@ -25,6 +25,24 @@ describe("evaluateStaleContent", () => {
     expect(result.ageDays).toBe(33);
   });
 
+  it("阈值当前为 14 天，10~14 天的内容不过滤", () => {
+    expect(STALE_EVENT_MAX_AGE_DAYS).toBe(14);
+
+    const tenDaysAgo = new Date("2026-10-04T00:00:00.000Z");
+    const result = evaluateStaleContent({
+      eventDate: "2026-09-24",
+      publishedAt: tenDaysAgo,
+      publishedAtKnown: true,
+      restoredByAdminAt: null,
+      referenceAt: tenDaysAgo,
+      contentText: "该项目于 2026 年 9 月 24 日开源。",
+    });
+
+    expect(result.ageDays).toBe(10);
+    expect(result.stale).toBe(false);
+    expect(result.skipReason).toBe("within_threshold");
+  });
+
   it("事件时间超阈值但正文无年份佐证时不过滤", () => {
     const result = evaluateStaleContent({
       eventDate: "2026-09-01",
@@ -53,9 +71,15 @@ describe("evaluateStaleContent", () => {
   });
 
   it("事件时间恰好等于阈值天数时不过滤", () => {
-    const publishedAt = new Date("2026-10-04T00:00:00.000Z");
+    // 从常量推导基准日，避免阈值调整后用例日期与阈值脱节
+    const eventDay = "2026-09-20";
+    const publishedAt = new Date(
+      `${eventDay}T00:00:00.000Z`,
+    );
+    publishedAt.setUTCDate(publishedAt.getUTCDate() + STALE_EVENT_MAX_AGE_DAYS);
+
     const result = evaluateStaleContent({
-      eventDate: "2026-09-27",
+      eventDate: eventDay,
       publishedAt,
       publishedAtKnown: true,
       restoredByAdminAt: null,
@@ -64,6 +88,25 @@ describe("evaluateStaleContent", () => {
 
     expect(result.ageDays).toBe(STALE_EVENT_MAX_AGE_DAYS);
     expect(result.stale).toBe(false);
+    expect(result.skipReason).toBe("within_threshold");
+  });
+
+  it("超过阈值一天即判定为过时（年份有佐证）", () => {
+    const eventDay = "2026-09-20";
+    const publishedAt = new Date(`${eventDay}T00:00:00.000Z`);
+    publishedAt.setUTCDate(publishedAt.getUTCDate() + STALE_EVENT_MAX_AGE_DAYS + 1);
+
+    const result = evaluateStaleContent({
+      eventDate: eventDay,
+      publishedAt,
+      publishedAtKnown: true,
+      restoredByAdminAt: null,
+      referenceAt: publishedAt,
+      contentText: `该项目于 ${eventDay.slice(0, 4)} 年 9 月 20 日开源。`,
+    });
+
+    expect(result.ageDays).toBe(STALE_EVENT_MAX_AGE_DAYS + 1);
+    expect(result.stale).toBe(true);
   });
 
   it("事件时间为空时不过滤", () => {

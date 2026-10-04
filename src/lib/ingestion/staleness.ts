@@ -2,9 +2,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * 时效过时阈值：AI 抽出的事件时间早于基准时间超过这个天数，视为“旧内容重新推送”。
- * 硬编码为常量，不做成设置项：判定口径需要跨源一致，误判由过滤内容复核里的人工恢复兜底。
+ *
+ * 取值依据：判定本身对「信息源重推旧文」和「正常报道数天前的旧事件」无法从
+ * 单一信号区分——两者都表现为 eventDate 早于发布时间。7 天对后者误杀偏高，
+ * 先放宽到 14 天降低人工恢复成本；判定正确性由 publishedAt 年份锚点和两道
+ * 正文护栏保证（见 evaluateStaleContent），阈值只影响召回宽严。
+ *
+ * 硬编码为常量，不做成设置项：判定口径需要跨源一致，且线上占比数据不足以
+ * 支撑按源定制。等真实回流样本积累后再评估是否需要分档。
  */
-export const STALE_EVENT_MAX_AGE_DAYS = 7;
+export const STALE_EVENT_MAX_AGE_DAYS = 14;
 
 export const STALE_CONTENT_FILTER_REASON = "stale_event_content";
 export const STALE_CONTENT_MODERATION_REASON = "stale_content" as const;
