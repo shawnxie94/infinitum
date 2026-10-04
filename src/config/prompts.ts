@@ -28,11 +28,20 @@ const ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES_PREVIOUS = `非聚合内容示例�
 // 单独提取成常量，供 PREVIOUS_DEFAULT 派生上一版文本。
 const ARGUMENT_RULE_CANONICAL = `5. eventSignature 描述整篇内容最主要的具体事件；eventType 仅在无法稳定判断整体事件时返回 null，不要用宽泛主题代替具体事件。eventSubject 与 eventObject 尽量必填：能指出具体事件时，主体（谁）与对象（对什么）通常都能确定，仅当内容中确实没有该论元时才返回 null；两者使用规范实体名——公司/机构/产品用最通用的正式名称并全文一致，不写描述性短语（如「某科技公司」），不把多个主体拼接成一个（多主体只写最核心的一个），不混入动作或结果，长度不超过 20 字。`;
 
+// 事件时间取值规则。缺这条时模型没有年份锚点：正文只给「X月X日」时必须
+// 自造年份，实测稳定落在模型知识边界上（2025），把当天新闻算成一年前。
+const EVENT_DATE_RULE = `事件时间（eventDate 及 aggregation 各事件的 eventDate）取正文所述事件本身的发生日期，不确定时返回 null，不要用你记忆中的年份补全。输入中的 publishedAt 是该文章的发布时间：正文只写「X月X日」而没有年份时，以 publishedAt 的年份为准；正文开头「X月X日消息」「北京时间X月X日」等表示报道当天，不是事件日期，不得直接作为 eventDate；只有正文明确给出年份或事件明显早于发布时间时才使用更早的年份。`;
+
 // 上一版规则 5（v2）：允许任意字段无判据即 null，是聚合层 no_event_anchor 泛滥的抽取侧根因。
 const ARGUMENT_RULE_PERMISSIVE = `5. eventSignature 描述整篇内容最主要的具体事件；无法稳定判断的字段返回 null，不要用宽泛主题代替具体事件。`;
 
 const AGGREGATION_EVENT_RULE = "8. 聚合内容最多返回系统输入中 maxEvents 指定数量的 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象，并按照与顶层条目相同的评分标准独立返回 qualityBreakdown。";
 const AGGREGATION_EVENT_RULE_WITHOUT_EVENT_BREAKDOWN = "8. 聚合内容最多返回系统输入中 maxEvents 指定数量的 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。";
+
+// v2 的规则 8：maxEvents 还是 {{maxEvents}} 模板占位符，由 contracts 的
+// LEGACY_INPUT_PLACEHOLDER_PATTERN 在运行时替换。部分存量环境仍停在这一版，
+// 见 PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT。
+const AGGREGATION_EVENT_RULE_V2 = "8. 聚合内容最多返回 {{maxEvents}} 个 events；超过时只保留事实密度和新闻价值最高的事件。每个子事件必须可独立署名给具体主体、动作和对象。";
 
 export const DEFAULT_ITEM_UNDERSTANDING_PROMPT = `你是资讯内容理解助手。只基于输入标题、来源和正文，一次完成摘要、内容分析、事件识别与聚合拆分。严格输出单个 JSON 对象，不要输出 Markdown、代码块或额外解释。
 
@@ -43,6 +52,7 @@ ${ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES}
 1. summary：100 到 200 字中文摘要，覆盖主体、动作、关键结果、背景和影响；只写正文，可使用有限 Markdown 行内强调，不要链接、标题、列表或编造内容。
 2. translatedTitle：仅当“是否需要翻译标题”为“是”时填写忠实简洁的中文标题，否则返回空字符串。
 3. moderationStatus 默认 allowed；仅当正文主体明显属于营销宣传、低质灌水或噪声重复时返回 filtered。页眉、页脚、侧栏、底部推荐位、插入式广告等页面附加内容不代表正文主体，不要仅因这些内容将条目标记为 filtered；moderationReason 只能使用固定枚举或 null。
+${EVENT_DATE_RULE}
 ${QUALITY_SCORE_RULE}
 ${ARGUMENT_RULE_CANONICAL}
 6. aggregation.isAggregation 仅当正文包含至少两个互相独立的离散事件时为 true；单事件多角度报道、深度长文、评论和营销文案为 false。
@@ -63,7 +73,24 @@ export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT = DEFAULT_ITEM_UNDERSTAN
   .replace(AGGREGATION_EVENT_RULE, AGGREGATION_EVENT_RULE_WITHOUT_EVENT_BREAKDOWN);
 
 // v4 之前的存量默认文本（v3 与更早的 v2 措辞）都要能被幂等升级到当前默认。
+// v5 新增事件时间取值规则，同样需要把「未改动过默认文本」的存量行升级上来。
+const ITEM_UNDERSTANDING_PROMPT_WITHOUT_EVENT_DATE_RULE = DEFAULT_ITEM_UNDERSTANDING_PROMPT.replace(
+  `${EVENT_DATE_RULE}\n`,
+  "",
+);
+
+// 初始化于 qualityBreakdown 契约（v4）之前、且 maxEvents 仍为 {{maxEvents}}
+// 占位符的存量默认文本。这一版此前没有任何迁移识别，存量环境会一直停在
+// 旧措辞上（v3 的规范论元规则与 v4 的 qualityBreakdown 契约均未生效）。
+export const PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT = ITEM_UNDERSTANDING_PROMPT_WITHOUT_EVENT_DATE_RULE
+  .replace(ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES, ITEM_UNDERSTANDING_VALID_JSON_EXAMPLES_PREVIOUS)
+  .replace(QUALITY_SCORE_RULE, QUALITY_SCORE_RULE_PREVIOUS)
+  .replace(ARGUMENT_RULE_CANONICAL, ARGUMENT_RULE_PERMISSIVE)
+  .replace(AGGREGATION_EVENT_RULE, AGGREGATION_EVENT_RULE_V2);
+
 export const PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS = [
+  PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  ITEM_UNDERSTANDING_PROMPT_WITHOUT_EVENT_DATE_RULE,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT.replace(ARGUMENT_RULE_CANONICAL, ARGUMENT_RULE_PERMISSIVE),
 ];
@@ -120,8 +147,12 @@ export const DEFAULT_DAILY_REPORT_REVIEW_PROMPT = `你是中文 AI 新闻日报�
 2. 每条 violation 都必须包含 code、severity、message、evidence 和 guidance；guidance 必须是基于输入证据的具体、可执行修复方向，说明下一次 PLAN 或 WRITE 应重点调整什么。topicIds、candidateIds 仅在能明确定位问题时提供，且只能引用审核输入中存在的 ID。
 3. verdict=pass 时不能包含 error 级 violation，可以包含有证据支持的 warning；没有问题时返回 violations=[]。
 4. verdict=reject 时至少包含一条 error 级 violation；每条 error 必须能由输入证据直接支持。
-5. code 含义：coverage_insufficient=候选池中存在足够高价值内容但日报覆盖明显不足；candidate_omitted=重要候选被遗漏；topic_not_independent=多个主题实际描述同一事实；factual_inconsistency=正文与候选证据事实冲突；duplicated_content=日报条目之间重复；padding_content=为满足数量而加入低价值或无关内容。
-6. 不要返回日报正文；guidance 只能描述基于输入证据的修复方向，不得创建输入之外的 topicId 或 candidateId。`;
+5. severity 必须如实标定，不得把可接受项升级为 error：
+   - 只有「正文断言与候选证据直接冲突」「同一事实在多条目间被重复叙述」「条目与日报主题明显无关」才是 error。
+   - 栏目限额未用满、候选池里还有更优候选可替换、某候选未入选、措辞或时态不够严谨、职级或称谓不够精确、同一公司主体的不同事件并列出现，一律只能是 warning。
+   - 如果读完自己的 evidence 会得出「无事实重复」「表述一致」「属合理覆盖」这类结论，就不得标为 error。
+6. code 含义：coverage_insufficient=候选池中存在足够高价值内容但日报覆盖明显不足；candidate_omitted=重要候选被遗漏；topic_not_independent=多个主题实际描述同一事实；factual_inconsistency=正文与候选证据事实冲突；duplicated_content=日报条目之间重复；padding_content=为满足数量而加入低价值或无关内容。
+7. 不要返回日报正文；guidance 只能描述基于输入证据的修复方向，不得创建输入之外的 topicId 或 candidateId。`;
 
 export const DEFAULT_ITEM_UNDERSTANDING_USER_PROMPT_TEMPLATE = `请准确理解文章内容，重点关注事实摘要、事件识别和多事件拆分。`;
 

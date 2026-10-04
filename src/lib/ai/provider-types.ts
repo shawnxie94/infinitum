@@ -114,7 +114,7 @@ export type EntityAliasCheckDecision = {
 export type AiProvider = {
   understandItem(
     inputText: string,
-    metadata: { title: string; sourceName?: string; translateTitle: boolean },
+    metadata: { title: string; sourceName?: string; publishedAt?: string; translateTitle: boolean },
   ): Promise<ItemUnderstandingResult>;
   summarizeCluster(inputText: string, metadata: { title: string }): Promise<string>;
   matchClusterCandidate(

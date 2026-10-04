@@ -78,6 +78,7 @@ async function resolveItemUnderstanding(
   return aiProvider.understandItem(input, {
     title: item.originalTitle,
     sourceName: item.source.name,
+    publishedAt: item.publishedAt.toISOString().slice(0, 10),
     translateTitle: shouldTranslateTitle(item.originalTitle),
   });
 }
@@ -1041,6 +1042,7 @@ async function reparseAggregationCandidate(
       {
         title: candidate.originalTitle,
         sourceName: candidate.source.name,
+        publishedAt: candidate.publishedAt.toISOString().slice(0, 10),
         translateTitle: shouldTranslateTitle(candidate.originalTitle),
       },
     );

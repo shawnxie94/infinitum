@@ -596,6 +596,7 @@ export async function processFeedItem({
       const understanding = await aiProvider.understandItem(understandingInput, {
         title: originalTitle,
         sourceName,
+        publishedAt: resolvedPublishedAt.value.toISOString().slice(0, 10),
         translateTitle,
       });
       addElapsed(timings, "analysisMs", understandingStartedAt);

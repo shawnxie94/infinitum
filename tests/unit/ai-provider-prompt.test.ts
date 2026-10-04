@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createAiProvider } from "@/lib/ai/provider-next";
 import { makeClusterMergePairRef } from "@/lib/ai/protocols/cluster";
 import { createAiSdkTransport, normalizeUsage } from "@infinitum/ai/provider/transports";
-import { ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE } from "@/config/prompts";
+import {
+  DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  ITEM_UNDERSTANDING_FIXED_OUTPUT_RULE,
+  PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+  PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
+} from "@/config/prompts";
 import {
   DEFAULT_QUALITY_RUBRIC,
   stringifyQualityRubric,
@@ -329,5 +334,95 @@ describe("ai provider quality rubric integration", () => {
     expect(request.messages?.[1]?.content).not.toContain('"pairsJson"');
     expect(request.temperature).toBe(0);
     expect(request.max_tokens).toBe(2000);
+  });
+});
+
+/**
+ * 事件时间年份锚点：模型必须拿到 publishedAt，且默认提示词要写明取值规则。
+ * 缺这两样时，模型遇到正文里的裸「X月X日」只能自造年份，实测稳定落在
+ * 知识边界（2025），把当天新闻算成一年前。
+ */
+describe("item 理解的事件时间锚点", () => {
+  it("把 publishedAt 透传进用户内容", async () => {
+    const create = mockModelResponse(buildUnderstandingContent());
+    const provider = createAiProvider(
+      modelApiConfig,
+      { itemUnderstanding: { systemPrompt: "contract", templateJson: null, temperature: 0.7 } },
+      { chat: { completions: { create } } },
+    );
+
+    await provider.understandItem("正文", {
+      title: "标题",
+      sourceName: "来源",
+      publishedAt: "2026-10-04",
+      translateTitle: false,
+    });
+
+    const userPrompt = create.mock.calls[0]?.[0]?.messages?.[1]?.content as string;
+    expect(userPrompt).toContain('"publishedAt":"2026-10-04"');
+  });
+
+  it("未提供 publishedAt 时显式标注未知，不静默省略", async () => {
+    const create = mockModelResponse(buildUnderstandingContent());
+    const provider = createAiProvider(
+      modelApiConfig,
+      { itemUnderstanding: { systemPrompt: "contract", templateJson: null, temperature: 0.7 } },
+      { chat: { completions: { create } } },
+    );
+
+    await provider.understandItem("正文", { title: "标题", translateTitle: false });
+
+    const userPrompt = create.mock.calls[0]?.[0]?.messages?.[1]?.content as string;
+    expect(userPrompt).toContain('"publishedAt":"未知"');
+  });
+
+  it("默认提示词写明 eventDate 的年份以 publishedAt 为准", async () => {
+    const create = mockModelResponse(buildUnderstandingContent());
+    const provider = createAiProvider(
+      modelApiConfig,
+      {},
+      { chat: { completions: { create } } },
+    );
+
+    await provider.understandItem("正文", {
+      title: "标题",
+      sourceName: "来源",
+      publishedAt: "2026-10-04",
+      translateTitle: false,
+    });
+
+    const systemPrompt = create.mock.calls[0]?.[0]?.messages?.[0]?.content as string;
+    expect(systemPrompt).toContain("以 publishedAt 的年份为准");
+    expect(systemPrompt).toContain("不要用你记忆中的年份补全");
+  });
+});
+
+describe("默认提示词的存量升级覆盖", () => {
+  it("当前默认包含事件时间规则", () => {
+    expect(DEFAULT_ITEM_UNDERSTANDING_PROMPT).toContain("publishedAt");
+  });
+
+  it("去掉事件时间规则的上一版被纳入变体，可幂等升级", () => {
+    const withoutRule = PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS.find(
+      (variant) => !variant.includes("publishedAt"),
+    );
+
+    expect(withoutRule).toBeDefined();
+    expect(withoutRule).not.toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
+  });
+
+  it("v2 存量文本（maxEvents 仍为占位符）被纳入变体", () => {
+    expect(PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT).toContain("{{maxEvents}}");
+    expect(PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT).not.toContain("qualityBreakdown");
+    expect(PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT).toContain("无法稳定判断的字段返回 null");
+    expect(PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS).toContain(
+      PREV2_DEFAULT_ITEM_UNDERSTANDING_PROMPT,
+    );
+  });
+
+  it("所有变体都不等于当前默认，避免自匹配空转", () => {
+    for (const variant of PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS) {
+      expect(variant).not.toBe(DEFAULT_ITEM_UNDERSTANDING_PROMPT);
+    }
   });
 });

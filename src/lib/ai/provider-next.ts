@@ -276,6 +276,8 @@ export function createAiProvider(
       const userContent = buildAiUserContent(itemUnderstandingConfig.userInstruction, {
         title: metadata.title,
         sourceName: metadata.sourceName ?? "未知来源",
+        // 事件时间需要以发布时间为年份锚点：正文只给「X月X日」时模型无从推断年份。
+        publishedAt: metadata.publishedAt ?? "未知",
         translateTitle: metadata.translateTitle,
         inputText,
       });
