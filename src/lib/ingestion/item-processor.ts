@@ -626,6 +626,9 @@ export async function processFeedItem({
           publishedAtKnown: resolvedPublishedAt.known,
           restoredByAdminAt: existing?.restoredByAdminAt ?? null,
           referenceAt: new Date(),
+          contentText: [originalTitle, rssContent, rssExcerpt, fullText]
+            .filter(Boolean)
+            .join("\n"),
         });
         if (staleness.stale) {
           moderationStatus = "filtered";

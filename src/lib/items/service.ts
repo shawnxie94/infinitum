@@ -601,6 +601,9 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
         publishedAtKnown: item.publishedAtKnown,
         restoredByAdminAt: item.restoredByAdminAt,
         referenceAt: new Date(),
+        contentText: [item.originalTitle, item.rssContent, item.rssExcerpt, item.fullText]
+          .filter(Boolean)
+          .join("\n"),
       })
     : null;
   const moderationStatus = staleness?.stale ? "filtered" : modelModerationStatus;

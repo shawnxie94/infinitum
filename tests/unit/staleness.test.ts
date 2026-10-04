@@ -9,19 +9,34 @@ import {
 describe("evaluateStaleContent", () => {
   const now = new Date("2026-10-04T00:00:00.000Z");
 
-  it("事件时间早于基准超过阈值时判为过时内容", () => {
+  it("事件时间早于基准超过阈值且年份有佐证时判为过时内容", () => {
     const result = evaluateStaleContent({
       eventDate: "2026-09-01",
       publishedAt: now,
       publishedAtKnown: true,
       restoredByAdminAt: null,
       referenceAt: now,
+      contentText: "该项目于 2026 年 9 月 1 日开源，本文跟进。",
     });
 
     expect(result.stale).toBe(true);
     expect(result.reason).toBe(STALE_CONTENT_FILTER_REASON);
     expect(result.detail).toContain("2026-09-01");
     expect(result.ageDays).toBe(33);
+  });
+
+  it("事件时间超阈值但正文无年份佐证时不过滤", () => {
+    const result = evaluateStaleContent({
+      eventDate: "2026-09-01",
+      publishedAt: now,
+      publishedAtKnown: true,
+      restoredByAdminAt: null,
+      referenceAt: now,
+      contentText: "10 月 1 日，某公司发布了新模型。",
+    });
+
+    expect(result.stale).toBe(false);
+    expect(result.skipReason).toBe("year_unverified");
   });
 
   it("事件时间在阈值内不过滤", () => {
@@ -97,6 +112,7 @@ describe("evaluateStaleContent", () => {
       publishedAtKnown: false,
       restoredByAdminAt: null,
       referenceAt: now,
+      contentText: "该项目于 2026 年 9 月 1 日开源。",
     });
 
     expect(result.stale).toBe(true);
@@ -140,5 +156,100 @@ describe("evaluateStaleContent", () => {
 
     expect(result.stale).toBe(false);
     expect(result.baseline).toBeNull();
+  });
+});
+
+/**
+ * 线上真实回归：2026-10-04 部署后，极客公园 4 条当天新文章被误判为 stale_content。
+ * 根因是模型把正文里的裸月日（如「北京时间 10 月 3 日」电头）当成事件时间，
+ * 并凭空补了 2025 年（实测 4 条正文均不含 "2025"），导致偏差整年。
+ * 以下正文节选取自真实库数据。
+ */
+describe("evaluateStaleContent 线上误杀回归", () => {
+  const realFalsePositives: Array<{
+    id: string;
+    eventDate: string;
+    publishedAt: string;
+    fragment: string;
+    correctGapDays: number;
+  }> = [
+    {
+      id: "cmutunfcp00dhlg01okulak8y",
+      eventDate: "2025-10-01",
+      publishedAt: "2026-10-04T05:27:14.000Z",
+      fragment:
+        "10 月 1 日，美国 AI 视频公司 Tavus 发布了一个名为 Griffin 的模型，并把它定义为全球第一个「人类交互模型」。",
+      correctGapDays: 3,
+    },
+    {
+      id: "cmutunosh00dllg01gsfru1ap",
+      eventDate: "2025-10-01",
+      publishedAt: "2026-10-04T05:16:11.000Z",
+      fragment:
+        "这一切的源头，是 Claude Code 负责人 Boris Cherny 9 月中旬在 GitHub 上放出的一套机制，名字就叫 Mods。当地时间 10 月 1 日，它正式写进更新日志，默认开启。",
+      correctGapDays: 3,
+    },
+    {
+      id: "cmutuntgc00dnlg01c7h82t26",
+      eventDate: "2025-09-30",
+      publishedAt: "2026-10-04T11:41:48.000Z",
+      fragment:
+        "9 月 15 日，前 OpenAI 研究员 Diogo Almeida 创办的 TypeSafe AI 发布了 Jev。这款模型不写一个字，只做判断。",
+      correctGapDays: 19,
+    },
+    {
+      id: "cmutuo2qg00dplg01gcin02hy",
+      eventDate: "2025-10-03",
+      publishedAt: "2026-10-04T00:33:38.000Z",
+      fragment:
+        "北京时间 10 月 3 日，彭博社报道称，苹果公司表示，AT&T 的问题已导致部分 iPhone 18 Pro Max 用户无法拨打电话。",
+      correctGapDays: 1,
+    },
+  ];
+
+  for (const item of realFalsePositives) {
+    it(`不误杀 ${item.id}：模型补的年份在正文中无佐证`, () => {
+      const result = evaluateStaleContent({
+        eventDate: item.eventDate,
+        publishedAt: new Date(item.publishedAt),
+        publishedAtKnown: true,
+        restoredByAdminAt: null,
+        referenceAt: new Date(item.publishedAt),
+        contentText: item.fragment,
+      });
+
+      expect(result.stale).toBe(false);
+      expect(result.skipReason).toBe("year_unverified");
+    });
+  }
+
+  it("正文含该年份的带年份日期时仍然判定为过时", () => {
+    const result = evaluateStaleContent({
+      eventDate: "2024-03-15",
+      publishedAt: new Date("2026-10-04T00:00:00.000Z"),
+      publishedAtKnown: true,
+      restoredByAdminAt: null,
+      referenceAt: new Date("2026-10-04T00:00:00.000Z"),
+      // 正文明确写了 2024 年 3 月，年份有佐证
+      contentText: "该产品于 2024 年 3 月 15 日首次发布，本文回顾其演进。",
+    });
+
+    expect(result.stale).toBe(true);
+    expect(result.reason).toBe("stale_event_content");
+  });
+
+  it("正文佐证年份但只有电头日期时按电头放行", () => {
+    const result = evaluateStaleContent({
+      eventDate: "2024-03-15",
+      publishedAt: new Date("2026-10-04T00:00:00.000Z"),
+      publishedAtKnown: true,
+      restoredByAdminAt: null,
+      referenceAt: new Date("2026-10-04T00:00:00.000Z"),
+      // 年份有佐证，但事件日期线索是电头
+      contentText: "2024 年行业回顾。北京时间 10 月 3 日消息，公司今日宣布调整。",
+    });
+
+    expect(result.stale).toBe(false);
+    expect(result.skipReason).toBe("dateline_only");
   });
 });
