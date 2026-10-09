@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { ToastProvider } from "@/components/ui/toast";
 import {
   buildOrganizationJsonLd,
@@ -76,7 +77,9 @@ export default function RootLayout({
         <link rel="stylesheet" href="/fonts/lxgw/index.css" />
       </head>
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <AntdRegistry>
+          <ToastProvider>{children}</ToastProvider>
+        </AntdRegistry>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(buildOrganizationJsonLd()) }}
