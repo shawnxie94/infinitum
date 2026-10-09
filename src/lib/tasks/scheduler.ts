@@ -7,6 +7,9 @@ export const DEFAULT_SCHEDULE_CRON_EXPRESSION = "0 * * * *";
 export const DEFAULT_SOURCE_CONCURRENCY = 2;
 export const DEFAULT_FULL_TEXT_FETCH_THRESHOLD = 80;
 export const DEFAULT_PER_SOURCE_ITEM_LIMIT = 20;
+export const DEFAULT_PROCESSING_WINDOW_DAYS = 14;
+export const MIN_PROCESSING_WINDOW_DAYS = 1;
+export const MAX_PROCESSING_WINDOW_DAYS = 3650;
 export const DEFAULT_AGGREGATION_SPLIT_MAX_EVENTS = 20;
 export const DEFAULT_DAILY_REPORT_CANDIDATE_LIMIT = 120;
 export const DEFAULT_DAILY_REPORT_OFFSET_DAYS = 0;
@@ -85,6 +88,11 @@ export function normalizeScheduleInput(input: ScheduleUpdateInput): ScheduleUpda
     );
   }
 
+  const processingWindowDays = input.processingWindowDays ?? DEFAULT_PROCESSING_WINDOW_DAYS;
+  if (!Number.isInteger(processingWindowDays) || processingWindowDays < MIN_PROCESSING_WINDOW_DAYS || processingWindowDays > MAX_PROCESSING_WINDOW_DAYS) {
+    throw new Error(`Processing window days must be an integer between ${MIN_PROCESSING_WINDOW_DAYS} and ${MAX_PROCESSING_WINDOW_DAYS}.`);
+  }
+
   const aggregationSplitMaxEvents =
     input.aggregationSplitMaxEvents ?? DEFAULT_AGGREGATION_SPLIT_MAX_EVENTS;
 
@@ -106,6 +114,7 @@ export function normalizeScheduleInput(input: ScheduleUpdateInput): ScheduleUpda
     perSourceItemLimit: input.perSourceItemLimit,
     aggregationSplitMaxEvents,
     processingStartAt: normalizeProcessingStartAt(input.processingStartAt ?? null),
+    processingWindowDays,
   };
 }
 

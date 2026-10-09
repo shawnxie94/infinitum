@@ -35,6 +35,7 @@ export type StaleContentInput = {
   restoredByAdminAt: Date | null | undefined;
   /** 入库时刻，用于 publishedAt 未知时兜底。 */
   referenceAt?: Date | null;
+  eventDateCutoff?: Date | null;
   /** 标题与正文全文，用于报道日期识别和年份佐证。 */
   contentText?: string | null;
 };
@@ -137,7 +138,9 @@ export function evaluateStaleContent(input: StaleContentInput): StaleContentResu
   const baselineLabel = usePublishedAt ? "发布时间" : "入库时间";
   const baselineIso = baseline.toISOString().slice(0, 10);
 
-  if (ageDays <= STALE_EVENT_MAX_AGE_DAYS) {
+  if (input.eventDateCutoff
+    ? eventDate.getTime() >= Date.UTC(input.eventDateCutoff.getUTCFullYear(), input.eventDateCutoff.getUTCMonth(), input.eventDateCutoff.getUTCDate())
+    : ageDays <= STALE_EVENT_MAX_AGE_DAYS) {
     return skip("within_threshold", ageDays, baselineLabel);
   }
 
@@ -158,7 +161,7 @@ export function evaluateStaleContent(input: StaleContentInput): StaleContentResu
     reason: STALE_CONTENT_FILTER_REASON,
     detail:
       `事件时间 ${input.eventDate?.trim()} 距${baselineLabel} ${baselineIso} 已有 ${ageDays} 天，` +
-      `超过时效阈值 ${STALE_EVENT_MAX_AGE_DAYS} 天，且该年份在正文中得到佐证，按旧内容重新推送过滤。`,
+      `${input.eventDateCutoff ? `早于动态截止日期 ${input.eventDateCutoff.toISOString().slice(0, 10)}` : `超过时效阈值 ${STALE_EVENT_MAX_AGE_DAYS} 天`}，且该年份在正文中得到佐证，按旧内容重新推送过滤。`,
     ageDays,
     baseline: baselineLabel,
     skipReason: null,

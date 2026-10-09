@@ -21,10 +21,10 @@ import { TextArea } from "@/components/ui/text-area";
 import { TextInput } from "@/components/ui/text-input";
 import { useToast } from "@/components/ui/toast";
 import type { AdminEventBriefingChannel, AdminSettingsSnapshot, PromptConfigType } from "@/lib/settings/types";
-import { DEFAULT_SCHEDULE_TIMEZONE, DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS, MAX_CLEANUP_RETENTION_DAYS, MAX_AGGREGATION_SPLIT_MAX_EVENTS, MAX_DAILY_REPORT_OFFSET_DAYS, MAX_FULL_TEXT_FETCH_THRESHOLD, MAX_SOURCE_CONCURRENCY, MIN_CLEANUP_RETENTION_DAYS, MIN_AGGREGATION_SPLIT_MAX_EVENTS, MIN_DAILY_REPORT_OFFSET_DAYS, MIN_FULL_TEXT_FETCH_THRESHOLD, MIN_SOURCE_CONCURRENCY, MAX_PER_SOURCE_ITEM_LIMIT, MAX_DAILY_REPORT_CANDIDATE_LIMIT, MIN_DAILY_REPORT_CANDIDATE_LIMIT, MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS, MIN_PER_SOURCE_ITEM_LIMIT } from "@/lib/tasks/scheduler";
+import { DEFAULT_SCHEDULE_TIMEZONE, DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS, MAX_CLEANUP_RETENTION_DAYS, MAX_AGGREGATION_SPLIT_MAX_EVENTS, MAX_DAILY_REPORT_OFFSET_DAYS, MAX_FULL_TEXT_FETCH_THRESHOLD, MAX_SOURCE_CONCURRENCY, MIN_CLEANUP_RETENTION_DAYS, MIN_AGGREGATION_SPLIT_MAX_EVENTS, MIN_DAILY_REPORT_OFFSET_DAYS, MIN_FULL_TEXT_FETCH_THRESHOLD, MIN_SOURCE_CONCURRENCY, MAX_PER_SOURCE_ITEM_LIMIT, MAX_DAILY_REPORT_CANDIDATE_LIMIT, MIN_DAILY_REPORT_CANDIDATE_LIMIT, MIN_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS, MIN_PER_SOURCE_ITEM_LIMIT, MIN_PROCESSING_WINDOW_DAYS, MAX_PROCESSING_WINDOW_DAYS } from "@/lib/tasks/scheduler";
 import { cx } from "@/lib/ui/cx";
 
-import { appendMissingOptions, areEventBriefingChannelsEqual, areStringArraysEqual, checkboxInputClassName, createEventBriefingChannel, DEFAULT_DAILY_REPORT_CHANNEL_ID, downloadTextFile, escapeXml, formatSourceUpdateTime, getInitialSourceFilterNumber, getInitialSourceFilterValue, HEADER_LINK_REL_DEFAULT, HEADER_LINK_REL_SPONSORED, headerLinkRelOptions, normalizeHeaderLinkRelOption, normalizeSourceEnabledFilter, refreshPage, sourceFilterQueryKeys, toDateTimeLocalValue, toIsoDateTimeOrNull, type AdminSettingsSection } from "@/components/admin/admin-settings-panel.helpers";
+import { appendMissingOptions, areEventBriefingChannelsEqual, areStringArraysEqual, checkboxInputClassName, createEventBriefingChannel, DEFAULT_DAILY_REPORT_CHANNEL_ID, downloadTextFile, escapeXml, formatSourceUpdateTime, getInitialSourceFilterNumber, getInitialSourceFilterValue, HEADER_LINK_REL_DEFAULT, HEADER_LINK_REL_SPONSORED, headerLinkRelOptions, normalizeHeaderLinkRelOption, normalizeSourceEnabledFilter, refreshPage, sourceFilterQueryKeys, type AdminSettingsSection } from "@/components/admin/admin-settings-panel.helpers";
 import { AdminWorkspaceSidebar, GroupRow, HeaderLinkRow } from "@/components/admin/admin-settings-panel-rows";
 type AdminSettingsPanelProps = {
   initialSettings: AdminSettingsSnapshot;
@@ -110,8 +110,8 @@ export function AdminSettingsPanel({
     useState(String(initialSettings.taskSchedule.perSourceItemLimit));
   const [taskScheduleAggregationSplitMaxEvents, setTaskScheduleAggregationSplitMaxEvents] =
     useState(String(initialSettings.taskSchedule.aggregationSplitMaxEvents));
-  const [taskScheduleProcessingStartAt, setTaskScheduleProcessingStartAt] = useState(
-    toDateTimeLocalValue(initialSettings.taskSchedule.processingStartAt),
+  const [taskScheduleProcessingWindowDays, setTaskScheduleProcessingWindowDays] = useState(
+    String(initialSettings.taskSchedule.processingWindowDays ?? 14),
   );
   const [taskScheduleSnapshot, setTaskScheduleSnapshot] = useState(
     initialSettings.taskSchedule,
@@ -858,6 +858,7 @@ export function AdminSettingsPanel({
       taskScheduleAggregationSplitMaxEvents.trim(),
       10,
     );
+    const parsedProcessingWindowDays = Number(taskScheduleProcessingWindowDays.trim());
 
     if (
       !Number.isInteger(parsedSourceConcurrency) ||
@@ -907,6 +908,18 @@ export function AdminSettingsPanel({
       return;
     }
 
+    if (
+      !Number.isInteger(parsedProcessingWindowDays) ||
+      parsedProcessingWindowDays < MIN_PROCESSING_WINDOW_DAYS ||
+      parsedProcessingWindowDays > MAX_PROCESSING_WINDOW_DAYS
+    ) {
+      showToast(
+        `处理时间窗需为 ${MIN_PROCESSING_WINDOW_DAYS}-${MAX_PROCESSING_WINDOW_DAYS} 的整数天。`,
+        "error",
+      );
+      return;
+    }
+
     startTransition(async () => {
       try {
         const schedule = await saveDefaultIngestionSchedule({
@@ -916,7 +929,7 @@ export function AdminSettingsPanel({
           fullTextFetchThreshold: parsedFullTextFetchThreshold,
           perSourceItemLimit: parsedPerSourceItemLimit,
           aggregationSplitMaxEvents: parsedAggregationSplitMaxEvents,
-          processingStartAt: toIsoDateTimeOrNull(taskScheduleProcessingStartAt),
+          processingWindowDays: parsedProcessingWindowDays,
         });
 
         setTaskScheduleSnapshot(schedule);
@@ -926,7 +939,7 @@ export function AdminSettingsPanel({
         setTaskScheduleFullTextFetchThreshold(String(schedule.fullTextFetchThreshold));
         setTaskSchedulePerSourceItemLimit(String(schedule.perSourceItemLimit));
         setTaskScheduleAggregationSplitMaxEvents(String(schedule.aggregationSplitMaxEvents));
-        setTaskScheduleProcessingStartAt(toDateTimeLocalValue(schedule.processingStartAt));
+        setTaskScheduleProcessingWindowDays(String(schedule.processingWindowDays ?? 14));
         showToast("任务配置已保存。", "success");
       } catch (error) {
         showToast(error instanceof Error ? error.message : "任务配置保存失败。", "error");
@@ -1177,7 +1190,7 @@ export function AdminSettingsPanel({
     taskScheduleFullTextFetchThreshold.trim() !== String(taskScheduleSnapshot.fullTextFetchThreshold) ||
     taskSchedulePerSourceItemLimit.trim() !== String(taskScheduleSnapshot.perSourceItemLimit) ||
     taskScheduleAggregationSplitMaxEvents.trim() !== String(taskScheduleSnapshot.aggregationSplitMaxEvents) ||
-    taskScheduleProcessingStartAt.trim() !== toDateTimeLocalValue(taskScheduleSnapshot.processingStartAt);
+    taskScheduleProcessingWindowDays.trim() !== String(taskScheduleSnapshot.processingWindowDays ?? 14);
   const contentExtractionIsDirty =
     (contentExtractionProvider === "jina") !== contentExtractionSnapshot.jinaEnabled ||
     contentExtractionBaseUrl.trim() !== contentExtractionSnapshot.jinaBaseUrl ||
@@ -2529,7 +2542,7 @@ export function AdminSettingsPanel({
               "space-y-6",
               activeSection !== "task-ingestion" ? "hidden" : "",
             )}>
-              {/* Row 1: 任务开关 + Cron 表达式 + 处理开始时间点 */}
+              {/* Row 1: 任务开关 + Cron 表达式 + 处理时间窗 */}
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="space-y-1.5">
                   <div className="block text-sm text-[var(--muted)]">任务开关</div>
@@ -2562,16 +2575,20 @@ export function AdminSettingsPanel({
 
                 <div className="space-y-1.5">
                   <label
-                    htmlFor="task-schedule-processing-start-at"
+                    htmlFor="task-schedule-processing-window-days"
                     className="block text-sm text-[var(--muted)]"
                   >
-                    处理开始时间点
+                    处理时间窗（天）
                   </label>
                   <TextInput
-                    id="task-schedule-processing-start-at"
-                    type="datetime-local"
-                    value={taskScheduleProcessingStartAt}
-                    onChange={(event) => setTaskScheduleProcessingStartAt(event.target.value)}
+                    id="task-schedule-processing-window-days"
+                    type="number"
+                    inputMode="numeric"
+                    min={MIN_PROCESSING_WINDOW_DAYS}
+                    max={MAX_PROCESSING_WINDOW_DAYS}
+                    step={1}
+                    value={taskScheduleProcessingWindowDays}
+                    onChange={(event) => setTaskScheduleProcessingWindowDays(event.target.value)}
                   />
                 </div>
               </div>

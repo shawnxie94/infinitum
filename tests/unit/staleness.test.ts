@@ -109,6 +109,21 @@ describe("evaluateStaleContent", () => {
     expect(result.stale).toBe(true);
   });
 
+  it("动态截止日期独立筛选事件时间并放行截止日及缺失证据", () => {
+    const common = {
+      publishedAt: now,
+      publishedAtKnown: true,
+      restoredByAdminAt: null,
+      referenceAt: now,
+      eventDateCutoff: new Date("2026-09-20T00:00:00.000Z"),
+      contentText: "2026 年 9 月 19 日发生的事件。",
+    };
+    expect(evaluateStaleContent({ ...common, eventDate: "2026-09-19" }).stale).toBe(true);
+    expect(evaluateStaleContent({ ...common, eventDate: "2026-09-20" }).stale).toBe(false);
+    expect(evaluateStaleContent({ ...common, eventDate: "2026-09-01", contentText: "旧事件" }).skipReason).toBe("year_unverified");
+    expect(evaluateStaleContent({ ...common, eventDate: null }).skipReason).toBe("no_event_date");
+  });
+
   it("事件时间为空时不过滤", () => {
     const result = evaluateStaleContent({
       eventDate: null,

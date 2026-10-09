@@ -378,6 +378,7 @@ export function toTaskScheduleSnapshot(schedule: {
   dailyReportChannelIdsJson?: string | null;
   cleanupRetentionDays: number | null;
   processingStartAt: Date | null;
+  processingWindowDays: number;
   timezone: string;
   lastHeartbeatAt: Date | null;
   lastRunStartedAt: Date | null;
@@ -401,6 +402,7 @@ export function toTaskScheduleSnapshot(schedule: {
     dailyReportChannelIds: parseDailyReportChannelIdsJson(schedule.dailyReportChannelIdsJson),
     cleanupRetentionDays: schedule.cleanupRetentionDays ?? DEFAULT_CLEANUP_RETENTION_DAYS,
     processingStartAt: schedule.processingStartAt?.toISOString() ?? null,
+    processingWindowDays: schedule.processingWindowDays ?? 14,
     timezone: schedule.timezone,
     lastHeartbeatAt: schedule.lastHeartbeatAt?.toISOString() ?? null,
     lastRunStartedAt: schedule.lastRunStartedAt?.toISOString() ?? null,
@@ -423,6 +425,7 @@ export async function updateDefaultIngestionSchedule(input: {
   perSourceItemLimit: number;
   aggregationSplitMaxEvents?: number;
   processingStartAt?: string | null;
+  processingWindowDays?: number;
 }) {
   const normalizedInput = normalizeScheduleInput(input);
   const currentSchedule = await ensureDefaultIngestionSchedule();
@@ -443,7 +446,8 @@ export async function updateDefaultIngestionSchedule(input: {
       fullTextFetchThreshold: normalizedInput.fullTextFetchThreshold,
       perSourceItemLimit: normalizedInput.perSourceItemLimit,
       aggregationSplitMaxEvents: normalizedInput.aggregationSplitMaxEvents,
-      processingStartAt: normalizedInput.processingStartAt ? new Date(normalizedInput.processingStartAt) : null,
+      processingStartAt: new Date(now.getTime() - normalizedInput.processingWindowDays! * 24 * 60 * 60 * 1000),
+      processingWindowDays: normalizedInput.processingWindowDays!,
       nextRunAt,
     },
   });

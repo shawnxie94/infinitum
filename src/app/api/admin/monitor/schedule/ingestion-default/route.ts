@@ -11,6 +11,8 @@ import {
   MIN_AGGREGATION_SPLIT_MAX_EVENTS,
   MAX_PER_SOURCE_ITEM_LIMIT,
   MIN_PER_SOURCE_ITEM_LIMIT,
+  MIN_PROCESSING_WINDOW_DAYS,
+  MAX_PROCESSING_WINDOW_DAYS,
 } from "@/lib/tasks/scheduler";
 import { toTaskScheduleSnapshot, updateDefaultIngestionSchedule } from "@/lib/tasks/service";
 
@@ -30,7 +32,7 @@ const scheduleUpdateSchema = z.object({
     .min(MIN_AGGREGATION_SPLIT_MAX_EVENTS)
     .max(MAX_AGGREGATION_SPLIT_MAX_EVENTS)
     .optional(),
-  processingStartAt: z.string().trim().nullable().optional().default(null),
+  processingWindowDays: z.number().int().min(MIN_PROCESSING_WINDOW_DAYS).max(MAX_PROCESSING_WINDOW_DAYS),
 });
 
 export async function PATCH(request: Request) {

@@ -141,7 +141,7 @@ export type AdminSettingsSnapshot = {
     dailyReportRecentTopicLookbackDays?: number;
     dailyReportAutoPublish: boolean;
     dailyReportChannelIds?: string[];
-    processingStartAt?: string | null;
+    processingWindowDays?: number;
     cleanupRetentionDays: number;
     timezone: string;
     lastHeartbeatAt: string | null;

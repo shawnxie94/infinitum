@@ -444,6 +444,7 @@ model TaskSchedule {
   dailyReportChannelIdsJson String                @default("[\"important\"]")
   cleanupRetentionDays      Int                   @default(365)
   processingStartAt         DateTime?
+  processingWindowDays      Int                   @default(14)
   timezone                  String
   lastHeartbeatAt           DateTime?
   lastRunStartedAt          DateTime?

@@ -14,6 +14,7 @@ import {
   executeIngestionWorkflowStage,
   findOrCreateIngestionFetchRun,
   mergeIngestionStageAiBreakdown,
+  resolveIngestionProcessingStartAt,
   type IngestionWorkflowPayload,
 } from "@/lib/ingestion/workflow-stages";
 import {
@@ -95,6 +96,17 @@ async function runIngestionWorkflowStagesForTest(
 }
 
 describe("ingestion workflow stages", () => {
+  it("recovers missing or invalid processing cutoffs from the persisted run time", () => {
+    const referenceAt = new Date("2026-10-08T12:00:00.000Z");
+    const expected = new Date("2026-09-28T12:00:00.000Z");
+
+    expect(resolveIngestionProcessingStartAt(undefined, referenceAt, 10)).toEqual(expected);
+    expect(resolveIngestionProcessingStartAt("invalid", referenceAt, 10)).toEqual(expected);
+    expect(resolveIngestionProcessingStartAt("2026-10-01T12:00:00.000Z", referenceAt, 10)).toEqual(
+      new Date("2026-10-01T12:00:00.000Z"),
+    );
+  });
+
   it.each([
     ["source fetch failures alone", { summaryFailed: 0, analysisFailed: 0, aggregationParseFailed: 0, skippedIncompleteSignature: 0 }, false],
     ["summary failures", { summaryFailed: 1, analysisFailed: 0, aggregationParseFailed: 0, skippedIncompleteSignature: 0 }, true],
@@ -718,7 +730,7 @@ describe("ingestion workflow stages", () => {
     expect(storedItems[0]?.originalUrl).toBe("https://example.com/posts/fresh");
   });
 
-  it("filters the processing window before applying the per-source item limit", async () => {
+  it("filters known pre-cutoff publications while allowing equality and unknown dates", async () => {
     const parser = {
       parseURL: vi.fn().mockResolvedValue({
         items: [
@@ -729,10 +741,15 @@ describe("ingestion workflow stages", () => {
             contentSnippet: "Old summary",
           },
           {
-            title: "Fresh article after configured processing start",
+            title: "Fresh article at configured processing start",
             link: "https://example.com/posts/fresh-after-limit",
-            isoDate: "2026-04-10T10:00:00.000Z",
+            isoDate: "2026-04-10T09:00:00.000Z",
             contentSnippet: "Fresh summary",
+          },
+          {
+            title: "Article with unknown publication date",
+            link: "https://example.com/posts/unknown-after-limit",
+            contentSnippet: "Unknown summary",
           },
         ],
       }),
@@ -751,13 +768,16 @@ describe("ingestion workflow stages", () => {
       }],
       blacklist: [],
       processingStartAt: new Date("2026-04-10T09:00:00.000Z"),
-      perSourceItemLimit: 1,
+      perSourceItemLimit: 10,
       now: new Date("2026-04-10T10:30:00.000Z"),
     });
 
     const storedItems = await prisma.item.findMany({ orderBy: { createdAt: "asc" } });
-    expect(storedItems).toHaveLength(1);
-    expect(storedItems[0]?.originalUrl).toBe("https://example.com/posts/fresh-after-limit");
+    expect(storedItems).toHaveLength(2);
+    expect(storedItems.map((item) => item.originalUrl)).toEqual(expect.arrayContaining([
+      "https://example.com/posts/fresh-after-limit",
+      "https://example.com/posts/unknown-after-limit",
+    ]));
   });
 
   it("applies an independent feed scan cap before the per-source processing limit", async () => {

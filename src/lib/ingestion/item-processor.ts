@@ -2,11 +2,14 @@ import type { Item } from "@prisma/client";
 
 import { AGGREGATION_PARSE_STATUS, RETRIABLE_AGGREGATION_PARSE_STATUSES } from "@/lib/aggregation/status";
 import { persistAggregationChildItems } from "@/lib/aggregation/persist";
+import { filterStaleAggregationChildren } from "@/lib/aggregation/staleness";
 import { normalizeStoredSummary } from "@/lib/ai/summary-quality";
 import type { AiEventSignature } from "@/lib/ai/provider-types";
 import type { ClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
-import { assignItemToCluster } from "@/lib/clusters/service";
+import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
+import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
+import { invalidateFeedCache } from "@/lib/feed/cache";
 import {
   findExistingItem,
   upsertItem,
@@ -326,6 +329,7 @@ export async function processFeedItem({
   clusterAssignmentCoordinator,
   fullTextFetchThreshold,
   contentExtraction,
+  processingStartAt,
   now,
   signal,
 }: {
@@ -343,6 +347,7 @@ export async function processFeedItem({
   clusterAssignmentCoordinator: ClusterAssignmentCoordinator;
   fullTextFetchThreshold: number;
   contentExtraction: RunIngestionOptions["contentExtraction"];
+  processingStartAt?: Date | null;
   now: Date;
   signal?: AbortSignal;
 }): Promise<ProcessedItemRecord | null> {
@@ -412,6 +417,7 @@ export async function processFeedItem({
   let aggregationParsed = false;
   let aggregationParseFailed = false;
   let aggregationEventCount = 0;
+  let aggregationChildrenEvaluated = false;
   const aggregationChildClusterIds = new Set<string>();
   const clusterAssignmentMetrics: NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["clusterAssignment"]> = {
     exactMatch: 0,
@@ -434,6 +440,22 @@ export async function processFeedItem({
   const finalizeTimings = () => {
     timings.totalMs = Date.now() - processingStartedAt;
     return timings;
+  };
+  const evaluateAndRefreshAggregationChildren = async (parentItemId: string) => {
+    const staleChildren = await filterStaleAggregationChildren({
+      parentItemId,
+      referenceAt: now,
+      eventDateCutoff: processingStartAt,
+    });
+    aggregationChildrenEvaluated = true;
+    for (const clusterId of staleChildren.clusterIds) {
+      aggregationChildClusterIds.add(clusterId);
+      await recomputeCluster(clusterId, aiProvider);
+    }
+    if (staleChildren.filteredCount > 0) {
+      invalidateFeedCache();
+      invalidateDailyReportCache();
+    }
   };
   const contentForFullTextDecision = fullText || rssContent || rssExcerpt || "";
   const canReuseExistingByUrlResult = Boolean(
@@ -497,6 +519,9 @@ export async function processFeedItem({
     );
     addElapsed(timings, "dbWriteMs", dbWriteStartedAt);
     await replaceItemEntitiesSafely(stored.id, [], issues);
+    if (hasActiveSplitChildren) {
+      await evaluateAndRefreshAggregationChildren(stored.id);
+    }
 
     return {
       id: stored.id,
@@ -513,6 +538,9 @@ export async function processFeedItem({
 
   if (canReuseExistingByUrlResult && existing) {
     const stored = existing;
+    if (hasActiveSplitChildren) {
+      await evaluateAndRefreshAggregationChildren(stored.id);
+    }
 
     return {
       id: stored.id,
@@ -627,6 +655,7 @@ export async function processFeedItem({
           publishedAtKnown: resolvedPublishedAt.known,
           restoredByAdminAt: existing?.restoredByAdminAt ?? null,
           referenceAt: new Date(),
+          eventDateCutoff: processingStartAt,
           contentText: [originalTitle, rssContent, rssExcerpt, fullText]
             .filter(Boolean)
             .join("\n"),
@@ -751,6 +780,8 @@ export async function processFeedItem({
           }
         }
 
+        await evaluateAndRefreshAggregationChildren(preUpsert.id);
+
         qualityScore = Math.max(qualityScore, ...events.map((event) => event.qualityScore));
         qualityRationale = `聚合内容拆出 ${events.length} 条子事件`;
         aggregationParseStatus = AGGREGATION_PARSE_STATUS.parsed;
@@ -840,6 +871,10 @@ export async function processFeedItem({
     },
   );
   addElapsed(timings, "dbWriteMs", dbWriteStartedAt);
+
+  if (hasActiveSplitChildren && !aggregationChildrenEvaluated) {
+    await evaluateAndRefreshAggregationChildren(stored.id);
+  }
 
   if (!isAggregation) {
     await replaceItemEntitiesSafely(

@@ -40,6 +40,7 @@ export type ScheduleUpdateInput = {
   perSourceItemLimit: number;
   aggregationSplitMaxEvents?: number;
   processingStartAt?: string | null;
+  processingWindowDays?: number;
 };
 
 export type EnqueueTaskRunInput = {
@@ -244,6 +245,7 @@ export type TaskScheduleSnapshot = {
   dailyReportChannelIds?: string[];
   cleanupRetentionDays: number;
   processingStartAt?: string | null;
+  processingWindowDays?: number;
   timezone: string;
   lastHeartbeatAt: string | null;
   lastRunStartedAt: string | null;

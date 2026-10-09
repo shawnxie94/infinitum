@@ -70,6 +70,70 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_merge_clean_pair_candidates') WHERE "name" IN ('recallSource', 'bm25Score', 'vectorSimilarity')`)).toBe("3");
   }, 30_000);
 
+  it("migrates legacy ISO and Prisma epoch-millisecond dates once, preserving legacy values", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-window-upgrade-"));
+    const dbPath = path.join(tempDir, "legacy-window.db");
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const isoPast = new Date(Date.now() - 2.1 * dayMs).toISOString();
+    const epochPast = Date.now() - 5.1 * dayMs;
+    const future = new Date(Date.now() + dayMs).toISOString();
+    const ancient = new Date(Date.now() - 4000 * dayMs).toISOString();
+    runSqlite(dbPath, `
+      ALTER TABLE "task_schedules" DROP COLUMN "processingWindowDays";
+      INSERT INTO "task_schedules" ("id", "key", "enabled", "cronExpression", "sourceConcurrency", "fullTextFetchThreshold", "perSourceItemLimit", "processingStartAt", "timezone", "nextRunAt", "updatedAt")
+      VALUES ('window-iso', 'window-iso', 0, '0 * * * *', 2, 80, 20, '${isoPast}', 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+             ('window-epoch', 'window-epoch', 0, '0 * * * *', 2, 80, 20, ${epochPast}, 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+             ('window-null', 'window-null', 0, '0 * * * *', 2, 80, 20, NULL, 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+             ('window-future', 'window-future', 0, '0 * * * *', 2, 80, 20, '${future}', 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+             ('window-ancient', 'window-ancient', 0, '0 * * * *', 2, 80, 20, '${ancient}', 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+             ('window-invalid', 'window-invalid', 0, '0 * * * *', 2, 80, 20, 'not-a-date', 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    const migrated = runSqlite(dbPath, `SELECT "id" || '|' || "processingWindowDays" || '|' || COALESCE(CAST("processingStartAt" AS TEXT), 'NULL') FROM "task_schedules" WHERE "id" LIKE 'window-%' ORDER BY "id"`);
+    expect(migrated).toContain(`window-iso|3|${isoPast}`);
+    expect(migrated).toContain(`window-epoch|6|${epochPast}`);
+    expect(migrated).toContain("window-null|14|NULL");
+    expect(migrated).toContain(`window-future|1|${future}`);
+    expect(migrated).toContain(`window-ancient|3650|${ancient}`);
+    expect(migrated).toContain("window-invalid|14|not-a-date");
+    expect(runSqlite(dbPath, `SELECT "status" FROM "_runtime_schema_migrations" WHERE "key"='task_schedules_processing_window_days_v1'`)).toBe("completed");
+
+    runSqlite(dbPath, `UPDATE "task_schedules" SET "processingWindowDays" = 30 WHERE "id" = 'window-iso';`);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT "processingWindowDays" || '|' || "processingStartAt" FROM "task_schedules" WHERE "id"='window-iso'`)).toBe(`30|${isoPast}`);
+  }, 30_000);
+
+  it("recovers a defaulted column whose epoch-millisecond backfill was interrupted", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-window-retry-"));
+    const dbPath = path.join(tempDir, "partial-window.db");
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    const legacyEpoch = Date.now() - 4.1 * 24 * 60 * 60 * 1000;
+    const selectedAt = Date.now();
+    const selectedLegacyEpoch = selectedAt - 14 * 24 * 60 * 60 * 1000;
+    runSqlite(dbPath, `
+      INSERT INTO "task_schedules" ("id", "key", "enabled", "cronExpression", "sourceConcurrency", "fullTextFetchThreshold", "perSourceItemLimit", "processingStartAt", "processingWindowDays", "timezone", "nextRunAt", "updatedAt")
+      VALUES ('partial-window', 'partial-window', 0, '0 * * * *', 2, 80, 20, ${legacyEpoch}, 14, 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+             ('selected-14', 'selected-14', 0, '0 * * * *', 2, 80, 20, ${selectedLegacyEpoch}, 14, 'UTC', ${selectedAt}, ${selectedAt});
+    `);
+
+    // Simulates the old partial upgrade: the additive column/default survived, but no completion marker/backfill did.
+    expect(runSqlite(dbPath, `SELECT "status" FROM "_runtime_schema_migrations" WHERE "key"='task_schedules_processing_window_days_v1'`)).toBe("");
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT "processingWindowDays" FROM "task_schedules" WHERE "id"='partial-window'`)).toBe("5");
+    expect(runSqlite(dbPath, `SELECT "status" FROM "_runtime_schema_migrations" WHERE "key"='task_schedules_processing_window_days_v1'`)).toBe("completed");
+    expect(runSqlite(dbPath, `SELECT "processingWindowDays" || '|' || "processingStartAt" FROM "task_schedules" WHERE "id"='selected-14'`)).toBe(`14|${selectedLegacyEpoch}`);
+
+    runSqlite(dbPath, `UPDATE "task_schedules" SET "processingWindowDays"=30 WHERE "id"='partial-window';`);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT "processingWindowDays" FROM "task_schedules" WHERE "id"='partial-window'`)).toBe("30");
+  }, 30_000);
+
   it("upgrades legacy merge candidate cache rows without inferring their provenance", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-merge-cache-upgrade-"));
     const dbPath = path.join(tempDir, "legacy-merge-cache.db");

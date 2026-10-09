@@ -193,7 +193,7 @@ export async function saveDefaultIngestionSchedule(input: {
   fullTextFetchThreshold: number;
   perSourceItemLimit: number;
   aggregationSplitMaxEvents: number;
-  processingStartAt: string | null;
+  processingWindowDays: number;
 }) {
   const payload = await requestAdminSettingsJson<SchedulePayload>(
     "/api/admin/monitor/schedule/ingestion-default",

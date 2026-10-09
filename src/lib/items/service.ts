@@ -14,6 +14,7 @@ import {
   reassignAggregationChildParentIfLinked,
   retireAggregationChildItems,
 } from "@/lib/aggregation/persist";
+import { filterStaleAggregationChildren } from "@/lib/aggregation/staleness";
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import { archiveItemDedupeHistories } from "@/lib/feed/repository";
@@ -646,6 +647,11 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
       include: { source: true },
     });
 
+    if (preserveSplit) {
+      const staleChildren = await filterStaleAggregationChildren({ parentItemId: item.id });
+      for (const clusterId of staleChildren.clusterIds) await recomputeCluster(clusterId, aiProvider);
+      if (staleChildren.filteredCount > 0) invalidateDailyReportCache();
+    }
     if (previousClusterId && understanding.diagnostics.summaryValid) {
       await recomputeCluster(previousClusterId, aiProvider);
     }
@@ -703,6 +709,10 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     });
 
     if (reparseResult.status === "parsed") {
+      const staleChildren = await filterStaleAggregationChildren({ parentItemId: item.id });
+      for (const clusterId of staleChildren.clusterIds) {
+        reparseResult.affectedClusterIds.add(clusterId);
+      }
       for (const clusterId of reparseResult.affectedClusterIds) {
         await recomputeCluster(clusterId, aiProvider);
       }
@@ -719,8 +729,6 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     }
 
     if (reparseResult.status === "failed") {
-      invalidateFeedCache();
-      invalidateDailyReportCache();
       if (hasActiveSplitChildren) {
         // The pre-reparse update marked the parent "detected"; when the re-split
         // itself fails, the existing children are still the active split, so
@@ -731,7 +739,11 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
             aggregationParseStatus: AGGREGATION_PARSE_STATUS.parsed,
           },
         });
+        const staleChildren = await filterStaleAggregationChildren({ parentItemId: item.id });
+        for (const clusterId of staleChildren.clusterIds) await recomputeCluster(clusterId, aiProvider);
       }
+      invalidateFeedCache();
+      invalidateDailyReportCache();
       const updated = await prisma.item.findUniqueOrThrow({
         where: { id: item.id },
         include: { source: true },
@@ -776,7 +788,10 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
       include: { source: true },
     });
     await replaceItemEntitiesSafely(updated.id, []);
+    const staleChildren = await filterStaleAggregationChildren({ parentItemId: item.id });
+    for (const clusterId of staleChildren.clusterIds) await recomputeCluster(clusterId, aiProvider);
     invalidateFeedCache();
+    if (staleChildren.filteredCount > 0) invalidateDailyReportCache();
     await syncItemProcessingRetryState(item.id);
 
     return { item: updated, failedFields };

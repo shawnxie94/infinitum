@@ -5,6 +5,7 @@ import { executeClusterMerge, recomputeCluster } from "@/lib/clusters/service";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { DEFAULT_PROCESSING_WINDOW_DAYS } from "@/lib/tasks/scheduler";
 import { scheduleDefaultFeedCacheWarm } from "@/lib/feed/warmup";
 import {
   completeFetchRun,
@@ -58,10 +59,23 @@ import {
 
 export type IngestionWorkflowStage = "source_sync" | "item_processing" | "cluster_merge" | "cluster_finalize";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function resolveIngestionProcessingStartAt(
+  value: string | undefined,
+  referenceAt: Date,
+  windowDays: number,
+): Date {
+  const persisted = value ? new Date(value) : null;
+  if (persisted && Number.isFinite(persisted.getTime())) return persisted;
+  return new Date(referenceAt.getTime() - windowDays * DAY_MS);
+}
+
 export type IngestionWorkflowPayload = {
   fetchRunId: string;
   trigger: "scheduled" | "manual";
   now: string;
+  processingStartAt: string;
   preparedItems: PreparedFeedItem[];
   sourceCount: number;
   sourceFailureCount: number;
@@ -275,7 +289,13 @@ async function runSourceSyncStage(
   const trigger = taskRun.triggerType === "scheduled" ? "scheduled" : "manual";
   const now = overrides?.now ?? new Date();
   const startedAt = now;
-  const options = await resolveRunOptions({ ...overrides, trigger, now });
+  const configuredSchedule = overrides?.processingStartAt ? null : await prisma.taskSchedule.findUnique({
+    where: { key: "ingestion_default" }, select: { processingWindowDays: true },
+  });
+  const processingStartAt = overrides?.processingStartAt ?? new Date(
+    now.getTime() - (configuredSchedule?.processingWindowDays ?? 14) * 24 * 60 * 60 * 1000,
+  );
+  const options = await resolveRunOptions({ ...overrides, processingStartAt, trigger, now });
   const run = await findOrCreateIngestionFetchRun(taskRun.id, trigger, now);
   const sources = await syncSources(options.sourceConfigs);
   const preparedItems: PreparedFeedItem[] = [];
@@ -366,6 +386,7 @@ async function runSourceSyncStage(
     fetchRunId: run.id,
     trigger,
     now: now.toISOString(),
+    processingStartAt: processingStartAt.toISOString(),
     preparedItems,
     sourceCount: sources.length,
     sourceFailureCount,
@@ -408,7 +429,25 @@ async function runItemProcessingStage(
   overrides?: Partial<RunIngestionOptions>,
 ): Promise<IngestionWorkflowPayload> {
   const startedAt = new Date();
-  const options = await resolveStageOptions(payload, { ...overrides, signal: context.signal });
+  let processingStartAt = overrides?.processingStartAt ?? (payload.processingStartAt
+    ? new Date(payload.processingStartAt)
+    : null);
+  if (!processingStartAt || !Number.isFinite(processingStartAt.getTime())) {
+    const configuredSchedule = await prisma.taskSchedule.findUnique({
+      where: { key: "ingestion_default" },
+      select: { processingWindowDays: true },
+    });
+    processingStartAt = resolveIngestionProcessingStartAt(
+      undefined,
+      new Date(payload.now),
+      configuredSchedule?.processingWindowDays ?? DEFAULT_PROCESSING_WINDOW_DAYS,
+    );
+  }
+  const options = await resolveStageOptions(payload, {
+    ...overrides,
+    processingStartAt,
+    signal: context.signal,
+  });
   const preparedLookupEntries = dedupePreparedLookupsByDedupeKey(
     payload.preparedItems
       .map((preparedItem) => ({ preparedItem, lookup: buildPreparedFeedItemLookup(preparedItem, new Date(payload.now)) }))
@@ -424,6 +463,12 @@ async function runItemProcessingStage(
   const historyByUrlHash = new Map(histories.map((history) => [history.urlHash, history]));
   const preparedLookups = preparedLookupEntries.filter((entry) => {
     const existing = getExistingItemForLookup(entry.lookup, existingByUrlHash);
+    const lookupKnown = entry.lookup?.publishedAtKnown ?? false;
+    const effectivePublishedAt = lookupKnown ? entry.lookup!.publishedAt : existing?.publishedAt;
+    const effectivePublishedAtKnown = lookupKnown || Boolean(existing?.publishedAtKnown);
+    if (options.processingStartAt && effectivePublishedAtKnown && effectivePublishedAt && effectivePublishedAt < options.processingStartAt) {
+      return false;
+    }
     return Boolean(existing) || !entry.lookup || !historyByUrlHash.has(entry.lookup.dedupeKeys.urlHash);
   });
   const aiUsage = options.aiUsage;
@@ -463,6 +508,7 @@ async function runItemProcessingStage(
           clusterAssignmentCoordinator: coordinator,
           fullTextFetchThreshold: options.fullTextFetchThreshold ?? DEFAULT_FULL_TEXT_FETCH_THRESHOLD,
           contentExtraction: options.contentExtraction,
+          processingStartAt: options.processingStartAt,
           now: new Date(payload.now),
           signal: options.signal,
         });

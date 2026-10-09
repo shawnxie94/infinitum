@@ -212,6 +212,107 @@ function querySqliteNumber(sql) {
   return Number(result || "0");
 }
 
+const processingWindowMigrationKey = "task_schedules_processing_window_days_v1";
+const runtimeMigrationTable = "_runtime_schema_migrations";
+
+function ensureRuntimeMigrationTable() {
+  runSqlite([dbPath], {
+    input: `CREATE TABLE IF NOT EXISTS "${runtimeMigrationTable}" (
+      "key" TEXT NOT NULL PRIMARY KEY,
+      "status" TEXT NOT NULL,
+      "startedAt" TEXT NOT NULL,
+      "completedAt" TEXT
+    );\n`,
+  });
+}
+
+function processingWindowMigrationStatus() {
+  const escapedKey = processingWindowMigrationKey.replace(/'/g, "''");
+  return execFileSync("sqlite3", [dbPath, `SELECT "status" FROM "${runtimeMigrationTable}" WHERE "key"='${escapedKey}'`], {
+    encoding: "utf8",
+  }).trim();
+}
+
+function scheduleDateAsEpochMilliseconds(column) {
+  return `CASE WHEN typeof("${column}") IN ('integer', 'real') THEN CAST("${column}" AS INTEGER) WHEN julianday("${column}") IS NOT NULL THEN CAST(ROUND((julianday("${column}") - 2440587.5) * 86400000.0) AS INTEGER) END`;
+}
+
+function ceilDaysBetween(laterEpochMs, earlierEpochMs) {
+  return `CAST((MAX(0, (${laterEpochMs}) - (${earlierEpochMs})) + 86400000 - 1) / 86400000 AS INTEGER)`;
+}
+
+/**
+ * Persist intent before adding the column so a crash between ALTER TABLE and
+ * backfill remains retryable. Also detect the previous epoch-ms failure mode
+ * and invalid legacy values left at the new column's default 14.
+ */
+function prepareProcessingWindowMigration() {
+  ensureRuntimeMigrationTable();
+  if (!tableExists("task_schedules") || processingWindowMigrationStatus()) return;
+
+  const escapedKey = processingWindowMigrationKey.replace(/'/g, "''");
+  let pendingMode = null;
+  if (!tableColumnExists("task_schedules", "processingWindowDays")) {
+    pendingMode = "legacy_column_missing";
+  } else if (tableColumnExists("task_schedules", "processingStartAt")) {
+    // Recover the exact pre-marker failure state, but leave a user-selected
+    // window alone when updatedAt confirms the legacy field was dual-written.
+    const legacyEpochMs = scheduleDateAsEpochMilliseconds("processingStartAt");
+    const updatedEpochMs = scheduleDateAsEpochMilliseconds("updatedAt");
+    const hasUnconvertedEpoch = querySqliteNumber(`
+      SELECT COUNT(*) FROM "task_schedules" s
+      WHERE s."processingWindowDays" = 14
+        AND typeof(s."processingStartAt") IN ('integer', 'real')
+        AND NOT (
+          ${updatedEpochMs} IS NOT NULL AND ${legacyEpochMs} IS NOT NULL
+          AND ${ceilDaysBetween(updatedEpochMs, legacyEpochMs)} = s."processingWindowDays"
+        )
+    `) > 0;
+    const hasInvalidLegacyDefault = querySqliteNumber(`
+      SELECT COUNT(*) FROM "task_schedules"
+      WHERE "processingWindowDays" = 14 AND "processingStartAt" IS NOT NULL
+        AND typeof("processingStartAt") NOT IN ('integer', 'real')
+        AND julianday("processingStartAt") IS NULL
+    `) > 0;
+    if (hasUnconvertedEpoch) pendingMode = "recover_epoch_default";
+    else if (hasInvalidLegacyDefault) pendingMode = "recover_invalid_default";
+  }
+
+  if (pendingMode) {
+    runSqlite([dbPath], {
+      input: `INSERT OR IGNORE INTO "${runtimeMigrationTable}" ("key", "status", "startedAt") VALUES ('${escapedKey}', '${pendingMode}', '${new Date().toISOString()}');\n`,
+    });
+  }
+}
+
+function migrateProcessingWindowDays() {
+  const status = processingWindowMigrationStatus();
+  if (status !== "legacy_column_missing" && status !== "recover_epoch_default" && status !== "recover_invalid_default") return;
+
+  const legacyEpochMs = scheduleDateAsEpochMilliseconds("processingStartAt");
+  const referenceAtEpochMs = Date.now();
+  const recoveryFilter = status === "recover_epoch_default"
+    ? `WHERE "processingWindowDays" = 14 AND typeof("processingStartAt") IN ('integer', 'real')
+       AND NOT (
+         ${scheduleDateAsEpochMilliseconds("updatedAt")} IS NOT NULL AND ${legacyEpochMs} IS NOT NULL
+         AND ${ceilDaysBetween(scheduleDateAsEpochMilliseconds("updatedAt"), legacyEpochMs)} = "processingWindowDays"
+       )`
+    : status === "recover_invalid_default"
+      ? `WHERE "processingWindowDays" = 14 AND "processingStartAt" IS NOT NULL
+         AND typeof("processingStartAt") NOT IN ('integer', 'real') AND julianday("processingStartAt") IS NULL`
+      : "";
+
+  runSqlite([dbPath], {
+    input: `.bail on\nBEGIN IMMEDIATE;\nUPDATE "task_schedules" SET "processingWindowDays" = CASE
+      WHEN "processingStartAt" IS NULL THEN 14
+      WHEN ${legacyEpochMs} IS NULL THEN 14 -- Invalid legacy dates fall back to the documented default.
+      ELSE MIN(3650, MAX(1, ${ceilDaysBetween(String(referenceAtEpochMs), legacyEpochMs)}))
+    END ${recoveryFilter};
+    UPDATE "${runtimeMigrationTable}" SET "status" = 'completed', "completedAt" = '${new Date().toISOString()}' WHERE "key" = '${processingWindowMigrationKey}';
+    COMMIT;\n`,
+  });
+}
+
 function hasPendingClusterFeedStatsBackfill() {
   if (
     !tableExists("content_clusters") ||
@@ -563,6 +664,7 @@ function applyAdditiveSchemaUpgrades() {
     });
   }
 
+  addColumnIfMissing("task_schedules", "processingWindowDays", "INTEGER NOT NULL DEFAULT 14");
   addColumnIfMissing("task_schedules", "dailyReportChannelIdsJson", "TEXT NOT NULL DEFAULT '[\"important\"]'");
   addColumnIfMissing("task_schedules", "dailyReportPlanningBatchSize", "INTEGER");
   addColumnIfMissing("task_schedules", "dailyReportRecentTopicLookbackDays", "INTEGER NOT NULL DEFAULT 7");
@@ -833,6 +935,8 @@ try {
     rmSync(`${dbPath}-wal`, { force: true });
   }
 
+  prepareProcessingWindowMigration();
+
   const shouldBackfillEntities = existsSync(dbPath) && tableExists("items") && (
     !tableExists("entities")
     || !tableExists("item_entities")
@@ -848,6 +952,7 @@ try {
   });
   dropLegacyCuratorPreferenceTables();
   applyAdditiveSchemaUpgrades();
+  migrateProcessingWindowDays();
   if (shouldBackfillEntities) {
     applyEntityItemBackfill();
     console.log(`Entity item backfill applied: up to ${entityBackfillLimit} items`);

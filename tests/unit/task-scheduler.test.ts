@@ -36,7 +36,17 @@ describe("task scheduler", () => {
       perSourceItemLimit: 20,
       aggregationSplitMaxEvents: 12,
       processingStartAt: null,
+      processingWindowDays: 14,
     });
+  });
+
+  it("accepts only integer dynamic processing windows from 1 through 3650 days", () => {
+    const input = { enabled: true, cronExpression: "0 * * * *", sourceConcurrency: 1, fullTextFetchThreshold: 0, perSourceItemLimit: 1 };
+    expect(normalizeScheduleInput({ ...input, processingWindowDays: 1 }).processingWindowDays).toBe(1);
+    expect(normalizeScheduleInput({ ...input, processingWindowDays: 3650 }).processingWindowDays).toBe(3650);
+    for (const processingWindowDays of [0, 3651, 1.5]) {
+      expect(() => normalizeScheduleInput({ ...input, processingWindowDays })).toThrow();
+    }
   });
 
   it("marks stale heartbeats after the timeout window", () => {
