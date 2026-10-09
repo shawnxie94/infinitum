@@ -1113,7 +1113,13 @@ export async function generateDailyReportInternal(input: {
       };
 
       if (firstReview.result.verdict === "reject") {
-        reviewRetryStage = firstReview.result.violations.some((violation) => reviewRetryPlanCodes.has(violation.code))
+        // 只有 error 级违规才允许把重试升级成整份 PLAN 重造。warning 级的
+        // 覆盖度/凑数提示不能作废一份已经通过确定性校验的计划，否则一个纯
+        // 措辞级的 WRITE 问题会被升级成整篇日报重跑。
+        const reviewErrorViolations = firstReview.result.violations.filter(
+          (violation) => violation.severity === "error",
+        );
+        reviewRetryStage = reviewErrorViolations.some((violation) => reviewRetryPlanCodes.has(violation.code))
           ? "plan"
           : "write";
         const reviewFeedback: DailyReportReviewFeedback = {
@@ -1127,21 +1133,42 @@ export async function generateDailyReportInternal(input: {
         };
         try {
           if (reviewRetryStage === "plan") {
-            const rawPlan = materializeDailyReportPlan(await provider.planDailyReport({
-              candidateBriefs: finalizationCandidateBriefs,
-              template,
-              recentTopics,
-              recentTopicLookbackDays,
-              reviewFeedback,
-            }));
-            const ordered = orderAndLimitDailyReportPlanWithAudit(
-              rawPlan,
-              template,
-              finalizationPlanningCandidates,
-              assessments,
-            );
+            // 与主流程 PLAN 一致地走修复循环：重试不再是「从零重抽一次签」，
+            // 而是以上一轮产物为基线带 violations 回喂的定向修复。
+            let retryPlanLoopAttempt: DailyReportPlan | null = null;
+            let retryPlanningAudit: DailyReportPlanningAudit | null = null;
+            const retryPlanLoop = await runDailyReportStageLoop({
+              stage: "plan",
+              inputHash: `${inputHash}:review-retry-plan`,
+              run: (stageContext, validationFeedback) => provider.planDailyReport({
+                candidateBriefs: finalizationCandidateBriefs,
+                template,
+                recentTopics,
+                recentTopicLookbackDays,
+                stageContext,
+                validationFeedback,
+                reviewFeedback,
+              }),
+              validate: (rawSelection) => {
+                const ordered = orderAndLimitDailyReportPlanWithAudit(
+                  materializeDailyReportPlan(rawSelection),
+                  template,
+                  finalizationPlanningCandidates,
+                  assessments,
+                );
+                retryPlanLoopAttempt = ordered.plan;
+                retryPlanningAudit = ordered.audit;
+                return validateDailyReportPlan(
+                  ordered.plan,
+                  finalizationPlanningCandidates,
+                  assessments,
+                  template,
+                );
+              },
+            });
+            const retriedPlan = retryPlanLoopAttempt ?? materializeDailyReportPlan(retryPlanLoop.value);
             const planViolations = validateDailyReportPlan(
-              ordered.plan,
+              retriedPlan,
               finalizationPlanningCandidates,
               assessments,
               template,
@@ -1149,34 +1176,65 @@ export async function generateDailyReportInternal(input: {
             if (planViolations.length > 0) {
               throw new Error(`Review 触发的 PLAN 重试未通过校验：${planViolations.map((violation) => violation.message).slice(0, 5).join("；")}`);
             }
-            finalizationPlan = ordered.plan;
-            latestPlanningAudit = ordered.audit;
+            finalizationPlan = retriedPlan;
+            latestPlanningAudit = retryPlanningAudit;
             finalizationSelectedCandidates = finalizationPlanningCandidates.filter((candidate) =>
-              new Set(getDailyReportPlanCandidateIds(ordered.plan)).has(candidate.id),
+              new Set(getDailyReportPlanCandidateIds(retriedPlan)).has(candidate.id),
             );
             finalizationSelectedTopics = buildDailyReportSelectedTopics(
-              ordered.plan,
+              retriedPlan,
               finalizationPlanningCandidates,
               assessments,
             );
           }
 
-          const retryModelDraft = await provider.writeDailyReport({
-            selectedTopics: finalizationSelectedTopics,
-            template,
-            reviewFeedback,
+          const retryPlan = finalizationPlan;
+          if (!retryPlan) {
+            throw new Error("Review 触发的重试缺少可用的最终计划。");
+          }
+          // 同样的道理：审核触发的 WRITE 重试走修复循环，模型输出不合法
+          // （缺 blocks / JSON 解析失败 / 空标题正文）会先被 clean retry 和
+          // 修复轮次消化，而不是一次就把整条日报打成 unavailable。
+          let retryDraftLoopValue: DailyReportDraft | null = null;
+          const retryWriteLoop = await runDailyReportStageLoop({
+            stage: "write",
+            inputHash: `${inputHash}:review-retry-write`,
+            run: (stageContext, validationFeedback) => provider.writeDailyReport({
+              selectedTopics: finalizationSelectedTopics,
+              template,
+              stageContext,
+              validationFeedback,
+              reviewFeedback,
+            }),
+            validate: (nextModelDraft) => {
+              retryDraftLoopValue = normalizeDailyReportDraftForTemplate(
+                orderDailyReportDraft(
+                  attachDailyReportTopicSources(nextModelDraft, retryPlan),
+                  retryPlan,
+                  template,
+                ),
+                template,
+              );
+              return validateDailyReportDraft(
+                retryDraftLoopValue,
+                retryPlan,
+                finalizationSelectedCandidates,
+                template,
+                omittedTopicIds,
+              );
+            },
           });
-          const retryDraft = normalizeDailyReportDraftForTemplate(
+          const retryDraft = retryDraftLoopValue ?? normalizeDailyReportDraftForTemplate(
             orderDailyReportDraft(
-              attachDailyReportTopicSources(retryModelDraft, finalizationPlan),
-              finalizationPlan,
+              attachDailyReportTopicSources(retryWriteLoop.value, retryPlan),
+              retryPlan,
               template,
             ),
             template,
           );
           const retryViolations = validateDailyReportDraft(
             retryDraft,
-            finalizationPlan,
+            retryPlan,
             finalizationSelectedCandidates,
             template,
             omittedTopicIds,
@@ -1202,12 +1260,17 @@ export async function generateDailyReportInternal(input: {
           finalizationPlan = originalFinalization.plan;
           finalizationSelectedCandidates = originalFinalization.selectedCandidates;
           finalizationSelectedTopics = originalFinalization.selectedTopics;
-          reviewStatus = "unavailable";
+          // 审核已经给出 reject 裁决，挂掉的是我们自己的重试实现。记 rejected
+          // 而不是 unavailable：语义正确，也让 review.ts 能把真正的 retryError
+          // 暴露出来，监控得以区分「审核挂了」和「重试挂了」。
+          reviewStatus = "rejected";
           reviewAudit = {
             ...(reviewAudit ?? {}),
             attempts: reviewAttempts,
             retryStage: reviewRetryStage,
-            retryError: error instanceof Error ? error.message : String(error),
+            // 自带重试阶段前缀：修复循环耗尽后抛的是 DailyReportStageLoopError，
+            // 只看 "write 校验失败" 无法区分主流程 WRITE 与审核重试 WRITE。
+            retryError: `Review 触发的 ${reviewRetryStage === "plan" ? "PLAN" : "WRITE"} 重试失败：${error instanceof Error ? error.message : String(error)}`,
           };
         }
       }

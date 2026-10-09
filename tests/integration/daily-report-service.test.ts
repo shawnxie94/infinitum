@@ -1691,6 +1691,157 @@ describe("daily report service", () => {
     expect(report.publishedAt).toBeNull();
   });
 
+  it("keeps the review retry at WRITE when only warnings suggest plan-level changes", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockResolvedValue({
+      verdict: "reject",
+      violations: [
+        {
+          code: "factual_inconsistency",
+          severity: "error",
+          message: "摘要时态与正文冲突",
+          evidence: "摘要写『获准完成』，正文写『预计 10 月 6 日完成』。",
+          guidance: "把摘要措辞改成不暗示已交割。",
+        },
+        {
+          code: "padding_content",
+          severity: "warning",
+          message: "栏目限额未用满",
+          evidence: "open-source-tools 候选池 7 条只选了 4 条。",
+          guidance: "补入一条候选。",
+        },
+        {
+          code: "candidate_omitted",
+          severity: "warning",
+          message: "存在未入选的高分候选",
+          evidence: "candidateId 30 未入选。",
+          guidance: "考虑补入 candidateId 30。",
+        },
+        {
+          code: "topic_not_independent",
+          severity: "warning",
+          message: "同一公司主体的不同事件并列",
+          evidence: "两个 Anthropic 事件属不同侧面。",
+          guidance: "确保每个事件只出现一次关键事实增量。",
+        },
+      ],
+      summary: "未通过",
+    });
+    writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => buildDailyReportOutput(selectedTopics));
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+
+    // warning 级覆盖度/凑数提示不能作废已通过校验的计划：唯一的 error 是
+    // 措辞级的 WRITE 问题，重试必须停在 WRITE，不重造 PLAN。
+    expect(result.reviewRetryStage).toBe("write");
+    expect(planDailyReportMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("repairs an invalid review retry draft instead of blocking publication", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock
+      .mockResolvedValueOnce({
+        verdict: "reject",
+        violations: [{
+          code: "factual_inconsistency",
+          severity: "error",
+          message: "事实需要重新核对",
+          evidence: "草稿中的数字与候选摘要不一致。",
+          guidance: "WRITE 重试时重新核对该主题的数字。",
+        }],
+        summary: "未通过",
+      })
+      .mockResolvedValueOnce({ verdict: "pass", violations: [], summary: "通过" });
+
+    // 第一次重试返回一条正文为空的条目——生产上正是这个形态直接把日报打成
+    // unavailable。修复循环应当回喂 validationFeedback 再试一次。
+    const buildDraftWithEmptyBody = (selectedTopics: SelectedTopicFixture[]) => {
+      const parsed = JSON.parse(buildDailyReportOutput(selectedTopics)) as {
+        blocks: Array<{ type: string; items?: Array<{ body: string }> }>;
+      };
+      const section = parsed.blocks.find((block) => block.type === "section" && block.items?.length);
+      if (section?.items?.[0]) section.items[0].body = "";
+      return JSON.stringify(parsed);
+    };
+    let call = 0;
+    writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => {
+      call += 1;
+      if (call === 1) return buildDailyReportOutput(selectedTopics);
+      if (call === 2) return buildDraftWithEmptyBody(selectedTopics);
+      return buildDailyReportOutput(selectedTopics);
+    });
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+
+    expect(result.reviewStatus).toBe("passed");
+    expect(result.reviewAttempts).toBe(2);
+    expect(writeDailyReportMock).toHaveBeenCalledTimes(3);
+    // 修复轮次必须带校验反馈，说明重试走的是修复式 transcript 而不是重抽一次签
+    expect(writeDailyReportMock.mock.calls[2]?.[0]).toMatchObject({
+      reviewFeedback: expect.objectContaining({ instruction: expect.stringContaining("error 级问题") }),
+      validationFeedback: expect.objectContaining({ violations: expect.any(Array) }),
+    });
+    expect(report.status).toBe("published");
+  });
+
+  it("records an exhausted review retry as rejected with the retry error", async () => {
+    await createDailyReportSchedule({ autoPublish: true });
+    await createReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockResolvedValue({
+      verdict: "reject",
+      violations: [{
+        code: "factual_inconsistency",
+        severity: "error",
+        message: "事实需要重新核对",
+        evidence: "草稿中的数字与候选摘要不一致。",
+        guidance: "WRITE 重试时重新核对该主题的数字。",
+      }],
+      summary: "未通过",
+    });
+    // 主流程 WRITE 正常，之后每次重试都返回缺 blocks 的非法产物，耗尽修复轮次
+    let call = 0;
+    writeDailyReportMock.mockImplementation(async ({ selectedTopics }: { selectedTopics: SelectedTopicFixture[] }) => {
+      call += 1;
+      return call === 1
+        ? buildDailyReportOutput(selectedTopics)
+        : JSON.stringify({ headline: "缺少 blocks 的非法草稿" });
+    });
+
+    const result = await generateDailyReport({ date: REPORT_DATE, force: true });
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+
+    // 审核已给出 reject 裁决，挂掉的是重试实现：状态必须是 rejected 而非
+    // unavailable，且 retryError 要能定位真实原因。
+    expect(result.reviewStatus).toBe("rejected");
+    expect(result.reviewRetryStage).toBe("write");
+    expect(report.status).toBe("draft");
+    expect(report.publishedAt).toBeNull();
+    const snapshot = JSON.parse(report.candidateSnapshot ?? "{}") as {
+      review: { audit: { retryError?: string } | null };
+    };
+    // retryError 必须自带重试阶段，否则无法与主流程 WRITE 失败区分
+    expect(snapshot.review.audit?.retryError ?? "").toContain("Review 触发的 WRITE 重试失败：");
+  });
+
   it("reviews the persisted draft even when the candidate pool changes afterward", async () => {
     await createDailyReportSchedule({ autoPublish: false });
     await createReportCandidates();
