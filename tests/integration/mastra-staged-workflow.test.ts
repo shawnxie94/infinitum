@@ -453,7 +453,7 @@ describe("Mastra staged task workflows", () => {
     mockState.rssItems = [{
       title: "Mastra ingestion timeline fixture",
       link: "https://mastra-test.example/story/1",
-      pubDate: "2026-09-22T12:00:00.000Z",
+      pubDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       contentSnippet: "This is a sufficiently long fixture body for the ingestion timeline test. ".repeat(3),
     }];
     const taskRun = await prisma.backgroundTaskRun.create({

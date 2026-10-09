@@ -1,6 +1,7 @@
 import type { Item } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { invalidateFeedCache } from "@/lib/feed/cache";
 import {
   evaluateStaleContent,
   STALE_CONTENT_MODERATION_REASON,
@@ -81,7 +82,7 @@ export async function filterStaleAggregationChildren({
   referenceAt?: Date;
   eventDateCutoff?: Date | null;
 }): Promise<{ clusterIds: string[]; filteredCount: number }> {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const [linked, legacy] = await Promise.all([
       tx.aggregationSplitLink.findMany({
         where: { parentItemId },
@@ -137,4 +138,7 @@ export async function filterStaleAggregationChildren({
     }
     return { clusterIds: [...affectedClusters], filteredCount };
   });
+
+  if (result.filteredCount > 0) invalidateFeedCache();
+  return result;
 }

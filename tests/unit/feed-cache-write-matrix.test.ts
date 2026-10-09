@@ -53,6 +53,7 @@ const EXPECTED_SELF_INVALIDATING: string[] = [
   "src/lib/clusters/service.ts",
   "src/lib/entities/service.ts",
   "src/lib/items/service.ts",
+  "src/lib/aggregation/staleness.ts",
   "src/lib/settings/source-service.ts",
 ];
 

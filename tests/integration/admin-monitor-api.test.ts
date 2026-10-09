@@ -198,6 +198,7 @@ describe("/api/admin/monitor", () => {
           fullTextFetchThreshold: 120,
           perSourceItemLimit: 50,
           aggregationSplitMaxEvents: 12,
+          processingWindowDays: 14,
         }),
         headers: { "content-type": "application/json" },
       }),
@@ -212,7 +213,7 @@ describe("/api/admin/monitor", () => {
       fullTextFetchThreshold: 120,
       perSourceItemLimit: 50,
       aggregationSplitMaxEvents: 12,
-      processingStartAt: null,
+      processingWindowDays: 14,
     });
     expect(json.schedule.enabled).toBe(false);
     expect(json.schedule.cronExpression).toBe("*/15 * * * *");
