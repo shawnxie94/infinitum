@@ -1,6 +1,6 @@
 {
   "name": "infinitum",
-  "version": "0.2.3-rc11",
+  "version": "0.2.3-rc12",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
