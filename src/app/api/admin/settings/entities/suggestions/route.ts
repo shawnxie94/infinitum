@@ -19,7 +19,7 @@ const entitySuggestionQuerySchema = z.object({
 const entitySuggestionDecisionSchema = z.object({
   sourceEntityId: z.string().min(1),
   targetEntityId: z.string().min(1),
-  decision: z.enum(["ignored", "kept"]),
+  decision: z.literal("ignored"),
 });
 
 const entitySuggestionPostSchema = z.union([

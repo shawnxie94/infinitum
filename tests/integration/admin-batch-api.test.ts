@@ -226,6 +226,20 @@ describe("治理批量 API 上限与串行执行", () => {
     expect(json.error).toContain("50");
   });
 
+  it("实体治理建议批量不再接受 keep 动作", async () => {
+    requireAdmin.mockResolvedValue(undefined);
+
+    const { POST } = await import("@/app/api/admin/settings/entities/suggestions/batch/route");
+    const response = await POST(
+      postBatch("/api/admin/settings/entities/suggestions/batch", {
+        action: "keep",
+        suggestions: [{ sourceEntityId: "entity-source", targetEntityId: "entity-target" }],
+      }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it("实体治理建议批量超过上限时整批拒绝", async () => {
     requireAdmin.mockResolvedValue(undefined);
 

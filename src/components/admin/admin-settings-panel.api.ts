@@ -474,7 +474,7 @@ export async function listAdminEntitySuggestions(input?: {
 export async function dismissAdminEntitySuggestion(input: {
   sourceEntityId: string;
   targetEntityId: string;
-  decision: "ignored" | "kept";
+  decision: "ignored";
 }) {
   return requestAdminSettingsJson<EntitySuggestionDecisionPayload>(
     "/api/admin/settings/entities/suggestions",
@@ -504,7 +504,7 @@ export type AdminEntitySuggestionBatchResult = {
 };
 
 export async function batchAdminEntitySuggestions(
-  action: "merge" | "ignore" | "keep",
+  action: "merge" | "ignore",
   suggestions: Array<{ sourceEntityId: string; targetEntityId: string }>,
 ) {
   return requestAdminSettingsJson<AdminEntitySuggestionBatchResult>(

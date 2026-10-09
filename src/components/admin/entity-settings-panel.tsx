@@ -22,7 +22,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterInput } from "@/components/ui/filter-input";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { IconButton } from "@/components/ui/icon-button";
-import { IconCheck, IconMerge, IconPlus, IconRotateCw, IconTrash, IconX } from "@/components/ui/icons";
+import { IconMerge, IconPlus, IconRotateCw, IconTrash, IconX } from "@/components/ui/icons";
 import { ModalShell } from "@/components/ui/modal-shell";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { StatusBanner } from "@/components/ui/status-banner";
@@ -57,12 +57,6 @@ const ENTITY_SUGGESTION_BATCH_ACTIONS: BatchActionDescriptor[] = [
     label: "批量忽略",
     confirmText: "会判定选中的建议不是同一实体，后续不再重复推荐这组配对。",
     variant: "secondary",
-  },
-  {
-    key: "keep",
-    label: "批量保留为不同实体",
-    confirmText: "会确认选中的建议确实是不同实体，保持现状不做合并。",
-    variant: "ghost",
   },
 ];
 
@@ -188,7 +182,7 @@ function EntitySuggestionModal({
               key={action.key}
               size="sm"
               variant={action.variant}
-              disabled={selectedIds.size < (action.key === "keep" ? 1 : 2) || selectedIds.size > ADMIN_BATCH_MAX_ITEMS || isBusy || isRunningBatch}
+              disabled={selectedIds.size < 2 || selectedIds.size > ADMIN_BATCH_MAX_ITEMS || isBusy || isRunningBatch}
               onClick={() => setPendingBatchAction(action)}
             >
               {action.label}
@@ -308,8 +302,8 @@ function EntitySuggestionModal({
                           <IconMerge className="h-4 w-4" />
                         </IconButton>
                         <IconButton
-                          aria-label={`处理治理建议：${suggestion.sourceEntity.name}`}
-                          title="处理治理建议"
+                          aria-label={`忽略治理建议：${suggestion.sourceEntity.name}`}
+                          title="忽略治理建议"
                           size="sm"
                           variant="ghost"
                           disabled={isBusy}
@@ -415,28 +409,26 @@ function SuggestionMergeChoiceModal({
   );
 }
 
-type SuggestionDismissChoiceModalProps = {
+type SuggestionIgnoreModalProps = {
   suggestion: AdminEntitySuggestion | null;
   isOpen: boolean;
   isBusy: boolean;
   onClose: () => void;
-  onKeepSeparate: () => void;
   onIgnore: () => void;
 };
 
-function SuggestionDismissChoiceModal({
+function SuggestionIgnoreModal({
   suggestion,
   isOpen,
   isBusy,
   onClose,
-  onKeepSeparate,
   onIgnore,
-}: SuggestionDismissChoiceModalProps) {
+}: SuggestionIgnoreModalProps) {
   return (
     <ModalShell
       isOpen={isOpen}
       onClose={onClose}
-      title="处理治理建议"
+      title="忽略治理建议"
       widthClassName="max-w-xl"
       headerClassName="border-b border-[color:var(--line)] p-4"
       bodyClassName="space-y-4 p-4"
@@ -446,13 +438,9 @@ function SuggestionDismissChoiceModal({
           <Button onClick={onClose} variant="secondary" disabled={isBusy}>
             取消
           </Button>
-          <Button onClick={onIgnore} variant="secondary" disabled={isBusy} className="gap-2">
+          <Button onClick={onIgnore} variant="primary" disabled={isBusy} className="gap-2">
             <IconX className="h-4 w-4" />
-            临时忽略
-          </Button>
-          <Button onClick={onKeepSeparate} variant="primary" disabled={isBusy} className="gap-2">
-            <IconCheck className="h-4 w-4" />
-            不合并
+            忽略
           </Button>
         </div>
       }
@@ -461,7 +449,7 @@ function SuggestionDismissChoiceModal({
         {suggestion ? `${suggestion.sourceEntity.name} / ${suggestion.targetEntity.name}` : "实体建议"}
       </div>
       <p className="text-sm leading-6 text-[var(--muted)]">
-        “不合并”表示确认两者都应保留为规范实体；“临时忽略”表示暂不处理这条建议。两种操作都会隐藏当前建议对。
+        忽略后，该建议对会加入后续预计算的屏蔽列表，不再重复推荐。
       </p>
     </ModalShell>
   );
@@ -986,13 +974,13 @@ export function EntitySettingsPanel({
     await reloadAfterEntityMutation();
   }
 
-  async function handleSuggestionDismiss(suggestion: AdminEntitySuggestion, decision: "ignored" | "kept") {
+  async function handleSuggestionDismiss(suggestion: AdminEntitySuggestion) {
     await dismissAdminEntitySuggestion({
       sourceEntityId: suggestion.sourceEntity.id,
       targetEntityId: suggestion.targetEntity.id,
-      decision,
+      decision: "ignored",
     });
-    showToast(decision === "kept" ? "已保留为规范实体。" : "已忽略该建议。");
+    showToast("已忽略该建议。");
     setDismissChoiceSuggestion(null);
     await loadSuggestions();
   }
@@ -1026,9 +1014,9 @@ export function EntitySettingsPanel({
   }
 
   function handleRunSuggestionBatch(actionKey: string) {
-    const action = actionKey === "merge" ? "merge" : actionKey === "keep" ? "keep" : "ignore";
+    const action = actionKey === "merge" ? "merge" : "ignore";
     const targets = suggestions.filter((entry) => selectedSuggestionIds.has(entry.id));
-    if (targets.length === 0 || targets.length > ADMIN_BATCH_MAX_ITEMS || (action !== "keep" && targets.length < 2)) {
+    if (targets.length < 2 || targets.length > ADMIN_BATCH_MAX_ITEMS) {
       return;
     }
 
@@ -1277,19 +1265,14 @@ export function EntitySettingsPanel({
         }}
       />
 
-      <SuggestionDismissChoiceModal
+      <SuggestionIgnoreModal
         suggestion={dismissChoiceSuggestion}
         isOpen={Boolean(dismissChoiceSuggestion)}
         isBusy={isPending}
         onClose={() => setDismissChoiceSuggestion(null)}
-        onKeepSeparate={() => {
-          if (dismissChoiceSuggestion) {
-            runModalAction(() => handleSuggestionDismiss(dismissChoiceSuggestion, "kept"));
-          }
-        }}
         onIgnore={() => {
           if (dismissChoiceSuggestion) {
-            runModalAction(() => handleSuggestionDismiss(dismissChoiceSuggestion, "ignored"));
+            runModalAction(() => handleSuggestionDismiss(dismissChoiceSuggestion));
           }
         }}
       />

@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/admin/session";
 import { dismissEntitySuggestion, mergeEntities } from "@/lib/entities/service";
 
 const entitySuggestionBatchSchema = z.object({
-  action: z.enum(["merge", "ignore", "keep"]),
+  action: z.enum(["merge", "ignore"]),
   suggestions: z
     .array(
       z.object({
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         await dismissEntitySuggestion({
           sourceEntityId: entry.sourceEntityId,
           targetEntityId: entry.targetEntityId,
-          decision: body.action === "ignore" ? "ignored" : "kept",
+          decision: "ignored",
         });
       },
     );

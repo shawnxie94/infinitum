@@ -162,7 +162,7 @@ describe("EntitySettingsPanel", () => {
     ).not.toBeInTheDocument();
     expect(within(suggestionDialog).getByLabelText("治理建议排序")).toHaveValue("confidence_desc");
     expect(within(suggestionDialog).getByRole("button", { name: "选择合并方向：AI Agents" })).toBeInTheDocument();
-    expect(within(suggestionDialog).getByRole("button", { name: "处理治理建议：AI Agents" })).toBeInTheDocument();
+    expect(within(suggestionDialog).getByRole("button", { name: "忽略治理建议：AI Agents" })).toBeInTheDocument();
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions?sort=confidence_desc&page=1&pageSize=10", {
         method: "GET",
@@ -220,13 +220,12 @@ describe("EntitySettingsPanel", () => {
     const dialog = await screen.findByRole("dialog", { name: "治理建议" });
     const mergeButton = within(dialog).getByRole("button", { name: "批量合并" });
     const ignoreButton = within(dialog).getByRole("button", { name: "批量忽略" });
-    const keepButton = within(dialog).getByRole("button", { name: "批量保留为不同实体" });
     await within(dialog).findByLabelText("选择治理建议 AI Agents");
 
     expect(within(dialog).getAllByLabelText("全选本页治理建议")).toHaveLength(1);
     expect(mergeButton).toBeDisabled();
     expect(ignoreButton).toBeDisabled();
-    expect(keepButton).toBeDisabled();
+    expect(within(dialog).queryByRole("button", { name: "批量保留为不同实体" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/已选 \d+ 条/)).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "清空选择" })).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "刷新建议" }).parentElement).toHaveClass("justify-end");
@@ -234,18 +233,23 @@ describe("EntitySettingsPanel", () => {
     await user.click(within(dialog).getByLabelText("选择治理建议 AI Agents"));
     expect(mergeButton).toBeDisabled();
     expect(ignoreButton).toBeDisabled();
-    expect(keepButton).toBeEnabled();
+    await user.click(within(dialog).getByLabelText("选择治理建议 Agent Builder"));
+    expect(mergeButton).toBeEnabled();
+    expect(ignoreButton).toBeEnabled();
 
-    await user.click(keepButton);
-    const keepDialog = await screen.findByRole("dialog", { name: "确认批量操作" });
-    await user.click(within(keepDialog).getByRole("button", { name: "确认执行" }));
+    await user.click(ignoreButton);
+    const ignoreDialog = await screen.findByRole("dialog", { name: "确认批量操作" });
+    await user.click(within(ignoreDialog).getByRole("button", { name: "确认执行" }));
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions/batch", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          action: "keep",
-          suggestions: [{ sourceEntityId: "entity-agents", targetEntityId: "entity-agent" }],
+          action: "ignore",
+          suggestions: [
+            { sourceEntityId: "entity-agents", targetEntityId: "entity-agent" },
+            { sourceEntityId: "entity-agent-builder", targetEntityId: "entity-agent" },
+          ],
         }),
       });
     });
@@ -380,9 +384,13 @@ describe("EntitySettingsPanel", () => {
       });
     });
 
-    await user.click(within(suggestionDialog).getByRole("button", { name: "处理治理建议：AI Agents" }));
-    const dismissChoiceDialog = screen.getByRole("dialog", { name: "处理治理建议" });
-    await user.click(within(dismissChoiceDialog).getByRole("button", { name: "临时忽略" }));
+    await user.click(within(suggestionDialog).getByRole("button", { name: "忽略治理建议：AI Agents" }));
+    const ignoreDialog = screen.getByRole("dialog", { name: "忽略治理建议" });
+    expect(within(ignoreDialog).getByText("忽略后，该建议对会加入后续预计算的屏蔽列表，不再重复推荐。")).toBeInTheDocument();
+    expect(within(ignoreDialog).getByRole("button", { name: "忽略" })).toBeInTheDocument();
+    expect(within(ignoreDialog).queryByRole("button", { name: "临时忽略" })).not.toBeInTheDocument();
+    expect(within(ignoreDialog).queryByRole("button", { name: "不合并" })).not.toBeInTheDocument();
+    await user.click(within(ignoreDialog).getByRole("button", { name: "忽略" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions", {

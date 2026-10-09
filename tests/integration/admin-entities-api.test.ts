@@ -234,12 +234,22 @@ describe("/api/admin/settings/entities", () => {
     });
     expect(json.suggestions[0].confidence).toBeGreaterThanOrEqual(0.95);
 
-    const dismissResponse = await POST(new Request("http://localhost/api/admin/settings/entities/suggestions", {
+    const legacyKeepResponse = await POST(new Request("http://localhost/api/admin/settings/entities/suggestions", {
       method: "POST",
       body: JSON.stringify({
         sourceEntityId: variant.id,
         targetEntityId: canonical.id,
         decision: "kept",
+      }),
+    }));
+    expect(legacyKeepResponse.status).toBe(400);
+
+    const dismissResponse = await POST(new Request("http://localhost/api/admin/settings/entities/suggestions", {
+      method: "POST",
+      body: JSON.stringify({
+        sourceEntityId: variant.id,
+        targetEntityId: canonical.id,
+        decision: "ignored",
       }),
     }));
 
@@ -251,7 +261,7 @@ describe("/api/admin/settings/entities", () => {
           targetEntityNormalized: "openai",
         },
       },
-    })).resolves.toMatchObject({ decision: "kept" });
+    })).resolves.toMatchObject({ decision: "ignored" });
 
     const suppressedResponse = await GET(new Request("http://localhost/api/admin/settings/entities/suggestions?search=open&page=1&pageSize=10"));
     const suppressedJson = await suppressedResponse.json();
