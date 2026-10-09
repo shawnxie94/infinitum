@@ -74,6 +74,14 @@ export function batchClusterReviewCandidates(action: "merge" | "ignore", ids: st
   );
 }
 
+export function batchFilteredItems(action: "restore" | "reanalyze", ids: string[]) {
+  return postBatch(
+    "/api/admin/items/filtered/batch",
+    { action, ids },
+    "过滤内容批量操作失败。",
+  );
+}
+
 async function parseJsonResponse<T extends { error?: string }>(
   response: Response,
   fallbackMessage: string,

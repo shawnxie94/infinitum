@@ -231,6 +231,107 @@ describe("ContentReviewPanel", () => {
     });
   });
 
+  it("supports batch restore and rejudge for explicitly selected filtered content", async () => {
+    const user = userEvent.setup();
+    let items = [createFilteredItem(), createFilteredItem({ id: "item-2", title: "第二条过滤内容" })];
+    const batchRequests: Array<{ action: string; ids: string[] }> = [];
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const url = getFetchUrl(input);
+
+      if (url === "/api/admin/items?moderationStatus=filtered&page=1&pageSize=10") {
+        return new Response(JSON.stringify({ items, total: items.length }));
+      }
+
+      if (url === "/api/admin/clusters?page=1&pageSize=10&minItemCount=2") {
+        return new Response(JSON.stringify({ clusters: [], total: 0 }));
+      }
+
+      if (url === "/api/admin/items/filtered/batch") {
+        expect(init?.method).toBe("POST");
+        const body = JSON.parse(String(init?.body)) as { action: string; ids: string[] };
+        batchRequests.push(body);
+        if (body.action === "restore") {
+          items = items.filter((item) => !body.ids.includes(item.id));
+        }
+        return new Response(JSON.stringify({ success: true, succeeded: body.ids, failed: [], total: body.ids.length }));
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(<ContentReviewPanel />);
+    await waitForLoaded();
+
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByLabelText("全选本页过滤内容")).toHaveLength(1);
+    const restoreButton = screen.getByRole("button", { name: "批量恢复" });
+    const rejudgeButton = screen.getByRole("button", { name: "批量重新判定" });
+    expect(restoreButton).toBeDisabled();
+    expect(rejudgeButton).toBeDisabled();
+
+    await user.click(within(table).getByLabelText("选择过滤内容 营销内容"));
+    expect(restoreButton).toBeEnabled();
+    await user.click(restoreButton);
+    const restoreDialog = await screen.findByRole("dialog", { name: "确认批量恢复" });
+    await user.click(within(restoreDialog).getByRole("button", { name: "批量恢复" }));
+
+    await waitFor(() => {
+      expect(batchRequests).toEqual([{ action: "restore", ids: ["item-1"] }]);
+    });
+    expect(screen.getByText("批量恢复完成，成功 1 条。")).toBeInTheDocument();
+
+    const refreshedTable = screen.getByRole("table");
+    await user.click(within(refreshedTable).getByLabelText("选择过滤内容 第二条过滤内容"));
+    await user.click(rejudgeButton);
+    const rejudgeDialog = await screen.findByRole("dialog", { name: "确认批量重新判定" });
+    await user.click(within(rejudgeDialog).getByRole("button", { name: "批量重新判定" }));
+
+    await waitFor(() => {
+      expect(batchRequests).toEqual([
+        { action: "restore", ids: ["item-1"] },
+        { action: "reanalyze", ids: ["item-2"] },
+      ]);
+    });
+    expect(screen.getByText("已为 1 条内容创建重新判定任务。")).toBeInTheDocument();
+  });
+
+  it("clears filtered-content selection when moving to another page", async () => {
+    const user = userEvent.setup();
+    const pageOneItems = Array.from({ length: 10 }, (_, index) =>
+      createFilteredItem({ id: `filtered-${index + 1}`, title: `过滤项 ${index + 1}` }),
+    );
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = getFetchUrl(input);
+      if (url === "/api/admin/items?moderationStatus=filtered&page=1&pageSize=10") {
+        return new Response(JSON.stringify({ items: pageOneItems, total: 11 }));
+      }
+      if (url === "/api/admin/items?moderationStatus=filtered&page=2&pageSize=10") {
+        return new Response(JSON.stringify({ items: [createFilteredItem({ id: "filtered-11", title: "过滤项 11" })], total: 11 }));
+      }
+      if (url === "/api/admin/clusters?page=1&pageSize=10&minItemCount=2") {
+        return new Response(JSON.stringify({ clusters: [], total: 0 }));
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(<ContentReviewPanel />);
+    await waitForLoaded();
+
+    const table = screen.getByRole("table");
+    await user.click(within(table).getByLabelText("选择过滤内容 过滤项 1"));
+    expect(screen.getByRole("button", { name: "批量恢复" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "下一页" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /过滤项 11/ })).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "批量恢复" })).toBeDisabled();
+    expect(screen.queryByText("已选 0")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "清空选择" })).not.toBeInTheDocument();
+  });
+
   it("labels reparsed parent children as 重拆下线 instead of 待复核", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = getFetchUrl(input);
@@ -383,6 +484,7 @@ describe("ContentReviewPanel", () => {
   });
 
   it("renders aggregation split management without the link column", async () => {
+    const user = userEvent.setup();
     const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const url = getFetchUrl(input);
 
@@ -407,6 +509,22 @@ describe("ContentReviewPanel", () => {
     expect(within(table).getByText("已拆分")).toHaveClass("whitespace-nowrap");
     expect(within(table).getByText("12 条")).toBeInTheDocument();
     expect(within(table).getByText("06/17 18:34")).toBeInTheDocument();
+
+    const toolbar = screen.getByRole("button", { name: "清空筛选" }).parentElement!;
+    const reanalyzeButton = within(toolbar).getByRole("button", { name: "批量重新分析" });
+    const cancelButton = within(toolbar).getByRole("button", { name: "批量取消拆分" });
+    const clearFiltersButton = within(toolbar).getByRole("button", { name: "清空筛选" });
+    expect(screen.queryByText(/已选 \d+/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "清空选择" })).not.toBeInTheDocument();
+    expect(reanalyzeButton).toHaveClass("bg-[var(--accent)]");
+    expect(cancelButton).toHaveClass("bg-[var(--surface)]", "border");
+    expect(reanalyzeButton.compareDocumentPosition(clearFiltersButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(cancelButton.compareDocumentPosition(clearFiltersButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("全选本页")).not.toBeInTheDocument();
+    expect(reanalyzeButton).toBeDisabled();
+
+    await user.click(within(table).getByLabelText("选择拆分记录 SpaceX buys Cursor"));
+    expect(reanalyzeButton).toBeEnabled();
   });
 
   it("keeps cluster list keyword searches restricted to multi-item clusters", async () => {
@@ -434,6 +552,7 @@ describe("ContentReviewPanel", () => {
     renderWithProviders(<ContentReviewPanel activeTab="clusters" />);
     await waitForLoaded();
 
+    expect(screen.queryByRole("button", { name: "清空筛选" })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText("审核关键词"), "OpenAI");
 
     await waitFor(
@@ -442,6 +561,68 @@ describe("ContentReviewPanel", () => {
       },
       { timeout: 2_000 },
     );
+  });
+
+  it("places aggregation-pending batch actions in the modal footer and requires multiple selections", async () => {
+    const user = userEvent.setup();
+    const secondCandidate = createClusterReviewCandidate({
+      id: "decision-2",
+      leftCluster: createCluster({ id: "cluster-3", title: "另一组待定聚合", itemCount: 1 }),
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+      const url = getFetchUrl(input);
+      if (url === "/api/admin/clusters?page=1&pageSize=10&minItemCount=2") {
+        return new Response(JSON.stringify({ clusters: [], total: 0 }));
+      }
+      if (url === CLUSTER_REVIEW_COUNT_URL) {
+        return new Response(JSON.stringify({ total: 2 }));
+      }
+      if (url === CLUSTER_REVIEW_LIST_URL) {
+        return new Response(JSON.stringify({ candidates: [createClusterReviewCandidate(), secondCandidate], total: 2 }));
+      }
+      if (url === "/api/admin/clusters/review-candidates/batch") {
+        expect(init?.method).toBe("POST");
+        return new Response(JSON.stringify({ success: true, succeeded: ["decision-1", "decision-2"], failed: [], total: 2 }));
+      }
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(<ContentReviewPanel activeTab="clusters" />);
+    await waitForLoaded();
+    await user.click(screen.getByRole("button", { name: "聚合待定（2）" }));
+    const dialog = await screen.findByRole("dialog", { name: "聚合待定" });
+    const mergeButton = within(dialog).getByRole("button", { name: "批量合并" });
+    const ignoreButton = within(dialog).getByRole("button", { name: "批量忽略" });
+
+    expect(within(dialog).getAllByLabelText("全选本页复核候选")).toHaveLength(1);
+    expect(mergeButton).toBeDisabled();
+    expect(ignoreButton).toBeDisabled();
+    expect(within(dialog).queryByText(/已选 \d+ 条/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "清空选择" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "刷新待定" }).parentElement).toHaveClass("justify-end");
+    const reviewTable = within(dialog).getByRole("table");
+    expect(reviewTable).toHaveClass("table-fixed", "min-w-[68rem]");
+    expect(reviewTable.parentElement).toHaveClass("overflow-x-auto");
+    expect(reviewTable.parentElement).not.toHaveClass("rounded-lg");
+    expect(within(reviewTable).getByRole("columnheader", { name: "判定" })).toHaveClass("w-[15%]");
+    const verdictTag = within(reviewTable).getAllByText("灰区复核")[0]!;
+    expect(verdictTag).toHaveClass("whitespace-nowrap");
+    expect(within(verdictTag.parentElement!).getByText(/04\/10/)).toHaveClass("whitespace-nowrap");
+    await user.click(within(dialog).getByLabelText("全选本页复核候选"));
+    expect(mergeButton).toBeEnabled();
+    expect(ignoreButton).toBeEnabled();
+
+    await user.click(mergeButton);
+    const confirmDialog = await screen.findByRole("dialog", { name: "确认批量操作" });
+    await user.click(within(confirmDialog).getByRole("button", { name: "确认执行" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/clusters/review-candidates/batch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "merge", ids: ["decision-1", "decision-2"] }),
+      });
+    });
   });
 
   it("loads cluster review candidates and merges one from the review queue", async () => {

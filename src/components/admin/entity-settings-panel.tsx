@@ -16,7 +16,7 @@ import {
   mergeAdminEntities,
   precomputeAdminEntitySuggestions,
 } from "@/components/admin/admin-settings-panel.api";
-import { BatchActionBar, type BatchActionDescriptor } from "@/components/admin/batch-action-bar";
+import { ADMIN_BATCH_MAX_ITEMS, type BatchActionDescriptor } from "@/components/admin/batch-action-bar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterInput } from "@/components/ui/filter-input";
@@ -65,6 +65,41 @@ const ENTITY_SUGGESTION_BATCH_ACTIONS: BatchActionDescriptor[] = [
     variant: "ghost",
   },
 ];
+
+function BatchActionConfirmationModal({
+  action,
+  selectedCount,
+  onCancel,
+  onConfirm,
+}: {
+  action: BatchActionDescriptor | null;
+  selectedCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell
+      isOpen={action !== null}
+      onClose={onCancel}
+      title="确认批量操作"
+      widthClassName="max-w-lg"
+      headerClassName="border-b border-[color:var(--line)] p-4"
+      bodyClassName="space-y-2 p-4"
+      footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button onClick={onCancel} variant="secondary">取消</Button>
+          <Button onClick={onConfirm} variant={action?.variant === "danger" ? "danger" : "primary"}>
+            确认执行
+          </Button>
+        </div>
+      }
+    >
+      <p className="text-sm text-[var(--foreground)]">即将对已选中的 {selectedCount} 条执行「{action?.label}」。</p>
+      <p className="text-sm leading-6 text-[var(--text-2)]">{action?.confirmText}</p>
+    </ModalShell>
+  );
+}
 
 function formatEntityCount(count: number) {
   return `${count} 条`;
@@ -135,6 +170,7 @@ function EntitySuggestionModal({
   onRunBatch,
 }: EntitySuggestionPanelProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const [pendingBatchAction, setPendingBatchAction] = useState<BatchActionDescriptor | null>(null);
 
   return (
     <ModalShell
@@ -147,6 +183,17 @@ function EntitySuggestionModal({
       footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
       footer={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          {ENTITY_SUGGESTION_BATCH_ACTIONS.map((action) => (
+            <Button
+              key={action.key}
+              size="sm"
+              variant={action.variant}
+              disabled={selectedIds.size < (action.key === "keep" ? 1 : 2) || selectedIds.size > ADMIN_BATCH_MAX_ITEMS || isBusy || isRunningBatch}
+              onClick={() => setPendingBatchAction(action)}
+            >
+              {action.label}
+            </Button>
+          ))}
           <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
             刷新建议
           </Button>
@@ -185,16 +232,6 @@ function EntitySuggestionModal({
           </EmptyState>
         ) : (
           <div className="w-full overflow-x-auto">
-            <BatchActionBar
-              className="mb-3"
-              selectedCount={selectedIds.size}
-              totalCount={suggestions.length}
-              actions={ENTITY_SUGGESTION_BATCH_ACTIONS}
-              isRunning={isRunningBatch}
-              onSelectAll={onSelectAll}
-              onClear={onClearSelection}
-              onRun={onRunBatch}
-            />
             <table className="w-full table-auto text-sm">
               <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
                 <tr>
@@ -301,6 +338,16 @@ function EntitySuggestionModal({
           />
         ) : null}
       </div>
+      <BatchActionConfirmationModal
+        action={pendingBatchAction}
+        selectedCount={selectedIds.size}
+        onCancel={() => setPendingBatchAction(null)}
+        onConfirm={() => {
+          const action = pendingBatchAction;
+          setPendingBatchAction(null);
+          if (action) onRunBatch(action.key);
+        }}
+      />
     </ModalShell>
   );
 }
@@ -805,6 +852,10 @@ export function EntitySettingsPanel({
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
   const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<Set<string>>(new Set());
   const [isRunningSuggestionBatch, setIsRunningSuggestionBatch] = useState(false);
+
+  useEffect(() => {
+    setSelectedSuggestionIds(new Set());
+  }, [isSuggestionModalOpen, suggestionPage, suggestionPageSize, suggestionSearch, suggestionSort]);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const managingEntity = useMemo(
@@ -977,7 +1028,7 @@ export function EntitySettingsPanel({
   function handleRunSuggestionBatch(actionKey: string) {
     const action = actionKey === "merge" ? "merge" : actionKey === "keep" ? "keep" : "ignore";
     const targets = suggestions.filter((entry) => selectedSuggestionIds.has(entry.id));
-    if (targets.length === 0) {
+    if (targets.length === 0 || targets.length > ADMIN_BATCH_MAX_ITEMS || (action !== "keep" && targets.length < 2)) {
       return;
     }
 

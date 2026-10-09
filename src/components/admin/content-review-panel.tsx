@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import {
   batchAggregationSplits,
   batchClusterReviewCandidates,
+  batchFilteredItems,
   fetchAggregationSplitDetail,
   fetchAggregationSplits,
   fetchAdminCluster,
@@ -19,7 +20,7 @@ import {
   type ContentReviewActionPayload,
   type RequiredActionField,
 } from "@/components/admin/content-review-panel.api";
-import { BatchActionBar, type BatchActionDescriptor } from "@/components/admin/batch-action-bar";
+import { ADMIN_BATCH_MAX_ITEMS, type BatchActionDescriptor } from "@/components/admin/batch-action-bar";
 import { ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS } from "@/config/constants";
 import { ContentReviewMergeModal } from "@/components/admin/content-review-merge-modal";
 import { PageShell } from "@/components/ui/page-shell";
@@ -199,7 +200,7 @@ const SPLIT_BATCH_ACTIONS: BatchActionDescriptor[] = [
     key: "cancel",
     label: "批量取消拆分",
     confirmText: "会把选中的聚合父条目标记为无需拆分，下线其拆分子条目。内容本身不会被删除。",
-    variant: "danger",
+    variant: "secondary",
   },
 ];
 
@@ -217,6 +218,41 @@ const REVIEW_CANDIDATE_BATCH_ACTIONS: BatchActionDescriptor[] = [
     variant: "secondary",
   },
 ];
+
+function BatchActionConfirmationModal({
+  action,
+  selectedCount,
+  onCancel,
+  onConfirm,
+}: {
+  action: BatchActionDescriptor | null;
+  selectedCount: number;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell
+      isOpen={action !== null}
+      onClose={onCancel}
+      title="确认批量操作"
+      widthClassName="max-w-lg"
+      headerClassName="border-b border-[color:var(--line)] p-4"
+      bodyClassName="space-y-2 p-4"
+      footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button onClick={onCancel} variant="secondary">取消</Button>
+          <Button onClick={onConfirm} variant={action?.variant === "danger" ? "danger" : "primary"}>
+            确认执行
+          </Button>
+        </div>
+      }
+    >
+      <p className="text-sm text-[var(--foreground)]">即将对已选中的 {selectedCount} 条执行「{action?.label}」。</p>
+      <p className="text-sm leading-6 text-[var(--text-2)]">{action?.confirmText}</p>
+    </ModalShell>
+  );
+}
 
 const splitChildFilterReasonLabels: Record<string, string> = {
   reparsed_parent: "重拆下线",
@@ -767,6 +803,7 @@ function ClusterReviewModal({
   onRunBatch,
 }: ClusterReviewModalProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const [pendingBatchAction, setPendingBatchAction] = useState<BatchActionDescriptor | null>(null);
 
   return (
     <ModalShell
@@ -778,7 +815,18 @@ function ClusterReviewModal({
       bodyClassName="space-y-4 p-4 max-h-[76vh] overflow-y-auto"
       footerClassName="border-t border-[color:var(--line)] bg-[var(--bg-muted)] p-4"
       footer={
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {REVIEW_CANDIDATE_BATCH_ACTIONS.map((action) => (
+            <Button
+              key={action.key}
+              size="sm"
+              variant={action.variant}
+              disabled={selectedIds.size < 2 || selectedIds.size > ADMIN_BATCH_MAX_ITEMS || isBusy || isRunningBatch}
+              onClick={() => setPendingBatchAction(action)}
+            >
+              {action.label}
+            </Button>
+          ))}
           <Button onClick={onRefresh} variant="secondary" disabled={isBusy}>
             刷新待定
           </Button>
@@ -794,29 +842,11 @@ function ClusterReviewModal({
             暂无待处理复核
           </EmptyState>
         ) : (
-          <div className="w-full overflow-x-auto rounded-lg border border-[color:var(--line)]">
-            <BatchActionBar
-              className="m-3 mb-0"
-              selectedCount={selectedIds.size}
-              totalCount={candidates.length}
-              actions={REVIEW_CANDIDATE_BATCH_ACTIONS}
-              isRunning={isRunningBatch}
-              onSelectAll={onSelectAll}
-              onClear={onClearSelection}
-              onRun={onRunBatch}
-            />
-            <table className="w-full min-w-[64rem] table-fixed text-sm">
-              <colgroup>
-                <col className="w-[4%]" />
-                <col className="w-[10%]" />
-                <col className="w-[23%]" />
-                <col className="w-[23%]" />
-                <col className="w-[30%]" />
-                <col className="w-[10%]" />
-              </colgroup>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full min-w-[68rem] table-fixed text-sm">
               <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
                 <tr>
-                  <th className="px-3 py-2">
+                  <th className="w-[4%] px-3 py-2">
                     <input
                       type="checkbox"
                       className="h-4 w-4 accent-[var(--accent)]"
@@ -834,11 +864,11 @@ function ClusterReviewModal({
                       }}
                     />
                   </th>
-                  <th className="whitespace-nowrap px-3 py-2 text-left">判定</th>
-                  <th className="px-3 py-2 text-left">左聚合</th>
-                  <th className="px-3 py-2 text-left">右聚合</th>
-                  <th className="px-3 py-2 text-left">判断依据</th>
-                  <th className="whitespace-nowrap px-3 py-2 text-right">操作</th>
+                  <th className="w-[15%] whitespace-nowrap px-3 py-2 text-left">判定</th>
+                  <th className="w-[21%] px-3 py-2 text-left">左聚合</th>
+                  <th className="w-[21%] px-3 py-2 text-left">右聚合</th>
+                  <th className="w-[29%] px-3 py-2 text-left">判断依据</th>
+                  <th className="w-[10%] whitespace-nowrap px-3 py-2 text-right">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[color:var(--line)]">
@@ -859,10 +889,10 @@ function ClusterReviewModal({
                         />
                       </td>
                       <td className="px-3 py-3">
-                        <StatusTag tone={reviewCandidateVerdictTone[candidate.verdict]}>
+                        <StatusTag className="whitespace-nowrap" tone={reviewCandidateVerdictTone[candidate.verdict]}>
                           {reviewCandidateVerdictLabels[candidate.verdict]}
                         </StatusTag>
-                        <div className="mt-1 text-xs text-[var(--text-3)]">
+                        <div className="mt-1 whitespace-nowrap text-xs text-[var(--text-3)]">
                           {formatDate(candidate.createdAt)}
                         </div>
                       </td>
@@ -939,6 +969,16 @@ function ClusterReviewModal({
           />
         ) : null}
       </div>
+      <BatchActionConfirmationModal
+        action={pendingBatchAction}
+        selectedCount={selectedIds.size}
+        onCancel={() => setPendingBatchAction(null)}
+        onConfirm={() => {
+          const action = pendingBatchAction;
+          setPendingBatchAction(null);
+          if (action) onRunBatch(action.key);
+        }}
+      />
     </ModalShell>
   );
 }
@@ -1019,8 +1059,10 @@ function ContentReviewContent({
   // Batch selection states
   const [selectedSplitIds, setSelectedSplitIds] = useState<Set<string>>(new Set());
   const [selectedReviewCandidateIds, setSelectedReviewCandidateIds] = useState<Set<string>>(new Set());
+  const [selectedFilteredItemIds, setSelectedFilteredItemIds] = useState<Set<string>>(new Set());
   const [isRunningSplitBatch, setIsRunningSplitBatch] = useState(false);
   const [isRunningReviewBatch, setIsRunningReviewBatch] = useState(false);
+  const [isRunningFilteredBatch, setIsRunningFilteredBatch] = useState(false);
 
   // Merge modal states
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
@@ -1127,6 +1169,18 @@ function ContentReviewContent({
     const cleanup = fetchData();
     return cleanup;
   }, [fetchData]);
+
+  useEffect(() => {
+    setSelectedFilteredItemIds(new Set());
+  }, [activeTab, page, pageSize, debouncedFilteredSearch, filteredSource, filteredReason, filteredRangeDays]);
+
+  useEffect(() => {
+    setSelectedSplitIds(new Set());
+  }, [activeTab, page, pageSize, debouncedSplitSearch, splitStatus, splitRangeDays]);
+
+  useEffect(() => {
+    setSelectedReviewCandidateIds(new Set());
+  }, [clusterReviewPage, clusterReviewPageSize, initialRangeDays]);
 
   useEffect(() => {
     if (!isClusterReviewModalOpen) {
@@ -1348,12 +1402,16 @@ function ContentReviewContent({
 
   const updatePage = useCallback((nextPage: number) => {
     setPage(nextPage);
+    setSelectedFilteredItemIds(new Set());
+    setSelectedSplitIds(new Set());
     onPageStateChange?.({ page: nextPage, pageSize });
   }, [onPageStateChange, pageSize]);
 
   const updatePageSize = useCallback((nextPageSize: number) => {
     setPageSize(nextPageSize);
     setPage(1);
+    setSelectedFilteredItemIds(new Set());
+    setSelectedSplitIds(new Set());
     onPageStateChange?.({ page: 1, pageSize: nextPageSize });
   }, [onPageStateChange]);
 
@@ -1377,6 +1435,8 @@ function ContentReviewContent({
       }
     }
     setPage(1);
+    setSelectedFilteredItemIds(new Set());
+    setSelectedSplitIds(new Set());
   };
 
   const handleOpenFilteredDetail = (item: ReviewItemDTO) => {
@@ -1433,6 +1493,7 @@ function ContentReviewContent({
 
   const handleOpenClusterReview = () => {
     setClusterReviewPage(1);
+    setSelectedReviewCandidateIds(new Set());
     setIsClusterReviewModalOpen(true);
   };
 
@@ -1460,6 +1521,76 @@ function ContentReviewContent({
           requiredField: "taskRun",
         });
       });
+    });
+  };
+
+  const toggleFilteredItemSelection = (itemId: string) => {
+    setSelectedFilteredItemIds((current) => {
+      const next = new Set(current);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const handleRunFilteredBatch = (action: "restore" | "reanalyze", ids: string[]) => {
+    if (ids.length === 0 || ids.length > ADMIN_BATCH_MAX_ITEMS) return;
+
+    runTransition(async () => {
+      setIsRunningFilteredBatch(true);
+      try {
+        const result = await batchFilteredItems(action, ids);
+        setSelectedFilteredItemIds(new Set());
+        if (action === "restore") {
+          const succeeded = new Set(result.succeeded);
+          setFilteredItems((current) => current.filter((item) => !succeeded.has(item.id)));
+          const remainingTotal = Math.max(0, filteredTotal - result.succeeded.length);
+          setFilteredTotal(remainingTotal);
+          const lastPage = Math.max(1, Math.ceil(remainingTotal / pageSize));
+          if (page > lastPage) setPage(lastPage);
+        }
+
+        const failedCount = result.failed.length;
+        const firstError = result.failed[0]?.error ?? "未知原因";
+        if (action === "restore") {
+          showToast(
+            failedCount === 0
+              ? `批量恢复完成，成功 ${result.succeeded.length} 条。`
+              : `批量恢复部分失败：成功 ${result.succeeded.length} 条，失败 ${failedCount} 条（首个原因：${firstError}）。`,
+            failedCount === 0 ? "success" : "error",
+          );
+        } else {
+          showToast(
+            failedCount === 0
+              ? `已为 ${result.succeeded.length} 条内容创建重新判定任务。`
+              : `重新判定部分失败：已创建 ${result.succeeded.length} 条任务，失败 ${failedCount} 条（首个原因：${firstError}）。`,
+            failedCount === 0 ? "success" : "error",
+          );
+        }
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "过滤内容批量操作失败。", "error");
+      } finally {
+        setIsRunningFilteredBatch(false);
+      }
+    });
+  };
+
+  const openConfirmFilteredBatch = (action: "restore" | "reanalyze") => {
+    const ids = [...selectedFilteredItemIds];
+    if (ids.length === 0 || ids.length > ADMIN_BATCH_MAX_ITEMS) return;
+    const restoring = action === "restore";
+    setConfirmModal({
+      isOpen: true,
+      title: restoring ? "确认批量恢复" : "确认批量重新判定",
+      message: restoring
+        ? `确定恢复已选中的 ${ids.length} 条过滤内容吗？`
+        : `确定为已选中的 ${ids.length} 条过滤内容创建重新判定任务吗？`,
+      confirmText: restoring ? "批量恢复" : "批量重新判定",
+      variant: "primary",
+      onConfirm: () => {
+        closeConfirmModal();
+        handleRunFilteredBatch(action, ids);
+      },
     });
   };
 
@@ -1580,9 +1711,25 @@ function ContentReviewContent({
     });
   };
 
+  const openConfirmSplitBatch = (action: BatchActionDescriptor) => {
+    const ids = [...selectedSplitIds];
+    if (ids.length === 0 || ids.length > ADMIN_BATCH_MAX_ITEMS) return;
+    setConfirmModal({
+      isOpen: true,
+      title: `确认${action.label}`,
+      message: `确定对已选中的 ${ids.length} 条拆分记录执行“${action.label}”吗？ ${action.confirmText}`,
+      confirmText: action.label,
+      variant: action.variant === "danger" ? "danger" : "primary",
+      onConfirm: () => {
+        closeConfirmModal();
+        handleRunSplitBatch(action.key);
+      },
+    });
+  };
+
   const handleRunSplitBatch = (actionKey: string) => {
     const ids = [...selectedSplitIds];
-    if (ids.length === 0) {
+    if (ids.length === 0 || ids.length > ADMIN_BATCH_MAX_ITEMS) {
       return;
     }
 
@@ -1618,7 +1765,7 @@ function ContentReviewContent({
 
   const handleRunReviewCandidateBatch = (actionKey: string) => {
     const ids = [...selectedReviewCandidateIds];
-    if (ids.length === 0) {
+    if (ids.length < 2 || ids.length > ADMIN_BATCH_MAX_ITEMS) {
       return;
     }
 
@@ -1904,9 +2051,45 @@ function ContentReviewContent({
               聚合待定{clusterReviewTotal > 0 ? `（${clusterReviewTotal}）` : ""}
             </Button>
           ) : null}
-          <Button onClick={handleClearFilters} variant="secondary" disabled={!hasFilters}>
-            清空筛选
-          </Button>
+          {activeTab === "filtered" ? (
+            <>
+              <Button
+                size="sm"
+                onClick={() => openConfirmFilteredBatch("restore")}
+                disabled={selectedFilteredItemIds.size === 0 || selectedFilteredItemIds.size > ADMIN_BATCH_MAX_ITEMS || isPending || isRunningFilteredBatch}
+              >
+                批量恢复
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => openConfirmFilteredBatch("reanalyze")}
+                disabled={selectedFilteredItemIds.size === 0 || selectedFilteredItemIds.size > ADMIN_BATCH_MAX_ITEMS || isPending || isRunningFilteredBatch}
+              >
+                批量重新判定
+              </Button>
+            </>
+          ) : null}
+          {activeTab === "splits" ? (
+            <>
+              {SPLIT_BATCH_ACTIONS.map((action) => (
+                <Button
+                  key={action.key}
+                  size="sm"
+                  variant={action.variant}
+                  onClick={() => openConfirmSplitBatch(action)}
+                  disabled={selectedSplitIds.size === 0 || selectedSplitIds.size > ADMIN_BATCH_MAX_ITEMS || isPending || isRunningSplitBatch}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </>
+          ) : null}
+          {activeTab !== "clusters" ? (
+            <Button onClick={handleClearFilters} variant="secondary" disabled={!hasFilters}>
+              清空筛选
+            </Button>
+          ) : null}
           <Button onClick={fetchData} variant="secondary" disabled={isPending}>
             刷新
           </Button>
@@ -2072,17 +2255,39 @@ function ContentReviewContent({
           <table className="w-full table-fixed text-sm">
             <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
               <tr>
-                <th className="w-[34%] text-left px-4 py-3">标题</th>
-                <th className="w-[22%] whitespace-nowrap text-left px-4 py-3">来源</th>
+                <th className="w-[4%] px-4 py-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-[var(--accent)]"
+                    aria-label="全选本页过滤内容"
+                    checked={filteredItems.length > 0 && filteredItems.every((item) => selectedFilteredItemIds.has(item.id))}
+                    disabled={isRunningFilteredBatch}
+                    onChange={(event) => setSelectedFilteredItemIds(
+                      event.target.checked ? new Set(filteredItems.map((item) => item.id)) : new Set(),
+                    )}
+                  />
+                </th>
+                <th className="w-[30%] text-left px-4 py-3">标题</th>
+                <th className="w-[21%] whitespace-nowrap text-left px-4 py-3">来源</th>
                 <th className="w-[14%] whitespace-nowrap text-left px-4 py-3">原因</th>
                 <th className="w-[8%] whitespace-nowrap text-left px-4 py-3">质量</th>
                 <th className="w-[12%] whitespace-nowrap text-left px-4 py-3">时间</th>
-                <th className="w-[10%] whitespace-nowrap text-right px-4 py-3">操作</th>
+                <th className="w-[11%] whitespace-nowrap text-right px-4 py-3">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[color:var(--line)]">
               {(paginatedItems as ReviewItemDTO[]).map((item) => (
                 <tr key={item.id} className="hover:bg-[var(--bg-muted)] transition-colors">
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-[var(--accent)]"
+                      aria-label={`选择过滤内容 ${item.title}`}
+                      checked={selectedFilteredItemIds.has(item.id)}
+                      disabled={isRunningFilteredBatch}
+                      onChange={() => toggleFilteredItemSelection(item.id)}
+                    />
+                  </td>
                   <td className="px-4 py-3 max-w-0">
                     <button
                       type="button"
@@ -2219,16 +2424,6 @@ function ContentReviewContent({
         </div>
       ) : (
         <div className="w-full overflow-x-auto">
-          <BatchActionBar
-            className="mb-3"
-            selectedCount={selectedSplitIds.size}
-            totalCount={paginatedItems.length}
-            actions={SPLIT_BATCH_ACTIONS}
-            isRunning={isRunningSplitBatch}
-            onSelectAll={() => setSelectedSplitIds(new Set(paginatedItems.map((item) => item.id)))}
-            onClear={() => setSelectedSplitIds(new Set())}
-            onRun={handleRunSplitBatch}
-          />
           <table className="w-full table-auto text-sm">
             <thead className="bg-[var(--bg-muted)] text-[var(--muted)]">
               <tr>
@@ -2386,8 +2581,12 @@ function ContentReviewContent({
         isBusy={isPending}
         pendingId={reviewCandidatePendingId}
         onClose={handleCloseClusterReview}
-        onPageChange={setClusterReviewPage}
+        onPageChange={(nextPage) => {
+          setSelectedReviewCandidateIds(new Set());
+          setClusterReviewPage(nextPage);
+        }}
         onPageSizeChange={(nextPageSize) => {
+          setSelectedReviewCandidateIds(new Set());
           setClusterReviewPageSize(nextPageSize);
           setClusterReviewPage(1);
         }}

@@ -74,16 +74,25 @@ const entitySuggestionPayload = {
   pageSize: 10,
 };
 
-function createFetchMock() {
+function createFetchMock(suggestionsPayload = entitySuggestionPayload) {
   return vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
     const url = String(input);
+
+    if (url === "/api/admin/settings/entities/suggestions/batch" && init?.method === "POST") {
+      return new Response(JSON.stringify({
+        success: true,
+        succeeded: ["entity-agents:entity-agent", "entity-agent-builder:entity-agent"],
+        failed: [],
+        total: 2,
+      }));
+    }
 
     if (url === "/api/admin/settings/entities/suggestions" && init?.method === "POST") {
       return new Response(JSON.stringify({ ok: true }));
     }
 
     if (url.startsWith("/api/admin/settings/entities/suggestions")) {
-      return new Response(JSON.stringify(entitySuggestionPayload));
+      return new Response(JSON.stringify(suggestionsPayload));
     }
 
     if (url === "/api/admin/settings/entities/merge" && init?.method === "POST") {
@@ -183,6 +192,84 @@ describe("EntitySettingsPanel", () => {
           "content-type": "application/json",
         },
         body: undefined,
+      });
+    });
+  });
+
+  it("places governance batch actions in the modal footer and requires multiple selections", async () => {
+    const user = userEvent.setup();
+    const secondSuggestion = {
+      ...entitySuggestionPayload.suggestions[0],
+      id: "entity-agent-builder:entity-agent",
+      sourceEntity: {
+        id: "entity-agent-builder",
+        name: "Agent Builder",
+        normalized: "agent builder",
+        itemCount: 2,
+        aliasCount: 0,
+      },
+    };
+    const fetchMock = createFetchMock({
+      ...entitySuggestionPayload,
+      suggestions: [...entitySuggestionPayload.suggestions, secondSuggestion],
+      totalCount: 2,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderWithProviders(<EntitySettingsPanel initialOpenSuggestions />);
+    const dialog = await screen.findByRole("dialog", { name: "治理建议" });
+    const mergeButton = within(dialog).getByRole("button", { name: "批量合并" });
+    const ignoreButton = within(dialog).getByRole("button", { name: "批量忽略" });
+    const keepButton = within(dialog).getByRole("button", { name: "批量保留为不同实体" });
+    await within(dialog).findByLabelText("选择治理建议 AI Agents");
+
+    expect(within(dialog).getAllByLabelText("全选本页治理建议")).toHaveLength(1);
+    expect(mergeButton).toBeDisabled();
+    expect(ignoreButton).toBeDisabled();
+    expect(keepButton).toBeDisabled();
+    expect(within(dialog).queryByText(/已选 \d+ 条/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "清空选择" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "刷新建议" }).parentElement).toHaveClass("justify-end");
+
+    await user.click(within(dialog).getByLabelText("选择治理建议 AI Agents"));
+    expect(mergeButton).toBeDisabled();
+    expect(ignoreButton).toBeDisabled();
+    expect(keepButton).toBeEnabled();
+
+    await user.click(keepButton);
+    const keepDialog = await screen.findByRole("dialog", { name: "确认批量操作" });
+    await user.click(within(keepDialog).getByRole("button", { name: "确认执行" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions/batch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "keep",
+          suggestions: [{ sourceEntityId: "entity-agents", targetEntityId: "entity-agent" }],
+        }),
+      });
+    });
+
+    await user.click(within(dialog).getByLabelText("选择治理建议 AI Agents"));
+    await user.click(within(dialog).getByLabelText("选择治理建议 Agent Builder"));
+    expect(mergeButton).toBeEnabled();
+    expect(ignoreButton).toBeEnabled();
+
+    await user.click(mergeButton);
+    const confirmDialog = await screen.findByRole("dialog", { name: "确认批量操作" });
+    await user.click(within(confirmDialog).getByRole("button", { name: "确认执行" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/admin/settings/entities/suggestions/batch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "merge",
+          suggestions: [
+            { sourceEntityId: "entity-agents", targetEntityId: "entity-agent" },
+            { sourceEntityId: "entity-agent-builder", targetEntityId: "entity-agent" },
+          ],
+        }),
       });
     });
   });
