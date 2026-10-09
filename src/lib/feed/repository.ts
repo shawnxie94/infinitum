@@ -958,6 +958,9 @@ function buildFeedEntryCandidatesCte(
   if (filters.sourceId) {
     nonTimeWhereClauses.push(Prisma.sql`s.id = ${filters.sourceId}`);
   }
+  if (filters.groupId) {
+    nonTimeWhereClauses.push(Prisma.sql`s."groupId" = ${filters.groupId}`);
+  }
 
   const likeSearchTerm = sanitizeLikeQuery(filters.title);
 
@@ -976,6 +979,8 @@ function buildFeedEntryCandidatesCte(
       searchClauses.push(Prisma.sql`COALESCE(i."translatedTitle", '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
       searchClauses.push(Prisma.sql`COALESCE(i.author, '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
       searchClauses.push(Prisma.sql`COALESCE(c.title, '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
+      searchClauses.push(Prisma.sql`COALESCE(c.summary, '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
+      searchClauses.push(Prisma.sql`COALESCE(c."feedSearchText", '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
     }
 
     nonTimeWhereClauses.push(Prisma.sql`(${Prisma.join(searchClauses, " OR ")})`);
@@ -1102,7 +1107,7 @@ function buildFeedEntryCandidatesCte(
         mi."sourceGroupId" AS "groupId",
         COUNT(*) AS count,
         MIN(mi."createdAt") AS "firstCreatedAt"
-      FROM matched_items mi
+      FROM filtered_items mi
       INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId"
       WHERE mi."sourceGroupId" IS NOT NULL
       GROUP BY mi."clusterId", mi."sourceGroupId"
@@ -1125,7 +1130,7 @@ function buildFeedEntryCandidatesCte(
       SELECT
         mi."clusterId" AS id,
         COUNT(*) AS "matchedItemCount"
-      FROM matched_items mi
+      FROM filtered_items mi
       INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId"
       GROUP BY mi."clusterId"
     ),
@@ -1139,13 +1144,14 @@ function buildFeedEntryCandidatesCte(
           : Prisma.empty}
         MAX(fi."publishedAt") AS "latestPublishedAt",
         MAX(fi."createdAt") AS "createdAt",
-        MAX(COALESCE(csg.score, 0)) AS score,
+        MAX(COALESCE(csg.score, cc."displayAverageScore", cc.score, 0)) AS score,
         COUNT(*) AS "itemCount",
-        MAX(COALESCE(cmc."matchedItemCount", 0)) AS "matchedItemCount",
-        MAX(COALESCE(csg."sourceCount", 0)) AS "sourceCount",
-        MAX(COALESCE(csg."totalItemCount", 0)) AS "totalItemCount",
+        COUNT(*) AS "matchedItemCount",
+        ${filters.sourceId ? Prisma.sql`1 AS "sourceCount"` : Prisma.sql`COUNT(DISTINCT fi."sourceId") AS "sourceCount"`},
+        COUNT(*) AS "totalItemCount",
+        MAX(cc."displayItemCount") AS "displayItemCount",
         MIN(cdg."groupId") AS "entryGroupId",
-        MAX(COALESCE(csg."qualityScore", 0)) AS "qualityScore"
+        MAX(COALESCE(csg."qualityScore", cc."displayQualityScore", cc.score, 0)) AS "qualityScore"
       FROM filtered_items fi
       INNER JOIN "content_clusters" cc ON cc.id = fi."clusterId"
       LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId"
@@ -1175,7 +1181,8 @@ function buildFeedEntryCandidatesCte(
       FROM filtered_items fi
       LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId"
       LEFT JOIN cluster_score_groups csg ON csg.id = fi."clusterId"
-      WHERE fi."clusterId" IS NULL OR COALESCE(cmc."matchedItemCount", 1) <= 1
+      LEFT JOIN "content_clusters" cc ON cc.id = fi."clusterId"
+      WHERE fi."clusterId" IS NULL OR COALESCE(cc."displayItemCount", 0) <= 1
     ),
     cluster_entries AS (
       SELECT
@@ -1196,7 +1203,7 @@ function buildFeedEntryCandidatesCte(
         cg."entryGroupId" AS "entryGroupId",
         cg."qualityScore" AS "qualityScore"
       FROM cluster_groups cg
-      WHERE cg."matchedItemCount" > 1${explicitClusterEntryClause}
+      WHERE cg."displayItemCount" > 1${explicitClusterEntryClause}
     ),
     all_entry_candidates AS (
       SELECT id, type, NULL AS "clusterId", ${includeDisplayFields ? Prisma.sql`title, summary,` : Prisma.empty} "latestPublishedAt", "createdAt", score, "sourceCount", "itemCount", "totalItemCount", "entryGroupId", "qualityScore"
@@ -1267,6 +1274,9 @@ function buildFeedEntryCountCandidatesCte(
   if (filters.sourceId) {
     nonTimeWhereClauses.push(Prisma.sql`s.id = ${filters.sourceId}`);
   }
+  if (filters.groupId) {
+    nonTimeWhereClauses.push(Prisma.sql`s."groupId" = ${filters.groupId}`);
+  }
 
   const likeSearchTerm = sanitizeLikeQuery(filters.title);
 
@@ -1283,6 +1293,8 @@ function buildFeedEntryCountCandidatesCte(
       searchClauses.push(Prisma.sql`COALESCE(i."translatedTitle", '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
       searchClauses.push(Prisma.sql`COALESCE(i.author, '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
       searchClauses.push(Prisma.sql`COALESCE(c.title, '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
+      searchClauses.push(Prisma.sql`COALESCE(c.summary, '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
+      searchClauses.push(Prisma.sql`COALESCE(c."feedSearchText", '') LIKE ${likeSearchTerm} ESCAPE ${likeEscape}`);
     }
 
     nonTimeWhereClauses.push(Prisma.sql`(${Prisma.join(searchClauses, " OR ")})`);
@@ -1353,7 +1365,7 @@ function buildFeedEntryCountCandidatesCte(
       SELECT
         mi."clusterId" AS id,
         COUNT(*) AS "matchedItemCount"
-      FROM matched_items mi
+      FROM filtered_items mi
       INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId"
       GROUP BY mi."clusterId"
     ),
@@ -1363,7 +1375,7 @@ function buildFeedEntryCountCandidatesCte(
         mi."sourceGroupId" AS "groupId",
         COUNT(*) AS count,
         MIN(mi."createdAt") AS "firstCreatedAt"
-      FROM matched_items mi
+      FROM filtered_items mi
       INNER JOIN relevant_clusters rc ON rc.id = mi."clusterId"
       WHERE mi."sourceGroupId" IS NOT NULL
       GROUP BY mi."clusterId", mi."sourceGroupId"
@@ -1388,9 +1400,10 @@ function buildFeedEntryCountCandidatesCte(
         MIN(cdg."groupId") AS "entryGroupId"
       FROM filtered_items fi
       INNER JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId"
+      INNER JOIN "content_clusters" cc ON cc.id = fi."clusterId"
       LEFT JOIN cluster_dominant_groups cdg ON cdg."clusterId" = fi."clusterId"
       WHERE fi."clusterId" IS NOT NULL
-        AND (cmc."matchedItemCount" > 1${explicitClusterEntryClause})
+        AND (cc."displayItemCount" > 1${explicitClusterEntryClause})
       GROUP BY fi."clusterId"
     ),
     single_count_entries AS (
@@ -1398,8 +1411,8 @@ function buildFeedEntryCountCandidatesCte(
         fi."itemId" AS id,
         fi."sourceGroupId" AS "entryGroupId"
       FROM filtered_items fi
-      LEFT JOIN cluster_match_counts cmc ON cmc.id = fi."clusterId"
-      WHERE fi."clusterId" IS NULL OR COALESCE(cmc."matchedItemCount", 1) <= 1
+      LEFT JOIN "content_clusters" cc ON cc.id = fi."clusterId"
+      WHERE fi."clusterId" IS NULL OR COALESCE(cc."displayItemCount", 0) <= 1
     ),
     entry_count_candidates AS (
       SELECT id, "entryGroupId"
@@ -1568,6 +1581,10 @@ function buildEntityFeedEntryCountCandidatesCte(
   `;
 }
 
+function shouldMatchFeedEntriesAtItemLevel(filters: Pick<FeedFilters, "sourceId" | "title">) {
+  return Boolean(filters.sourceId || filters.title?.trim());
+}
+
 function buildActiveFeedEntryCandidatesCte(
   filters: FeedFilters & {
     rangeStart: Date | null;
@@ -1587,6 +1604,15 @@ function buildActiveFeedEntryCandidatesCte(
     });
   }
 
+  // Filtered searches need item hits to bubble up to their cluster, while the
+  // precomputed aggregate path remains the fast path for the unfiltered feed.
+  if (shouldMatchFeedEntriesAtItemLevel(filters)) {
+    return buildFeedEntryCandidatesCte(filters, searchTerm, {
+      includeClusterScoreStats: false,
+      includeDisplayFields: options.includeDisplayFields,
+    });
+  }
+
   return buildEntityFeedEntryCandidatesCte(filters, searchTerm, options);
 }
 
@@ -1599,7 +1625,7 @@ function buildActiveFeedEntryCountCandidatesCte(
   },
   searchTerm: string | null,
 ) {
-  if (!isClusterEntityFilteringEnabled()) {
+  if (!isClusterEntityFilteringEnabled() || shouldMatchFeedEntriesAtItemLevel(filters)) {
     return buildFeedEntryCountCandidatesCte(filters, searchTerm);
   }
 
@@ -1766,6 +1792,52 @@ export async function listNewsSitemapItems(since: Date, limit: number) {
   });
 }
 
+async function findFilteredClusterPreviewItems(
+  clusterIds: string[],
+  filters: FeedFilters & {
+    rangeStart: Date | null;
+    rangeEnd: Date | null;
+    publishedRangeStart: Date | null;
+    publishedRangeEnd: Date | null;
+  },
+  searchTerm: string | null,
+) {
+  if (clusterIds.length === 0) {
+    return [];
+  }
+
+  const previewRows = await prisma.$queryRaw<Array<{ itemId: string }>>(Prisma.sql`
+    ${buildFeedEntryCandidatesCte(filters, searchTerm, {
+      includeClusterScoreStats: false,
+      includeDisplayFields: false,
+    })},
+    ranked_cluster_items AS (
+      SELECT
+        fi."itemId",
+        ROW_NUMBER() OVER (
+          PARTITION BY fi."clusterId"
+          ORDER BY fi."publishedAt" DESC, fi."createdAt" DESC, fi."itemId" ASC
+        ) AS previewRank
+      FROM filtered_items fi
+      WHERE fi."clusterId" IN (${Prisma.join(clusterIds)})
+    )
+    SELECT "itemId"
+    FROM ranked_cluster_items
+    WHERE previewRank <= 3
+  `);
+  const itemIds = previewRows.map((row) => row.itemId);
+
+  if (itemIds.length === 0) {
+    return [];
+  }
+
+  return prisma.item.findMany({
+    where: { id: { in: itemIds } },
+    include: { source: { include: { group: true } } },
+    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+  });
+}
+
 export async function listFeedItems(
   filters: FeedFilters & {
     rangeStart: Date | null;
@@ -1840,29 +1912,31 @@ export async function listFeedItems(
         })
       : Promise.resolve([]),
     clusterIds.length > 0
-      ? prisma.item.findMany({
-          where: {
-            clusterId: { in: clusterIds },
-            status: "processed",
-            moderationStatus: {
-              in: [...DISPLAYABLE_MODERATION_STATUSES],
-            },
-            isAggregation: false,
-            source: {
-              is: {
-                enabled: true,
+      ? shouldMatchFeedEntriesAtItemLevel(filters)
+        ? findFilteredClusterPreviewItems(clusterIds, filters, searchTerm)
+        : prisma.item.findMany({
+            where: {
+              clusterId: { in: clusterIds },
+              status: "processed",
+              moderationStatus: {
+                in: [...DISPLAYABLE_MODERATION_STATUSES],
+              },
+              isAggregation: false,
+              source: {
+                is: {
+                  enabled: true,
+                },
               },
             },
-          },
-          include: {
-            source: {
-              include: {
-                group: true,
+            include: {
+              source: {
+                include: {
+                  group: true,
+                },
               },
             },
-          },
-          orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
-        })
+            orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+          })
       : Promise.resolve([]),
     clusterIds.length > 0
       ? prisma.contentCluster.findMany({
