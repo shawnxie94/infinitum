@@ -80,7 +80,33 @@ export type ItemUnderstandingResult = AiEnrichment & {
   };
 };
 
-export type ClusterMergeDecisionVerdict = "approved" | "declined" | "ambiguous";
+/**
+ * 聚类 pair 的关系语义单字段：关系判断与合并动作分离。
+ * 动作由 getClusterMergeRelationAction 派生，不单独持久化 verdict。
+ * failed 不是模型可输出的关系，仅作为决策记录状态保留在 DB enum 中。
+ */
+export type ClusterMergeRelation = "same_event" | "follow_up" | "synthesis" | "unrelated" | "uncertain";
+
+export type ClusterMergeRelationAction = "merge" | "reject" | "review";
+
+export function getClusterMergeRelationAction(relation: ClusterMergeRelation): ClusterMergeRelationAction {
+  switch (relation) {
+    case "same_event":
+      return "merge";
+    case "uncertain":
+      return "review";
+    default:
+      return "reject";
+  }
+}
+
+export const CLUSTER_MERGE_RELATIONS = [
+  "same_event",
+  "follow_up",
+  "synthesis",
+  "unrelated",
+  "uncertain",
+] as const;
 
 export const CLUSTER_MERGE_REASON_CODES = [
   "same_event",
@@ -90,14 +116,33 @@ export const CLUSTER_MERGE_REASON_CODES = [
   "action_conflict",
   "date_conflict",
   "subject_conflict",
+  "follow_up_event",
+  "synthesis_article",
+  "admin_declined",
 ] as const;
 
 export type ClusterMergeReasonCode = typeof CLUSTER_MERGE_REASON_CODES[number];
 
+/** relation × reasonCode 的合法组合；人工写入额外允许 admin_declined 兜底。 */
+export const CLUSTER_MERGE_RELATION_REASON_CODES: Record<ClusterMergeRelation, readonly ClusterMergeReasonCode[]> = {
+  same_event: ["same_event"],
+  follow_up: ["follow_up_event"],
+  synthesis: ["synthesis_article"],
+  uncertain: ["insufficient_evidence"],
+  unrelated: ["different_event", "object_conflict", "action_conflict", "date_conflict", "subject_conflict", "admin_declined"],
+};
+
+/** 旧 verdict 协议响应的兼容映射（DB 存量 prompt 仍会让模型输出 verdict）。 */
+export const LEGACY_VERDICT_TO_RELATION: Record<"approved" | "declined" | "ambiguous", ClusterMergeRelation> = {
+  approved: "same_event",
+  declined: "unrelated",
+  ambiguous: "uncertain",
+};
+
 export type ClusterMergeDecision = {
   leftClusterId: string;
   rightClusterId: string;
-  verdict: ClusterMergeDecisionVerdict;
+  relation: ClusterMergeRelation;
   confidence: number | null;
   reasonCode: ClusterMergeReasonCode | null;
   reasonText: string | null;

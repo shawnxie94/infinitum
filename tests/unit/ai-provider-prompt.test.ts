@@ -262,11 +262,12 @@ describe("ai provider quality rubric integration", () => {
       ],
     }));
 
+    // 存量 prompt 仍输出 verdict 旧协议：断言兼容映射后的 relation。
     expect(decisions).toEqual([
       {
         leftClusterId: "left-1",
         rightClusterId: "right-1",
-        verdict: "approved",
+        relation: "same_event",
         confidence: 95,
         reasonCode: "same_event",
         reasonText: "主体、对象一致。"
@@ -274,7 +275,7 @@ describe("ai provider quality rubric integration", () => {
       {
         leftClusterId: "left-2",
         rightClusterId: "right-2",
-        verdict: "ambiguous",
+        relation: "uncertain",
         confidence: 70,
         reasonCode: "insufficient_evidence",
         reasonText: "证据不足。"
@@ -306,7 +307,7 @@ describe("ai provider quality rubric integration", () => {
     }))).resolves.toEqual([expect.objectContaining({
       leftClusterId: "left-1",
       rightClusterId: "right-1",
-      verdict: "approved",
+      relation: "same_event",
     })]);
   });
 

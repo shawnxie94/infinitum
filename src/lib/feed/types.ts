@@ -137,7 +137,7 @@ export type ClusterDTO = {
 
 export type ClusterReviewCandidateDTO = {
   id: string;
-  verdict: "approved" | "declined" | "ambiguous" | "failed";
+  relation: "same_event" | "follow_up" | "synthesis" | "unrelated" | "uncertain" | "failed";
   source: "local_rule" | "llm" | "manual" | "system";
   reasonCode: string | null;
   reasonText: string | null;

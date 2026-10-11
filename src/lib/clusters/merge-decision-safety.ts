@@ -8,13 +8,13 @@ export type ClusterMergeDecisionConsistencyAudit = {
   status: "downgraded";
   issueCodes: ClusterMergeDecisionConsistencyIssue[];
   original: {
-    verdict: ClusterMergeDecision["verdict"];
+    relation: ClusterMergeDecision["relation"];
     confidence: number | null;
     reasonCode: ClusterMergeDecision["reasonCode"];
     reasonText: string | null;
   };
   effective: {
-    verdict: "ambiguous";
+    relation: "uncertain";
     reasonCode: "insufficient_evidence";
   };
 };
@@ -45,7 +45,7 @@ export function reconcileApprovedClusterMergeDecision(
   decision: ClusterMergeDecision,
   pairSafetyReason: string | null,
 ): { decision: ClusterMergeDecision; audit: ClusterMergeDecisionConsistencyAudit | null } {
-  if (decision.verdict !== "approved") {
+  if (decision.relation !== "same_event") {
     return { decision, audit: null };
   }
 
@@ -69,9 +69,9 @@ export function reconcileApprovedClusterMergeDecision(
   const reasonText = decision.reasonText?.trim() || "（原始理由为空）";
   const downgraded: ClusterMergeDecision = {
     ...decision,
-    verdict: "ambiguous",
+    relation: "uncertain",
     reasonCode: "insufficient_evidence",
-    reasonText: `一致性保护转人工复核：${issueText}。原始 AI verdict=${decision.verdict}，reasonCode=${decision.reasonCode}；原始理由：${reasonText}`,
+    reasonText: `一致性保护转人工复核：${issueText}。原始 AI relation=${decision.relation}，reasonCode=${decision.reasonCode}；原始理由：${reasonText}`,
   };
 
   return {
@@ -80,12 +80,12 @@ export function reconcileApprovedClusterMergeDecision(
       status: "downgraded",
       issueCodes,
       original: {
-        verdict: decision.verdict,
+        relation: decision.relation,
         confidence: decision.confidence,
         reasonCode: decision.reasonCode,
         reasonText: decision.reasonText,
       },
-      effective: { verdict: "ambiguous", reasonCode: "insufficient_evidence" },
+      effective: { relation: "uncertain", reasonCode: "insufficient_evidence" },
     },
   };
 }

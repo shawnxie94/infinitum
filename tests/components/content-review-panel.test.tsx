@@ -116,7 +116,7 @@ function createClusterReviewCandidate(overrides: Partial<Record<string, unknown>
 
   return {
     id: "decision-1",
-    verdict: "ambiguous",
+    relation: "uncertain",
     source: "llm",
     reasonCode: "llm_ambiguous",
     reasonText: "主体一致但对象证据不足",

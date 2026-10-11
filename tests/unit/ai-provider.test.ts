@@ -4,7 +4,19 @@ import { createAiProvider } from "@/lib/ai/provider-next";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import type { DailyReportReviewInput } from "@/lib/daily-report/types";
 
-function makeMergeDecision(pairRef: string, verdict: "approved" | "declined" | "ambiguous") {
+function makeMergeDecision(pairRef: string, relation: "same_event" | "unrelated" | "uncertain" = "unrelated") {
+  const reasonCode = relation === "same_event" ? "same_event" : relation === "uncertain" ? "insufficient_evidence" : "different_event";
+  return {
+    pair_id: pairRef,
+    relation,
+    confidence: 95,
+    reasonCode,
+    reasonText: relation === "same_event" ? "主体、对象和事件动作一致。" : relation === "uncertain" ? "证据不足，无法确认是同一事件。" : "主体和具体对象不同，不是同一事件。",
+  };
+}
+
+/** 旧 verdict 协议响应：DB 存量 prompt 仍会产出，解析层必须兼容映射。 */
+function makeLegacyVerdictDecision(pairRef: string, verdict: "approved" | "declined" | "ambiguous") {
   const reasonCode = verdict === "approved" ? "same_event" : verdict === "ambiguous" ? "insufficient_evidence" : "different_event";
   return {
     pair_id: pairRef,
@@ -343,7 +355,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), makeMergeDecision("p2", "approved")] }),
+            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "same_event"), makeMergeDecision("p2", "same_event")] }),
           },
         },
       ],
@@ -380,8 +392,8 @@ describe("ai provider", () => {
     }));
 
     expect(decisions).toEqual([
-      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-b", verdict: "approved", reasonCode: "same_event" }),
-      expect.objectContaining({ leftClusterId: "cluster-b", rightClusterId: "cluster-c", verdict: "approved", reasonCode: "same_event" }),
+      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-b", relation: "same_event", reasonCode: "same_event" }),
+      expect.objectContaining({ leftClusterId: "cluster-b", rightClusterId: "cluster-c", relation: "same_event", reasonCode: "same_event" }),
     ]);
     expect(create).toHaveBeenCalledTimes(1);
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("候选聚合 Pair");
@@ -395,11 +407,11 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[1]?.content).not.toContain("merge_pair_");
   });
 
-  it("parses explicit cluster merge verdicts including ambiguous pairs", async () => {
+  it("parses legacy verdict responses including ambiguous pairs via compat mapping", async () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
         message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), makeMergeDecision("p2", "ambiguous")] }),
+            content: JSON.stringify({ decisions: [makeLegacyVerdictDecision("p1", "approved"), makeLegacyVerdictDecision("p2", "ambiguous")] }),
         },
       }],
     });
@@ -433,8 +445,8 @@ describe("ai provider", () => {
         },
       ],
     }))).resolves.toEqual([
-      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-b", verdict: "approved", reasonCode: "same_event" }),
-      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-c", verdict: "ambiguous", reasonCode: "insufficient_evidence" }),
+      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-b", relation: "same_event", reasonCode: "same_event" }),
+      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-c", relation: "uncertain", reasonCode: "insufficient_evidence" }),
     ]);
 
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("每个输入 pair_id");
@@ -446,7 +458,7 @@ describe("ai provider", () => {
     const create = vi.fn().mockResolvedValue({
       choices: [{
         message: {
-          content: JSON.stringify({ decisions: [makeMergeDecision("p1", "declined")] }),
+          content: JSON.stringify({ decisions: [makeMergeDecision("p1", "unrelated")] }),
         },
       }],
     });
@@ -465,7 +477,7 @@ describe("ai provider", () => {
     }))).resolves.toEqual([expect.objectContaining({
       leftClusterId: "cluster-a",
       rightClusterId: "cluster-b",
-      verdict: "declined",
+      relation: "unrelated",
       confidence: 95,
       reasonCode: "different_event",
       reasonText: "主体和具体对象不同，不是同一事件。",
@@ -478,7 +490,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), makeMergeDecision("p9", "approved")] }),
+            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "same_event"), makeMergeDecision("p9", "same_event")] }),
           },
         },
       ],
@@ -510,7 +522,7 @@ describe("ai provider", () => {
     }))).resolves.toEqual([expect.objectContaining({
       leftClusterId: "cluster-a",
       rightClusterId: "cluster-b",
-      verdict: "approved",
+      relation: "same_event",
     })]);
   });
 
@@ -557,7 +569,7 @@ describe("ai provider", () => {
       choices: [
         {
           message: {
-            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved"), { ...makeMergeDecision("p2", "declined"), verdict: "approve" }, makeMergeDecision("p3", "declined")] }),
+            content: JSON.stringify({ decisions: [makeMergeDecision("p1", "same_event"), { ...makeMergeDecision("p2", "unrelated"), relation: "approve" }, makeMergeDecision("p3", "unrelated")] }),
           },
         },
       ],
@@ -597,8 +609,8 @@ describe("ai provider", () => {
         },
       ],
     }))).resolves.toEqual([
-      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-b", verdict: "approved" }),
-      expect.objectContaining({ leftClusterId: "cluster-e", rightClusterId: "cluster-f", verdict: "declined" }),
+      expect.objectContaining({ leftClusterId: "cluster-a", rightClusterId: "cluster-b", relation: "same_event" }),
+      expect.objectContaining({ leftClusterId: "cluster-e", rightClusterId: "cluster-f", relation: "unrelated" }),
     ]);
   });
 
@@ -698,7 +710,7 @@ describe("ai provider", () => {
         choices: [
           {
             message: {
-              content: JSON.stringify({ decisions: [makeMergeDecision("p1", "approved")] }),
+              content: JSON.stringify({ decisions: [makeMergeDecision("p1", "same_event")] }),
             },
           },
         ],
@@ -732,7 +744,7 @@ describe("ai provider", () => {
     expect(decisions).toEqual([expect.objectContaining({
       leftClusterId: "cluster-a",
       rightClusterId: "cluster-b",
-      verdict: "approved",
+      relation: "same_event",
     })]);
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[1]?.[0]?.messages?.[1]?.content).toContain("上一次输出不是合法 JSON");

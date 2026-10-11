@@ -3,10 +3,18 @@ import { z } from "zod";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import {
   CLUSTER_MERGE_REASON_CODES,
+  CLUSTER_MERGE_RELATION_REASON_CODES,
+  CLUSTER_MERGE_RELATIONS,
+  getClusterMergeRelationAction,
   getJsonParseErrorMessage,
   InvalidJsonModelResponseError,
+  LEGACY_VERDICT_TO_RELATION,
 } from "@/lib/ai/provider-types";
-import type { ClusterMergeDecision, ClusterMergeDecisionVerdict, ClusterMergeReasonCode } from "@/lib/ai/provider-types";
+import type {
+  ClusterMergeDecision,
+  ClusterMergeReasonCode,
+  ClusterMergeRelation,
+} from "@/lib/ai/provider-types";
 
 export const CLUSTER_MATCH_SCHEMA = z.object({
   clusterId: z.string().nullable(),
@@ -15,7 +23,7 @@ export const CLUSTER_MATCH_SCHEMA = z.object({
 export const CLUSTER_MERGE_DECISIONS_SCHEMA = z.object({
   decisions: z.array(z.object({
     pair_id: z.string().min(1),
-    verdict: z.enum(["approved", "declined", "ambiguous"]),
+    relation: z.enum(CLUSTER_MERGE_RELATIONS),
     confidence: z.number().min(0).max(100),
     reasonCode: z.enum(CLUSTER_MERGE_REASON_CODES),
     reasonText: z.string().trim().min(1),
@@ -186,11 +194,11 @@ function buildClusterMergeGroupsFromApprovedEdges(
 }
 
 export function resolveClusterMergeGroupsFromDecisions(
-  decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "verdict">>,
+  decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "relation">>,
   itemCounts: Map<string, number>,
 ) {
   const approvedEdges = decisions
-    .filter((decision) => decision.verdict === "approved")
+    .filter((decision) => decision.relation === "same_event")
     .map((decision) => [decision.leftClusterId, decision.rightClusterId] as [string, string]);
   const approvedComponents = buildApprovedClusterMergeGraph(approvedEdges).components;
   const conflicts: ClusterMergeGroupConflict[] = [];
@@ -199,7 +207,7 @@ export function resolveClusterMergeGroupsFromDecisions(
     const members = new Set(component);
     const declinedPairs = decisions
       .filter((decision) =>
-        decision.verdict === "declined" &&
+        getClusterMergeRelationAction(decision.relation) === "reject" &&
         members.has(decision.leftClusterId) &&
         members.has(decision.rightClusterId)
       )
@@ -226,7 +234,7 @@ export function resolveClusterMergeGroupsFromDecisions(
 }
 
 export function buildClusterMergeGroupsFromDecisions(
-  decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "verdict">>,
+  decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "relation">>,
   itemCounts: Map<string, number>,
 ) {
   return resolveClusterMergeGroupsFromDecisions(decisions, itemCounts).groups;
@@ -309,8 +317,15 @@ export function parseClusterMergeDecisions(rawContent: string, metadata: Cluster
       drop("pair_id 重复");
       continue;
     }
-    if (decision.verdict !== "approved" && decision.verdict !== "declined" && decision.verdict !== "ambiguous") {
-      drop("verdict 无效");
+    // relation 优先；verdict 是 DB 存量 prompt（旧协议）响应的兼容回退，
+    // 运行时会把输出规则常量追加到自定义 prompt，过渡期两种字段都可能出现。
+    let relation: ClusterMergeRelation;
+    if (typeof decision.relation === "string" && CLUSTER_MERGE_RELATIONS.includes(decision.relation as ClusterMergeRelation)) {
+      relation = decision.relation as ClusterMergeRelation;
+    } else if (typeof decision.verdict === "string" && decision.verdict in LEGACY_VERDICT_TO_RELATION) {
+      relation = LEGACY_VERDICT_TO_RELATION[decision.verdict as keyof typeof LEGACY_VERDICT_TO_RELATION];
+    } else {
+      drop("relation 无效");
       continue;
     }
     if (typeof decision.confidence !== "number" || !Number.isFinite(decision.confidence) ||
@@ -327,12 +342,8 @@ export function parseClusterMergeDecisions(rawContent: string, metadata: Cluster
       drop("缺少 reasonText");
       continue;
     }
-    if (
-      (decision.verdict === "approved" && decision.reasonCode !== "same_event") ||
-      (decision.verdict === "ambiguous" && decision.reasonCode !== "insufficient_evidence") ||
-      (decision.verdict === "declined" && (decision.reasonCode === "same_event" || decision.reasonCode === "insufficient_evidence"))
-    ) {
-      drop("verdict 与 reasonCode 不匹配");
+    if (!CLUSTER_MERGE_RELATION_REASON_CODES[relation].includes(decision.reasonCode as ClusterMergeReasonCode)) {
+      drop("relation 与 reasonCode 不匹配");
       continue;
     }
 
@@ -340,7 +351,7 @@ export function parseClusterMergeDecisions(rawContent: string, metadata: Cluster
     decisionsById.set(decision.pair_id, {
       leftClusterId: pair.leftClusterId,
       rightClusterId: pair.rightClusterId,
-      verdict: decision.verdict as ClusterMergeDecisionVerdict,
+      relation,
       confidence: decision.confidence,
       reasonCode: decision.reasonCode as ClusterMergeReasonCode,
       reasonText,

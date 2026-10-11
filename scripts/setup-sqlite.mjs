@@ -313,6 +313,35 @@ function migrateProcessingWindowDays() {
   });
 }
 
+const clusterDecisionRelationMigrationKey = "cluster_decisions_verdict_to_relation_v1";
+
+/**
+ * verdict 三态 → relation 关系语义单字段。必须在 snapshot DDL 之前执行：
+ * snapshot 会按新列名建索引，旧库缺 relation 列会直接失败。
+ * 值映射与 LEGACY_VERDICT_TO_RELATION 保持一致（follow_up/synthesis 无旧值）。
+ */
+function migrateClusterDecisionVerdictToRelation() {
+  ensureRuntimeMigrationTable();
+  if (!tableExists("cluster_decisions")) return;
+  if (tableColumnExists("cluster_decisions", "relation")) return;
+  if (!tableColumnExists("cluster_decisions", "verdict")) return;
+
+  const escapedKey = clusterDecisionRelationMigrationKey.replace(/'/g, "''");
+  const completedAt = new Date().toISOString();
+  runSqlite([dbPath], {
+    input: `.bail on\nBEGIN IMMEDIATE;
+ALTER TABLE "cluster_decisions" RENAME COLUMN "verdict" TO "relation";
+UPDATE "cluster_decisions" SET "relation" = CASE "relation"
+  WHEN 'approved' THEN 'same_event'
+  WHEN 'ambiguous' THEN 'uncertain'
+  WHEN 'declined' THEN 'unrelated'
+  ELSE "relation" END;
+DROP INDEX IF EXISTS "cluster_decisions_verdict_expiresAt_idx";
+INSERT OR IGNORE INTO "${runtimeMigrationTable}" ("key", "status", "startedAt", "completedAt") VALUES ('${escapedKey}', 'completed', '${completedAt}', '${completedAt}');
+COMMIT;\n`,
+  });
+}
+
 function hasPendingClusterFeedStatsBackfill() {
   if (
     !tableExists("content_clusters") ||
@@ -936,6 +965,7 @@ try {
   }
 
   prepareProcessingWindowMigration();
+  migrateClusterDecisionVerdictToRelation();
 
   const shouldBackfillEntities = existsSync(dbPath) && tableExists("items") && (
     !tableExists("entities")

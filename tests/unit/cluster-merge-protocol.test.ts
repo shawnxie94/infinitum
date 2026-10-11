@@ -20,13 +20,13 @@ function makeInput(pairCount: number) {
   });
 }
 
-function makeDecision(pairId: string, verdict: "approved" | "declined" | "ambiguous" = "declined") {
+function makeDecision(pairId: string, relation: "same_event" | "unrelated" = "unrelated") {
   return {
     pair_id: pairId,
-    verdict,
+    relation,
     confidence: 91,
-    reasonCode: verdict === "approved" ? "same_event" : "different_event",
-    reasonText: verdict === "approved" ? "主体、对象与事件动作一致。" : "主体和具体对象不同，不是同一事件。",
+    reasonCode: relation === "same_event" ? "same_event" : "different_event",
+    reasonText: relation === "same_event" ? "主体、对象与事件动作一致。" : "主体和具体对象不同，不是同一事件。",
   };
 }
 
@@ -50,14 +50,14 @@ describe("cluster merge pair-id protocol", () => {
     const metadata = parseClusterMergeInputMetadata(input);
     const pairIds = metadata.pairs.map((pair) => pair.pairId);
     const decisions = parseClusterMergeDecisions(JSON.stringify({
-      decisions: [makeDecision(pairIds[1]!, "approved"), makeDecision(pairIds[0]!, "declined")],
+      decisions: [makeDecision(pairIds[1]!, "same_event"), makeDecision(pairIds[0]!, "unrelated")],
     }), metadata);
 
     expect(decisions).toEqual([
       expect.objectContaining({
         leftClusterId: "cluster-left-0",
         rightClusterId: "cluster-right-0",
-        verdict: "declined",
+        relation: "unrelated",
         confidence: 91,
         reasonCode: "different_event",
         reasonText: "主体和具体对象不同，不是同一事件。",
@@ -65,7 +65,7 @@ describe("cluster merge pair-id protocol", () => {
       expect.objectContaining({
         leftClusterId: "cluster-left-1",
         rightClusterId: "cluster-right-1",
-        verdict: "approved",
+        relation: "same_event",
       }),
     ]);
   });
@@ -118,7 +118,7 @@ describe("cluster merge pair-id protocol", () => {
     const decisions = parseClusterMergeDecisions(JSON.stringify({
       decisions: [
         { ...makeDecision(pairIds[0]!), confidence: 900 },
-        { ...makeDecision(pairIds[1]!), verdict: "maybe" },
+        { ...makeDecision(pairIds[1]!), relation: "maybe" },
       ],
     }), metadata);
 
@@ -143,10 +143,11 @@ describe("cluster merge pair-id protocol", () => {
       `"reasonCode":"different_event","reasonText":"左侧是 The\u0000 New Stack 评论 CVE 漏洞管理，右侧无关。"}]}`;
 
     expect(() => JSON.parse(raw)).toThrow();
+    // verdict 是存量 prompt（旧协议）响应的兼容回退：映射为 unrelated。
     expect(parseClusterMergeDecisions(raw, metadata)).toEqual([expect.objectContaining({
       leftClusterId: "cluster-left-0",
       rightClusterId: "cluster-right-0",
-      verdict: "declined",
+      relation: "unrelated",
       reasonText: "左侧是 The New Stack 评论 CVE 漏洞管理，右侧无关。",
     })]);
   });
@@ -195,13 +196,13 @@ describe("cluster merge pair-id protocol", () => {
     });
     const metadata = parseClusterMergeInputMetadata(input);
     const decisions = parseClusterMergeDecisions(JSON.stringify({
-      decisions: [makeDecision(metadata.pairs[0]!.pairId, "declined")],
+      decisions: [makeDecision(metadata.pairs[0]!.pairId, "unrelated")],
     }), metadata);
 
     expect(decisions).toEqual([expect.objectContaining({
       leftClusterId: "amazfit-cluster",
       rightClusterId: "razer-cluster",
-      verdict: "declined",
+      relation: "unrelated",
       reasonCode: "different_event",
       reasonText: "主体和具体对象不同，不是同一事件。",
     })]);
@@ -213,10 +214,10 @@ describe("cluster merge pair-id protocol", () => {
 
   it("blocks the full approved component when it contains a declined pair and preserves other components", () => {
     const decisions = [
-      { leftClusterId: "A", rightClusterId: "B", verdict: "approved" as const },
-      { leftClusterId: "B", rightClusterId: "C", verdict: "approved" as const },
-      { leftClusterId: "A", rightClusterId: "C", verdict: "declined" as const },
-      { leftClusterId: "D", rightClusterId: "E", verdict: "approved" as const },
+      { leftClusterId: "A", rightClusterId: "B", relation: "same_event" as const },
+      { leftClusterId: "B", rightClusterId: "C", relation: "same_event" as const },
+      { leftClusterId: "A", rightClusterId: "C", relation: "unrelated" as const },
+      { leftClusterId: "D", rightClusterId: "E", relation: "same_event" as const },
     ];
 
     expect(resolveClusterMergeGroupsFromDecisions(decisions, new Map([
@@ -229,13 +230,13 @@ describe("cluster merge pair-id protocol", () => {
         declinedPairs: [{ leftClusterId: "A", rightClusterId: "C" }],
       }],
     });
-    expect(decisions.map((decision) => decision.verdict)).toEqual(["approved", "approved", "declined", "approved"]);
+    expect(decisions.map((decision) => decision.relation)).toEqual(["same_event", "same_event", "unrelated", "same_event"]);
   });
 
   it("keeps existing groups when declined pairs do not contradict an approved component", () => {
     const result = resolveClusterMergeGroupsFromDecisions([
-      { leftClusterId: "A", rightClusterId: "B", verdict: "approved" },
-      { leftClusterId: "X", rightClusterId: "Y", verdict: "declined" },
+      { leftClusterId: "A", rightClusterId: "B", relation: "same_event" },
+      { leftClusterId: "X", rightClusterId: "Y", relation: "unrelated" },
     ], new Map([["A", 1], ["B", 1]]));
 
     expect(result).toEqual({ groups: [["A", "B"]], conflicts: [] });

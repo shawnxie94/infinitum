@@ -441,7 +441,7 @@ export async function assignItemToCluster(
       await recordClusterDecision({
         kind: "item_cluster",
         source: "system",
-        verdict: "approved",
+        relation: "same_event",
         leftItemId: item.id,
         leftClusterId: cluster.id,
         pairKey: buildClusterMergeEdgeKey(item.id, cluster.id),
@@ -510,7 +510,7 @@ export async function assignItemToCluster(
     await recordClusterDecision({
       kind: "item_cluster",
       source: matchSource === "ai_match" ? "llm" : "system",
-      verdict: "approved",
+      relation: "same_event",
       leftItemId: item.id,
       leftClusterId: cluster.id,
       pairKey: buildClusterMergeEdgeKey(item.id, cluster.id),
@@ -1281,7 +1281,7 @@ export type ClusterMergePairDiagnostic = {
   signals: ReturnType<typeof getClusterMergePairAuditSignals>;
   groupConflict?: ClusterMergeGroupConflict;
   decision: {
-    verdict: ClusterMergeDecision["verdict"] | "failed";
+    relation: ClusterMergeDecision["relation"] | "failed";
     confidence: number | null;
     reasonCode: string | null;
     reasonText: string | null;
@@ -1618,7 +1618,7 @@ async function recordClusterMergeDecisions(input: {
   candidatesById: Map<string, ClusterMergeCandidate>;
   allowedPairs: ClusterMergeCandidateEdge[];
   decisions: ClusterMergeDecision[];
-  verdictOnMissing: "declined" | "failed";
+  relationOnMissing: "unrelated" | "failed";
   failureReason?: string | null;
   now: Date;
 }) {
@@ -1637,12 +1637,12 @@ async function recordClusterMergeDecisions(input: {
     }
 
     const aiDecision = decisionByPairKey.get(buildClusterMergeEdgeKey(edge.leftId, edge.rightId));
-    const verdict = aiDecision?.verdict ?? input.verdictOnMissing;
+    const relation = aiDecision?.relation ?? input.relationOnMissing;
     recordedDecisions.push(
       await recordClusterDecision({
         kind: "cluster_pair",
         source: "llm",
-        verdict,
+        relation,
         leftClusterId: edge.leftId,
         rightClusterId: edge.rightId,
         pairKey: buildClusterMergeEdgeKey(edge.leftId, edge.rightId),
@@ -1652,7 +1652,7 @@ async function recordClusterMergeDecisions(input: {
         reasonCode: aiDecision?.reasonCode ?? null,
         // 失败必须可归因：历史上大量 failed 决策 reasonText 为 NULL，事后无法判断
         // 是超时、限流还是协议缺陷，故对空原因补一个显式占位而不是留空。
-        reasonText: aiDecision?.reasonText ?? (verdict === "failed"
+        reasonText: aiDecision?.reasonText ?? (relation === "failed"
           ? (input.failureReason?.trim() || "未记录失败原因（AI 未返回可用判定）")
           : null),
         now: input.now,
@@ -1667,10 +1667,10 @@ function countClusterMergeDecisionVerdicts(
   decisions: Array<Awaited<ReturnType<typeof recordClusterDecision>>>,
 ) {
   return {
-    decisionsApproved: decisions.filter((decision) => decision.verdict === "approved").length,
-    decisionsDeclined: decisions.filter((decision) => decision.verdict === "declined").length,
-    decisionsAmbiguous: decisions.filter((decision) => decision.verdict === "ambiguous").length,
-    decisionsFailed: decisions.filter((decision) => decision.verdict === "failed").length,
+    decisionsApproved: decisions.filter((decision) => decision.relation === "same_event").length,
+    decisionsDeclined: decisions.filter((decision) => decision.relation === "unrelated").length,
+    decisionsAmbiguous: decisions.filter((decision) => decision.relation === "uncertain").length,
+    decisionsFailed: decisions.filter((decision) => decision.relation === "failed").length,
   };
 }
 
@@ -1707,7 +1707,7 @@ function buildClusterMergePairDiagnostics(
       signals: getClusterMergePairAuditSignals(left, right),
       ...(groupConflict ? { groupConflict } : {}),
       decision: {
-        verdict: decision.verdict,
+        relation: decision.relation,
         confidence: decision.confidence,
         reasonCode: decision.reasonCode,
         reasonText: decision.reasonText,
@@ -2059,7 +2059,7 @@ export async function executeClusterMerge(
       candidatesById,
       allowedPairs,
       decisions: [],
-      verdictOnMissing: "failed",
+      relationOnMissing: "failed",
       failureReason,
       now,
     });
@@ -2082,7 +2082,7 @@ export async function executeClusterMerge(
     candidatesById,
     allowedPairs,
     decisions: mergeDecisions,
-    verdictOnMissing: "declined",
+    relationOnMissing: "unrelated",
     now,
   });
   await markDeclinedPrecomputedCleanMergePairs(
@@ -2095,7 +2095,7 @@ export async function executeClusterMerge(
   const affectedClusterIds = new Set<string>();
   const nonApprovedPairKeys = new Set(
     recordedMergeDecisions
-      .filter((decision) => decision.verdict !== "approved")
+      .filter((decision) => decision.relation !== "same_event")
       .map((decision) => decision.pairKey),
   );
   let mergedCount = 0;
@@ -2152,7 +2152,7 @@ export async function executeClusterMerge(
       itemsMoved += mergeResult.itemsMoved;
       await Promise.all(
         recordedMergeDecisions
-          .filter((decision) => decision.verdict === "approved" && stillAllowedSources.some((sourceId) =>
+          .filter((decision) => decision.relation === "same_event" && stillAllowedSources.some((sourceId) =>
             buildClusterMergeEdgeKey(target.id, sourceId) === decision.pairKey
           ))
           .map((decision) => prisma.clusterDecision.update({

@@ -181,8 +181,8 @@ async function main() {
   const decidedPairKeys = new Set<string>();
   const decisionRows = db
     .prepare(
-      `SELECT leftClusterId, rightClusterId, verdict FROM cluster_decisions
-        WHERE kind = 'cluster_pair' AND verdict IN ('declined','ambiguous')`,
+      `SELECT leftClusterId, rightClusterId, relation AS verdict FROM cluster_decisions
+        WHERE kind = 'cluster_pair' AND relation NOT IN ('same_event','failed')`,
     )
     .all() as SqlRow[];
   for (const row of decisionRows) {

@@ -17,6 +17,7 @@ import {
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
+  VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT,
 } from "@/config/prompts";
 import {
   DEFAULT_QUALITY_RUBRIC,
@@ -216,6 +217,7 @@ describe("admin settings service", () => {
   it.each([
     ["previous", PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT],
     ["legacy-reason-code", PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT_LEGACY_REASON_CODE],
+    ["verdict-protocol", VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT],
   ])("upgrades the untouched historical cluster merge prompt variant: %s", async (variant, systemPrompt) => {
     await prisma.promptConfig.create({
       data: {
@@ -294,7 +296,7 @@ describe("admin settings service", () => {
       modelApiConfigId: null,
       isEnabled: true,
       isDefault: false,
-    })).rejects.toThrow("必须使用 decisions/verdict 协议");
+    })).rejects.toThrow("必须使用 decisions/relation 协议");
   });
 
   it("rejects mixed cluster merge output protocols", async () => {
@@ -309,7 +311,7 @@ describe("admin settings service", () => {
       modelApiConfigId: null,
       isEnabled: true,
       isDefault: false,
-    })).rejects.toThrow("必须使用 decisions/verdict 协议");
+    })).rejects.toThrow("必须使用 decisions/relation 协议");
   });
 
   it("saves content extraction connection and limits", async () => {

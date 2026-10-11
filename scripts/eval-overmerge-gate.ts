@@ -29,7 +29,7 @@ import fs from "node:fs";
 import { buildClusterMergeInput } from "../src/lib/clusters/helpers";
 import type { ClusterMergeCandidate, ClusterMergeCandidateEdge } from "../src/lib/clusters/helpers";
 import { createAiProvider } from "../src/lib/ai/provider-next";
-import type { ClusterMergeDecisionVerdict } from "../src/lib/ai/provider-types";
+import type { ClusterMergeRelation } from "../src/lib/ai/provider-types";
 
 type Args = {
   csv: string;
@@ -208,7 +208,7 @@ async function main() {
   }
 
   const provider = createAiProvider({ apiKey, baseURL, model });
-  const verdictByKey = new Map<string, { verdict: ClusterMergeDecisionVerdict | null; error?: string }>();
+  const relationByKey = new Map<string, { relation: ClusterMergeRelation | null; error?: string }>();
 
   for (let offset = 0; offset < pairs.length; offset += args.batchSize) {
     const batch = pairs.slice(offset, offset + args.batchSize);
@@ -225,12 +225,12 @@ async function main() {
     try {
       const decisions = await provider.assessClusterMergePairs(clustersJson);
       batch.forEach((pair, index) => {
-        verdictByKey.set(pair.pairKey, { verdict: decisions[index]?.verdict ?? null });
+        relationByKey.set(pair.pairKey, { relation: decisions[index]?.relation ?? null });
       });
       console.log("ok");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      batch.forEach((pair) => verdictByKey.set(pair.pairKey, { verdict: null, error: message }));
+      batch.forEach((pair) => relationByKey.set(pair.pairKey, { relation: null, error: message }));
       console.log(`failed: ${message.slice(0, 120)}`);
     }
   }
@@ -238,20 +238,20 @@ async function main() {
   let diffDeclined = 0;
   let sameApproved = 0;
   let callFailed = 0;
-  const rows: Array<{ pairKey: string; label: string; storedScore: number; verdict: string; ok: boolean }> = [];
+  const rows: Array<{ pairKey: string; label: string; storedScore: number; relation: string; ok: boolean }> = [];
   for (const pair of pairs) {
-    const outcome = verdictByKey.get(pair.pairKey);
-    const verdict = outcome?.verdict ?? "call_failed";
-    if (verdict === "call_failed") callFailed += 1;
+    const outcome = relationByKey.get(pair.pairKey);
+    const relation = outcome?.relation ?? "call_failed";
+    if (relation === "call_failed") callFailed += 1;
     let ok: boolean;
-    if (pair.label === "diff") ok = verdict === "declined";
-    else if (pair.label === "same") ok = verdict === "approved";
+    if (pair.label === "diff") ok = relation === "unrelated";
+    else if (pair.label === "same") ok = relation === "same_event";
     else ok = true; // uncertain 仅展示，不进门
-    if (pair.label === "diff" && verdict === "declined") diffDeclined += 1;
-    if (pair.label === "same" && verdict === "approved") sameApproved += 1;
-    rows.push({ pairKey: pair.pairKey, label: pair.label, storedScore: pair.storedScore, verdict, ok });
+    if (pair.label === "diff" && relation === "unrelated") diffDeclined += 1;
+    if (pair.label === "same" && relation === "same_event") sameApproved += 1;
+    rows.push({ pairKey: pair.pairKey, label: pair.label, storedScore: pair.storedScore, relation, ok });
     const mark = pair.label === "uncertain" ? " " : ok ? "✓" : "✗";
-    console.log(`  ${mark} [${pair.label}] ${pair.pairKey} → ${verdict}`);
+    console.log(`  ${mark} [${pair.label}] ${pair.pairKey} → ${relation}`);
   }
 
   const result = {

@@ -105,20 +105,24 @@ const splitStatusTone: Record<string, "success" | "warning" | "danger" | "neutra
   failed: "danger",
 };
 
-const reviewCandidateVerdictLabels: Record<ClusterReviewCandidateDTO["verdict"], string> = {
-  approved: "建议合并",
-  ambiguous: "灰区复核",
-  declined: "已拒绝",
+const reviewCandidateRelationLabels: Record<ClusterReviewCandidateDTO["relation"], string> = {
+  same_event: "建议合并",
+  uncertain: "灰区复核",
+  follow_up: "直接进展",
+  synthesis: "综合稿",
+  unrelated: "已拒绝",
   failed: "判定失败",
 };
 
-const reviewCandidateVerdictTone: Record<
-  ClusterReviewCandidateDTO["verdict"],
+const reviewCandidateRelationTone: Record<
+  ClusterReviewCandidateDTO["relation"],
   "success" | "warning" | "danger" | "neutral"
 > = {
-  approved: "success",
-  ambiguous: "warning",
-  declined: "neutral",
+  same_event: "success",
+  uncertain: "warning",
+  follow_up: "neutral",
+  synthesis: "neutral",
+  unrelated: "neutral",
   failed: "danger",
 };
 
@@ -889,8 +893,8 @@ function ClusterReviewModal({
                         />
                       </td>
                       <td className="px-3 py-3">
-                        <StatusTag className="whitespace-nowrap" tone={reviewCandidateVerdictTone[candidate.verdict]}>
-                          {reviewCandidateVerdictLabels[candidate.verdict]}
+                        <StatusTag className="whitespace-nowrap" tone={reviewCandidateRelationTone[candidate.relation]}>
+                          {reviewCandidateRelationLabels[candidate.relation]}
                         </StatusTag>
                         <div className="mt-1 whitespace-nowrap text-xs text-[var(--text-3)]">
                           {formatDate(candidate.createdAt)}

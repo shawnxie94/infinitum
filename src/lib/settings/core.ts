@@ -12,6 +12,7 @@ import {
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
+  VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT,
 } from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
 import type { RuntimeConfig } from "@/config/runtime";
@@ -566,7 +567,7 @@ function validateClusterMergePromptProtocol(input: SavePromptConfigInput) {
   const usesLegacyOutput = ["approvedPairs", "mergeGroups"].some((marker) => content.includes(marker));
 
   if (usesLegacyOutput) {
-    throw new Error("聚合合并提示词必须使用 decisions/verdict 协议，不能继续输出 approvedPairs 或 mergeGroups。");
+    throw new Error("聚合合并提示词必须使用 decisions/relation 协议，不能继续输出 approvedPairs 或 mergeGroups。");
   }
 }
 
@@ -845,6 +846,7 @@ const LEGACY_CLUSTER_MERGE_PROMPT_VARIANTS = [
   LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT_LEGACY_REASON_CODE,
+  VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT,
 ] as const;
 
 function isLegacyClusterMergePrompt(systemPrompt: string | null) {

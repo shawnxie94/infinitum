@@ -167,7 +167,7 @@ async function main() {
   // ---- 2. All cluster-pair decisions in window (with existence flags) ----
   const decisionsRaw = db
     .prepare(
-      `SELECT d.leftClusterId, d.rightClusterId, d.verdict, d.localScore, d.reasonCode,
+      `SELECT d.leftClusterId, d.rightClusterId, d.relation AS verdict, d.localScore, d.reasonCode,
               d.confidence, d.appliedAt, d.createdAt,
               (a.id IS NOT NULL) AS aExists, (b.id IS NOT NULL) AS bExists,
               a.title AS titleA, a.summary AS summaryA, a.eventSubject AS subjectA,
@@ -216,8 +216,8 @@ async function main() {
   // ---- 3. Per-verdict overview (fresh counts, no dedup) ----
   const verdictCount = new Map();
   for (const d of decisions) verdictCount.set(d.verdict, (verdictCount.get(d.verdict) ?? 0) + 1);
-  console.log("\n=== verdict distribution (window) ===");
-  for (const v of ["approved", "declined", "ambiguous", "failed"]) {
+  console.log("\n=== relation distribution (window) ===");
+  for (const v of ["same_event", "follow_up", "synthesis", "unrelated", "uncertain", "failed"]) {
     if (verdictCount.has(v)) console.log(`${v}\t${verdictCount.get(v)}`);
   }
 

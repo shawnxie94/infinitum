@@ -396,7 +396,7 @@ describe("precomputeClusterMergeCleanPairs vector prefilter", () => {
         return [{
           leftClusterId: "conflict-a",
           rightClusterId: "conflict-b",
-          verdict: "declined" as const,
+          relation: "unrelated" as const,
           confidence: 99,
           reasonCode: "subject_conflict",
           reasonText: "主体不同，事件无关",

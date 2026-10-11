@@ -93,10 +93,14 @@ enum ClusterDecisionKind {
   cluster_pair
 }
 
-enum ClusterDecisionVerdict {
-  approved
-  declined
-  ambiguous
+/// 聚类 pair 的关系语义单字段（取代 verdict 三态）：动作由代码派生
+/// （same_event→合并、uncertain→挂起复核、其余→拒绝），failed 仅表示未获得判定。
+enum ClusterDecisionRelation {
+  same_event
+  follow_up
+  synthesis
+  unrelated
+  uncertain
   failed
 }
 
@@ -362,7 +366,7 @@ model ClusterDecision {
   id             String                 @id @default(cuid())
   kind           ClusterDecisionKind
   source         ClusterDecisionSource
-  verdict        ClusterDecisionVerdict
+  relation       ClusterDecisionRelation
   leftItemId     String?
   rightItemId    String?
   leftClusterId  String?
@@ -383,7 +387,7 @@ model ClusterDecision {
   updatedAt      DateTime               @updatedAt
 
   @@index([kind, pairKey, inputHash])
-  @@index([verdict, expiresAt])
+  @@index([relation, expiresAt])
   @@index([leftClusterId])
   @@index([rightClusterId])
   @@map("cluster_decisions")

@@ -26,7 +26,7 @@ function snapshotProtectedData(dbPath: string) {
     SELECT 'item' || '|' || "id" || '|' || "originalTitle" || '|' || "status" || '|' || "moderationStatus" FROM "items" WHERE "id" = 'item-legacy';
     SELECT 'cluster' || '|' || "id" || '|' || "title" || '|' || "summary" || '|' || "status" || '|' || "fingerprint" FROM "content_clusters" WHERE "id" = 'cluster-legacy';
     SELECT 'hidden-cluster' || '|' || "id" || '|' || "title" || '|' || "status" FROM "content_clusters" WHERE "id" = 'cluster-legacy-hidden';
-    SELECT 'decision' || '|' || "id" || '|' || "verdict" || '|' || "source" || '|' || "pairKey" FROM "cluster_decisions" WHERE "id" = 'decision-legacy';
+    SELECT 'decision' || '|' || "id" || '|' || "source" || '|' || "pairKey" FROM "cluster_decisions" WHERE "id" = 'decision-legacy';
     SELECT 'constraint' || '|' || "id" || '|' || "kind" || '|' || "scope" || '|' || "pairKey" FROM "cluster_constraints" WHERE "id" = 'constraint-legacy';
     SELECT 'feedback' || '|' || "id" || '|' || "clusterId" || '|' || "status" || '|' || "note" FROM "cluster_feedback" WHERE "id" = 'feedback-legacy';
     SELECT 'entity' || '|' || "id" || '|' || "name" || '|' || "normalized" FROM "entities" WHERE "id" = 'entity-legacy';
@@ -105,6 +105,44 @@ describe("sqlite setup", () => {
     runSqlite(dbPath, `UPDATE "task_schedules" SET "processingWindowDays" = 30 WHERE "id" = 'window-iso';`);
     execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
     expect(runSqlite(dbPath, `SELECT "processingWindowDays" || '|' || "processingStartAt" FROM "task_schedules" WHERE "id"='window-iso'`)).toBe(`30|${isoPast}`);
+  }, 30_000);
+
+  it("renames cluster decision verdicts to relations and maps legacy values", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-verdict-relation-"));
+    const dbPath = path.join(tempDir, "verdict-relation.db");
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    // 模拟升级前的旧卷：列名/索引名回退到 verdict 时代，值停留在旧三态。
+    runSqlite(dbPath, `
+      DROP INDEX "cluster_decisions_relation_expiresAt_idx";
+      ALTER TABLE "cluster_decisions" RENAME COLUMN "relation" TO "verdict";
+      INSERT INTO "cluster_decisions" ("id", "kind", "source", "verdict", "pairKey", "inputHash", "createdAt", "updatedAt")
+        VALUES ('d-approved', 'cluster_pair', 'llm', 'approved', 'k1', 'h1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+               ('d-declined', 'cluster_pair', 'llm', 'declined', 'k2', 'h2', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+               ('d-ambiguous', 'cluster_pair', 'llm', 'ambiguous', 'k3', 'h3', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+               ('d-failed', 'cluster_pair', 'llm', 'failed', 'k4', 'h4', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+    runSqlite(dbPath, `
+      CREATE INDEX "cluster_decisions_verdict_expiresAt_idx" ON "cluster_decisions"("verdict", "expiresAt");
+    `);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_decisions') WHERE "name" = 'relation'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_decisions') WHERE "name" = 'verdict'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT "relation" FROM "cluster_decisions" WHERE "id" = 'd-approved'`)).toBe("same_event");
+    expect(runSqlite(dbPath, `SELECT "relation" FROM "cluster_decisions" WHERE "id" = 'd-declined'`)).toBe("unrelated");
+    expect(runSqlite(dbPath, `SELECT "relation" FROM "cluster_decisions" WHERE "id" = 'd-ambiguous'`)).toBe("uncertain");
+    expect(runSqlite(dbPath, `SELECT "relation" FROM "cluster_decisions" WHERE "id" = 'd-failed'`)).toBe("failed");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'index' AND name = 'cluster_decisions_relation_expiresAt_idx'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'index' AND name = 'cluster_decisions_verdict_expiresAt_idx'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT "status" FROM "_runtime_schema_migrations" WHERE "key" = 'cluster_decisions_verdict_to_relation_v1'`)).toBe("completed");
+
+    // 幂等：二次 setup 不再改动数据。
+    runSqlite(dbPath, `UPDATE "cluster_decisions" SET "relation" = 'follow_up' WHERE "id" = 'd-failed';`);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT "relation" FROM "cluster_decisions" WHERE "id" = 'd-failed'`)).toBe("follow_up");
   }, 30_000);
 
   it("recovers a defaulted column whose epoch-millisecond backfill was interrupted", () => {
@@ -292,10 +330,10 @@ describe("sqlite setup", () => {
         '2026-06-29T07:00:00.000Z', 'cluster-legacy-hidden', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       );
       INSERT INTO "cluster_decisions" (
-        "id", "kind", "source", "verdict", "leftClusterId", "rightClusterId",
+        "id", "kind", "source", "relation", "leftClusterId", "rightClusterId",
         "pairKey", "inputHash", "createdAt", "updatedAt"
       ) VALUES (
-        'decision-legacy', 'cluster_pair', 'manual', 'declined',
+        'decision-legacy', 'cluster_pair', 'manual', 'unrelated',
         'cluster-legacy', 'cluster-legacy-hidden', 'legacy-pair', 'legacy-input-hash',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       );
@@ -369,6 +407,12 @@ describe("sqlite setup", () => {
       expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sources" WHERE "id" = 'source-legacy'`)).toBe("1");
       expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items" WHERE "id" = 'item-legacy' AND "status" = 'filtered' AND "moderationStatus" = 'filtered'`)).toBe("1");
       expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "content_clusters" WHERE "id" = 'cluster-legacy' AND "status" = 'published'`)).toBe("1");
+      // verdict → relation 迁移：列重命名 + 值映射 + 新旧索引切换。
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_decisions') WHERE "name" = 'relation'`)).toBe("1");
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_decisions') WHERE "name" = 'verdict'`)).toBe("0");
+      expect(runSqlite(dbPath, `SELECT "relation" FROM "cluster_decisions" WHERE "id" = 'decision-legacy'`)).toBe("unrelated");
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'index' AND name = 'cluster_decisions_relation_expiresAt_idx'`)).toBe("1");
+      expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'index' AND name = 'cluster_decisions_verdict_expiresAt_idx'`)).toBe("0");
       expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "event_briefing_configs" WHERE "id" = 'briefing-config-legacy'`)).toBe("1");
       expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "source_groups" WHERE "id" = 'group-legacy'`)).toBe("1");
     }

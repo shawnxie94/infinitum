@@ -312,7 +312,7 @@ async function main() {
              FROM cluster_decisions d
              JOIN content_clusters a ON a.id = d.leftClusterId
              JOIN content_clusters b ON b.id = d.rightClusterId
-            WHERE d.kind = 'cluster_pair' AND d.verdict = 'declined' AND d.createdAt >= ?
+            WHERE d.kind = 'cluster_pair' AND d.relation IN ('unrelated','follow_up','synthesis') AND d.createdAt >= ?
             ORDER BY d.createdAt DESC
        ) d LIMIT ?`,
     )

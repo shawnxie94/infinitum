@@ -143,7 +143,7 @@ describe("actionable monitor snapshot", () => {
         id: "decision-cluster",
         kind: "cluster_pair",
         source: "llm",
-        verdict: "ambiguous",
+        relation: "uncertain",
         leftClusterId: "cluster-left",
         rightClusterId: "cluster-right",
         pairKey: "cluster-left::cluster-right",

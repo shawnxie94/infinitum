@@ -1,6 +1,7 @@
-import { Prisma, type ClusterDecisionKind, type ClusterDecisionSource, type ClusterDecisionVerdict } from "@prisma/client";
+import { Prisma, type ClusterDecisionKind, type ClusterDecisionRelation, type ClusterDecisionSource } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { getClusterMergeRelationAction } from "@/lib/ai/provider-types";
 import type { ClusterReviewCandidateDTO } from "@/lib/feed/types";
 
 const DECLINED_RETRY_DELAYS_MS = [
@@ -10,10 +11,13 @@ const DECLINED_RETRY_DELAYS_MS = [
 ];
 const MAX_DECLINED_ATTEMPTS = DECLINED_RETRY_DELAYS_MS.length;
 
+/** 拒绝类关系：与 merge 动作相对，参与重试抑制计数。 */
+const REJECT_RELATIONS = ["follow_up", "synthesis", "unrelated"] as const;
+
 export type ClusterDecisionRecordInput = {
   kind: ClusterDecisionKind;
   source: ClusterDecisionSource;
-  verdict: ClusterDecisionVerdict;
+  relation: ClusterDecisionRelation;
   pairKey: string;
   inputHash: string;
   leftItemId?: string | null;
@@ -37,22 +41,23 @@ export async function countDeclinedDecisions(pairKey: string, inputHash: string)
       kind: "cluster_pair",
       pairKey,
       inputHash,
-      verdict: "declined",
+      relation: { in: [...REJECT_RELATIONS] },
     },
   });
 }
 
 export async function recordClusterDecision(input: ClusterDecisionRecordInput) {
   const now = input.now ?? new Date();
+  const isRejected = input.relation !== "failed" && getClusterMergeRelationAction(input.relation) === "reject";
   const declinedAttempts =
-    input.verdict === "declined" ? (await countDeclinedDecisions(input.pairKey, input.inputHash)) + 1 : 0;
-  const retryDelayMs = input.verdict === "declined" ? getDeclinedRetryDelayMs(declinedAttempts) : null;
+    isRejected ? (await countDeclinedDecisions(input.pairKey, input.inputHash)) + 1 : 0;
+  const retryDelayMs = isRejected ? getDeclinedRetryDelayMs(declinedAttempts) : null;
 
   return prisma.clusterDecision.create({
     data: {
       kind: input.kind,
       source: input.source,
-      verdict: input.verdict,
+      relation: input.relation,
       pairKey: input.pairKey,
       inputHash: input.inputHash,
       leftItemId: input.leftItemId ?? null,
@@ -79,7 +84,7 @@ export async function getClusterPairDecisionBlock(input: {
       kind: "cluster_pair",
       pairKey: input.pairKey,
       inputHash: input.inputHash,
-      verdict: { in: ["declined", "ambiguous"] },
+      relation: { in: ["uncertain", ...REJECT_RELATIONS] },
       appliedAt: null,
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -89,7 +94,7 @@ export async function getClusterPairDecisionBlock(input: {
     return null;
   }
 
-  if (latestDecision.verdict === "ambiguous") {
+  if (latestDecision.relation === "uncertain") {
     return {
       reason: "ambiguous_pending_review" as const,
       decision: latestDecision,
@@ -129,7 +134,7 @@ export async function markOrphanedClusterPairDecisionsStale(now = new Date()) {
     SET "appliedAt" = ${now.getTime()},
         "appliedAction" = ${"stale_orphan_cluster"}
     WHERE "kind" = ${"cluster_pair"}
-      AND "verdict" IN (${Prisma.join(["approved", "ambiguous"])})
+      AND "relation" IN (${Prisma.join(["same_event", "uncertain"])})
       AND "appliedAt" IS NULL
       AND (
         "leftClusterId" IS NULL
@@ -175,7 +180,7 @@ export async function listClusterReviewCandidates(page = 1, pageSize = 20, optio
     : Prisma.empty;
   const reviewDecisionFilter = Prisma.sql`
     WHERE d."kind" = ${"cluster_pair"}
-      AND d."verdict" IN (${Prisma.join(["approved", "ambiguous"])})
+      AND d."relation" IN (${Prisma.join(["same_event", "uncertain"])})
       AND d."appliedAt" IS NULL
       AND d."leftClusterId" IS NOT NULL
       AND d."rightClusterId" IS NOT NULL
@@ -245,7 +250,7 @@ export async function listClusterReviewCandidates(page = 1, pageSize = 20, optio
 
     candidates.push({
       id: decision.id,
-      verdict: decision.verdict,
+      relation: decision.relation,
       source: decision.source,
       reasonCode: decision.reasonCode,
       reasonText: decision.reasonText,
@@ -274,7 +279,7 @@ export async function getPendingClusterReviewDecision(decisionId: string) {
     where: {
       id: decisionId,
       kind: "cluster_pair",
-      verdict: { in: ["approved", "ambiguous"] },
+      relation: { in: ["same_event", "uncertain"] },
       appliedAt: null,
       leftClusterId: { not: null },
       rightClusterId: { not: null },

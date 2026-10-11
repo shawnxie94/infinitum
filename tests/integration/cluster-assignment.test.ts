@@ -449,7 +449,7 @@ describe("cluster assignment", () => {
       return [{
         leftClusterId: clusters[0].id,
         rightClusterId: clusters[1].id,
-        verdict: "approved" as const,
+        relation: "same_event" as const,
         confidence: 95,
         reasonCode: "same_event",
         reasonText: "预计算候选回归测试",
@@ -479,7 +479,7 @@ describe("cluster assignment", () => {
         id: "orphaned-merge-decision",
         kind: "cluster_pair",
         source: "llm",
-        verdict: "ambiguous",
+        relation: "uncertain",
         leftClusterId: "missing-left-cluster",
         rightClusterId: "missing-right-cluster",
         pairKey: "missing-left-cluster::missing-right-cluster",
@@ -493,7 +493,7 @@ describe("cluster assignment", () => {
     await expect(
       prisma.clusterDecision.findUnique({ where: { id: "orphaned-merge-decision" } }),
     ).resolves.toMatchObject({
-      verdict: "ambiguous",
+      relation: "uncertain",
       appliedAction: "stale_orphan_cluster",
       appliedAt: expect.any(Date),
     });
@@ -1586,7 +1586,7 @@ describe("cluster assignment", () => {
       return [{
         leftClusterId: "openai-contract-cluster",
         rightClusterId: "microsoft-contract-cluster",
-        verdict: "approved" as const,
+        relation: "same_event" as const,
         confidence: 95,
         reasonCode: "same_event",
         reasonText: "主体、对象和时间一致",
@@ -1609,7 +1609,7 @@ describe("cluster assignment", () => {
       where: { kind: "cluster_pair", source: "llm", reasonText: "主体、对象和时间一致" },
     });
     expect(recordedDecision).toMatchObject({
-      verdict: "approved",
+      relation: "same_event",
       confidence: 95,
       reasonCode: "same_event",
       reasonText: "主体、对象和时间一致",
@@ -1709,7 +1709,7 @@ describe("cluster assignment", () => {
       return [{
         leftClusterId: "northstar-alias-cluster",
         rightClusterId: "blueorbit-alias-cluster",
-        verdict: "approved" as const,
+        relation: "same_event" as const,
         confidence: 95,
         reasonCode: "same_event",
         reasonText: "已配置别名指向同一主体",
@@ -1795,7 +1795,7 @@ describe("cluster assignment", () => {
       return [{
         leftClusterId: "contradictory-openai-ipo",
         rightClusterId: "contradictory-manus-release",
-        verdict: "approved" as const,
+        relation: "same_event" as const,
         confidence: 96,
         reasonCode: "same_event",
         reasonText: "这是两个不同的事件，应该拒绝合并。",
@@ -1825,20 +1825,20 @@ describe("cluster assignment", () => {
       },
     });
     expect(decision).toMatchObject({
-      verdict: "ambiguous",
+      relation: "uncertain",
       reasonCode: "insufficient_evidence",
     });
-    expect(decision.reasonText).toContain("原始 AI verdict=approved");
+    expect(decision.reasonText).toContain("原始 AI relation=same_event");
     expect(decision.reasonText).toContain("这是两个不同的事件，应该拒绝合并。");
     expect(result.pairDiagnostics[0]?.decision.consistency).toMatchObject({
       status: "downgraded",
       issueCodes: ["explicit_negative_reason", "unrelated_structured_entities"],
       original: {
-        verdict: "approved",
+        relation: "same_event",
         reasonCode: "same_event",
         reasonText: "这是两个不同的事件，应该拒绝合并。",
       },
-      effective: { verdict: "ambiguous", reasonCode: "insufficient_evidence" },
+      effective: { relation: "uncertain", reasonCode: "insufficient_evidence" },
     });
     await expect(prisma.contentCluster.count({ where: { id: { in: pair.map((cluster) => cluster.id) } } })).resolves.toBe(2);
   });
@@ -1927,7 +1927,7 @@ describe("cluster assignment", () => {
     const assessClusterMergePairs = vi.fn().mockResolvedValue([{
       leftClusterId: "ambiguous-left-cluster",
       rightClusterId: "ambiguous-right-cluster",
-      verdict: "ambiguous" as const,
+      relation: "uncertain" as const,
       confidence: 62,
       reasonCode: "insufficient_evidence",
       reasonText: "主体和对象相关，但动作不同",
@@ -1952,7 +1952,7 @@ describe("cluster assignment", () => {
       bm25Score: expect.any(Number),
       signals: expect.objectContaining({ safety: expect.objectContaining({ rejected: false }) }),
       decision: {
-        verdict: "ambiguous",
+        relation: "uncertain",
         confidence: 62,
         reasonCode: "insufficient_evidence",
         reasonText: "主体和对象相关，但动作不同",
@@ -1969,7 +1969,7 @@ describe("cluster assignment", () => {
         orderBy: { createdAt: "desc" },
       }),
     ).resolves.toMatchObject({
-      verdict: "ambiguous",
+      relation: "uncertain",
       confidence: 62,
       reasonText: "主体和对象相关，但动作不同",
     });
@@ -2112,7 +2112,7 @@ describe("cluster assignment", () => {
       cachePriorityScore: storedPair.score,
       bm25Score: null,
       vectorSimilarity: null,
-      decision: { verdict: "declined" },
+      decision: { relation: "unrelated" },
     });
     expect(thirdPass).toMatchObject({
       dirtyPairs: 0,
@@ -2128,7 +2128,7 @@ describe("cluster assignment", () => {
       prisma.clusterDecision.count({
         where: {
           kind: "cluster_pair",
-          verdict: "declined",
+          relation: "unrelated",
         },
       }),
     ).resolves.toBe(3);
@@ -2238,11 +2238,11 @@ describe("cluster assignment", () => {
     const failedPass = await executeClusterMerge(aiProvider, new Date("2026-04-21T10:00:00.000Z"));
     await expect(
       prisma.clusterDecision.findFirst({
-        where: { verdict: "failed" },
+        where: { relation: "failed" },
         orderBy: { createdAt: "desc" },
       }),
     ).resolves.toMatchObject({
-      verdict: "failed",
+      relation: "failed",
       reasonText: "upstream timeout",
     });
     await expect(
@@ -2262,7 +2262,7 @@ describe("cluster assignment", () => {
     await expect(
       prisma.clusterDecision.count({
         where: {
-          verdict: "failed",
+          relation: "failed",
         },
       }),
     ).resolves.toBe(1);
@@ -2323,9 +2323,9 @@ describe("cluster assignment", () => {
       }))),
     });
     const assessClusterMergePairs = vi.fn().mockResolvedValue([
-      { leftClusterId: "A", rightClusterId: "B", verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件" },
-      { leftClusterId: "B", rightClusterId: "C", verdict: "approved", confidence: 95, reasonCode: "same_event", reasonText: "同一事件" },
-      { leftClusterId: "A", rightClusterId: "C", verdict: "declined", confidence: 95, reasonCode: "different_event", reasonText: "明确不能合并" },
+      { leftClusterId: "A", rightClusterId: "B", relation: "same_event", confidence: 95, reasonCode: "same_event", reasonText: "同一事件" },
+      { leftClusterId: "B", rightClusterId: "C", relation: "same_event", confidence: 95, reasonCode: "same_event", reasonText: "同一事件" },
+      { leftClusterId: "A", rightClusterId: "C", relation: "unrelated", confidence: 95, reasonCode: "different_event", reasonText: "明确不能合并" },
     ]);
 
     const result = await executeClusterMerge(
@@ -2343,7 +2343,7 @@ describe("cluster assignment", () => {
         leftClusterId: { in: clusterIds },
         rightClusterId: { in: clusterIds },
       },
-      select: { verdict: true },
+      select: { relation: true },
     });
 
     expect(assessClusterMergePairs).toHaveBeenCalledOnce();
@@ -2355,8 +2355,8 @@ describe("cluster assignment", () => {
       decisionsDeclined: 1,
     });
     expect(result.pairDiagnostics).toHaveLength(3);
-    expect(result.pairDiagnostics.map((diagnostic) => diagnostic.decision.verdict).sort())
-      .toEqual(["approved", "approved", "declined"]);
+    expect(result.pairDiagnostics.map((diagnostic) => diagnostic.decision.relation).sort())
+      .toEqual(["same_event", "same_event", "unrelated"]);
     expect(result.pairDiagnostics.every((diagnostic) =>
       diagnostic.groupConflict?.reason === "declined_pair_within_approved_component"
     )).toBe(true);
@@ -2365,8 +2365,8 @@ describe("cluster assignment", () => {
       clusterIds: ["A", "B", "C"],
       declinedPairs: [{ leftClusterId: "A", rightClusterId: "C" }],
     });
-    expect(recordedDecisions.map((decision) => decision.verdict).sort())
-      .toEqual(["approved", "approved", "declined"]);
+    expect(recordedDecisions.map((decision) => decision.relation).sort())
+      .toEqual(["same_event", "same_event", "unrelated"]);
     expect(remainingClusters.map((cluster) => cluster.id).sort()).toEqual(["A", "B", "C"]);
     expect(Object.fromEntries(itemClusters.map((item) => [item.id, item.clusterId]))).toEqual({
       "A-item-0": "A",

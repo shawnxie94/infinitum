@@ -202,7 +202,7 @@ describe("ingestion workflow stages", () => {
       return parsed.pairs.map(({ left, right }) => ({
         leftClusterId: left.id,
         rightClusterId: right.id,
-        verdict: "declined" as const,
+        relation: "unrelated" as const,
         confidence: 83,
         reasonCode: "different_events",
         reasonText: "AI 判断为不同事件",
@@ -243,7 +243,7 @@ describe("ingestion workflow stages", () => {
       selectionPaths: ["live"],
       recallChannels: expect.arrayContaining(["bm25"]),
       decision: {
-        verdict: "declined",
+        relation: "unrelated",
         confidence: 83,
         reasonCode: "different_events",
         reasonText: "AI 判断为不同事件",
@@ -262,7 +262,7 @@ describe("ingestion workflow stages", () => {
       vectorSimilarity: null,
       signals: { safety: { rejected: false, rejectedReason: null } },
       decision: {
-        verdict: "declined",
+        relation: "unrelated",
         confidence: 91,
         reasonCode: "different_events",
         reasonText: "事件不同",
