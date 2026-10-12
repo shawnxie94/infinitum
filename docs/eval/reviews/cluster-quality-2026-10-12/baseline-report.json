@@ -32,9 +32,9 @@
     "corpusFingerprint": "d1465f51aec6c0d983608707f6e28831629f9c7427088b5f43f656e68bca30be",
     "snapshotUnchangedAfterRun": true,
     "sourceVersion": {
-      "gitHead": "8c729f63fffc2421b4c1e8f93632fe60c4138a1f",
+      "gitHead": "2f38e04e77c30a9136aaf637d5b15d9fb6aaa0aa",
       "sourceCode": {
-        "src/lib/clusters/helpers.ts": "3078a1920a54a5d2ee8034bf2d5a3cb50fc09cc6728cd30c4fc9f25670ee9926",
+        "src/lib/clusters/helpers.ts": "c90f843b6cde9a809539cf82c4857f365d0741c094d4b3d381a50d6176535f03",
         "src/lib/clusters/bm25.ts": "a7a80ce0fb13fb5565505e877bf47b275cec22c2a30a264ac6ecaa938b1ec460",
         "src/config/constants.ts": "53656d45bef68b82f14fa4c7843c086e1d394a792a20e19371e4c72891338a0c",
         "scripts/eval-cluster-quality-baseline.ts": "be07af278c3d62140fb5d96c3517d890bf1989e4ed8b996448a0f363c59cb586"
@@ -69,15 +69,15 @@
       "eligible": 16,
       "same": {
         "total": 1,
-        "admitted": 0,
-        "notAdmitted": 1
+        "admitted": 1,
+        "notAdmitted": 0
       },
       "diff": {
         "total": 15,
         "admitted": 12,
         "notAdmitted": 3
       },
-      "sameEventCandidateAdmissionRecall": 0,
+      "sameEventCandidateAdmissionRecall": 1,
       "differentEventCandidateAdmissionRate": 0.8
     },
     "holdout": {
@@ -85,23 +85,19 @@
       "eligible": 8,
       "same": {
         "total": 1,
-        "admitted": 0,
-        "notAdmitted": 1
+        "admitted": 1,
+        "notAdmitted": 0
       },
       "diff": {
         "total": 7,
         "admitted": 6,
         "notAdmitted": 1
       },
-      "sameEventCandidateAdmissionRecall": 0,
+      "sameEventCandidateAdmissionRecall": 1,
       "differentEventCandidateAdmissionRate": 0.8571428571428571
     }
   },
   "devRejectionReasons": [
-    {
-      "caseId": "CQ-45FB5A1C62F2",
-      "reason": "safety_rejected:object_conflict"
-    },
     {
       "caseId": "CQ-6D17E63300D9",
       "reason": "safety_rejected:unrelated_subjects"
@@ -117,18 +113,18 @@
   ],
   "diagnostics": {
     "totalPairs": 6624,
-    "rejectedObjectConflict": 329,
+    "rejectedObjectConflict": 323,
     "rejectedDateConflict": 0,
     "rejectedNoEventAnchor": 5583,
     "belowGrayScore": 0,
-    "relatedPairs": 712,
+    "relatedPairs": 718,
     "aiEligiblePairs": 141,
     "cleanPairsSkipped": 8190,
     "dirtyPairs": 141,
-    "preLimitCandidates": 57,
-    "postLimitCandidates": 57,
+    "preLimitCandidates": 56,
+    "postLimitCandidates": 56,
     "dirtyCandidateCount": 47
   },
-  "stableDecisionDigest": "6624c0f5b91f19eff799d343b0cf04d8ad8ff2affa18de93f303f20de56b5728",
-  "offlineRuntimeMs": 490
+  "stableDecisionDigest": "4b5c5a795ca87581f95fa9e086ac3e8cebbccb6b070c4ccf610dd826572ba3df",
+  "offlineRuntimeMs": 520
 }

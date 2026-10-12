@@ -6,6 +6,7 @@ import {
   buildClusterMergeCandidateSelection,
   buildClusterMergeCandidates,
   getClusterMergePairAuditSignals,
+  checkClusterMergePairSafety,
   buildClusterMergeInput,
   filterClusterMergeSourcesByAllowedEdges,
   hasClusterMergeCandidateEdge,
@@ -28,6 +29,61 @@ function createCandidate(overrides: Partial<ClusterMergeCandidate>): ClusterMerg
     ...overrides,
   };
 }
+
+describe("checkClusterMergePairSafety object-conflict text-overlap exemption", () => {
+  const overlapWords = (count: number) =>
+    Array.from({ length: count }, (_, i) => `细节词${i}`).join(" ");
+
+  it("exempts object_conflict when subjects strongly match and body text overlaps heavily", () => {
+    // 还原 2026-10-12 回放误杀对 CQ-45FB5A1C62F2：object 字段粒度不一致
+    //（"10月13日新品发布活动" vs "智能家居中枢HomeView、HomePod mini…"），
+    // 但排除主体/动作后独特正文重叠 24，判 object_conflict 属抽取噪声误杀。
+    const left = createCandidate({
+      id: "apple-announce",
+      title: "苹果10月发布会聚焦智能家居中枢及LG联名配件",
+      summary: "苹果官宣将于10月13日举办主题为\"Welcome home\"的新品发布活动，多方消息指向智能家居生态成为核心。传闻新品包括命名为HomePad的智能家居中枢设备、新一代HomePod mini以及新款Apple TV。与此同时，彭博社披露苹果正与LG电子联合开发视频门铃、智能门锁、恒温器、室内外摄像头等家庭自动化配件，产品挂LG品牌并由LG负责生产与技术支持，已部分出现在LG提交的监管认证文件中",
+      eventSubject: "苹果",
+      eventAction: "预告",
+      eventObject: "10月13日新品发布活动",
+    });
+    const right = createCandidate({
+      id: "apple-official",
+      title: "苹果官宣10月13日举办Welcome home发布会推出智能家居中枢HomeView等多款新品",
+      summary: "苹果公司宣布于2026年10月13日在纽约举办主题为\"Welcome home\"的智能家居新品发布会，这是新任CEO John Ternus上任后在智能家居领域的首个重大战略动作。发布会核心推出搭载A18芯片、约6英寸方形显示屏的智能家居中枢HomeView，提供桌面和壁挂两版，定位为家庭智能设备集中控制中枢；同步亮相搭载S10芯片的新款HomePod mini智能音箱和搭载A19芯片的Apple TV 4K流媒体机顶盒",
+      eventSubject: "苹果",
+      eventAction: "发布智能家居中枢HomeView",
+      eventObject: "智能家居中枢HomeView、HomePod mini、Apple TV及Apple Home Collection设备",
+    });
+
+    const safety = checkClusterMergePairSafety(left, right);
+    expect(safety.rejected).toBe(false);
+    expect(safety.rejectedReason).toBeNull();
+  });
+
+  it("keeps object_conflict when the body overlap stays below the exemption threshold", () => {
+    const shared = overlapWords(8);
+    const left = createCandidate({
+      id: "acme-model",
+      title: "Acme 发布新模型",
+      summary: `Acme 推出新一代模型 ${shared}`,
+      eventSubject: "Acme",
+      eventAction: "发布新模型",
+      eventObject: "新一代模型",
+    });
+    const right = createCandidate({
+      id: "acme-funding",
+      title: "Acme 完成新融资",
+      summary: `Acme 宣布完成融资交割 ${shared}`,
+      eventSubject: "Acme",
+      eventAction: "完成融资",
+      eventObject: "融资交割",
+    });
+
+    const safety = checkClusterMergePairSafety(left, right);
+    expect(safety.rejected).toBe(true);
+    expect(safety.rejectedReason).toBe("object_conflict");
+  });
+});
 
 describe("buildClusterMergeCandidates", () => {
   it("does not keep existing multi-item clusters when no merge anchor is found", () => {
