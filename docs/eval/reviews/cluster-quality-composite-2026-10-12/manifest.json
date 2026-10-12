@@ -1,0 +1,209 @@
+{
+ "schemaVersion": 1,
+ "id": "cluster-quality-composite-2026-10-12",
+ "status": "supplemental_development_set_not_release_gate",
+ "purpose": "Add the 2026-10-12 relation-semantics annotated cohort (same_event/follow_up/unrelated labels) to the composite development set without mutating any frozen source packet or the 2026-10-03 composite.",
+ "splitPolicy": "Inherit the full 2026-10-03 composite (2026-10-01 dev + 2026-10-02 dev/holdout) and append the 2026-10-12 cohort with both splits. No source holdout moves into dev; humanLabel may use relation semantics (same_event|follow_up|synthesis|unrelated|uncertain) alongside legacy same/diff — replay tooling maps same_event→same and follow_up/synthesis/unrelated→diff.",
+ "sourceCohorts": [
+  {
+   "cohortId": "2026-10-01",
+   "manifestPath": "docs/eval/reviews/cluster-quality-2026-10-01/frozen-manifest.json",
+   "labelsPath": "docs/eval/reviews/cluster-quality-2026-10-01/blind-review.csv",
+   "includeSplits": [
+    "dev"
+   ],
+   "sourceManifestSha256": "36fa4b92b314ace918683ebbdb23c6f6f8e3f994d5ed04cc9d81c5b4e8bff260",
+   "sourceLabelsSha256": "560649b6343c1a8558a0d8e0663aa29367875a57bfd183baf43bc91f71af6370",
+   "sourceAsOf": "2026-09-26T06:39:09.566850+00:00",
+   "sourceSnapshotPath": "docs/eval/snapshots/prod-snapshot-2026-09-21.db",
+   "sourceSnapshotSha256": "72c7049ace08654bf327f346d11d1fc63fcf294d01e2882c9a130755ea29828e",
+   "sourceMethodVersion": "d0dba2ddbaa96093913e64a76cf5bd173de14fbd53c853cd4991da0181fb17ee",
+   "sourceBaseCommit": "35b8d41748070ff6b81ff618e063524b46079dd4",
+   "includedCases": 24,
+   "includedLabelCounts": {
+    "dev": {
+     "diff": 14,
+     "same": 10
+    }
+   }
+  },
+  {
+   "cohortId": "2026-10-02",
+   "manifestPath": "docs/eval/reviews/cluster-quality-2026-10-02/packet/frozen-manifest.json",
+   "labelsPath": "docs/eval/reviews/cluster-quality-2026-10-02/packet/blind-review.csv",
+   "includeSplits": [
+    "dev",
+    "holdout"
+   ],
+   "sourceManifestSha256": "10fa0c8a69ea400d70e3e3e1c45f2a0dc9c1a9a3938f2b3a1554a165e36471d1",
+   "sourceLabelsSha256": "da2bd8b787ace6859fec45a32be474f11c70ba5f05aebe01ed49e33a916e3f9f",
+   "sourceAsOf": "2026-10-02T11:41:35.000Z",
+   "sourceSnapshotPath": "docs/eval/snapshots/local-qualification-snapshot-2026-10-02.db",
+   "sourceSnapshotSha256": "0d6e998bff7495cb3df3487983351b247a13d22ba147210185c781b6be9146cd",
+   "sourceMethodVersion": "a9a305d857ecd0ffa726e6c92d5fdb90258836fb9833b41b08ec9c7907ce58fd",
+   "sourceBaseCommit": "35b8d41748070ff6b81ff618e063524b46079dd4",
+   "includedCases": 24,
+   "includedLabelCounts": {
+    "dev": {
+     "diff": 16
+    },
+    "holdout": {
+     "diff": 7,
+     "same": 1
+    }
+   }
+  },
+  {
+   "cohortId": "2026-10-12",
+   "manifestPath": "docs/eval/reviews/cluster-quality-2026-10-12/packet/frozen-manifest.json",
+   "labelsPath": "docs/eval/reviews/cluster-quality-2026-10-12/packet/blind-review.csv",
+   "includeSplits": [
+    "dev",
+    "holdout"
+   ],
+   "sourceManifestSha256": "7d574983ab3b2f94fd091eac5a192d1690cce7847ad90ab773544abfaea2d217",
+   "sourceLabelsSha256": "a3755d992b41c7151bdf9620d39a4bd807175b2821476806ae9d6b7dd0d20dc8",
+   "sourceAsOf": "2026-10-12T05:17:31.000Z",
+   "sourceSnapshotPath": "docs/eval/snapshots/local-qualification-snapshot-2026-10-12.db",
+   "sourceSnapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+   "sourceMethodVersion": "337083957cb4ba0b37917b72d6b47826c3e21732da56723f860055aac2f24cf5",
+   "sourceBaseCommit": "4f0eec2ca620f29d1bab496949ff297155bde4fb",
+   "includedCases": 24,
+   "includedLabelCounts": {
+    "dev": {
+     "unrelated": 14,
+     "same_event": 1,
+     "follow_up": 1
+    },
+    "holdout": {
+     "unrelated": 6,
+     "follow_up": 1,
+     "same_event": 1
+    }
+   }
+  }
+ ],
+ "outputs": {
+  "devCsvSha256": "ec91c5c72ef42879ab975f84fb95f7752a037b7b870f2385035fd073ee2523b2",
+  "holdoutCsvSha256": "49b52c85c6945c1723b95224b76a90e9ba0b10c71686b4404bce79d6833db49d"
+ },
+ "replayEvidence": {
+  "cohort": "2026-10-12",
+  "baselineReportPath": "docs/eval/reviews/cluster-quality-2026-10-12/baseline-report.json",
+  "status": "diagnostic_complete",
+  "releaseEligible": false,
+  "note": "sameEventCandidateAdmissionRecall 0/2 in both splits; both same positives came from the safety_rejected_related stratum — candidate-selector safety vetoes blocked AI review on human-confirmed same-event pairs."
+ },
+ "expectedCounts": {
+  "dev": {
+   "total": 56,
+   "labels": {
+    "same": 10,
+    "diff": 30,
+    "same_event": 1,
+    "follow_up": 1,
+    "unrelated": 14
+   },
+   "byCohort": {
+    "2026-10-01": {
+     "total": 24,
+     "labels": {
+      "same": 10,
+      "diff": 14
+     }
+    },
+    "2026-10-02": {
+     "total": 16,
+     "labels": {
+      "diff": 16
+     }
+    },
+    "2026-10-12": {
+     "total": 16,
+     "labels": {
+      "same_event": 1,
+      "unrelated": 15
+     },
+     "mergedLabels": {
+      "same": 1,
+      "diff": 15
+     }
+    }
+   },
+   "mergedLabels": {
+    "same": 11,
+    "diff": 45
+   }
+  },
+  "holdout": {
+   "total": 16,
+   "labels": {
+    "same": 1,
+    "diff": 7,
+    "same_event": 1,
+    "follow_up": 1,
+    "unrelated": 6
+   },
+   "byCohort": {
+    "2026-10-02": {
+     "total": 8,
+     "labels": {
+      "same": 1,
+      "diff": 7
+     }
+    },
+    "2026-10-12": {
+     "total": 8,
+     "labels": {
+      "same_event": 1,
+      "follow_up": 1,
+      "unrelated": 6
+     },
+     "mergedLabels": {
+      "same": 1,
+      "diff": 7
+     }
+    }
+   },
+   "mergedLabels": {
+    "same": 2,
+    "diff": 14
+   }
+  },
+  "excludedOriginalHoldout": {
+   "2026-10-01": {
+    "total": 12,
+    "same": 4,
+    "diff": 8,
+    "reason": "retained in original frozen packet; not moved or copied into this suite"
+   }
+  }
+ },
+ "clusterDisjointness": {
+  "devClusterIds": 76,
+  "holdoutClusterIds": 16,
+  "intersectionCount": 0
+ },
+ "metricCautions": [
+  "Cohorts have different snapshots, asOf values, method versions, and sampling designs; do not pool performance rates as one production-population estimate.",
+  "The older cohort contributes only its original dev split; its holdout stays separate.",
+  "The 1,420-pair model-assisted review is diagnostic-only and not a human-label source.",
+  "This composite set does not by itself pass the quality or release gate.",
+  "The 2026-10-12 cohort uses relation-semantics label values; replay metrics map same_event→same and follow_up/synthesis/unrelated→diff."
+ ],
+ "diagnosticOnly": {
+  "path": "diagnostic-only/unrelated-subjects-1420-reviewed.csv",
+  "rows": 1420,
+  "sha256": "e6f40bf94ad4b18919699edcdd4e006e3fb6f7a25aaaad63325e1febba9317a7",
+  "reviewType": "model-assisted diagnostic; not human gold; excluded from label totals",
+  "initialClassificationCounts": {
+   "not_same_event": 1419,
+   "uncertain": 1
+  },
+  "finalClassificationCounts": {
+   "not_same_event": 1420
+  },
+  "candidateRecallCases": 0,
+  "sourcesCheckedBorderline": 1
+ }
+}

@@ -355,6 +355,15 @@ export type SplitBaselineMetrics = {
 };
 
 /** Excluded and uncertain cases are never negative-correct or missed-recall; denominators are eligible-only. */
+/** 关系语义五值与历史 same/diff 值域并存的归并（与 eval-cluster-quality-review 的 assess 一致）。 */
+function isSameEventLabel(label: string | undefined): boolean {
+  return label === "same" || label === "same_event";
+}
+
+function isNotMergeLabel(label: string | undefined): boolean {
+  return label === "diff" || label === "follow_up" || label === "synthesis" || label === "unrelated";
+}
+
 export function computeSplitMetrics(outcomes: CaseOutcome[], split: "dev" | "holdout"): SplitBaselineMetrics {
   const inSplit = outcomes.filter((o) => o.split === split && o.eligibility === "eligible");
   const same = { total: 0, admitted: 0, notAdmitted: 0 };
@@ -607,8 +616,8 @@ export function assessBaseline(input: BaselineInputs): { status: BaselineReport[
     if (row.reviewStatus !== "reviewed") invalid.push(`case ${caseId}: reviewStatus must be reviewed`);
     if (!row.reviewer?.trim()) invalid.push(`case ${caseId}: reviewer missing`);
     if (!Number.isFinite(Date.parse(row.reviewedAt ?? ""))) invalid.push(`case ${caseId}: reviewedAt unparseable`);
-    if (row.humanLabel !== "same" && row.humanLabel !== "diff" && row.humanLabel !== "uncertain") {
-      invalid.push(`case ${caseId}: humanLabel must be same|diff|uncertain`);
+    if (!isSameEventLabel(row.humanLabel) && !isNotMergeLabel(row.humanLabel) && row.humanLabel !== "uncertain") {
+      invalid.push(`case ${caseId}: humanLabel must be same|diff|uncertain or relation semantics (same_event|follow_up|synthesis|unrelated)`);
     }
   }
 
@@ -635,7 +644,7 @@ export function assessBaseline(input: BaselineInputs): { status: BaselineReport[
   for (const c of input.frozen.cases) {
     const row = labelsById.get(c.caseId);
     const s = samplingById.get(c.caseId)!;
-    const label: "same" | "diff" = row?.humanLabel === "same" ? "same" : "diff";
+    const label: "same" | "diff" = isSameEventLabel(row?.humanLabel) ? "same" : "diff";
     const base: CaseOutcome = {
       caseId: c.caseId,
       split: c.split,

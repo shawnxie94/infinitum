@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "stage": "production_candidate_selector_snapshot_counterfactual",
+  "status": "diagnostic_complete",
+  "releaseEligible": false,
+  "notMeasured": {
+    "aiCalls": "not_measured",
+    "aiTokens": "not_measured",
+    "modelCost": "not_measured",
+    "aiLatency": "not_measured",
+    "vectorRecallChannel": "disabled_not_measured"
+  },
+  "scenarioFaithfulness": {
+    "asOfBasis": "snapshot_active_max_latestPublishedAt",
+    "lookbackDays": 7,
+    "scanClusterLimit": 2500,
+    "candidateLimit": 80,
+    "relatedPairLimit": 3,
+    "liveEndpoints": "counterfactual_reviewed_endpoints_live",
+    "corpusSize": 139,
+    "liveClusterIdCount": 48,
+    "missingTables": [],
+    "itemsSourceFilter": "enforced_production_exists_filter",
+    "samplingBiasNote": "sampling strata are 18 high_bm25_near_neighbor + 4 low_similarity_coverage + 2 safety_rejected_related hard cases; rates are biased-sample diagnostics, not a global error rate",
+    "stageBoundaryNote": "admission counts candidate-selector pairs only; entity-alias normalization, cannot-link filtering, AI review, and final graph merging are out of stage and not measured"
+  },
+  "inputs": {
+    "frozenManifestSha256": "7d574983ab3b2f94fd091eac5a192d1690cce7847ad90ab773544abfaea2d217",
+    "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+    "samplingManifestSha256": "3a87ac3fa3d09a07254bfe4be1c5983f832e949cf962c35e7240a87e151bea48",
+    "labelsCsvSha256": "a3755d992b41c7151bdf9620d39a4bd807175b2821476806ae9d6b7dd0d20dc8",
+    "corpusFingerprint": "d1465f51aec6c0d983608707f6e28831629f9c7427088b5f43f656e68bca30be",
+    "snapshotUnchangedAfterRun": true,
+    "sourceVersion": {
+      "gitHead": "8c729f63fffc2421b4c1e8f93632fe60c4138a1f",
+      "sourceCode": {
+        "src/lib/clusters/helpers.ts": "3078a1920a54a5d2ee8034bf2d5a3cb50fc09cc6728cd30c4fc9f25670ee9926",
+        "src/lib/clusters/bm25.ts": "a7a80ce0fb13fb5565505e877bf47b275cec22c2a30a264ac6ecaa938b1ec460",
+        "src/config/constants.ts": "53656d45bef68b82f14fa4c7843c086e1d394a792a20e19371e4c72891338a0c",
+        "scripts/eval-cluster-quality-baseline.ts": "be07af278c3d62140fb5d96c3517d890bf1989e4ed8b996448a0f363c59cb586"
+      }
+    }
+  },
+  "coverage": {
+    "total": 24,
+    "eligible": 24,
+    "uncertain": 0,
+    "invalid": [],
+    "snapshotFieldComparison": {
+      "comparedCases": 24,
+      "notComparedCases": 0,
+      "note": "snapshot field comparison only ran for cases passing cluster-presence and window checks; earlier-excluded cases are not compared and no no-drift claim is made for them"
+    },
+    "exclusions": [],
+    "bySplit": {
+      "dev": {
+        "total": 16,
+        "eligible": 16
+      },
+      "holdout": {
+        "total": 8,
+        "eligible": 8
+      }
+    }
+  },
+  "metrics": {
+    "dev": {
+      "aggregationOnly": false,
+      "eligible": 16,
+      "same": {
+        "total": 1,
+        "admitted": 0,
+        "notAdmitted": 1
+      },
+      "diff": {
+        "total": 15,
+        "admitted": 12,
+        "notAdmitted": 3
+      },
+      "sameEventCandidateAdmissionRecall": 0,
+      "differentEventCandidateAdmissionRate": 0.8
+    },
+    "holdout": {
+      "aggregationOnly": true,
+      "eligible": 8,
+      "same": {
+        "total": 1,
+        "admitted": 0,
+        "notAdmitted": 1
+      },
+      "diff": {
+        "total": 7,
+        "admitted": 6,
+        "notAdmitted": 1
+      },
+      "sameEventCandidateAdmissionRecall": 0,
+      "differentEventCandidateAdmissionRate": 0.8571428571428571
+    }
+  },
+  "devRejectionReasons": [
+    {
+      "caseId": "CQ-45FB5A1C62F2",
+      "reason": "safety_rejected:object_conflict"
+    },
+    {
+      "caseId": "CQ-6D17E63300D9",
+      "reason": "safety_rejected:unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-9B55E619D9E1",
+      "reason": "safety_rejected:no_event_anchor"
+    },
+    {
+      "caseId": "CQ-F48B5AA6A86F",
+      "reason": "safety_rejected:unrelated_subjects"
+    }
+  ],
+  "diagnostics": {
+    "totalPairs": 6624,
+    "rejectedObjectConflict": 329,
+    "rejectedDateConflict": 0,
+    "rejectedNoEventAnchor": 5583,
+    "belowGrayScore": 0,
+    "relatedPairs": 712,
+    "aiEligiblePairs": 141,
+    "cleanPairsSkipped": 8190,
+    "dirtyPairs": 141,
+    "preLimitCandidates": 57,
+    "postLimitCandidates": 57,
+    "dirtyCandidateCount": 47
+  },
+  "stableDecisionDigest": "6624c0f5b91f19eff799d343b0cf04d8ad8ff2affa18de93f303f20de56b5728",
+  "offlineRuntimeMs": 490
+}
