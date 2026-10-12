@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 1,
+  "stage": "local_qualification_snapshot_sampler",
+  "purpose": "Private sampling manifest for the cluster-quality blind review (weak scheduling hints only; never human truth). Source of the frozen packet.",
+  "createdAt": "2026-10-12T05:17:31.000Z",
+  "asOfMs": 1791782251000,
+  "windowDays": 7,
+  "seed": "cluster-quality-relation-sample-20261012",
+  "snapshot": {
+    "path": "docs/eval/snapshots/local-qualification-snapshot-2026-10-12.db",
+    "sha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+  },
+  "selection": {
+    "targetCaseCount": 24,
+    "actualCaseCount": 24,
+    "universeSize": 9591,
+    "stratumCounts": {
+      "high_bm25_near_neighbor": 18,
+      "safety_rejected_related": 2,
+      "low_similarity_coverage": 4
+    },
+    "quotaStats": {
+      "high_similarity_or_same_fp": {
+        "requested": 18,
+        "actual": 18
+      },
+      "safety_rejected_related": {
+        "requested": 2,
+        "actual": 2
+      },
+      "low_similarity_coverage": {
+        "requested": 4,
+        "actual": 4
+      }
+    },
+    "note": "strata follow explicit quotas (at target 24: 18 high-similarity/same-FP + 2 safety-rejected-related + 4 low-similarity coverage); they are weak sampling-bias diagnostics from the current production BM25+safety stack, intentionally NOT population rates; controls are not gold labels and weak signals never reach the blind CSV"
+  },
+  "reviewInstructions": {
+    "rule": "Decide independently from the visible pair snapshot; do not treat the source or any weak verdict as gold. Mark uncertain when event boundary/evidence is insufficient."
+  },
+  "caseCount": 24,
+  "cases": [
+    {
+      "caseId": "CQ-1DFB8BF4A81A",
+      "pairKey": "cmv131wjo04moq101jt480vk6|cmv13209l04n8q101jcylqhvh",
+      "leftClusterId": "cmv131wjo04moq101jt480vk6",
+      "rightClusterId": "cmv13209l04n8q101jcylqhvh",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1756185,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-30392BA6BF19",
+      "pairKey": "cmuzc01u500lvlk01efx9wen3|cmv1315gg04hpq101d1i7fvz4",
+      "leftClusterId": "cmuzc01u500lvlk01efx9wen3",
+      "rightClusterId": "cmv1315gg04hpq101d1i7fvz4",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 3191017,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-3A55206C1A26",
+      "pairKey": "cmuz8lam53yxvm801vccapras|cmuz8nfa23z5gm801xlo639ub",
+      "leftClusterId": "cmuz8lam53yxvm801vccapras",
+      "rightClusterId": "cmuz8nfa23z5gm801xlo639ub",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 2127474,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-3D502A9E8E03",
+      "pairKey": "cmuz8p0yh3za1m801tgwhc6dx|cmv131c1m04idq1017ifvatde",
+      "leftClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+      "rightClusterId": "cmv131c1m04idq1017ifvatde",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 4926378,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-3D540CDAD6DB",
+      "pairKey": "cmv3r5fof00n6s501joxk4506|cmv3r5ns400nxs501feqskl6o",
+      "leftClusterId": "cmv3r5fof00n6s501joxk4506",
+      "rightClusterId": "cmv3r5ns400nxs501feqskl6o",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 3011299,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-45FB5A1C62F2",
+      "pairKey": "cmv13273k04o0q101zl8zsyak|cmv4nxxbm009oua01cuwcv8ok",
+      "leftClusterId": "cmv13273k04o0q101zl8zsyak",
+      "rightClusterId": "cmv4nxxbm009oua01cuwcv8ok",
+      "sourceStratum": "safety_rejected_related",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 11256760,
+      "reasonCode": "safety_rejected_related",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "object_conflict"
+    },
+    {
+      "caseId": "CQ-5E7ABD124000",
+      "pairKey": "cmuz8nhyo3z5im801o7l0jmrr|cmuz8nuw73z7wm801xqkhhidy",
+      "leftClusterId": "cmuz8nhyo3z5im801o7l0jmrr",
+      "rightClusterId": "cmuz8nuw73z7wm801xqkhhidy",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 4842439,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-5FAFE6A31587",
+      "pairKey": "cmuz8p2kr3zafm8018jxhqd3g|cmv132ciw04omq1019q96qecw",
+      "leftClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+      "rightClusterId": "cmv132ciw04omq1019q96qecw",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 4771791,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-6D17E63300D9",
+      "pairKey": "cmuz8ln093yzbm801vb4hld18|cmuz8mggy3z0pm80165kzuvc9",
+      "leftClusterId": "cmuz8ln093yzbm801vb4hld18",
+      "rightClusterId": "cmuz8mggy3z0pm80165kzuvc9",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-6F87248DB80C",
+      "pairKey": "cmuz8p7cx3zbdm801y3rth2vz|cmuzc5kn301k6lk01irjc3wf0",
+      "leftClusterId": "cmuz8p7cx3zbdm801y3rth2vz",
+      "rightClusterId": "cmuzc5kn301k6lk01irjc3wf0",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 3257493,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-7574E555E57A",
+      "pairKey": "cmuz8m8u83z0nm801sf3350mz|cmuz8mj0h3z0tm8011xud4q0h",
+      "leftClusterId": "cmuz8m8u83z0nm801sf3350mz",
+      "rightClusterId": "cmuz8mj0h3z0tm8011xud4q0h",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 4951638,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-7788D9F312BD",
+      "pairKey": "cmuz8o45k3z8gm801sfyb01kv|cmv131ht504j1q101gjxezjb3",
+      "leftClusterId": "cmuz8o45k3z8gm801sfyb01kv",
+      "rightClusterId": "cmv131ht504j1q101gjxezjb3",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 2634712,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-88F9466EE3CE",
+      "pairKey": "cmuz8mhpw3z0rm801p6syctso|cmuz8n5qw3z2qm801wchj08zn",
+      "leftClusterId": "cmuz8mhpw3z0rm801p6syctso",
+      "rightClusterId": "cmuz8n5qw3z2qm801wchj08zn",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-930CC4423D30",
+      "pairKey": "cmuz8o8ji3z8km801s7sclw7f|cmuz8ojht3z8xm801gcqeteew",
+      "leftClusterId": "cmuz8o8ji3z8km801s7sclw7f",
+      "rightClusterId": "cmuz8ojht3z8xm801gcqeteew",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 2146744,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-9B55E619D9E1",
+      "pairKey": "cmuz8mofn3z0vm8014733qj6g|cmuz8ozcg3z9lm801ebrand06",
+      "leftClusterId": "cmuz8mofn3z0vm8014733qj6g",
+      "rightClusterId": "cmuz8ozcg3z9lm801ebrand06",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "no_event_anchor"
+    },
+    {
+      "caseId": "CQ-9D8F9AAE35FB",
+      "pairKey": "cmv3r5zgl00pbs501ucor0u2f|cmv3r65n800pws501aay0fxwb",
+      "leftClusterId": "cmv3r5zgl00pbs501ucor0u2f",
+      "rightClusterId": "cmv3r65n800pws501aay0fxwb",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 5452067,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-B22955783DFC",
+      "pairKey": "cmuz8o51f3z8im801g8g7epr7|cmuzc07um00mnlk01vucdb2np",
+      "leftClusterId": "cmuz8o51f3z8im801g8g7epr7",
+      "rightClusterId": "cmuzc07um00mnlk01vucdb2np",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1945762,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-BACAC3335FD2",
+      "pairKey": "cmuz8nokt3z7sm801oogn7zvt|cmv4scn1e001mua017u8w6bte",
+      "leftClusterId": "cmuz8nokt3z7sm801oogn7zvt",
+      "rightClusterId": "cmv4scn1e001mua017u8w6bte",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 5800329,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-C41E5C6A635D",
+      "pairKey": "cmv131e5b04ilq101trpv9tsw|cmv3r6ble00qls501gu213twp",
+      "leftClusterId": "cmv131e5b04ilq101trpv9tsw",
+      "rightClusterId": "cmv3r6ble00qls501gu213twp",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 4598794,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-D1A964A40B6F",
+      "pairKey": "cmv3r4nld00hjs501uvmcfard|cmv3r4plj00hrs50161o6k3ha",
+      "leftClusterId": "cmv3r4nld00hjs501uvmcfard",
+      "rightClusterId": "cmv3r4plj00hrs50161o6k3ha",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 5959039,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-D64AE43EA4EE",
+      "pairKey": "cmuz8n8oz3z2um801y67mhsd5|cmv131yac04myq101qla926zm",
+      "leftClusterId": "cmuz8n8oz3z2um801y67mhsd5",
+      "rightClusterId": "cmv131yac04myq101qla926zm",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 3044661,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-D67A49318423",
+      "pairKey": "cmuz8p2kz3zahm8011yactf9i|cmv3r6akk00qjs501j526xtdu",
+      "leftClusterId": "cmuz8p2kz3zahm8011yactf9i",
+      "rightClusterId": "cmv3r6akk00qjs501j526xtdu",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 3372479,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-D847793A6268",
+      "pairKey": "cmuz8p7853zb9m8019p6o8twk|cmuzc0co500mplk01z2067aa0",
+      "leftClusterId": "cmuz8p7853zb9m8019p6o8twk",
+      "rightClusterId": "cmuzc0co500mplk01z2067aa0",
+      "sourceStratum": "safety_rejected_related",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 10405909,
+      "reasonCode": "safety_rejected_related",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "object_conflict"
+    },
+    {
+      "caseId": "CQ-F48B5AA6A86F",
+      "pairKey": "cmutvxst9006epf01vkca214q|cmuz8lfyz3yy3m801atd94pz7",
+      "leftClusterId": "cmutvxst9006epf01vkca214q",
+      "rightClusterId": "cmuz8lfyz3yy3m801atd94pz7",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    }
+  ]
+}

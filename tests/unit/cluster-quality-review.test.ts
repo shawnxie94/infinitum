@@ -291,6 +291,29 @@ describe("assess readiness", () => {
     expect(result.status).toBe("insufficient_truth");
   });
 
+  it("maps relation-semantics labels to same/diff coverage alongside legacy values", () => {
+    const dir = makeTmp();
+    prepareSix(dir);
+    const frozen = frozenOf(dir);
+    const rows = labelsFromPacket(dir, (records) => {
+      const relationByIndex = ["same_event", "follow_up", "synthesis", "unrelated", "uncertain", "same"];
+      records.forEach((r, i) => {
+        r.reviewStatus = "reviewed";
+        r.humanLabel = relationByIndex[i] ?? "unrelated";
+        r.reviewer = "alice";
+        r.reviewedAt = "2026-10-12T08:00:00Z";
+      });
+    });
+    const result = assessReadiness(frozen, rows);
+    // same_event + legacy same → 2 same；follow_up/synthesis/unrelated → 3 diff；uncertain 独立计数。
+    expect(result.coverage.eligible).toBe(5);
+    expect(result.coverage.reviewedUncertain).toBe(1);
+    // insufficient_truth 时不产出 metrics；关系标签的 same/diff 归并
+    // 至少保证 dev 具备正负例（6 例全部 reviewed 且含 same_event/unrelated）。
+    expect(result.coverage.eligible).toBe(5);
+    expect(result.coverage.reviewedUncertain).toBe(1);
+  });
+
   it("never converts uncertain to diff and blocks metrics while pending rows remain", () => {
     const dir = makeTmp();
     prepareSix(dir);

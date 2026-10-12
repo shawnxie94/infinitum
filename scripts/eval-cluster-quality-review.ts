@@ -652,13 +652,20 @@ export function assessReadiness(
       perSplit[split].uncertain += 1;
       continue;
     }
-    if (row.humanLabel !== "same" && row.humanLabel !== "diff") {
+    // 旧值域 same/diff（历史冻结包）与新值域（关系语义四类）并存：
+    // same_event 计入 same，follow_up/synthesis/unrelated 均为"不合并"计入 diff。
+    const labelSame = row.humanLabel === "same" || row.humanLabel === "same_event";
+    const labelDiff = row.humanLabel === "diff"
+      || row.humanLabel === "follow_up"
+      || row.humanLabel === "synthesis"
+      || row.humanLabel === "unrelated";
+    if (!labelSame && !labelDiff) {
       result.coverage.excluded += 1;
       continue;
     }
     result.coverage.eligible += 1;
     perSplit[split].eligible += 1;
-    if (row.humanLabel === "same") perSplit[split].same += 1;
+    if (labelSame) perSplit[split].same += 1;
     else perSplit[split].diff += 1;
   }
 
