@@ -19,13 +19,13 @@ import path from "node:path";
 import { createAiProvider } from "../src/lib/ai/provider-next";
 import type { PromptOverrides, RuntimeConfig } from "../src/config/runtime";
 
-interface SuiteRow extends Record<string, string> {}
+type SuiteRow = Record<string, string>;
 interface ModelConfigFile {
   model: { apiKey: string; baseURL: string; model: string };
   clusterMerge: { systemPrompt: string; userInstruction: string };
 }
 
-function parseCsv(text: string): Array<SuiteRow> {
+function parseCsv(text: string): SuiteRow[] {
   // RFC 4180 状态机：支持引号内逗号/换行/转义引号（复合集 summary 含内嵌换行）。
   const rows: string[][] = [];
   let row: string[] = [];
