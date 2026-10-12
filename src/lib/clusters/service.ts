@@ -1320,19 +1320,6 @@ type PrecomputedCleanPairSelection = {
   invalidSkipped: number;
 };
 
-function parseStoredRecallChannels(source: string | null): ClusterMergeRecallChannel[] {
-  switch (source) {
-    case "bm25":
-      return ["bm25"];
-    case "vector":
-      return ["vector"];
-    case "bm25+vector":
-      return ["bm25", "vector"];
-    default:
-      return ["unknown"];
-  }
-}
-
 function addPrecomputedAttribution(
   edge: ClusterMergeCandidateEdge,
   pair: StoredCleanMergePair,

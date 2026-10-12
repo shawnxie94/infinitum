@@ -103,7 +103,6 @@ describe("buildEmbeddingText", () => {
 describe("resolveMergePairAdmission", () => {
   const GRAY = 55;
   const VEC = 0.72;
-  const OVERRIDE = 0.9;
 
   it("admits by rule when score reaches the gray zone", () => {
     const admission = resolveMergePairAdmission(
@@ -111,7 +110,6 @@ describe("resolveMergePairAdmission", () => {
       null,
       GRAY,
       VEC,
-      OVERRIDE,
     );
     expect(admission).toEqual({ admitted: true, priorityScore: 60, source: "rule" });
   });
@@ -122,7 +120,6 @@ describe("resolveMergePairAdmission", () => {
       0.95,
       GRAY,
       VEC,
-      OVERRIDE,
     );
     expect(admission).toEqual({ admitted: true, priorityScore: 95, source: "vector" });
   });
@@ -133,7 +130,6 @@ describe("resolveMergePairAdmission", () => {
       0.8,
       GRAY,
       VEC,
-      OVERRIDE,
     );
     expect(admission).toEqual({ admitted: true, priorityScore: 80, source: "vector" });
   });
@@ -144,7 +140,6 @@ describe("resolveMergePairAdmission", () => {
       0.85,
       GRAY,
       VEC,
-      OVERRIDE,
     );
     expect(admission).toEqual({ admitted: true, priorityScore: 85, source: "vector" });
   });
@@ -155,7 +150,6 @@ describe("resolveMergePairAdmission", () => {
       1,
       GRAY,
       VEC,
-      OVERRIDE,
     );
     expect(admission).toEqual({ admitted: true, priorityScore: 100, source: "vector" });
   });
@@ -166,17 +160,16 @@ describe("resolveMergePairAdmission", () => {
       0.95,
       GRAY,
       VEC,
-      OVERRIDE,
     );
     expect(admission).toEqual({ admitted: true, priorityScore: 95, source: "vector" });
   });
 
   it("rejects pairs below both gates", () => {
     expect(
-      resolveMergePairAdmission({ rejected: true, rejectedReason: "no_event_anchor", score: 8 }, 0.5, GRAY, VEC, OVERRIDE).admitted,
+      resolveMergePairAdmission({ rejected: true, rejectedReason: "no_event_anchor", score: 8 }, 0.5, GRAY, VEC).admitted,
     ).toBe(false);
     expect(
-      resolveMergePairAdmission({ rejected: false, rejectedReason: null, score: 30 }, null, GRAY, VEC, OVERRIDE).admitted,
+      resolveMergePairAdmission({ rejected: false, rejectedReason: null, score: 30 }, null, GRAY, VEC).admitted,
     ).toBe(false);
   });
 });

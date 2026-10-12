@@ -17,6 +17,7 @@ import {
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
+  VERDICTS_ARRAY_PROTOCOL_CLUSTER_MERGE_PROMPT,
   VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT,
 } from "@/config/prompts";
 import {
@@ -218,6 +219,7 @@ describe("admin settings service", () => {
     ["previous", PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT],
     ["legacy-reason-code", PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT_LEGACY_REASON_CODE],
     ["verdict-protocol", VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT],
+    ["verdicts-array-protocol", VERDICTS_ARRAY_PROTOCOL_CLUSTER_MERGE_PROMPT],
   ])("upgrades the untouched historical cluster merge prompt variant: %s", async (variant, systemPrompt) => {
     await prisma.promptConfig.create({
       data: {

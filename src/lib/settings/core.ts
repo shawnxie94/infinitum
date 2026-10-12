@@ -12,6 +12,7 @@ import {
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
   PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
   PREVIOUS_DEFAULT_ITEM_UNDERSTANDING_PROMPT_VARIANTS,
+  VERDICTS_ARRAY_PROTOCOL_CLUSTER_MERGE_PROMPT,
   VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT,
 } from "@/config/prompts";
 import { getRuntimeConfig } from "@/config/runtime";
@@ -846,16 +847,19 @@ const LEGACY_CLUSTER_MERGE_PROMPT_VARIANTS = [
   LEGACY_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT,
   PREVIOUS_DEFAULT_CLUSTER_MERGE_PROMPT_LEGACY_REASON_CODE,
+  VERDICTS_ARRAY_PROTOCOL_CLUSTER_MERGE_PROMPT,
   VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT,
 ] as const;
 
 function isLegacyClusterMergePrompt(systemPrompt: string | null) {
-  if (!systemPrompt || systemPrompt.includes('"verdicts"')) {
-    return false;
-  }
-
+  // 已知历史默认逐字匹配（含 verdicts 数组代际）优先判定，不受下方
+  // '"verdicts"' 排除影响；其余含 verdicts 的自定义仍视为身份不明，不覆盖。
   if (LEGACY_CLUSTER_MERGE_PROMPT_VARIANTS.includes(systemPrompt as (typeof LEGACY_CLUSTER_MERGE_PROMPT_VARIANTS)[number])) {
     return true;
+  }
+
+  if (!systemPrompt || systemPrompt.includes('"verdicts"')) {
+    return false;
   }
 
   return (

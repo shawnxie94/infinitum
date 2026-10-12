@@ -30,13 +30,11 @@ type SqlRow = Record<string, any>;
 
 const GRAY_SCORE = 55; // CLUSTER_MERGE_AI_PAIR_GRAY_SCORE
 const VECTOR_GRAY_SIM = 0.72; // CLUSTER_MERGE_VECTOR_GRAY_SIM
-const CONFLICT_OVERRIDE_SIM = 0.9; // CLUSTER_MERGE_VECTOR_CONFLICT_OVERRIDE_SIM
 
 function parseArgs(argv: string[]) {
   const args: {
     db: string;
     minSim: number;
-    conflictOverride: number;
     csv: string;
     embedUrl: string;
     embedModel: string;
@@ -46,7 +44,6 @@ function parseArgs(argv: string[]) {
   } = {
     db: process.env.INFINITUM_EVAL_DB ?? "",
     minSim: VECTOR_GRAY_SIM,
-    conflictOverride: CONFLICT_OVERRIDE_SIM,
     csv: "docs/eval/eval-sample-30d.csv,docs/eval/embedding-mined-pairs.csv",
     embedUrl: process.env.INFINITUM_EMBED_URL ?? "",
     embedModel: process.env.INFINITUM_EMBED_MODEL ?? "",
@@ -58,7 +55,6 @@ function parseArgs(argv: string[]) {
     const arg = argv[i];
     if (arg === "--db") args.db = argv[++i] ?? "";
     else if (arg === "--min-sim") args.minSim = Number(argv[++i] ?? VECTOR_GRAY_SIM);
-    else if (arg === "--conflict-override") args.conflictOverride = Number(argv[++i] ?? CONFLICT_OVERRIDE_SIM);
     else if (arg === "--csv") args.csv = argv[++i] ?? "";
     else if (arg === "--embed-url") args.embedUrl = argv[++i] ?? "";
     else if (arg === "--embed-model") args.embedModel = argv[++i] ?? "";
@@ -239,8 +235,8 @@ async function main() {
     const vecB = embedText(pair.titleB, pair.summaryB);
     const sim = vecA && vecB ? cosine(vecA, vecB) : null;
 
-    const ruleOnly = resolveMergePairAdmission(rule, null, GRAY_SCORE, args.minSim, args.conflictOverride);
-    const fused = resolveMergePairAdmission(rule, sim, GRAY_SCORE, args.minSim, args.conflictOverride);
+    const ruleOnly = resolveMergePairAdmission(rule, null, GRAY_SCORE, args.minSim);
+    const fused = resolveMergePairAdmission(rule, sim, GRAY_SCORE, args.minSim);
     const bucket = stats[pair.verdict];
     bucket.total += 1;
     if (ruleOnly.admitted) bucket.ruleAdmitted += 1;
@@ -260,7 +256,6 @@ async function main() {
     db: args.db,
     grayScore: GRAY_SCORE,
     vectorGraySim: args.minSim,
-    conflictOverrideSim: args.conflictOverride,
     csv: args.csv,
     approved: {
       ...stats.approved,

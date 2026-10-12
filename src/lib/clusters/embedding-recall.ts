@@ -49,8 +49,6 @@ export function resolveMergePairAdmission(
   vectorSim: number | null,
   grayScore: number,
   vectorGraySim: number,
-  /** @deprecated Accepted for compatibility; dense admission no longer depends on sparse conflict overrides. */
-  _conflictOverrideSim?: number,
 ): { admitted: boolean; priorityScore: number; source: "rule" | "vector" } {
   if (!rule.rejected && rule.score >= grayScore) {
     return { admitted: true, priorityScore: rule.score, source: "rule" };
