@@ -1,0 +1,704 @@
+{
+ "schemaVersion": 1,
+ "stage": "composite_dev_ai_judgment_offline",
+ "createdAt": "2026-10-12T06:12:46.365Z",
+ "suite": {
+  "path": "docs/eval/reviews/cluster-quality-composite-2026-10-12/dev.csv",
+  "cases": 56,
+  "decisionsReturned": 56
+ },
+ "model": "MiniMax-M3",
+ "metrics": {
+  "sameRecall": 0.8181818181818182,
+  "samePrecision": 1,
+  "diffCorrectReject": 45,
+  "confusionHumanByAi": [
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "same",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "follow_up"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "same_event",
+    "ai": "same_event"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "follow_up",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   },
+   {
+    "human": "unrelated",
+    "ai": "unrelated"
+   }
+  ],
+  "aiRelationCounts": {
+   "unrelated": 46,
+   "same_event": 9,
+   "follow_up": 1
+  }
+ },
+ "cost": {
+  "aiCalls": 1,
+  "promptTokens": 26613,
+  "completionTokens": 3349,
+  "totalTokens": 29962,
+  "elapsedMs": 24255
+ },
+ "perCase": [
+  {
+   "caseId": "cq-2026-10-01-HC-000B133C2FA2",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-000D87D27A1B",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-001AD14F3C5B",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-00473323E101",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-0077178B1484",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-01EC4296156F",
+   "humanRelation": "same",
+   "aiRelation": "unrelated",
+   "reasonCode": "action_conflict",
+   "agree": "false",
+   "confidence": "90"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-02EDC075CD4E",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-0413ECFDBB0D",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-067A095E2261",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-075AC49FD115",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-0A393FE95C21",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-0A39B2C1016C",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "action_conflict",
+   "agree": "true",
+   "confidence": "88"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-0CC4B6EA59B1",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-0E25358D2FB3",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-1077A537BBFD",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-164A7BEDA674",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "action_conflict",
+   "agree": "true",
+   "confidence": "92"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-31E428990DE4",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-44B794FBCD60",
+   "humanRelation": "same",
+   "aiRelation": "follow_up",
+   "reasonCode": "follow_up_event",
+   "agree": "false",
+   "confidence": "92"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-52E07A585A16",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "92"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-63195647AA27",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-75CB4B7DB1C8",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-9B25C6270D8A",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "93"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-AE0623F64D50",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-01-HC-C12C652E8E35",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "94"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-023955463DF8",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-0B9362D73DCB",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "90"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-55314A6C8274",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-5DD3AEFCD19F",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "action_conflict",
+   "agree": "true",
+   "confidence": "85"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-6132734C4657",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "object_conflict",
+   "agree": "true",
+   "confidence": "94"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-797D646A0B12",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-8019A69C2EB5",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-890A28C03D70",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-89BBDCA0A83D",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-B29146173708",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "object_conflict",
+   "agree": "true",
+   "confidence": "90"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-BD76F1963CB7",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-C20C497A4569",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "90"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-DCC1EC4B97F8",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-E4C9F4A71235",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-EA765AAED05A",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-02-CQ-F925508932DB",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-1DFB8BF4A81A",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-3A55206C1A26",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-3D502A9E8E03",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-45FB5A1C62F2",
+   "humanRelation": "same_event",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "90"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-5E7ABD124000",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "98"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-5FAFE6A31587",
+   "humanRelation": "follow_up",
+   "aiRelation": "unrelated",
+   "reasonCode": "action_conflict",
+   "agree": "true",
+   "confidence": "88"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-6D17E63300D9",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-7574E555E57A",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-930CC4423D30",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-9B55E619D9E1",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-9D8F9AAE35FB",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "88"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-B22955783DFC",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-C41E5C6A635D",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-D1A964A40B6F",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "action_conflict",
+   "agree": "true",
+   "confidence": "92"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-D67A49318423",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "cq-2026-10-12-CQ-F48B5AA6A86F",
+   "humanRelation": "unrelated",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  }
+ ]
+}
