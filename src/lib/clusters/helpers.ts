@@ -92,7 +92,7 @@ export function getItemEventSignature(item: {
   });
 }
 
-function getCandidateEventSignature(candidate: {
+export function getCandidateEventSignature(candidate: {
   eventType?: string | null;
   eventSubject?: string | null;
   eventAction?: string | null;

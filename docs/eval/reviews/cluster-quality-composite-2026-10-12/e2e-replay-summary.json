@@ -1,0 +1,115 @@
+{
+ "schemaVersion": 1,
+ "stage": "composite_e2e_composed_replay_summary",
+ "createdAt": "2026-10-13",
+ "cohorts": {
+  "2026-10-01": {
+   "corpusSize": 276,
+   "l1": {
+    "sameTotal": 10,
+    "sameAdmitted": 0,
+    "diffTotal": 14,
+    "diffAdmitted": 3,
+    "sameRecall": 0,
+    "diffAdmissionRate": 0.21428571428571427
+   },
+   "l2": {
+    "judged": 3,
+    "admittedPairs": 3,
+    "sameJudgedMerge": 0,
+    "sameJudgedTotal": 0,
+    "diffJudgedReject": 3,
+    "diffJudgedTotal": 3,
+    "sameMergeFalsePositive": 0,
+    "sameMergeRateWithinAdmitted": null
+   },
+   "l3": {
+    "sameMerged": 0,
+    "sameTotal": 10,
+    "diffMerged": 0,
+    "diffTotal": 14,
+    "sameEndToEndRecall": 0,
+    "endToEndFalseMerges": 0
+   },
+   "costTokens": 2962
+  },
+  "2026-10-02": {
+   "corpusSize": 99,
+   "l1": {
+    "sameTotal": 0,
+    "sameAdmitted": 0,
+    "diffTotal": 16,
+    "diffAdmitted": 12,
+    "sameRecall": null,
+    "diffAdmissionRate": 0.75
+   },
+   "l2": {
+    "judged": 12,
+    "admittedPairs": 12,
+    "sameJudgedMerge": 0,
+    "sameJudgedTotal": 0,
+    "diffJudgedReject": 12,
+    "diffJudgedTotal": 12,
+    "sameMergeFalsePositive": 0,
+    "sameMergeRateWithinAdmitted": null
+   },
+   "l3": {
+    "sameMerged": 0,
+    "sameTotal": 0,
+    "diffMerged": 0,
+    "diffTotal": 16,
+    "sameEndToEndRecall": null,
+    "endToEndFalseMerges": 0
+   },
+   "costTokens": 6640
+  },
+  "2026-10-12": {
+   "corpusSize": 139,
+   "l1": {
+    "sameTotal": 1,
+    "sameAdmitted": 1,
+    "diffTotal": 15,
+    "diffAdmitted": 12,
+    "sameRecall": 1,
+    "diffAdmissionRate": 0.8
+   },
+   "l2": {
+    "judged": 13,
+    "admittedPairs": 13,
+    "sameJudgedMerge": 1,
+    "sameJudgedTotal": 1,
+    "diffJudgedReject": 12,
+    "diffJudgedTotal": 12,
+    "sameMergeFalsePositive": 0,
+    "sameMergeRateWithinAdmitted": 1
+   },
+   "l3": {
+    "sameMerged": 1,
+    "sameTotal": 1,
+    "diffMerged": 0,
+    "diffTotal": 15,
+    "sameEndToEndRecall": 1,
+    "endToEndFalseMerges": 0
+   },
+   "costTokens": 7081
+  }
+ },
+ "holdoutJudgmentRuns": {
+  "2026-10-01": {
+   "cases": 12,
+   "sameRecall": 1,
+   "falseMerges": 0
+  },
+  "2026-10-02": {
+   "cases": 8,
+   "sameRecall": 1,
+   "falseMerges": 0
+  }
+ },
+ "interpretation": [
+  "2026-10-12 cohort (current BM25 vocabulary + safety-gate exemption): end-to-end same merged 1/1, zero end-to-end false merges.",
+  "2026-10-01 cohort: 10 same positives were sampled by the LEGACY lexical scorer (stratum high_lexical_score) and none is admitted by the current BM25 candidate vocabulary — this cohort has no discriminating power for the current candidate layer; it remains valuable as labeled challenge cases for the judgment layer (9/11 recall there).",
+  "Zero end-to-end false merges across all three cohorts.",
+  "Both independent holdouts pass judgment cleanly (20/20 combined, 5 same / 15 diff)."
+ ]
+}

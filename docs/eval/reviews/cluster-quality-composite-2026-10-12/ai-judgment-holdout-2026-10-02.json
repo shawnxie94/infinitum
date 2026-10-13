@@ -1,0 +1,127 @@
+{
+ "schemaVersion": 1,
+ "stage": "composite_dev_ai_judgment_offline",
+ "createdAt": "2026-10-13T03:25:55.185Z",
+ "suite": {
+  "path": "/tmp/eval-relation-20261012/holdout-2026-10-02.csv",
+  "cases": 8,
+  "decisionsReturned": 8
+ },
+ "model": "MiniMax-M3",
+ "metrics": {
+  "sameRecall": 1,
+  "samePrecision": 1,
+  "diffCorrectReject": 7,
+  "confusionHumanByAi": [
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   }
+  ],
+  "aiRelationCounts": {
+   "unrelated": 7,
+   "same_event": 1
+  }
+ },
+ "cost": {
+  "aiCalls": 1,
+  "promptTokens": 4092,
+  "completionTokens": 509,
+  "totalTokens": 4601,
+  "elapsedMs": 8128
+ },
+ "perCase": [
+  {
+   "caseId": "CQ-257FD0C0E6C3",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "99"
+  },
+  {
+   "caseId": "CQ-27508F845338",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "CQ-5FABBD61A6FF",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "98"
+  },
+  {
+   "caseId": "CQ-84A7E5080BEE",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "92"
+  },
+  {
+   "caseId": "CQ-A6FBBFDD7999",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "99"
+  },
+  {
+   "caseId": "CQ-E1F22FEBE0F0",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "90"
+  },
+  {
+   "caseId": "CQ-E226F2C15D08",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "99"
+  },
+  {
+   "caseId": "CQ-F533F795AB8F",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "88"
+  }
+ ]
+}

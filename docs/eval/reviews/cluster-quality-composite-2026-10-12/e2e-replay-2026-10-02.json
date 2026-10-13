@@ -1,0 +1,41 @@
+{
+ "schemaVersion": 1,
+ "stage": "composite_e2e_composed_replay",
+ "createdAt": "2026-10-13T03:28:30.878Z",
+ "cohort": "2026-10-02",
+ "snapshot": "/Users/shawn/Developer/GitHub/products/infinitum/docs/eval/snapshots/local-qualification-snapshot-2026-10-02.db",
+ "corpusSize": 99,
+ "pairEndpoints": 16,
+ "funnel": {
+  "l1CandidateAdmission": {
+   "sameTotal": 0,
+   "sameAdmitted": 0,
+   "diffTotal": 16,
+   "diffAdmitted": 12,
+   "sameRecall": null,
+   "diffAdmissionRate": 0.75
+  },
+  "l2AiJudgment": {
+   "judged": 12,
+   "admittedPairs": 12,
+   "sameJudgedMerge": 0,
+   "sameJudgedTotal": 0,
+   "diffJudgedReject": 12,
+   "diffJudgedTotal": 12,
+   "sameMergeFalsePositive": 0,
+   "sameMergeRateWithinAdmitted": null
+  },
+  "l3FinalMerge": {
+   "sameMerged": 0,
+   "sameTotal": 0,
+   "diffMerged": 0,
+   "diffTotal": 16,
+   "sameEndToEndRecall": null,
+   "endToEndFalseMerges": 0
+  }
+ },
+ "cost": {
+  "aiCalls": 1,
+  "totalTokens": 6640
+ }
+}
