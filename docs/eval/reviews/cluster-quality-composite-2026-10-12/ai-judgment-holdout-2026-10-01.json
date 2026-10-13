@@ -1,0 +1,175 @@
+{
+ "schemaVersion": 1,
+ "stage": "composite_dev_ai_judgment_offline",
+ "createdAt": "2026-10-13T03:13:25.987Z",
+ "suite": {
+  "path": "/tmp/eval-relation-20261012/holdout-2026-10-01.csv",
+  "cases": 12,
+  "decisionsReturned": 12
+ },
+ "model": "MiniMax-M3",
+ "metrics": {
+  "sameRecall": 1,
+  "samePrecision": 1,
+  "diffCorrectReject": 8,
+  "confusionHumanByAi": [
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "diff",
+    "ai": "unrelated"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   },
+   {
+    "human": "same",
+    "ai": "same_event"
+   }
+  ],
+  "aiRelationCounts": {
+   "unrelated": 8,
+   "same_event": 4
+  }
+ },
+ "cost": {
+  "aiCalls": 1,
+  "promptTokens": 7319,
+  "completionTokens": 782,
+  "totalTokens": 8101,
+  "elapsedMs": 10427
+ },
+ "perCase": [
+  {
+   "caseId": "HC-004456E4D7CC",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "HC-019FE79C1DF8",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "92"
+  },
+  {
+   "caseId": "HC-0351A9118D80",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "HC-04354A47EF0A",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "HC-06B78550A7D9",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "93"
+  },
+  {
+   "caseId": "HC-0C336C936642",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "HC-10510E2DBA9F",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "subject_conflict",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "HC-1ADF3AA98CA8",
+   "humanRelation": "diff",
+   "aiRelation": "unrelated",
+   "reasonCode": "different_event",
+   "agree": "true",
+   "confidence": "96"
+  },
+  {
+   "caseId": "HC-51002F655647",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "88"
+  },
+  {
+   "caseId": "HC-B20B8201316B",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "95"
+  },
+  {
+   "caseId": "HC-B2654445C25E",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "97"
+  },
+  {
+   "caseId": "HC-BCA6A381B52D",
+   "humanRelation": "same",
+   "aiRelation": "same_event",
+   "reasonCode": "same_event",
+   "agree": "true",
+   "confidence": "95"
+  }
+ ]
+}

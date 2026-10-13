@@ -1,0 +1,73 @@
+{
+ "schemaVersion": 1,
+ "stage": "composite_dev_multi_run_agreement",
+ "createdAt": "2026-10-13",
+ "suite": {
+  "path": "docs/eval/reviews/cluster-quality-composite-2026-10-12/dev.csv",
+  "cases": 56
+ },
+ "runs": [
+  {
+   "id": "run1",
+   "prompt": "relation-v1",
+   "sameRecall": 0.818,
+   "falseMerges": 0,
+   "source": "ai-judgment-report.json"
+  },
+  {
+   "id": "run2",
+   "prompt": "relation-v1 (identical bytes)",
+   "sameRecall": 0.727,
+   "falseMerges": 0,
+   "source": "/tmp local (not committed)"
+  },
+  {
+   "id": "run3",
+   "prompt": "relation-v1 (identical bytes)",
+   "sameRecall": 0.9,
+   "falseMerges": 0,
+   "protocolDrops": "50/56 returned; 6 dropped",
+   "source": "/tmp local (not committed)"
+  },
+  {
+   "id": "run4",
+   "prompt": "relation-v1 (identical bytes)",
+   "sameRecall": 0.727,
+   "falseMerges": 0,
+   "source": "/tmp local (not committed)"
+  }
+ ],
+ "agreement": {
+  "perPairStable": "49/56 (87.5%)",
+  "semanticFlipPairs": [
+   {
+    "caseId": "cq-2026-10-01-HC-44B794FBCD60",
+    "distribution": {
+     "follow_up": 1,
+     "unrelated": 2
+    }
+   },
+   {
+    "caseId": "cq-2026-10-12-CQ-45FB5A1C62F2",
+    "distribution": {
+     "same_event": 2,
+     "follow_up": 2
+    }
+   }
+  ],
+  "flipConcentration": "all flips are same_event/follow_up/unrelated boundary relations; zero same_event→reject flips",
+  "falseMergeStability": "0 false merges across all 4 runs (samePrecision=1.0 constant)",
+  "protocolDropEvents": "1/4 runs dropped 6/56 decisions in a single 56-pair batch call; production shards at 5 pairs/batch where per-pair salvage bounds the blast radius"
+ },
+ "holdout": {
+  "source": "ai-judgment-holdout-2026-10-01.json",
+  "cases": 12,
+  "humanLabels": "4 same / 8 diff (never used in development or calibration)",
+  "result": "12/12 agree; sameRecall 4/4; 0 false merges"
+ },
+ "interpretation": [
+  "Merge safety is stable: no run produced a false merge, and all semantic flips stay within non-merge relations.",
+  "sameRecall has a 0.727-0.900 band across runs; single-run readings are not precise.",
+  "Boundary calibration (synthesis/follow_up) requires multi-run agreement reporting and dedicated human synthesis positives."
+ ]
+}

@@ -44,3 +44,18 @@ Three full-suite runs on 2026-10-13:
 | v1-run2 | relation v1 (identical bytes) | 8/11 | 1 | 2 verdict flips vs v1-run1 (both same_event↔follow_up/unrelated boundary) |
 
 Temperature is locked to 0, yet the provider is not fully deterministic: **single-run metrics carry a ~±1-case noise band** on this suite, concentrated on same_event/follow_up boundaries. Consequences: (1) prompt tweaks must be evaluated against this noise band, not single runs — the synthesis-priority calibration was reverted because its +1 false merge exceeded it; (2) future evaluation tooling should report multi-run agreement, not a single pass; (3) follow_up/synthesis boundary calibration needs dedicated human `synthesis` positives before retry.
+
+## Gate evidence scale-up (2026-10-13)
+
+- **Independent holdout** (`ai-judgment-holdout-2026-10-01.json`): the 2026-10-01 holdout 12 pairs (4 same / 8 diff, never used in dev or calibration) through the real AI judgment layer — **12/12 agree, sameRecall 4/4, 0 false merges**.
+- **Multi-run agreement** (`multi-run-agreement.json`): 4 full-suite runs on dev 56. Per-pair stable 49/56 (87.5%); 2 semantic flip pairs, both on the same_event/follow_up/unrelated boundary; **0 false merges in all 4 runs** (samePrecision=1.0 constant). One run dropped 6/56 decisions in a single 56-pair batch call — production shards at 5 pairs/batch where per-pair salvage bounds the blast radius.
+- sameRecall band across runs: 0.727–0.900. Single-run readings are not precise; boundary calibration must be evaluated against multi-run agreement.
+
+## Gate gap list (候选层 + 判定层证据后的现状)
+
+Evidence in hand: candidate-selector recall fixed (safety-gate exemption, same 0/2→2/2), judgment-layer holdout 12/12, 0 false merges across 4 runs, protocol binding clean, relation semantics actively used (follow_up).
+Still missing for a production quality gate:
+1. End-to-end (candidate + judgment + final graph merge) replay on the merged composite dev 56 — the current evidence is per-stage, not composed.
+2. `synthesis` human positives (0 so far) — needed before boundary calibration and the merge-graph bridge guard.
+3. 10-02 holdout judgment-layer run (8 pairs) for cohort completeness.
+4. Multi-run agreement on any future prompt change (single-run evaluations are insufficient by the noise-band finding).
