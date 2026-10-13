@@ -17,7 +17,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createAiProvider } from "../src/lib/ai/provider-next";
-import type { PromptOverrides, RuntimeConfig } from "../src/config/runtime";
+import type { PromptOverrides } from "../src/lib/ai/provider-types";
+import type { RuntimeConfig } from "../src/config/runtime";
 
 type SuiteRow = Record<string, string>;
 interface ModelConfigFile {

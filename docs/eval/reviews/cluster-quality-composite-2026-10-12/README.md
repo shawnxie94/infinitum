@@ -25,3 +25,22 @@ Interpretation caution: only 2 same positives in this cohort, both hard-case str
 ```bash
 python3 docs/eval/reviews/cluster-quality-composite-2026-10-12/verify_set.py
 ```
+
+## AI judgment layer offline evaluation (2026-10-13)
+
+`ai-judgment-report.json`: composite dev 56 pairs through the REAL cluster-merge AI path (relation protocol v2-era prompt + MiniMax-M3, one call, 29,962 tokens, 24s).
+
+- Merged-label same recall 9/11 (81.8%), **0 false merges** on 45 diff/follow_up cases; relation×reasonCode binding 56/56 protocol-clean.
+- Both disagreements are relation-semantics boundary cases, not errors: fal H3 Max release→Twitch integration judged `follow_up` (directionally correct progress semantics; human `same` is legacy binary labeling); Amami-Island travel series (same-author aggregation philosophy).
+
+### Run-to-run noise finding
+
+Three full-suite runs on 2026-10-13:
+
+| run | prompt | sameRecall | follow_up | note |
+|---|---|---|---|---|
+| v1-run1 | relation v1 | 9/11 | 1 | committed report |
+| v2-run | v1 + synthesis-priority sentence | 9/11 | 4 | +1 false merge on an unrelated pair (Claude quota pair) → **rolled back** |
+| v1-run2 | relation v1 (identical bytes) | 8/11 | 1 | 2 verdict flips vs v1-run1 (both same_event↔follow_up/unrelated boundary) |
+
+Temperature is locked to 0, yet the provider is not fully deterministic: **single-run metrics carry a ~±1-case noise band** on this suite, concentrated on same_event/follow_up boundaries. Consequences: (1) prompt tweaks must be evaluated against this noise band, not single runs — the synthesis-priority calibration was reverted because its +1 false merge exceeded it; (2) future evaluation tooling should report multi-run agreement, not a single pass; (3) follow_up/synthesis boundary calibration needs dedicated human `synthesis` positives before retry.

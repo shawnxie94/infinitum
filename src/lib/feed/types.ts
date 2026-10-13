@@ -133,6 +133,16 @@ export type ClusterDTO = {
   status: "active" | "hidden";
   items: FeedClusterPreviewItemDTO[];
   assignmentExplanation?: ClusterAssignmentExplanationDTO;
+  /** 仅 admin 详情返回：relation=follow_up 且双侧簇存活的直接进展关联。 */
+  relatedProgress?: ClusterRelatedProgressDTO[];
+};
+
+export type ClusterRelatedProgressDTO = {
+  clusterId: string;
+  title: string;
+  summary: string;
+  latestPublishedAt: string;
+  decidedAt: string;
 };
 
 export type ClusterReviewCandidateDTO = {

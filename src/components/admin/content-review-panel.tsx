@@ -565,6 +565,23 @@ function ClusterDetailModal({
           </p>
         </div>
 
+        {cluster.relatedProgress && cluster.relatedProgress.length > 0 ? (
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-[var(--text-1)]">进展关联</h4>
+            <p className="text-xs text-[var(--text-3)]">AI 判定为同一主体的直接进展（未合并）的其他聚合：</p>
+            <ul className="space-y-1">
+              {cluster.relatedProgress.map((progress) => (
+                <li key={progress.clusterId} className="rounded-md border border-[color:var(--line)] px-3 py-2 text-sm">
+                  <div className="font-medium text-[var(--text-1)]">{progress.title}</div>
+                  <div className="mt-0.5 text-xs text-[var(--text-3)]">
+                    {formatDate(progress.latestPublishedAt)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {cluster.assignmentExplanation ? (
           <div className="rounded-md border border-[color:var(--line)] bg-[var(--bg-muted)] px-3 py-2 text-sm">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

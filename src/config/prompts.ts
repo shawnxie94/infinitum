@@ -172,6 +172,9 @@ export const PREVIOUS_DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE = `请审
 
 export const CLUSTER_MERGE_PAIR_ID_OUTPUT_RULE = `输出协议必须为 {"decisions":[{"pair_id":"p1","relation":"same_event|follow_up|synthesis|unrelated|uncertain","confidence":98,"reasonCode":"same_event|follow_up_event|synthesis_article|different_event|object_conflict|action_conflict|date_conflict|subject_conflict|insufficient_evidence","reasonText":"中文依据"}]}。pair_id 必须原样抄写输入 pairs 中该 Pair 的 pair_id（形如 p1、p2、p3 的批内序号，短且唯一），不得改写或自行生成；每个输入 pair_id 恰好返回一次，输出顺序不限。relation 与 reasonCode 必须匹配（same_event=same_event、follow_up=follow_up_event、synthesis=synthesis_article、uncertain=insufficient_evidence、unrelated=其余冲突码）；confidence 是 0 到 100 的整数；reasonText 非空。不得输出其他字段。`;
 
+// 注：synthesis 优先级校准（一方综合稿时优先 synthesis 而非 follow_up）曾于 2026-10-13 尝试，
+// 56 对对照显示 prompt 微扰引入无关 pair 误并（Claude 额度对 unrelated→same_event），已回滚；
+// 重新校准需先积累 synthesis 人工正例并在对照中验证无回归。
 export const DEFAULT_CLUSTER_MERGE_PROMPT = `你是聚合合并助手。请基于给定的候选聚合 Pair，判断每个 Pair 中的两个聚合组是否描述同一具体事件，输出需要合并的 Pair。
 
 关系判断（relation 五选一）：

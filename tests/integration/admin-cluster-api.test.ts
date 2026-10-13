@@ -296,6 +296,73 @@ describe("/api/admin/clusters", () => {
     });
   });
 
+  it("returns follow-up related progress on the admin cluster detail", async () => {
+    await prisma.contentCluster.create({
+      data: {
+        id: "cluster-followup",
+        kind: "topic",
+        title: "OpenAI Agent 后续声明",
+        summary: "后续进展聚合",
+        score: 70,
+        itemCount: 1,
+        latestPublishedAt: new Date("2026-04-11T10:00:00.000Z"),
+        status: "active",
+        fingerprint: "openai-agent-followup",
+      },
+    });
+    await prisma.contentCluster.create({
+      data: {
+        id: "cluster-gone",
+        kind: "topic",
+        title: "已消失簇",
+        summary: "对侧已删除",
+        score: 60,
+        itemCount: 1,
+        latestPublishedAt: new Date("2026-04-11T09:00:00.000Z"),
+        status: "active",
+        fingerprint: "gone-cluster",
+      },
+    });
+    await prisma.clusterDecision.createMany({
+      data: [
+        {
+          id: "decision-followup-live",
+          kind: "cluster_pair",
+          source: "llm",
+          relation: "follow_up",
+          leftClusterId: "cluster-1",
+          rightClusterId: "cluster-followup",
+          pairKey: "cluster-1::cluster-followup",
+          inputHash: "followup-input",
+        },
+        {
+          id: "decision-followup-orphan",
+          kind: "cluster_pair",
+          source: "llm",
+          relation: "follow_up",
+          leftClusterId: "cluster-1",
+          rightClusterId: "cluster-gone",
+          pairKey: "cluster-1::cluster-gone",
+          inputHash: "gone-input",
+        },
+      ],
+    });
+    // 对侧簇删除后孤儿决策不应出现在关联里
+    await prisma.contentCluster.delete({ where: { id: "cluster-gone" } });
+
+    const { GET } = await import("@/app/api/admin/clusters/[id]/route");
+    const response = await GET(new Request("http://localhost/api/admin/clusters/cluster-1"), {
+      params: Promise.resolve({ id: "cluster-1" }),
+    } as never);
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.cluster.relatedProgress).toHaveLength(1);
+    expect(json.cluster.relatedProgress[0]).toMatchObject({
+      clusterId: "cluster-followup",
+      title: "OpenAI Agent 后续声明",
+    });
+  });
+
   it("hides a cluster for admins", async () => {
     requireAdmin.mockResolvedValue(undefined);
 

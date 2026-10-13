@@ -2486,9 +2486,35 @@ export async function getAdminCluster(clusterId: string) {
     return latest;
   }, null);
 
+  const relatedProgress = await prisma.$queryRaw<Array<{
+    otherId: string; title: string; summary: string; latestPublishedAt: Date; decidedAt: Date;
+  }>>`
+    SELECT other."id" AS "otherId", other."title", other."summary", other."latestPublishedAt", d."createdAt" AS "decidedAt"
+    FROM "cluster_decisions" d
+    INNER JOIN "content_clusters" other ON other."id" = CASE WHEN d."leftClusterId" = ${clusterId} THEN d."rightClusterId" ELSE d."leftClusterId" END
+    WHERE d."kind" = 'cluster_pair'
+      AND d."relation" = 'follow_up'
+      AND d."appliedAt" IS NULL
+      AND other."status" = 'active'
+      AND (d."leftClusterId" = ${clusterId} OR d."rightClusterId" = ${clusterId})
+    ORDER BY d."createdAt" DESC
+    LIMIT 10
+  `;
+
   return {
     ...mapClusterToAdminDto(cluster, latestItemUpdatedAt),
     itemCount: cluster.items.length,
     items: cluster.items.map(mapItemToClusterPreview),
+    ...(relatedProgress.length > 0
+      ? {
+          relatedProgress: relatedProgress.map((row) => ({
+            clusterId: row.otherId,
+            title: row.title,
+            summary: row.summary,
+            latestPublishedAt: row.latestPublishedAt.toISOString(),
+            decidedAt: row.decidedAt.toISOString(),
+          })),
+        }
+      : {}),
   } satisfies ClusterDTO;
 }
