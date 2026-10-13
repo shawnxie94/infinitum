@@ -672,6 +672,21 @@ function dropLegacyCuratorPreferenceTables() {
   });
 }
 
+/**
+ * promptHash 自建列起从未接入读写（全量 NULL 死字段），schema 已移除；
+ * 存量卷在 snapshot DDL 后幂等抹除。DROP COLUMN 需 SQLite >=3.35，
+ * 该列无索引/约束引用，原子操作无需迁移账本。
+ */
+function dropClusterDecisionPromptHashColumn() {
+  if (!tableExists("cluster_decisions")) return;
+  if (!tableColumnExists("cluster_decisions", "promptHash")) return;
+
+  runSqlite([dbPath], {
+    input: `ALTER TABLE "cluster_decisions" DROP COLUMN "promptHash";\n`,
+  });
+  console.log("Dropped legacy cluster_decisions.promptHash column");
+}
+
 function applyAdditiveSchemaUpgrades() {
   // Repair///bootstrap item processing recovery columns before any items rebuilds.
   runSqlite([dbPath], {
@@ -981,6 +996,7 @@ try {
     input: sql,
   });
   dropLegacyCuratorPreferenceTables();
+  dropClusterDecisionPromptHashColumn();
   applyAdditiveSchemaUpgrades();
   migrateProcessingWindowDays();
   if (shouldBackfillEntities) {

@@ -145,6 +145,32 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT "relation" FROM "cluster_decisions" WHERE "id" = 'd-failed'`)).toBe("follow_up");
   }, 30_000);
 
+  it("drops the never-wired cluster_decisions.promptHash column from legacy volumes", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-prompthash-drop-"));
+    const dbPath = path.join(tempDir, "prompt-hash-legacy.db");
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_decisions') WHERE "name" = 'promptHash'`)).toBe("0");
+
+    // 模拟升级前的旧卷：列存在且带历史 NULL 以外的值。
+    runSqlite(dbPath, `
+      ALTER TABLE "cluster_decisions" ADD COLUMN "promptHash" TEXT;
+      INSERT INTO "cluster_decisions" ("id", "kind", "source", "relation", "pairKey", "inputHash", "promptHash", "createdAt", "updatedAt")
+        VALUES ('d-legacy-prompt', 'cluster_pair', 'llm', 'unrelated', 'k-ph', 'h-ph', 'sha:legacy', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_decisions') WHERE "name" = 'promptHash'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT "pairKey" FROM "cluster_decisions" WHERE "id" = 'd-legacy-prompt'`)).toBe("k-ph");
+
+    // 幂等：二次 setup 不报错、数据不再变动。
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_decisions') WHERE "name" = 'promptHash'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "cluster_decisions" WHERE "id" = 'd-legacy-prompt'`)).toBe("1");
+  }, 30_000);
+
   it("recovers a defaulted column whose epoch-millisecond backfill was interrupted", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-window-retry-"));
     const dbPath = path.join(tempDir, "partial-window.db");

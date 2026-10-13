@@ -374,7 +374,6 @@ model ClusterDecision {
   pairKey        String
   inputHash      String
   modelName      String?
-  promptHash     String?
   localScore     Int?
   confidence     Int?
   reasonCode     String?
