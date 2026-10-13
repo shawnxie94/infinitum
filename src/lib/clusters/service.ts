@@ -1661,6 +1661,27 @@ function countClusterMergeDecisionVerdicts(
   };
 }
 
+
+/**
+ * 综合稿桥接守卫的信号：给定簇集合中，含「未拆分聚合源」条目的簇
+ * （isAggregation=true 且无 aggregation_split_links 派生子项，且条目仍活跃可展示）。
+ * 这类簇整体提及多个独立事件，桥接进传递性合并会把真事件无声并簇。
+ */
+async function findUnsplitAggregationClusterIds(clusterIds: Iterable<string>): Promise<Set<string>> {
+  const ids = [...clusterIds];
+  if (ids.length === 0) return new Set();
+  const rows = await prisma.$queryRaw<Array<{ clusterId: string }>>`
+    SELECT DISTINCT i."clusterId"
+    FROM "items" i
+    WHERE i."clusterId" IN (${Prisma.join(ids)})
+      AND i."isAggregation" = true
+      AND i."status" = 'processed'
+      AND i."moderationStatus" IN ('allowed', 'restored')
+      AND NOT EXISTS (SELECT 1 FROM "aggregation_split_links" l WHERE l."parentItemId" = i."id")
+  `;
+  return new Set(rows.map((row) => row.clusterId));
+}
+
 function buildClusterMergePairDiagnostics(
   candidatesById: Map<string, ClusterMergeCandidate>,
   allowedPairs: ClusterMergeCandidateEdge[],
@@ -2035,9 +2056,17 @@ export async function executeClusterMerge(
       return result.decision;
     });
     const itemCounts = new Map(allCandidates.map((candidate) => [candidate.id, candidate.itemCount]));
-    const groupResolution = resolveClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts);
+    const synthesisGuardClusterIds = await findUnsplitAggregationClusterIds(
+      mergeDecisions.flatMap((decision) => [decision.leftClusterId, decision.rightClusterId]),
+    );
+    const groupResolution = resolveClusterMergeGroupsFromDecisions(mergeDecisions, itemCounts, synthesisGuardClusterIds);
     mergeGroups = groupResolution.groups;
     groupConflicts = groupResolution.conflicts;
+    if (synthesisGuardClusterIds.size > 0) {
+      console.warn(
+        `[Cluster Merge] 综合稿桥接守卫: ${synthesisGuardClusterIds.size} 个含未拆分聚合源的簇已排除出传递性合并`,
+      );
+    }
   } catch (error) {
     timings.aiMergeMs = Date.now() - aiMergeStartedAt;
     const failureReason = error instanceof Error ? error.message : "Unknown cluster merge AI error";

@@ -324,8 +324,16 @@ export type SelectionResult = {
  * capacity shortfall — counts are never fabricated and no source filter is
  * loosened. Human labels and weak verdicts never feed back into ranking.
  */
-export function chooseSamplePairs(pairs: PairCandidate[], target: number, seed: string): SelectionResult {
+export function chooseSamplePairs(
+  pairs: PairCandidate[],
+  target: number,
+  seed: string,
+  excludeClusterIds?: ReadonlySet<string>,
+): SelectionResult {
   if (!Number.isInteger(target) || target < 1) throw new InvalidInputError(`invalid target pair count: ${target}`);
+  if (excludeClusterIds && excludeClusterIds.size > 0) {
+    pairs = pairs.filter((p) => !excludeClusterIds.has(p.leftId) && !excludeClusterIds.has(p.rightId));
+  }
   const byStratum = new Map<SampleStratum, PairCandidate[]>();
   for (const pair of pairs) {
     const stratum = stratumOf(pair);
@@ -653,6 +661,7 @@ export function runSample(args: {
   sourcesDir: string;
   target?: number;
   seed?: string;
+  excludeClusterIds?: ReadonlySet<string>;
 }): { manifest: SamplingManifest; pendingCsvPath: string; manifestPath: string } {
   const asOfMs = Date.parse(args.asOf);
   if (!Number.isFinite(asOfMs)) throw new InvalidInputError(`--as-of must be a valid ISO timestamp: ${args.asOf}`);
@@ -675,7 +684,7 @@ export function runSample(args: {
     }
     const corpusById = new Map(corpus.map((row) => [row.id, row]));
     const universe = scorePairUniverse(corpus);
-    const selection = chooseSamplePairs(universe, target, seed);
+    const selection = chooseSamplePairs(universe, target, seed, args.excludeClusterIds);
     const manifest = buildSamplingManifest({
       snapshotPath: path.relative(process.cwd(), snapshotPath),
       snapshotSha256,
@@ -726,7 +735,13 @@ async function main(): Promise<void> {
     }
     if (command === "sample") {
       if (!args.snapshot || !args["as-of"] || !args["sources-dir"]) {
-        throw new InvalidInputError("required args: --snapshot --as-of --sources-dir [--target] [--seed]");
+        throw new InvalidInputError("required args: --snapshot --as-of --sources-dir [--target] [--seed] [--exclude-clusters file]");
+      }
+      let excludeClusterIds: Set<string> | undefined;
+      if (args["exclude-clusters"]) {
+        excludeClusterIds = new Set(
+          fs.readFileSync(args["exclude-clusters"], "utf8").split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0),
+        );
       }
       const result = runSample({
         snapshot: args.snapshot,
@@ -734,6 +749,7 @@ async function main(): Promise<void> {
         sourcesDir: args["sources-dir"],
         target: args.target ? Number(args.target) : undefined,
         seed: args.seed,
+        excludeClusterIds,
       });
       const m = result.manifest;
       console.log(

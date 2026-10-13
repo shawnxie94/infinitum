@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "stage": "local_qualification_snapshot_sampler",
+  "purpose": "Private sampling manifest for the cluster-quality blind review (weak scheduling hints only; never human truth). Source of the frozen packet.",
+  "createdAt": "2026-10-12T05:17:31.000Z",
+  "asOfMs": 1791782251000,
+  "windowDays": 7,
+  "seed": "cluster-quality-relation-sample-20261013",
+  "snapshot": {
+    "path": "docs/eval/snapshots/local-qualification-snapshot-2026-10-12.db",
+    "sha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+  },
+  "selection": {
+    "targetCaseCount": 16,
+    "actualCaseCount": 16,
+    "universeSize": 4095,
+    "stratumCounts": {
+      "high_bm25_near_neighbor": 10,
+      "safety_rejected_related": 2,
+      "low_similarity_coverage": 4
+    },
+    "quotaStats": {
+      "high_similarity_or_same_fp": {
+        "requested": 16,
+        "actual": 10
+      },
+      "safety_rejected_related": {
+        "requested": 2,
+        "actual": 2
+      },
+      "low_similarity_coverage": {
+        "requested": 4,
+        "actual": 4
+      }
+    },
+    "note": "strata follow explicit quotas (at target 24: 18 high-similarity/same-FP + 2 safety-rejected-related + 4 low-similarity coverage); they are weak sampling-bias diagnostics from the current production BM25+safety stack, intentionally NOT population rates; controls are not gold labels and weak signals never reach the blind CSV"
+  },
+  "reviewInstructions": {
+    "rule": "Decide independently from the visible pair snapshot; do not treat the source or any weak verdict as gold. Mark uncertain when event boundary/evidence is insufficient."
+  },
+  "caseCount": 16,
+  "cases": [
+    {
+      "caseId": "CQ-088FD55C4971",
+      "pairKey": "cmuz8oa1e3z8mm80128hloso6|cmv4nxw12009iua01bu2w2etz",
+      "leftClusterId": "cmuz8oa1e3z8mm80128hloso6",
+      "rightClusterId": "cmv4nxw12009iua01bu2w2etz",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1735342,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-0EE2289B5384",
+      "pairKey": "cmuz8ms653z0xm801rps0457k|cmuzc041900m3lk01sgdwpjjx",
+      "leftClusterId": "cmuz8ms653z0xm801rps0457k",
+      "rightClusterId": "cmuzc041900m3lk01sgdwpjjx",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1526898,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-115C31EBA415",
+      "pairKey": "cmv131r0b04lwq101tp0v15dp|cmv4nybc800aqua012tm20h8k",
+      "leftClusterId": "cmv131r0b04lwq101tp0v15dp",
+      "rightClusterId": "cmv4nybc800aqua012tm20h8k",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 833922,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-136BB11B1F6C",
+      "pairKey": "cmv4scr2f002cua014d72zu4h|cmv4scs1x002eua01wa83uu70",
+      "leftClusterId": "cmv4scr2f002cua014d72zu4h",
+      "rightClusterId": "cmv4scs1x002eua01wa83uu70",
+      "sourceStratum": "safety_rejected_related",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 7386332,
+      "reasonCode": "safety_rejected_related",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "object_conflict"
+    },
+    {
+      "caseId": "CQ-292C7EDEEF4F",
+      "pairKey": "cmv4nxurx009gua01dk21qys2|cmv4nz7a900bjua018kmtz1bz",
+      "leftClusterId": "cmv4nxurx009gua01dk21qys2",
+      "rightClusterId": "cmv4nz7a900bjua018kmtz1bz",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1700736,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-2C50D64EF90F",
+      "pairKey": "cmuz8p2ic3za9m801opoc1cvj|cmv3r5okg00obs501ewflwdvn",
+      "leftClusterId": "cmuz8p2ic3za9m801opoc1cvj",
+      "rightClusterId": "cmv3r5okg00obs501ewflwdvn",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 716400,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-38939701BE0F",
+      "pairKey": "cmuz8obb03z8om801e0bv9y8j|cmv3r4wro00jjs501q1fhevzj",
+      "leftClusterId": "cmuz8obb03z8om801e0bv9y8j",
+      "rightClusterId": "cmv3r4wro00jjs501q1fhevzj",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 535375,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-83B39152445B",
+      "pairKey": "cmv1328e104o8q101vne5i55f|cmv132dpa04ooq101nrlkklpe",
+      "leftClusterId": "cmv1328e104o8q101vne5i55f",
+      "rightClusterId": "cmv132dpa04ooq101nrlkklpe",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1072768,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-8B08CB64AAA7",
+      "pairKey": "cmuz8mxg33z13m801nsjmj09r|cmv131oxw04llq101lzl8w76y",
+      "leftClusterId": "cmuz8mxg33z13m801nsjmj09r",
+      "rightClusterId": "cmv131oxw04llq101lzl8w76y",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-926F4BBC54F4",
+      "pairKey": "cmuz8nnjv3z5pm801g5rtoqqs|cmuz8oowo3z95m801133bbrzm",
+      "leftClusterId": "cmuz8nnjv3z5pm801g5rtoqqs",
+      "rightClusterId": "cmuz8oowo3z95m801133bbrzm",
+      "sourceStratum": "safety_rejected_related",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 5637208,
+      "reasonCode": "safety_rejected_related",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-94567F3891F9",
+      "pairKey": "cmv131yym04n0q101wfuriulr|cmv4o3jq5012fua01l1br7c2j",
+      "leftClusterId": "cmv131yym04n0q101wfuriulr",
+      "rightClusterId": "cmv4o3jq5012fua01l1br7c2j",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1472986,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-C7316C2A3009",
+      "pairKey": "cmuz8mw3c3z11m8017s3mwcmf|cmv4nxec0008mua012v4bzp3v",
+      "leftClusterId": "cmuz8mw3c3z11m8017s3mwcmf",
+      "rightClusterId": "cmv4nxec0008mua012v4bzp3v",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-C864667E814D",
+      "pairKey": "cmuz8o2h23z8em8015bmikcm4|cmv131u7q04meq1014panvcct",
+      "leftClusterId": "cmuz8o2h23z8em8015bmikcm4",
+      "rightClusterId": "cmv131u7q04meq1014panvcct",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1434856,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-D18C1870DA57",
+      "pairKey": "cmuz8mu7r3z0zm801ecftkirl|cmuz8nye83z84m801da89om9d",
+      "leftClusterId": "cmuz8mu7r3z0zm801ecftkirl",
+      "rightClusterId": "cmuz8nye83z84m801da89om9d",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    },
+    {
+      "caseId": "CQ-DE1F7DA1694B",
+      "pairKey": "cmv3r4xue00jls501ac86fvji|cmv3r503l00jps501bmmh1xky",
+      "leftClusterId": "cmv3r4xue00jls501ac86fvji",
+      "rightClusterId": "cmv3r503l00jps501bmmh1xky",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 1667960,
+      "reasonCode": "high_bm25_near_neighbor",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": null
+    },
+    {
+      "caseId": "CQ-E321F49AD5A9",
+      "pairKey": "cmuz8niwb3z5km801al3tt68y|cmuzbzzne00ltlk01d39orm82",
+      "leftClusterId": "cmuz8niwb3z5km801al3tt68y",
+      "rightClusterId": "cmuzbzzne00ltlk01d39orm82",
+      "sourceStratum": "low_similarity_coverage",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+      "weakBm25Score": 0,
+      "reasonCode": "low_similarity_coverage",
+      "eventFingerprintShared": false,
+      "weakSafetyReason": "unrelated_subjects"
+    }
+  ]
+}

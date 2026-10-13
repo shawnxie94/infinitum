@@ -1,0 +1,276 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Private frozen fixture for cluster-quality human review; do not hand to blind reviewers.",
+  "createdAt": "2026-10-13T03:53:44.830Z",
+  "asOf": "2026-10-12T05:17:31.000Z",
+  "baseCommit": "969e44d58d7179150092b12bc55070fe80d0d61f",
+  "methodVersion": "337083957cb4ba0b37917b72d6b47826c3e21732da56723f860055aac2f24cf5",
+  "strategyNote": "Split policy code is frozen via methodVersion; current git HEAD is recorded as a parameter only. The legacy lexical scorer in eval-bm25-vs-lexical.ts is NOT the current production strategy.",
+  "snapshot": {
+    "path": "docs/eval/snapshots/local-qualification-snapshot-2026-10-12.db",
+    "sha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+  },
+  "sourceFiles": {
+    "pendingCsv": {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-13/sources/pending-review.csv",
+      "sha256": "b6c63ff7f9613f3fe10d2be0129e616acba6b42470456c01c0b5d1c39a348ce1"
+    },
+    "samplingManifest": {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-13/sources/sampling-manifest.json",
+      "sha256": "a16df60d380334b5125eb457f42019d9b8c21dd8367ef89df7c74620b569dd22"
+    }
+  },
+  "baseline": {
+    "status": "deferred",
+    "note": "Baseline deferred, not completed: no human labels exist yet. The legacy replay output would be diagnostic_only (legacy lexical vs BM25), not the current end-to-end AI pipeline, and must never be presented as a quality result.",
+    "legacyCli": {
+      "path": "/Users/shawn/Developer/GitHub/products/infinitum/scripts/eval-bm25-vs-lexical.ts",
+      "sha256": "5f88a876f5ac18acb8edcd20d4f0cc801b7156028bf6d87c26ff21219d2c3da1"
+    }
+  },
+  "splitPolicy": "whole connected components over shared cluster ids; deterministic 2:1 dev:holdout strata balancing; no component spans splits",
+  "clusterComponents": [
+    {
+      "caseIds": [
+        "CQ-088FD55C4971"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-0EE2289B5384"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-115C31EBA415"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-136BB11B1F6C"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-292C7EDEEF4F"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-2C50D64EF90F"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-38939701BE0F"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-83B39152445B"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-8B08CB64AAA7"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-926F4BBC54F4"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-94567F3891F9"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-C7316C2A3009"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-C864667E814D"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-D18C1870DA57"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-DE1F7DA1694B"
+      ]
+    },
+    {
+      "caseIds": [
+        "CQ-E321F49AD5A9"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "CQ-088FD55C4971",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "7fc59214ad924e8357662a832d91af33af3c496038550356966ea0595452913d",
+      "clusterIds": [
+        "cmuz8oa1e3z8mm80128hloso6",
+        "cmv4nxw12009iua01bu2w2etz"
+      ]
+    },
+    {
+      "caseId": "CQ-0EE2289B5384",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "f07b9c0164b74f5a0c808c821526671e4d90be41a3f00aeb385b644d85e6931e",
+      "clusterIds": [
+        "cmuz8ms653z0xm801rps0457k",
+        "cmuzc041900m3lk01sgdwpjjx"
+      ]
+    },
+    {
+      "caseId": "CQ-115C31EBA415",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "3972a28e7782dfa1628f4c87caad206ceac627696fc63980425b433138bf55e2",
+      "clusterIds": [
+        "cmv131r0b04lwq101tp0v15dp",
+        "cmv4nybc800aqua012tm20h8k"
+      ]
+    },
+    {
+      "caseId": "CQ-136BB11B1F6C",
+      "split": "dev",
+      "sourceStratum": "safety_rejected_related",
+      "inputSha256": "81d96c083e82d3f5b53fc8febbf8c1efd4ce5ab797dc5462bfc6a8b5ed3b9866",
+      "clusterIds": [
+        "cmv4scr2f002cua014d72zu4h",
+        "cmv4scs1x002eua01wa83uu70"
+      ]
+    },
+    {
+      "caseId": "CQ-292C7EDEEF4F",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "dd5f7dd1d56d46743dbccd1cc65f6e42eb1aec29fc2433c012843e7cafc304d2",
+      "clusterIds": [
+        "cmv4nxurx009gua01dk21qys2",
+        "cmv4nz7a900bjua018kmtz1bz"
+      ]
+    },
+    {
+      "caseId": "CQ-2C50D64EF90F",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "cbc8cc2da4f3717cdb3db7f07c240e2529f873b909a56df10bec6d6b5bae8968",
+      "clusterIds": [
+        "cmuz8p2ic3za9m801opoc1cvj",
+        "cmv3r5okg00obs501ewflwdvn"
+      ]
+    },
+    {
+      "caseId": "CQ-38939701BE0F",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "6112d214d4cf5b2a7ed2a72a1ec5d205e17af137b4e95fdf90361323662f15d0",
+      "clusterIds": [
+        "cmuz8obb03z8om801e0bv9y8j",
+        "cmv3r4wro00jjs501q1fhevzj"
+      ]
+    },
+    {
+      "caseId": "CQ-83B39152445B",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "32ec1eadbae6b020f8019db26adfe18b7b71d7a21174a42cd13fc562e00b39b4",
+      "clusterIds": [
+        "cmv1328e104o8q101vne5i55f",
+        "cmv132dpa04ooq101nrlkklpe"
+      ]
+    },
+    {
+      "caseId": "CQ-8B08CB64AAA7",
+      "split": "dev",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "56123817e8eb65f31cd6fc254f235ebad276468201e5d345ad12bfc654ee4437",
+      "clusterIds": [
+        "cmuz8mxg33z13m801nsjmj09r",
+        "cmv131oxw04llq101lzl8w76y"
+      ]
+    },
+    {
+      "caseId": "CQ-926F4BBC54F4",
+      "split": "holdout",
+      "sourceStratum": "safety_rejected_related",
+      "inputSha256": "78f3776a8f76b6961c8a4f30daa8680157fdd3ee6f224cd1f7551485ebba0e80",
+      "clusterIds": [
+        "cmuz8nnjv3z5pm801g5rtoqqs",
+        "cmuz8oowo3z95m801133bbrzm"
+      ]
+    },
+    {
+      "caseId": "CQ-94567F3891F9",
+      "split": "holdout",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "4132c72932602bd08d1a1b1d8ed3f908b68c970d338d8b8e9d1a97ea1265d91f",
+      "clusterIds": [
+        "cmv131yym04n0q101wfuriulr",
+        "cmv4o3jq5012fua01l1br7c2j"
+      ]
+    },
+    {
+      "caseId": "CQ-C7316C2A3009",
+      "split": "holdout",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "e42cb23d523da63d2e4812efb29f31674c5ed3e4cee38171201bd7caf4ebbd26",
+      "clusterIds": [
+        "cmuz8mw3c3z11m8017s3mwcmf",
+        "cmv4nxec0008mua012v4bzp3v"
+      ]
+    },
+    {
+      "caseId": "CQ-C864667E814D",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "7cc6f0a7d302eea523056eec0e0bc5bb9a90afb08a06ee060616917d96552072",
+      "clusterIds": [
+        "cmuz8o2h23z8em8015bmikcm4",
+        "cmv131u7q04meq1014panvcct"
+      ]
+    },
+    {
+      "caseId": "CQ-D18C1870DA57",
+      "split": "dev",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "ffb654409e89b08ca779903d8ecceea114df430fdfaa355ee4352ca61dd816ab",
+      "clusterIds": [
+        "cmuz8mu7r3z0zm801ecftkirl",
+        "cmuz8nye83z84m801da89om9d"
+      ]
+    },
+    {
+      "caseId": "CQ-DE1F7DA1694B",
+      "split": "dev",
+      "sourceStratum": "high_bm25_near_neighbor",
+      "inputSha256": "9bc65477239fb0482b404f95a0eb3a039b86d37c84edf461e2990a2fd05835c0",
+      "clusterIds": [
+        "cmv3r4xue00jls501ac86fvji",
+        "cmv3r503l00jps501bmmh1xky"
+      ]
+    },
+    {
+      "caseId": "CQ-E321F49AD5A9",
+      "split": "dev",
+      "sourceStratum": "low_similarity_coverage",
+      "inputSha256": "ddf5797c0b5bab36f6de04d44dc3cf0535bc720c650a3a0a000bf13b54b6aafd",
+      "clusterIds": [
+        "cmuz8niwb3z5km801al3tt68y",
+        "cmuzbzzne00ltlk01d39orm82"
+      ]
+    }
+  ]
+}

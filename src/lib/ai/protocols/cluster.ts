@@ -126,7 +126,7 @@ export type ClusterMergeInputMetadata = {
 };
 
 export type ClusterMergeGroupConflict = {
-  reason: "declined_pair_within_approved_component";
+  reason: "declined_pair_within_approved_component" | "synthesis_source_guard";
   clusterIds: string[];
   declinedPairs: Array<{ leftClusterId: string; rightClusterId: string }>;
 };
@@ -196,12 +196,38 @@ function buildClusterMergeGroupsFromApprovedEdges(
 export function resolveClusterMergeGroupsFromDecisions(
   decisions: Array<Pick<ClusterMergeDecision, "leftClusterId" | "rightClusterId" | "relation">>,
   itemCounts: Map<string, number>,
+  blockedClusterIds?: ReadonlySet<string>,
 ) {
+  // 综合稿桥接守卫：含未拆分聚合源的簇不参与传递性合并——聚合稿整体同时提及
+  // 多个独立事件，一旦桥接会把真事件无声并簇。blocked 边降级人工复核
+  // （决策保持 same_event 落库不 applied，自然进入复核队列）。
+  const guarded = blockedClusterIds && blockedClusterIds.size > 0;
   const approvedEdges = decisions
-    .filter((decision) => decision.relation === "same_event")
+    .filter((decision) => {
+      if (decision.relation !== "same_event") return false;
+      if (!guarded) return true;
+      return !blockedClusterIds.has(decision.leftClusterId) && !blockedClusterIds.has(decision.rightClusterId);
+    })
     .map((decision) => [decision.leftClusterId, decision.rightClusterId] as [string, string]);
   const approvedComponents = buildApprovedClusterMergeGraph(approvedEdges).components;
   const conflicts: ClusterMergeGroupConflict[] = [];
+
+  if (guarded) {
+    const guardedPairs = decisions
+      .filter((decision) =>
+        decision.relation === "same_event" &&
+        (blockedClusterIds.has(decision.leftClusterId) || blockedClusterIds.has(decision.rightClusterId)))
+      .map(({ leftClusterId, rightClusterId }) => ({ leftClusterId, rightClusterId }))
+      .sort((left, right) =>
+        left.leftClusterId.localeCompare(right.leftClusterId) || left.rightClusterId.localeCompare(right.rightClusterId));
+    if (guardedPairs.length > 0) {
+      conflicts.push({
+        reason: "synthesis_source_guard",
+        clusterIds: [...new Set(guardedPairs.flatMap((p) => [p.leftClusterId, p.rightClusterId]))].sort(),
+        declinedPairs: guardedPairs,
+      });
+    }
+  }
 
   for (const component of approvedComponents) {
     const members = new Set(component);

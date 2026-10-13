@@ -233,6 +233,43 @@ describe("cluster merge pair-id protocol", () => {
     expect(decisions.map((decision) => decision.relation)).toEqual(["same_event", "same_event", "unrelated", "same_event"]);
   });
 
+  it("synthesis source guard blocks guarded clusters from transitive merges and records the conflict", () => {
+    // A-B、B-C approved，但 B 含未拆分聚合源：A-B-C 组件不得组装，
+    // 守卫产生 synthesis_source_guard conflict 且不波及无关组件。
+    const decisions = [
+      { leftClusterId: "A", rightClusterId: "B", relation: "same_event" as const },
+      { leftClusterId: "B", rightClusterId: "C", relation: "same_event" as const },
+      { leftClusterId: "D", rightClusterId: "E", relation: "same_event" as const },
+    ];
+    const result = resolveClusterMergeGroupsFromDecisions(
+      decisions,
+      new Map([["A", 1], ["B", 1], ["C", 1], ["D", 1], ["E", 1]]),
+      new Set(["B"]),
+    );
+
+    expect(result.groups).toEqual([["D", "E"]]);
+    expect(result.conflicts).toEqual([{
+      reason: "synthesis_source_guard",
+      clusterIds: ["A", "B", "C"],
+      declinedPairs: [
+        { leftClusterId: "A", rightClusterId: "B" },
+        { leftClusterId: "B", rightClusterId: "C" },
+      ],
+    }]);
+  });
+
+  it("synthesis source guard is a no-op when no cluster is blocked", () => {
+    const decisions = [
+      { leftClusterId: "A", rightClusterId: "B", relation: "same_event" as const },
+    ];
+    const result = resolveClusterMergeGroupsFromDecisions(
+      decisions,
+      new Map([["A", 1], ["B", 1]]),
+    );
+    expect(result.groups).toEqual([["A", "B"]]);
+    expect(result.conflicts).toEqual([]);
+  });
+
   it("keeps existing groups when declined pairs do not contradict an approved component", () => {
     const result = resolveClusterMergeGroupsFromDecisions([
       { leftClusterId: "A", rightClusterId: "B", relation: "same_event" },
