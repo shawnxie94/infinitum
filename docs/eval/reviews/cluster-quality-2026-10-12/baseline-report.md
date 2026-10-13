@@ -13,16 +13,15 @@
 
 ## Stage 准入指标（candidate-selector，非 final merging）
 
-- dev：same 0/1 admitted（recall 0），diff 12/15 admitted（rate 0.8）
-- holdout：same 0/1 admitted（recall 0），diff 6/7 admitted（rate 0.8571428571428571）
+- dev：same 1/1 admitted（recall 1），diff 12/15 admitted（rate 0.8）
+- holdout：same 1/1 admitted（recall 1），diff 6/7 admitted（rate 0.8571428571428571）
 
 ## Dev 未准入原因（逐字来自报告，无推测）
 
-- CQ-45FB5A1C62F2: safety_rejected:object_conflict
 - CQ-6D17E63300D9: safety_rejected:unrelated_subjects
 - CQ-9B55E619D9E1: safety_rejected:no_event_anchor
 - CQ-F48B5AA6A86F: safety_rejected:unrelated_subjects
 
-stableDecisionDigest: `6624c0f5b91f19eff799d343b0cf04d8ad8ff2affa18de93f303f20de56b5728`（git HEAD `8c729f63fffc`；排除时间戳/timing）
+stableDecisionDigest: `4b5c5a795ca87581f95fa9e086ac3e8cebbccb6b070c4ccf610dd826572ba3df`（git HEAD `2f38e04e77c3`；排除时间戳/timing）
 
 局限：sampling strata are 18 high_bm25_near_neighbor + 4 low_similarity_coverage + 2 safety_rejected_related hard cases; rates are biased-sample diagnostics, not a global error rate
