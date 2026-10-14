@@ -1,4 +1,16 @@
-# 新来源定向审核候选（尚未标注）
+# 新来源定向审核批
+
+## 当前人工确认 v1
+
+FN-01、FN-02 均经用户确认标为 **follow_up，不合并**：[reviewed-v1.csv](reviewed-v1.csv)，审计：[human-review-v1.json](human-review-v1.json)。规范登记：`sqlite://artifact/evaluation/cluster-relation-follow-up-reviewed-v1-2026-10-14`。
+
+用户确认原话：“认可，按follow_up处理吧”。确认前已经看到助手对两例的关系建议及理由，因此这是**辅助人工复核，不是独立盲标**。助手依据单独注明来源，不冒充用户独立撰写的理由；CSV 的理由及未提供的审核完成时间留空，recordedAt 只表示登记时间。
+
+冻结 dev/holdout 标记不变，但 FN-02 也不能作为独立 holdout 效果证明。本批有 2 个辅助确认的 follow_up 开发诊断例，新增独立盲标正例仍为 0；不混算此前 8 对或 12 对指标。原始空白表及冻结证据保持不变，未回放模型或修改线上。
+
+下一步可将两例用于开发边界诊断；若要补独立盲标证据，需要新的未曝光样本，并在人工判断前不展示助手/模型建议。任何新付费对照仍需新授权。
+
+以下保留原始冻结说明（“尚未标注”指冻结时状态）。
 
 规范冻结：`sqlite://artifact/evaluation/cluster-relation-follow-up-freeze-2026-10-14`。
 
