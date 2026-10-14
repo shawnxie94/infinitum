@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "evaluationUnit": "source article/complete parent news collection; NOT production cluster snapshots",
+  "cases": [
+    {
+      "caseId": "SR-01",
+      "split": "dev",
+      "leftSourceId": "cmu965vsv2oiyo501egk58wi0",
+      "rightSourceId": "cmuao3hw2009xpf01ihuoljo6",
+      "pairKey": "cmu965vsv2oiyo501egk58wi0|cmuao3hw2009xpf01ihuoljo6"
+    },
+    {
+      "caseId": "SR-02",
+      "split": "dev",
+      "leftSourceId": "cmudvpa01031oo60138xeu7ux",
+      "rightSourceId": "cmuao3iar00ampf015avv3kch",
+      "pairKey": "cmudvpa01031oo60138xeu7ux|cmuao3iar00ampf015avv3kch"
+    },
+    {
+      "caseId": "SR-03",
+      "split": "holdout",
+      "leftSourceId": "cmunonxxv00gdo301rx1x1qna",
+      "rightSourceId": "cmunoobpl00ilo301fzbjjali",
+      "pairKey": "cmunonxxv00gdo301rx1x1qna|cmunoobpl00ilo301fzbjjali"
+    },
+    {
+      "caseId": "SR-04",
+      "split": "dev",
+      "leftSourceId": "cmv6b4vlr00h3lm01e4krr1aq",
+      "rightSourceId": "cmv6b5afs00i0lm01i5otsz23",
+      "pairKey": "cmv6b4vlr00h3lm01e4krr1aq|cmv6b5afs00i0lm01i5otsz23"
+    },
+    {
+      "caseId": "SR-05",
+      "split": "dev",
+      "leftSourceId": "cmv3r5i0z00nes50191rr2yok",
+      "rightSourceId": "cmv4scp7n001pua015kllsxms",
+      "pairKey": "cmv3r5i0z00nes50191rr2yok|cmv4scp7n001pua015kllsxms"
+    },
+    {
+      "caseId": "SR-06",
+      "split": "dev",
+      "leftSourceId": "cmv6b54i600hjlm01wi1rq4pf",
+      "rightSourceId": "cmv6b29h100fwlm016qsl9qi9",
+      "pairKey": "cmv6b54i600hjlm01wi1rq4pf|cmv6b29h100fwlm016qsl9qi9"
+    },
+    {
+      "caseId": "SR-07",
+      "split": "holdout",
+      "leftSourceId": "cmugzpeaa1bg5lf01rzpfue0l",
+      "rightSourceId": "cmugzpm7o1bjblf01vj1mafkn",
+      "pairKey": "cmugzpeaa1bg5lf01rzpfue0l|cmugzpm7o1bjblf01vj1mafkn"
+    },
+    {
+      "caseId": "SR-08",
+      "split": "dev",
+      "leftSourceId": "cmuao3hnj0099pf019nmug04v",
+      "rightSourceId": "cmu9nzcrp00appm01n6fzy7j5",
+      "pairKey": "cmuao3hnj0099pf019nmug04v|cmu9nzcrp00appm01n6fzy7j5"
+    }
+  ],
+  "aiCalls": 0,
+  "modelPredictionsPresent": false
+}
