@@ -1,10 +1,10 @@
 # 定向事件关系候选冻结包
 
-## 当前版本：人工更正 v2
+## 当前版本：人工更正 v3
 
-用户确认 DR-07 为 `follow_up`，仅更正开发集这一条，原始 CSV、AI 回执及 v1 报告保持不变。当前标签为 [packet/blind-review.corrected-v2.csv](packet/blind-review.corrected-v2.csv)，重算见 [ai-one-round.corrected-v2.report.md](ai-one-round.corrected-v2.report.md)：关系一致 8/12、合并判断一致 9/12、误并 1、未识别同一事件 2。没有新增模型调用。
+用户确认 DR-04 为 `same_event`，并保留 v2 的 DR-07=`follow_up`。原始及 v2 CSV/报告、AI 回执和决策保持不变。当前标签为 [packet/blind-review.corrected-v3.csv](packet/blind-review.corrected-v3.csv)，重算见 [ai-one-round.corrected-v3.report.md](ai-one-round.corrected-v3.report.md)：关系一致 9/12、合并判断一致 10/12、误并 0、未识别同一事件 2。没有新增模型调用。
 
-这条 follow_up 是看到模型分歧后的人工复核，不算新增独立盲标正例；当前仍非质量通过。规范审计：sqlite://artifact/evaluation/cluster-relation-gold-correction-v2-2026-10-14。以下保留 v1 阶段记录。
+这些更正来自看过模型分歧后的开发集人工复核，不增加独立盲标真值，也不是模型/策略改善；当前仍非质量通过。规范审计：sqlite://artifact/evaluation/cluster-relation-gold-correction-v3-2026-10-14；v2 审计与报告保留。以下保留 v1 阶段记录。
 
 状态：人工标注已登记，assess 为 `ready_for_replay`；授权单轮 AI 判定已完成，存在关系分歧，不是质量通过。
 
