@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Synthetic development expectations, not independently human-labeled gold or model evaluation results",
+  "modelCalls": 0,
+  "cases": [
+    {"caseId":"BQ-01","left":"甲公司同日发布产品A，并宣布独立产品B召回，文章分别说明两个动作。","right":"甲公司在该日发布产品A。","expectedRelation":"synthesis","why":"对方具体发生属于明确多事件覆盖的一部分"},
+    {"caseId":"BQ-02","left":"甲公司同日发布产品A，详述价格、规格及背景。","right":"甲公司该次发布产品A，简述售价。","expectedRelation":"same_event","why":"详略或背景不等于多个独立发生"},
+    {"caseId":"BQ-03","left":"甲公司9月1日预告9月10日将发布产品A。","right":"甲公司9月10日正式发布产品A。","expectedRelation":"follow_up","why":"预告之后有明确新增的实际发布动作"},
+    {"caseId":"BQ-04","left":"甲公司9月10日发布产品A。","right":"9月15日的文章回顾甲公司9月10日发布产品A，没有新增动作。","expectedRelation":"same_event","why":"报道更晚不构成后续事件"},
+    {"caseId":"BQ-05","left":"甲公司9月10日发布产品A。","right":"甲公司9月12日因故障宣布召回此前发布的产品A。","expectedRelation":"follow_up","why":"与发布直接关联的新增召回动作"},
+    {"caseId":"BQ-06","left":"甲公司9月10日发布产品A。","right":"甲公司9月10日发布独立产品B，文章不涉及产品A。","expectedRelation":"unrelated","why":"共同公司和同日不足以建立同一具体发生"},
+    {"caseId":"BQ-07","left":"正文称9月10日发布A，事件字段却称上一年9月10日，无可核对来源。","right":"只说A近期发布，缺日期和动作细节。","expectedRelation":"uncertain","why":"冲突且证据不足，不以结构化日期强判"},
+    {"caseId":"BQ-08","left":"聚合快照明确混合两次独立发生：发布产品A，以及试验另一服务的人工接管机制。","right":"报道其中该次产品A发布，没有新增动作。","expectedRelation":"synthesis","why":"输入覆盖多个发生，不凭itemCount或稿件标志判断"},
+    {"caseId":"BQ-09","left":"综合稿仅涵盖甲公司产品A发布和产品B召回。","right":"甲公司独立产品C上市，与A或B均无直接关联。","expectedRelation":"unrelated","why":"综合稿与单条并非必为synthesis，须定位对方对应的发生"},
+    {"caseId":"BQ-10","left":"从多主题早报拆出的单条，仅描述甲公司某日发布A。","right":"另一来源描述该次发布A；父网页虽有其他新闻，但不属于当前子条目。","expectedRelation":"same_event","why":"比较当前输入单元，不能把父网页内容偷换为子条目"}
+  ]
+}

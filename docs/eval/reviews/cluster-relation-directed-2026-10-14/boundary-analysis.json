@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-14T09:56:48.049007+00:00",
+  "sourceAuditSha256": "d8d583a46e915ce5936dc5f3ac9a5265e450f6569923f2a55151de7ee3c58acc",
+  "confirmedFacts": {
+    "items": 5,
+    "retainedRssBodies": 3,
+    "retainedFullTextBodies": 0,
+    "allStoredIsAggregationFalse": true,
+    "childParentIds": {
+      "cmugzqhy81bpklf01hf8g7p1b": "cmugzqh6k1boylf01ibe0echn",
+      "cmut1ivbg29khp001r3284ph6": "cmut1er0z2901p001ct8awbat"
+    },
+    "DR08LeftClusterContainsDistinctReports": [
+      "Meta Connect hardware/Muse announcement",
+      "separate human-outsourcing-call trial"
+    ],
+    "DR03LeftRssNames": "QwenNote, first product A2",
+    "DR03RightRssNames": "QwenNote Eva"
+  },
+  "publicSourceSectionMatches": [
+    {
+      "itemId": "cmugzqhy81bpklf01hf8g7p1b",
+      "sourceUrl": "http://www.geekpark.net/news/370917",
+      "accessedAt": "2026-10-14T09:52:09+00:00",
+      "parentPageTitle": "OpenAI CEO : AI 可能带来工业革命式动荡；Anthropic 宣布成立生命科学团队和实验室；腾讯 QClaw 宣布将停运 | 极客公园",
+      "matchStatus": "unique_target_section",
+      "matchedSection": "Meta 被曝内测 Muse 新机制：外包人员人工代替 AI 通话\n\n据 Meta 内部帖子显示，该公司正在为其新款个人 AI 助手 Muse 测试一项「人工管家」机制：Muse 可能会在用户不知情的情况下，把电话任务交给人工外包，由呼叫中心人员代替 AI 完成通话。\n\n自上线两周以来，Muse 已经稳居美国应用下载榜榜首，瞬间火爆美国市场。这款 AI 助手能够自主代用户执行发邮件、购物、预订行程等任务。\n\n就在不久前，Meta 刚刚对外推出 Muse 的通话功能。借助通话功能，Muse 用户可以指令 AI 拨打美国商户电话，由 AI 和对方沟通，完成预约理发、查询门店库存、获取多家服务商报价等跑腿事务。\n\n但是上周，Meta 向员工通报了一项「人工管家」的内部测试：当 Muse 的通话功能遭遇复杂场景时，可能会在用户不知情的情况下将通话转接给公司承包商，由呼叫中心人员来完成通话。\n\nMeta 超级智能实验室一名副总裁表示，部分测试表明，由人工拨打电话，成功率可以提升至 95%–98%，高于纯 AI 通话的成功率。\n\n但公司内部帖子也显示，已有部分员工对人工介入通话提出隐私担忧，警示该模式可能导致敏感信息无意中被 AI 泄露给呼叫中心外包人员。（来源：财联社）",
+      "scope": "only matched news section corresponds to stored child; entire parent roundup is not the child input",
+      "historicalByteIdentityVerified": false
+    },
+    {
+      "itemId": "cmut1ivbg29khp001r3284ph6",
+      "sourceUrl": "http://www.geekpark.net/news/372070",
+      "accessedAt": "2026-10-14T09:52:09+00:00",
+      "parentPageTitle": "英伟达股价创新高，逼近 6 万亿美元；限制 AI 助手，苹果收紧 MacOS 磁盘访问权限；arXiv 每人每月仅允许投递 2 篇论文 | 极客公园",
+      "matchStatus": "unique_target_section",
+      "matchedSection": "Meta 旗下 AI 智能体 Muse 将登陆智能眼镜平台，可代用户完成各种任务\n\n10 月 2 日消息，Meta 宣布旗下 AI 智能体 Muse 将于近期登陆智能眼镜，用户无需拿出手机，只需通过语音下达指令，Muse 就能在后台代用户完成一系列任务。\n\nMeta 表示，Muse 基于 Muse Spark AI 模型运行，其核心运行环境是一台部署在云端的私有持久化 Linux 虚拟机，配备独立的网页浏览器、文件系统和终端。即使用户关闭应用，这些组件仍会持续运行。\n\n为了完成用户交代的任务，Muse 可以自行决定编写并运行代码，也可以将工作分配给多个子智能体，还能创建定时任务。此外，Muse 还能够生成文档、PDF、网站以及消费记录追踪器、数据仪表盘等交互式工具。\n\nMeta 列举了更多使用场景，包括代用户预约服务、查询机票价格、寻找替换零部件、记录饮食、提供健身指导、帮助购买用户眼前看到的商品。用户只需说出「Hey Muse」或预先设置的 Muse 名称，然后提出具体要求，Muse 便会在后台执行任务，并在完成后向用户反馈结果。（来源：网易）",
+      "scope": "only matched news section corresponds to stored child; entire parent roundup is not the child input",
+      "historicalByteIdentityVerified": false
+    }
+  ],
+  "evidenceGaps": [
+    "DR-03 does not prove A2 and Eva are the same product/occurrence; overlap needs independent corroboration",
+    "DR-08 frozen left eventDate year 2025 is not supported by retained RSS/publication-year context; no historical source date automatically corrected",
+    "both public GeekPark pages are parent multi-news roundups; current child sources must be distinguished from full parent content",
+    "current live RSS/fetched page is not an immutable historic source capture; no frozen input or gold changed"
+  ],
+  "promptAudit": {
+    "synthesisDefinitionExists": true,
+    "followUpDefinitionAlreadyRequiresNewEvent": true,
+    "concerns": [
+      "independent reports vs independent occurrences is ambiguous",
+      "metadata priority can overshadow explicit multi-event text",
+      "no explicit evidence requirement excluding late reporting/same-time elaboration from follow_up"
+    ],
+    "productionPromptChanged": false,
+    "draftApplied": false,
+    "semanticImprovementMeasured": false,
+    "draftPath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-prompt-candidate.txt",
+    "draftSha256": "985c6de7f11655438c2bf27c49e5a38cf734c8b724988f2a1a00122c985b46c7"
+  },
+  "fixtureAudit": {
+    "path": "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-cases.json",
+    "sha256": "6b3e6ee32715996ddcb378f082c3bf6e0a0a601bfa6cb6d30b95bf39c2ea7a98",
+    "count": 10,
+    "syntheticDevelopmentOnly": true,
+    "notHumanGold": true,
+    "notModelBehaviorVerification": true
+  },
+  "existingTests": {
+    "command": "npx vitest run tests/unit/ai-contracts.test.ts tests/unit/cluster-merge-protocol.test.ts",
+    "passed": 21,
+    "failed": 0,
+    "scope": "existing contract/protocol tests only, not semantic model accuracy"
+  },
+  "protected": {
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v4.csv": "775c91bcc872a8cfadd98d7b58c9d45d21fc700a89fe75d37d9b73d96b90731f",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.receipt.json": "9419c5b1c9f8e9e0047860136aa5e2d58dbbe33a977bb07b1ad1b2a257855694",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.corrected-v4.report.json": "469acfb7ab0fd2560b7e49bb69cbc76bd82862dab2be3908421a2d6e1cb4aa7a",
+    "src/config/prompts.ts": "52a4b9f9e500764af06631836e9819a27887b00a033134bd7466b6953249ed53",
+    "src/lib/ai/contracts.ts": "e63311db39967289bb995a1112d7da5171c90da269003cb1cf0b27e8a40faa53"
+  },
+  "aiCalls": 0,
+  "paidCalls": 0,
+  "productionMutation": false,
+  "releaseEligible": false,
+  "qualityPassed": false,
+  "next": "first establish clean independently source-verified dev/holdout relations; candidate prompt remains un-applied; paid comparison requires new authorization"
+}

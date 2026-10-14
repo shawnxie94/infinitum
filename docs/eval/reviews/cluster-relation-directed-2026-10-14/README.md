@@ -1,5 +1,7 @@
 # 定向事件关系候选冻结包
 
+来源与 Prompt 审查已完成：[boundary-audit.md](boundary-audit.md)。发现 DR-03 的 A2/Eva 对应身份未证实、DR-08 左侧已混合不同报道，且父早报与子条目需区分。保留 gold，不能把这些分歧全部归因于 Prompt；10 组合成开发期望与未应用规则草案已归档，0 新增模型调用。下一步先准备来源充分的独立盲标样本。规范审查证据：sqlite://artifact/evaluation/cluster-relation-boundary-audit-2026-10-14。
+
 ## 当前版本：人工更正 v4，开发集边界复核已收口
 
 用户确认 DR-08 为 `synthesis`，保留 DR-04=`same_event`、DR-07=`follow_up`，DR-03 复核维持 `synthesis`。原始与 v2/v3 标签/报告及 AI 回执、决策保持不变。当前标签为 [packet/blind-review.corrected-v4.csv](packet/blind-review.corrected-v4.csv)，重算见 [ai-one-round.corrected-v4.report.md](ai-one-round.corrected-v4.report.md)：关系一致 9/12、合并判断一致 11/12、误并 0、未识别同一事件 1；dev 合并判断 8/8。没有新增模型调用。
