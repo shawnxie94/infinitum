@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "version": 2,
+  "recordedAt": "2026-10-14T08:45:31.488611+00:00",
+  "authority": "user explicitly confirmed DR-07 is follow_up in chat; no model overwrite",
+  "reviewer": "Shawn",
+  "originalReviewTimestampPreserved": true,
+  "recordedAtIsNotAClaimOfOriginalReviewTime": true,
+  "changes": [
+    {
+      "caseId": "DR-07",
+      "split": "dev",
+      "from": "same_event",
+      "to": "follow_up",
+      "reason": "发布会预告与正式发布/评测按后续进展区分（用户确认）"
+    }
+  ],
+  "originalFiles": {
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.csv": "2af89d22ffc8df94f37ac9e260b46eec5a59248a19f49462ff5ae3936980cc9c",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.report.json": "9a72b69f5d2c020450a2248c13e31928814b6b01366fdb6c27270ff00848c7ea",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.receipt.json": "9419c5b1c9f8e9e0047860136aa5e2d58dbbe33a977bb07b1ad1b2a257855694",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.freeze.json": "c341d2f21959e613d7045bea472f581ac891bdeaeebbe10739d44050c2db23ba",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/frozen-manifest.json": "ec21fe1b6b05cd2a53d852011a9f50fae678ef5fcb2939de80291d9326e4e01d",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/sources/pending-review.csv": "ec48abb0e0a47cbb3381dab183e532703932f9cff8f877c304774c848b0c2d88"
+  },
+  "correctedLabelsPath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v2.csv",
+  "correctedLabelsSha256": "152b114f58091e3a1123db7b0390002cacda4b844fe860593eca143d4109cc73",
+  "postInferenceRevision": true,
+  "independentBlindFollowUpPositive": false,
+  "holdoutLabelsChanged": false,
+  "additionalAiRequests": 0
+}

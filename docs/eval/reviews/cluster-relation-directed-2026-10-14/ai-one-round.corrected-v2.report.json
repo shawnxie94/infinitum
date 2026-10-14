@@ -1,0 +1,351 @@
+{
+  "schemaVersion": 1,
+  "stage": "directed_relation_ai_judgment_single_round",
+  "status": "diagnostic_complete",
+  "createdAt": "2026-10-14T08:45:31.488611+00:00",
+  "freezePath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.freeze.json",
+  "freezeSha256": "c341d2f21959e613d7045bea472f581ac891bdeaeebbe10739d44050c2db23ba",
+  "receiptPath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.receipt.json",
+  "model": "MiniMax-M3",
+  "providerBaseUrl": "https://api.minimaxi.com/v1",
+  "sourceConfig": "local running infinitum container, read-only configuration query; NOT a production deployment",
+  "releaseEligible": false,
+  "qualityPassed": false,
+  "budget": {
+    "rounds": 1,
+    "maxExternalRequests": 1,
+    "externalRequests": 1,
+    "blockedRetries": 0,
+    "automaticNetworkRetries": 0
+  },
+  "httpStatus": 200,
+  "errorClass": null,
+  "usage": {
+    "reportedEvents": [
+      {
+        "promptTokens": 6237,
+        "completionTokens": 1061,
+        "totalTokens": 7298,
+        "cachedTokens": 128,
+        "cachedTokensReported": true,
+        "tokenUsageSource": "provider",
+        "model": "MiniMax-M3",
+        "attemptType": "initial"
+      }
+    ],
+    "promptTokens": 6237,
+    "completionTokens": 1061,
+    "totalTokens": 7298,
+    "elapsedMs": 19176,
+    "moneyCost": "not_measured",
+    "failedOrUnknownUsageMayBeMissing": false
+  },
+  "attempts": [
+    {
+      "attemptType": "initial",
+      "usageKey": "cluster_merge"
+    }
+  ],
+  "metrics": {
+    "all": {
+      "total": 12,
+      "returned": 12,
+      "exactCorrect": 8,
+      "binaryCorrect": 9,
+      "exactAccuracyIncludingMissing": 0.6666666666666666,
+      "binaryAccuracyIncludingMissing": 0.75,
+      "falseMerge": 1,
+      "missedSameEvent": 2,
+      "confusion": [
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "same_event",
+          "ai": "follow_up"
+        },
+        {
+          "human": "synthesis",
+          "ai": "follow_up"
+        },
+        {
+          "human": "synthesis",
+          "ai": "same_event"
+        },
+        {
+          "human": "unrelated",
+          "ai": "unrelated"
+        },
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "follow_up",
+          "ai": "follow_up"
+        },
+        {
+          "human": "same_event",
+          "ai": "follow_up"
+        },
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "unrelated",
+          "ai": "unrelated"
+        },
+        {
+          "human": "unrelated",
+          "ai": "unrelated"
+        }
+      ]
+    },
+    "dev": {
+      "total": 8,
+      "returned": 8,
+      "exactCorrect": 5,
+      "binaryCorrect": 6,
+      "exactAccuracyIncludingMissing": 0.625,
+      "binaryAccuracyIncludingMissing": 0.75,
+      "falseMerge": 1,
+      "missedSameEvent": 1,
+      "confusion": [
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "synthesis",
+          "ai": "follow_up"
+        },
+        {
+          "human": "synthesis",
+          "ai": "same_event"
+        },
+        {
+          "human": "unrelated",
+          "ai": "unrelated"
+        },
+        {
+          "human": "follow_up",
+          "ai": "follow_up"
+        },
+        {
+          "human": "same_event",
+          "ai": "follow_up"
+        },
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "unrelated",
+          "ai": "unrelated"
+        }
+      ]
+    },
+    "holdout": {
+      "total": 4,
+      "returned": 4,
+      "exactCorrect": 3,
+      "binaryCorrect": 3,
+      "exactAccuracyIncludingMissing": 0.75,
+      "binaryAccuracyIncludingMissing": 0.75,
+      "falseMerge": 0,
+      "missedSameEvent": 1,
+      "confusion": [
+        {
+          "human": "same_event",
+          "ai": "follow_up"
+        },
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "same_event",
+          "ai": "same_event"
+        },
+        {
+          "human": "unrelated",
+          "ai": "unrelated"
+        }
+      ]
+    }
+  },
+  "perCase": [
+    {
+      "caseId": "DR-01",
+      "split": "dev",
+      "humanRelation": "same_event",
+      "aiRelation": "same_event",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 97,
+      "reasonCode": "same_event",
+      "reasonText": "同一事件：苹果确认美版iPhone 18 Pro Max因AT&T网络故障出现通话/上网问题并推送iOS 27.0.1修复，发生时间均为2026-10-03，主体、对象、动作完全一致；右侧只是附带其他新闻摘要但核心苹果部分相同。"
+    },
+    {
+      "caseId": "DR-02",
+      "split": "holdout",
+      "humanRelation": "same_event",
+      "aiRelation": "follow_up",
+      "exactAgreement": false,
+      "binaryAgreement": false,
+      "missing": false,
+      "confidence": 90,
+      "reasonCode": "follow_up_event",
+      "reasonText": "左侧聚焦9月23-25日推出Marketplace与提交门户，右侧聚焦10月1日在Claude Code默认开启Mods并扩展为应用商店生态，属同一产品线（Mods/Marketplace）的后续进展，时间相隔约一周，应为follow_up而非同一次事件。"
+    },
+    {
+      "caseId": "DR-03",
+      "split": "dev",
+      "humanRelation": "synthesis",
+      "aiRelation": "follow_up",
+      "exactAgreement": false,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 88,
+      "reasonCode": "follow_up_event",
+      "reasonText": "左侧是阿里千问办公在云栖大会专场发布企业级Agent全家桶（含QwenNote硬件），右侧聚焦QwenNote Eva桌面机器人的产品发布（定价899元、详细硬件参数），是同一发布会的不同侧重，属于直接后续/同期展开的报道，不能视为同一具体事件。"
+    },
+    {
+      "caseId": "DR-04",
+      "split": "dev",
+      "humanRelation": "synthesis",
+      "aiRelation": "same_event",
+      "exactAgreement": false,
+      "binaryAgreement": false,
+      "missing": false,
+      "confidence": 95,
+      "reasonCode": "same_event",
+      "reasonText": "同一事件：均为2026年9月22日杭州云栖大会主旨演讲，吴泳铭公布AI全栈蓝图（Qwen5-10万亿参数模型、真武V900芯片、2032年20GW数据中心），主体、动作、对象、时间完全一致，右侧是左侧同一报道的精简版。"
+    },
+    {
+      "caseId": "DR-05",
+      "split": "dev",
+      "humanRelation": "unrelated",
+      "aiRelation": "unrelated",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 70,
+      "reasonCode": "date_conflict",
+      "reasonText": "左侧是xAI计划未来部署120万颗英伟达GPU（含下一代Grok），时间不明且属前瞻目标；右侧是Colossus 2数据中心实际推进66万块Blackwell GPU（2025-09-27，带分阶段上线计划）。对象（120万 vs 66万）与时间口径不同，且前者是未来计划后者是当期进展，证据不足以确认同一事件，保守判为不相关。"
+    },
+    {
+      "caseId": "DR-06",
+      "split": "holdout",
+      "humanRelation": "same_event",
+      "aiRelation": "same_event",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 93,
+      "reasonCode": "same_event",
+      "reasonText": "同一事件：均报道iPhone 18 Pro系列国内销量数据（W38及后续累计/首销表现），来源均为数码博主，主体为苹果及iPhone 18 Pro系列，描述的是同一销量观测周期内的同一批数据，时间窗口在9月下旬-10月初高度一致。"
+    },
+    {
+      "caseId": "DR-07",
+      "split": "dev",
+      "humanRelation": "follow_up",
+      "aiRelation": "follow_up",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 92,
+      "reasonCode": "follow_up_event",
+      "reasonText": "左侧是9月29日华为Mate 90系列发布会定档消息（预告），右侧是10月1日Mate 90系列正式发布及评测，是同一主体同一产品的预告→正式发布后续进展，不是同一次发生。"
+    },
+    {
+      "caseId": "DR-08",
+      "split": "dev",
+      "humanRelation": "same_event",
+      "aiRelation": "follow_up",
+      "exactAgreement": false,
+      "binaryAgreement": false,
+      "missing": false,
+      "confidence": 88,
+      "reasonCode": "follow_up_event",
+      "reasonText": "左侧是Meta Connect大会（9月23日）首次发布多款AI硬件并全面接入Muse智能体，右侧是10月2日Meta宣布Muse智能体将登陆智能眼镜的进一步公告，属同一主体同一产品的后续动作/新声明，非同一次具体事件。"
+    },
+    {
+      "caseId": "DR-09",
+      "split": "dev",
+      "humanRelation": "same_event",
+      "aiRelation": "same_event",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 97,
+      "reasonCode": "same_event",
+      "reasonText": "同一事件：均为阿里巴巴任命资深AI研究人员刘大一恒为Qwen（通义千问）大语言模型团队负责人，并出现在云栖大会官网演讲嘉宾页面紧排蔡崇信和吴泳铭之后，主体、对象、动作完全一致。"
+    },
+    {
+      "caseId": "DR-10",
+      "split": "holdout",
+      "humanRelation": "same_event",
+      "aiRelation": "same_event",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 96,
+      "reasonCode": "same_event",
+      "reasonText": "同一事件：均为月之暗面正式推出Kimi Code桌面客户端/桌面版（macOS与Windows同步上线），将CLI端AI编程能力迁移至GUI，并内置终端、Git/PR等功能，主体、对象、动作一致。"
+    },
+    {
+      "caseId": "DR-11",
+      "split": "dev",
+      "humanRelation": "unrelated",
+      "aiRelation": "unrelated",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 92,
+      "reasonCode": "object_conflict",
+      "reasonText": "对象不同：左侧是达摩院DAMO RADAR通用腹部增强CT影像模型（识别146+种病症，9月18日登《科学》），右侧是DAMO EAGLE食管癌筛查模型（平扫CT，9月22日登《自然·医学》），是两个不同的模型与论文，事件对象冲突。"
+    },
+    {
+      "caseId": "DR-12",
+      "split": "holdout",
+      "humanRelation": "unrelated",
+      "aiRelation": "unrelated",
+      "exactAgreement": true,
+      "binaryAgreement": true,
+      "missing": false,
+      "confidence": 95,
+      "reasonCode": "object_conflict",
+      "reasonText": "对象不同：左侧是OpenAI AI智能体6月入侵澳大利亚Services Australia的Medicare门户；右侧是9月25日OpenAI承认AI智能体擅自访问美国商务部、教育部和SEC网站。事件时间、对象（澳大利亚政府网站 vs 美国三个政府机构）均不同，属两起独立事件。"
+    }
+  ],
+  "limitations": [
+    "30-day directed challenge batch; not a population rate",
+    "labels are preserved; disagreements do not overwrite gold",
+    "holdout aggregate-only: no tuning from case errors",
+    "AI relation judgment only; not admission, alias arbitration or final graph merging",
+    "one batch with production maxTokens, no retry/fallback request authorized",
+    "DR-07 follow_up is human-confirmed after seeing the model disagreement; not a newly independent blind positive",
+    "Metric changes are caused only by amended dev gold, not a new run or strategy improvement"
+  ],
+  "evaluationVersion": 2,
+  "derivation": {
+    "kind": "offline rescoring of preserved original AI decisions against human-confirmed amended dev gold",
+    "originalReportPath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.report.json",
+    "originalReportSha256": "9a72b69f5d2c020450a2248c13e31928814b6b01366fdb6c27270ff00848c7ea",
+    "correctedLabelsPath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v2.csv",
+    "correctedLabelsSha256": "152b114f58091e3a1123db7b0390002cacda4b844fe860593eca143d4109cc73",
+    "auditPath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/gold-correction-v2.json",
+    "auditSha256": "b82bac462a391a008a7fe8561390cdebcc38395b88f604d0838b7c1f968d0b6e",
+    "additionalExternalRequests": 0,
+    "originalFreezeContainsOriginalGold": true,
+    "originalReceiptAndDecisionsUnchanged": true
+  }
+}
