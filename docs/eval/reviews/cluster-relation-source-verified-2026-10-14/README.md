@@ -1,5 +1,7 @@
 # 新来源关系盲标批
 
+最新 dev 复核：[../cluster-relation-dev-recheck-2026-10-14/README.md](../cluster-relation-dev-recheck-2026-10-14/README.md)。SR-06 保持 same_event，理由注明为助手建议后确认；SR-01 的 follow_up 只是待验证倾向，已列待核，原 v1 标签不改，但暂不作已定边界证据。规范状态：`sqlite://artifact/evaluation/cluster-relation-dev-recheck-2026-10-14`。
+
 ## 当前人工标签 v1
 
 用户已给出 SR-01～SR-08 的关系：[reviewed-v1.csv](reviewed-v1.csv)，登记审计及分布：[human-review-v1.json](human-review-v1.json)。规范登记：`sqlite://artifact/evaluation/cluster-relation-source-reviewed-v1-2026-10-14`。

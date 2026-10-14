@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-14T11:25:03.241041+00:00",
+  "scope": "SR-01 source and announcement-identity recheck only; public URLs, no authentication",
+  "results": [
+    {
+      "url": "https://www.aibase.com/zh/news/31173",
+      "status": "fetched_requires_identity_check",
+      "payload": {
+        "url": "https://www.aibase.com/zh/news/31173",
+        "extractor": "defuddle",
+        "accessed_at": "2026-10-14T11:24:58+00:00",
+        "title": "智谱AI回应ZCode代码上传争议:已修复漏洞，将开源代码库",
+        "metadata": {
+          "description": "智谱AI旗下代码助手ZCode近日因“代码库索引”功能引发用户代码数据上传争议。ZCode官方发布情况说明并致歉，披露事件原因及整改方案。官方表示，该功能原用于本地生成代码仓库索引，支持会话断点恢复、历史版本回退及Repo Wiki等能力，其中Repo Wiki生成页面时会触发仓库数据上传;云端生成Wiki后，相关数据",
+          "language": "zh",
+          "site": "AIbase",
+          "wordCount": 321
+        },
+        "content": "智谱AI旗下代码助手ZCode近日因“代码库索引”功能引发用户代码数据上传争议。ZCode官方发布情况说明并致歉，披露事件原因及整改方案。\n\n官方表示，该功能原用于本地生成代码仓库索引，支持会话断点恢复、历史版本回退及Repo Wiki等能力，其中Repo Wiki生成页面时会触发仓库数据上传;云端生成Wiki后，相关数据将立即销毁，不会留存。\n\n争议的主要原因在于，功能上线初期默认开启，部分用户未充分感知的情况下触发了数据上传。目前相关漏洞已完成修复。为重建开发者信任，ZCode计划近期开放源代码，并邀请第三方评估人员开展独立审查，持续公开审查进展。此外，官方已为全部ZCode用户额外提供一次周额度重置，相关额度已于说明发布当日发放。\n\n此事也凸显出AI编程工具在代码数据处理、默认设置和隐私透明度方面面临的信任挑战。",
+        "truncated": false
+      }
+    },
+    {
+      "url": "https://www.aibase.com/zh/news/31218",
+      "status": "fetched_requires_identity_check",
+      "payload": {
+        "url": "https://www.aibase.com/zh/news/31218",
+        "extractor": "defuddle",
+        "accessed_at": "2026-10-14T11:24:59+00:00",
+        "title": "ZCode 道歉并开源:阿里云 OSS 已清空，Repo Wiki 功能已下线",
+        "metadata": {
+          "description": "近日，针对社区反馈的 ZCode 产品安全问题，ZCode 团队正式发布公开致歉与整改说明，宣布已将代码在 GitHub 上开源（github.com/zai-org/ZCode），并邀请中国信息通信研究院和绿盟科技开展安全审计，以回应外界对数据安全与隐私保护的关切。ZCode 在声明中表示，对社区提及的代码数据承诺无",
+          "language": "zh",
+          "site": "AIbase",
+          "wordCount": 471
+        },
+        "content": "近日，针对社区反馈的 ZCode 产品安全问题，ZCode 团队正式发布公开致歉与整改说明，宣布已将代码在 GitHub 上开源（github.com/zai-org/ZCode），并邀请中国信息通信研究院和绿盟科技开展安全审计，以回应外界对数据安全与隐私保护的关切。\n\n![QQ20260921-092816.jpg](https://upload.chinaz.com/2026/0921/6392557973901866213743054.jpg \"QQ20260921-092816.jpg\")\n\nZCode 在声明中表示，对社区提及的代码数据承诺无留存，也从未将其用于模型训练。为彻底消除隐患，团队已完成客户端 v3.14.0的安全整改，移除了 Repo Wiki 功能，并切断了本地仓库快照生成与上传链路。经绿盟科技审查，确认未发现可触发本地仓库快照或文件外发的功能路径。\n\n第三方审计结果成为此次整改的关键背书。中国信息通信研究院技术评测确认，zcode-prod 阿里云 OSS 存储桶状态为云端零数据。绿盟科技同步审查后确认，该存储桶内全部数据对象及存储桶本身已删除。\n\nZCode 团队在声明中向所有用户致歉，并对此前发现问题的社区开发者表示感谢。团队表示，接下来将建立常态化的产品安全漏洞机制，欢迎开发者持续检查和反馈问题，将根据问题严重程度给予相应回报。\n\n此次事件反映出，在 AI 开发工具快速迭代的背景下，产品安全与用户数据保护正成为行业不可回避的核心议题。ZCode 以开源交底、第三方审计、功能整改的组合拳回应质疑，能否重建社区信任，仍有待时间检验。",
+        "truncated": false
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/zai-org/ZCode",
+      "status": "public_api_fetched",
+      "accessedAt": "2026-10-14T11:25:01.523435+00:00",
+      "payload": {
+        "full_name": "zai-org/ZCode",
+        "html_url": "https://github.com/zai-org/ZCode",
+        "created_at": "2026-09-20T12:01:16Z",
+        "updated_at": "2026-10-14T11:21:54Z",
+        "description": "Z.ai's coding agent harness. Powerful, intelligent, extensible."
+      }
+    },
+    {
+      "url": "https://api.github.com/repos/zai-org/ZCode/releases/tags/v3.14.0",
+      "status": "public_api_unavailable",
+      "errorType": "HTTPError",
+      "httpStatus": 404
+    }
+  ],
+  "aiCalls": 0,
+  "paidCalls": 0,
+  "productionMutation": false
+}

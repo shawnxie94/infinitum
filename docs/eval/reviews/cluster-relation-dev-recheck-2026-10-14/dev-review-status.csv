@@ -1,0 +1,3 @@
+caseId,split,originalLabel,currentStoredLabel,proposedLabel,reviewStatus,eligibleAsSettledBoundaryEvidence
+SR-01,dev,same_event,same_event,follow_up,pending_announcement_identity_review,false
+SR-06,dev,same_event,same_event,same_event,same_event_assisted_rationale_confirmed,true
