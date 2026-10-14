@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "evaluationUnit": "official release records; not production cluster_merge snapshots",
+  "cases": [
+    {
+      "caseId": "FN-01",
+      "split": "dev",
+      "eventGroup": "anthropics/claude-code",
+      "leftSourceId": "anthropics/claude-code@v2.1.295",
+      "rightSourceId": "anthropics/claude-code@v2.1.296",
+      "pairKey": "anthropics/claude-code@v2.1.295|anthropics/claude-code@v2.1.296"
+    },
+    {
+      "caseId": "FN-02",
+      "split": "holdout",
+      "eventGroup": "openai/codex",
+      "leftSourceId": "openai/codex@rust-v0.162.0",
+      "rightSourceId": "openai/codex@rust-v0.162.1",
+      "pairKey": "openai/codex@rust-v0.162.0|openai/codex@rust-v0.162.1"
+    }
+  ],
+  "modelPredictionsPresent": false
+}
