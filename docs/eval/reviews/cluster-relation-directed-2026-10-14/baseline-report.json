@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "stage": "production_candidate_selector_snapshot_counterfactual",
+  "status": "diagnostic_incomplete",
+  "releaseEligible": false,
+  "notMeasured": {
+    "aiCalls": "not_measured",
+    "aiTokens": "not_measured",
+    "modelCost": "not_measured",
+    "aiLatency": "not_measured",
+    "vectorRecallChannel": "disabled_not_measured"
+  },
+  "scenarioFaithfulness": {
+    "asOfBasis": "capture_utc_explicit",
+    "lookbackDays": 7,
+    "scanClusterLimit": 2500,
+    "candidateLimit": 80,
+    "relatedPairLimit": 3,
+    "liveEndpoints": "counterfactual_reviewed_endpoints_live",
+    "corpusSize": 139,
+    "liveClusterIdCount": 0,
+    "missingTables": [],
+    "itemsSourceFilter": "enforced_production_exists_filter",
+    "samplingBiasNote": "sampling strata are 2 identity_boundary + 4 multi_event_overlap + 4 progress_boundary + 2 shared_subject_control hard cases; rates are biased-sample diagnostics, not a global error rate",
+    "stageBoundaryNote": "admission counts candidate-selector pairs only; entity-alias normalization, cannot-link filtering, AI review, and final graph merging are out of stage and not measured"
+  },
+  "inputs": {
+    "frozenManifestSha256": "ec21fe1b6b05cd2a53d852011a9f50fae678ef5fcb2939de80291d9326e4e01d",
+    "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198",
+    "samplingManifestSha256": "1888a4b374e1b01a88ecb1ef5b7aeb93a884c3ac79eeb965eb92980c1a188194",
+    "labelsCsvSha256": "2af89d22ffc8df94f37ac9e260b46eec5a59248a19f49462ff5ae3936980cc9c",
+    "corpusFingerprint": "d1465f51aec6c0d983608707f6e28831629f9c7427088b5f43f656e68bca30be",
+    "snapshotUnchangedAfterRun": true,
+    "sourceVersion": {
+      "gitHead": "0cacd8a8f8169fedf150437301066302930e35fe",
+      "sourceCode": {
+        "src/lib/clusters/helpers.ts": "c632f2bbb08d851fe9f53afe72d87572f6845733c1c43421190858e7e9d3fc02",
+        "src/lib/clusters/bm25.ts": "a7a80ce0fb13fb5565505e877bf47b275cec22c2a30a264ac6ecaa938b1ec460",
+        "src/config/constants.ts": "53656d45bef68b82f14fa4c7843c086e1d394a792a20e19371e4c72891338a0c",
+        "scripts/eval-cluster-quality-baseline.ts": "be07af278c3d62140fb5d96c3517d890bf1989e4ed8b996448a0f363c59cb586"
+      }
+    }
+  },
+  "coverage": {
+    "total": 12,
+    "eligible": 0,
+    "uncertain": 0,
+    "invalid": [],
+    "snapshotFieldComparison": {
+      "comparedCases": 0,
+      "notComparedCases": 12,
+      "note": "snapshot field comparison only ran for cases passing cluster-presence and window checks; earlier-excluded cases are not compared and no no-drift claim is made for them"
+    },
+    "exclusions": [
+      {
+        "reason": "out_of_lookback_window",
+        "count": 12,
+        "caseIds": [
+          "DR-01",
+          "DR-02",
+          "DR-03",
+          "DR-04",
+          "DR-05",
+          "DR-06",
+          "DR-07",
+          "DR-08",
+          "DR-09",
+          "DR-10",
+          "DR-11",
+          "DR-12"
+        ]
+      }
+    ],
+    "bySplit": {
+      "dev": {
+        "total": 8,
+        "eligible": 0
+      },
+      "holdout": {
+        "total": 4,
+        "eligible": 0
+      }
+    }
+  },
+  "metrics": {
+    "dev": {
+      "aggregationOnly": false,
+      "eligible": 0,
+      "same": {
+        "total": 0,
+        "admitted": 0,
+        "notAdmitted": 0
+      },
+      "diff": {
+        "total": 0,
+        "admitted": 0,
+        "notAdmitted": 0
+      },
+      "sameEventCandidateAdmissionRecall": null,
+      "differentEventCandidateAdmissionRate": null
+    },
+    "holdout": {
+      "aggregationOnly": true,
+      "eligible": 0,
+      "same": {
+        "total": 0,
+        "admitted": 0,
+        "notAdmitted": 0
+      },
+      "diff": {
+        "total": 0,
+        "admitted": 0,
+        "notAdmitted": 0
+      },
+      "sameEventCandidateAdmissionRecall": null,
+      "differentEventCandidateAdmissionRate": null
+    }
+  },
+  "devRejectionReasons": [],
+  "diagnostics": {
+    "totalPairs": 0,
+    "rejectedObjectConflict": 0,
+    "rejectedDateConflict": 0,
+    "rejectedNoEventAnchor": 0,
+    "belowGrayScore": 0,
+    "relatedPairs": 0,
+    "aiEligiblePairs": 0,
+    "cleanPairsSkipped": 19182,
+    "dirtyPairs": 0,
+    "preLimitCandidates": 0,
+    "postLimitCandidates": 0,
+    "dirtyCandidateCount": 0
+  },
+  "stableDecisionDigest": "5f5e463178f41041d04e98674f712b6a43de484faf40675af9fd9bc6980fd81d",
+  "offlineRuntimeMs": 45
+}
