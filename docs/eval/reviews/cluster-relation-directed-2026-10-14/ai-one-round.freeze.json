@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "stage": "directed_relation_ai_judgment_single_round",
+  "createdAt": "2026-10-14T08:32:16.173Z",
+  "configSource": "local running infinitum container, read-only configuration query; NOT a production deployment",
+  "config": {
+    "promptId": "cmqq311w50006o101uaje7asd",
+    "promptName": "默认聚合合并提示词",
+    "userInstruction": "请根据候选事件信息谨慎判断哪些内容属于同一具体事件；无法确定时不要合并。",
+    "maxTokens": 2000,
+    "temperature": 0,
+    "topP": null,
+    "modelConfigId": "cmqv0x84p0004qn01bnsbii66",
+    "modelConfigName": "MiniMax-M3",
+    "baseUrl": "https://api.minimaxi.com/v1",
+    "modelName": "MiniMax-M3",
+    "hasCustomHeaders": 0
+  },
+  "keychain": {
+    "service": "kb-model",
+    "account": "minimax",
+    "persistedCredential": false
+  },
+  "actualSystemPromptSource": "current code-owned cluster_merge contract; persisted legacy systemPrompt intentionally ignored by current provider",
+  "budget": {
+    "rounds": 1,
+    "cases": 12,
+    "maxExternalRequests": 1,
+    "automaticRetryAllowed": false
+  },
+  "scenario": "12 pairs in one batch, original frozen titles/summaries/signatures; no weak scores, sampling hints or human labels in model input. This isolates AI relation judgment and is NOT candidate ranking/admission or final graph merging.",
+  "samplingWindowDays": 30,
+  "labelsSha256": "2af89d22ffc8df94f37ac9e260b46eec5a59248a19f49462ff5ae3936980cc9c",
+  "manifestSha256": "ec21fe1b6b05cd2a53d852011a9f50fae678ef5fcb2939de80291d9326e4e01d",
+  "inputSha256": "4b362b69fac81bc5f7e6e272cdfb112e517fa47a6e4f2f9a2bf5804aba19eaf0",
+  "caseIds": [
+    "DR-01",
+    "DR-02",
+    "DR-03",
+    "DR-04",
+    "DR-05",
+    "DR-06",
+    "DR-07",
+    "DR-08",
+    "DR-09",
+    "DR-10",
+    "DR-11",
+    "DR-12"
+  ],
+  "sourceFiles": [
+    {
+      "path": "src/lib/ai/provider-next.ts",
+      "sha256": "8028225fe4007541d86ec880a95e9ad5288cf8fd6cc75402072b5ae369ed6415"
+    },
+    {
+      "path": "src/lib/ai/protocols/cluster.ts",
+      "sha256": "c5ae0be9cb14ce33a797d4f5753c41948c5f47f7c10e7d90bcb5749279782129"
+    },
+    {
+      "path": "packages/ai/src/provider/transports.ts",
+      "sha256": "3be47c4c5d56bfd5279036b9337d62f832a7bb0483826c4b25952007354ec4bf"
+    },
+    {
+      "path": "packages/ai/src/provider/gateway.ts",
+      "sha256": "b32c3e9c04ad9f879e76bbc4b67573def50238cb7418b6a6f6b8d4d671d4d7a8"
+    },
+    {
+      "path": ".agent/tmp/cluster-relation-ai-once/replay.ts",
+      "sha256": "06de17e692a71963dd75b2724b996415660f69463a865492db18313d01649729"
+    }
+  ],
+  "gitHead": "2ad5110f14f4e9ce1b858947be03fcecd2df0d0a",
+  "releaseEligible": false
+}
