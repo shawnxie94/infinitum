@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-14T11:12:58.509540+00:00",
+  "status": "dev_diagnosis_complete_candidate_unapplied_evidence_gaps_open",
+  "inputCaseIds": [
+    "SR-01",
+    "SR-02",
+    "SR-04",
+    "SR-05",
+    "SR-06",
+    "SR-08",
+    "FN-01"
+  ],
+  "inputCounts": {
+    "same_event": 4,
+    "synthesis": 1,
+    "unrelated": 1,
+    "follow_up": 1,
+    "uncertain": 0
+  },
+  "holdoutBodyUsedForRuleDesign": false,
+  "holdoutLabelsUsedForRuleDesign": false,
+  "holdoutPolicy": "hash old files only for preservation; do not claim globally unexposed holdout or tune using its errors",
+  "humanReasonsMissing": [
+    "SR-01",
+    "SR-02",
+    "SR-04",
+    "SR-05",
+    "SR-06",
+    "SR-08",
+    "FN-01"
+  ],
+  "assistantInterpretationsNotHumanRationale": true,
+  "diagnosticHypotheses": [
+    {
+      "ids": [
+        "SR-04",
+        "SR-05"
+      ],
+      "hypothesis": "background or later detail does not alone identify another concrete occurrence; still must prove both refer to the same occurrence"
+    },
+    {
+      "ids": [
+        "SR-02",
+        "SR-08"
+      ],
+      "hypothesis": "shared company or feature count is insufficient; identify distinct occurrences and whether a multi-event source actually contains the counterpart occurrence"
+    },
+    {
+      "ids": [
+        "FN-01"
+      ],
+      "hypothesis": "separate official release records plus explicit predecessor-regression evidence supports a related new repair occurrence; assisted confirmation, not independent validation"
+    }
+  ],
+  "unresolvedDevQuestions": [
+    {
+      "caseId": "SR-01",
+      "question": "为何初始说明“近期将开源”与后文“已开源/新增审计结果”仍属于同一次具体发生？缺同一声明/公告身份及你的原文依据，不据此泛化“执行新动作也应合并”。"
+    },
+    {
+      "caseId": "SR-06",
+      "question": "如何确认“即将推出”的体验报道与当日官方体验申请消息对应同一次公布，而非另一次新声明？缺你的判断依据；报道日期相近和共用70元案例只是线索。"
+    }
+  ],
+  "draft": {
+    "path": "docs/eval/reviews/cluster-relation-dev-boundary-2026-10-14/prompt-candidate-v2.txt",
+    "sha256": "74fbf5f71dcae71b55673b67d20564bca7b5ab719030b1abfa33587ec449503c",
+    "parentPath": "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-prompt-candidate.txt",
+    "parentSha256": "985c6de7f11655438c2bf27c49e5a38cf734c8b724988f2a1a00122c985b46c7",
+    "modelContentContainsHistoryOrCaseIds": false,
+    "applied": false,
+    "behaviorValidated": false,
+    "changeSummary": "remove categorical preview/execution distinction; require concrete occurrence evidence; distinguish background/features from independent happenings; no forced synthesis priority"
+  },
+  "impact": {
+    "retrieval": "CodeGraph on-disk source for two target files plus impact query; index initialized, complete, zero pending changes",
+    "indexState": "complete",
+    "pendingChanges": 0,
+    "directCodeIfImplemented": [
+      "src/config/prompts.ts:178-212",
+      "src/lib/ai/contracts.ts:50-55,82-85"
+    ],
+    "boundary": "cluster_merge system prompt and hash are code owned; no production code or config was changed",
+    "sourceCommentRisk": "src/config/prompts.ts:175-177 records a previous synthesis-priority rollback; historical numeric results not reverified here",
+    "testsIfImplemented": [
+      "tests/unit/ai-contracts.test.ts",
+      "tests/unit/cluster-merge-protocol.test.ts",
+      "tests/integration/admin-settings-service.test.ts"
+    ],
+    "runtimeEffectsNotClaimedVerified": true
+  },
+  "protectedPreviousFiles": {
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/gold-correction-v3.json": "f30db411a74e72e96c6c576aa56a4911db655111142e05ae429131b7eb6b292e",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.corrected-v3.report.json": "09b2c20be200eb56519885da0a7b3461d1b0ed4fa11e1e6a34a62612be652692",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.report.json": "9a72b69f5d2c020450a2248c13e31928814b6b01366fdb6c27270ff00848c7ea",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/gold-correction-v2.json": "b82bac462a391a008a7fe8561390cdebcc38395b88f604d0838b7c1f968d0b6e",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.receipt.json": "9419c5b1c9f8e9e0047860136aa5e2d58dbbe33a977bb07b1ad1b2a257855694",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-cases.json": "6b3e6ee32715996ddcb378f082c3bf6e0a0a601bfa6cb6d30b95bf39c2ea7a98",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-prompt-candidate.txt": "985c6de7f11655438c2bf27c49e5a38cf734c8b724988f2a1a00122c985b46c7",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/gold-correction-v4.json": "6157b974e33156163acbb99f315cdfbc4386dae20a6a6b23081c7f4cbf2cd8fb",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-analysis.json": "12d97c62f2574d3e0c24a6fef8eee90327740abf1e87a082ddfe9b160677a1cb",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/baseline-report.json": "cf6e1d142c768a647397fe9a4f9df0698006ec252e1e9fdf6b1eee59a4912d87",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.corrected-v2.report.json": "cc1117383b1a81590c596233083d26acf90612e2505416f117898918ab929ff0",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-source-audit.json": "d8d583a46e915ce5936dc5f3ac9a5265e450f6569923f2a55151de7ee3c58acc",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.corrected-v4.report.json": "469acfb7ab0fd2560b7e49bb69cbc76bd82862dab2be3908421a2d6e1cb4aa7a",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.freeze.json": "c341d2f21959e613d7045bea472f581ac891bdeaeebbe10739d44050c2db23ba",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/sources/sampling-manifest.json": "1888a4b374e1b01a88ecb1ef5b7aeb93a884c3ac79eeb965eb92980c1a188194",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/sources/pending-review.csv": "ec48abb0e0a47cbb3381dab183e532703932f9cff8f877c304774c848b0c2d88",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.corrected-v3.json": "f6a9b17bc4315a8feec3b77c3df579f5406ddbea61c23835762449084ccc9208",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.corrected-v2.json": "71518b8258e3d57adb5ba422a49cff9876edb4af9eaa3fa047587eb800a61c34",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v4.csv": "775c91bcc872a8cfadd98d7b58c9d45d21fc700a89fe75d37d9b73d96b90731f",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/frozen-manifest.json": "ec21fe1b6b05cd2a53d852011a9f50fae678ef5fcb2939de80291d9326e4e01d",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v3.csv": "21698878f8ebba9c41d34ab45913456a892428cf7b1c18ebf2fcd5a7d038dbad",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v2.csv": "152b114f58091e3a1123db7b0390002cacda4b844fe860593eca143d4109cc73",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.corrected-v4.json": "71518b8258e3d57adb5ba422a49cff9876edb4af9eaa3fa047587eb800a61c34",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.json": "f6a9b17bc4315a8feec3b77c3df579f5406ddbea61c23835762449084ccc9208",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.csv": "2af89d22ffc8df94f37ac9e260b46eec5a59248a19f49462ff5ae3936980cc9c",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/reviewed-v1.csv": "f9b188e5bf3defe1ca58610eb41999845d308267974615bf04037373c705c366",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/sources.json": "85f7eaaea5b58db1e17d5286c6b2a05f08b9e9d32d9e512eac7f815848a3cbcd",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/frozen-manifest.json": "17c10e5d87601c793ca94a6aa34c5dd37c592c9a6c549b02c76545ce982a6c8e",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/cases.json": "152fa18f727f4c86e3333519ae806f5aab913777942d3ced97b2e6104e4d0da7",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/blind-review.csv": "b1b9156432cf29ceb279e38026b26917bd3586fd85dd3169353a660a7cf6b788",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/human-review-v1.json": "2d22a90c6c83b6e606f01e21ae5e0a72679f80207868fe364c15f2c2e47ea54d",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/reviewed-v1.csv": "954a1055c820a30cdb3b61405295725fbfc233840baa836c99fab24d1e405fc2",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/sources.json": "15df5bf4eb9676c22a43d4589b126223a7fed19967390766558be6d31a4b6ea4",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/frozen-manifest.json": "5b4556ff02a859228857771d9d2dab1c303887be512dbde84618f112a8ae1973",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/cases.json": "f7633804a2994d25b098cf375f87cae11198e2349c21f4d52a7fde62e3e5b33e",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/blind-review.csv": "fed8a9fa41d67250be1d6c634ce971cfa92424b2b655d1ad3fc825960dbb13a0",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/human-review-v1.json": "49aff0608a49d4b4d59e6baf51faf9156419c85a7c369bab9ece267e93584282",
+    "src/config/prompts.ts": "52a4b9f9e500764af06631836e9819a27887b00a033134bd7466b6953249ed53",
+    "src/lib/ai/contracts.ts": "e63311db39967289bb995a1112d7da5171c90da269003cb1cf0b27e8a40faa53"
+  },
+  "frozenFiles": {
+    "dev-evidence.json": "26a4730a9074ac61487d18cb43850b7c0691dab312c755581838f702a889f325",
+    "prompt-candidate-v2.txt": "74fbf5f71dcae71b55673b67d20564bca7b5ab719030b1abfa33587ec449503c"
+  },
+  "aiCalls": 0,
+  "paidCalls": 0,
+  "productionMutation": false,
+  "goldChanged": false,
+  "metrics": null,
+  "readyForReplay": false,
+  "qualityPassed": false,
+  "releaseEligible": false,
+  "remaining": [
+    "SR-01/SR-06 independent human rationale and occurrence identity",
+    "independently blind follow_up positive still missing",
+    "source-level inputs are not production DTOs",
+    "new model replay needs explicit renewed authorization"
+  ],
+  "next": "ask two concise dev-only rationale questions; preserve labels regardless; settle occurrence boundary and freeze an explicit offline input contract before proposing any paid comparison"
+}
