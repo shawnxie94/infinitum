@@ -1,4 +1,16 @@
-# 新来源关系盲标批（尚未标注）
+# 新来源关系盲标批
+
+## 当前人工标签 v1
+
+用户已给出 SR-01～SR-08 的关系：[reviewed-v1.csv](reviewed-v1.csv)，登记审计及分布：[human-review-v1.json](human-review-v1.json)。规范登记：`sqlite://artifact/evaluation/cluster-relation-source-reviewed-v1-2026-10-14`。
+
+- 全批：same_event 5 / synthesis 2 / follow_up 0 / unrelated 1 / uncertain 0。
+- dev：same_event 4 / synthesis 1 / unrelated 1；holdout：same_event 1 / synthesis 1。分组未改。
+- 用户未提供逐条理由或本批审核完成时间：字段留空，不补造。recordedAt 仅表示登记时间，审核人沿用本会话此前确认的 Shawn。
+- 原始空白 CSV 与冻结包保留；未改旧 12 对 gold v4，未混算指标。没有模型预测，不计算准确率。
+- 尚缺 follow_up 人工正例，文章级材料也不是生产 cluster_merge DTO；目前不具备完整五分类或生产回放资格。下一步另准备有明确新增动作证据的来源候选，由人工判断，不预填标签；任何新付费对照重新授权。
+
+以下保留原始冻结时的审核说明（“尚未标注”指冻结时状态）。
 
 规范登记：`sqlite://artifact/evaluation/cluster-relation-source-verified-freeze-2026-10-14`。
 

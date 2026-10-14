@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "status": "labels_registered_evidence_incomplete_not_ready_for_replay",
+  "recordedAt": "2026-10-14T10:49:26.252673+00:00",
+  "reviewer": "Shawn",
+  "reviewerIdentityBasis": "reviewer identity previously confirmed in this conversation",
+  "reviewedAt": null,
+  "reviewedAtPolicy": "review completion time not supplied; recordedAt is registration time only",
+  "userInput": "SR-01 same_event\nSR-02 unrelated\nSR-03 synthesis\nSR-04 same_event\nSR-05 same_event\nSR-06 same_event\nSR-07 same_event\nSR-08 synthesis",
+  "userInputSha256": "65f4005bccf8ece8eaecd1278701dd5b5eb177aee07b95daca8f0723961aea8f",
+  "humanReasonsSupplied": false,
+  "missingReasonCaseIds": [
+    "SR-01",
+    "SR-02",
+    "SR-03",
+    "SR-04",
+    "SR-05",
+    "SR-06",
+    "SR-07",
+    "SR-08"
+  ],
+  "reasonPolicy": "do not fabricate reasons or treat assistant inference as human rationale",
+  "counts": {
+    "all": {
+      "same_event": 5,
+      "synthesis": 2,
+      "follow_up": 0,
+      "unrelated": 1,
+      "uncertain": 0
+    },
+    "dev": {
+      "same_event": 4,
+      "synthesis": 1,
+      "follow_up": 0,
+      "unrelated": 1,
+      "uncertain": 0
+    },
+    "holdout": {
+      "same_event": 1,
+      "synthesis": 1,
+      "follow_up": 0,
+      "unrelated": 0,
+      "uncertain": 0
+    }
+  },
+  "binaryCounts": {
+    "merge": 5,
+    "doNotMerge": 3
+  },
+  "evaluationUnit": "source articles/complete parent news collection, NOT production cluster snapshots",
+  "provenance": "human labels supplied before any model predictions for this frozen source batch; known prior source-family exclusion only, not proven historical event-disjointness",
+  "modelPredictionsPresent": false,
+  "metrics": null,
+  "metricPolicy": "no accuracy/error rates without model predictions; do not mix with the previous 12-pair v4 evaluation",
+  "coverage": {
+    "followUpPositiveCount": 0,
+    "fiveWayCoverageSatisfied": false,
+    "humanEvidenceComplete": false,
+    "productionInputContractAligned": false
+  },
+  "readyForReplay": false,
+  "qualityPassed": false,
+  "releaseEligible": false,
+  "paidCalls": 0,
+  "aiCalls": 0,
+  "productionMutation": false,
+  "anchors": {
+    "manifestSha256": "17c10e5d87601c793ca94a6aa34c5dd37c592c9a6c549b02c76545ce982a6c8e",
+    "initialBlankReviewSha256": "b1b9156432cf29ceb279e38026b26917bd3586fd85dd3169353a660a7cf6b788",
+    "reviewedV1Sha256": "f9b188e5bf3defe1ca58610eb41999845d308267974615bf04037373c705c366"
+  },
+  "protectedPreviousEvidence": {
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.corrected-v2.report.json": "cc1117383b1a81590c596233083d26acf90612e2505416f117898918ab929ff0",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.corrected-v3.report.json": "09b2c20be200eb56519885da0a7b3461d1b0ed4fa11e1e6a34a62612be652692",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.corrected-v4.report.json": "469acfb7ab0fd2560b7e49bb69cbc76bd82862dab2be3908421a2d6e1cb4aa7a",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.freeze.json": "c341d2f21959e613d7045bea472f581ac891bdeaeebbe10739d44050c2db23ba",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.receipt.json": "9419c5b1c9f8e9e0047860136aa5e2d58dbbe33a977bb07b1ad1b2a257855694",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/ai-one-round.report.json": "9a72b69f5d2c020450a2248c13e31928814b6b01366fdb6c27270ff00848c7ea",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/baseline-report.json": "cf6e1d142c768a647397fe9a4f9df0698006ec252e1e9fdf6b1eee59a4912d87",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-analysis.json": "12d97c62f2574d3e0c24a6fef8eee90327740abf1e87a082ddfe9b160677a1cb",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-cases.json": "6b3e6ee32715996ddcb378f082c3bf6e0a0a601bfa6cb6d30b95bf39c2ea7a98",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/boundary-source-audit.json": "d8d583a46e915ce5936dc5f3ac9a5265e450f6569923f2a55151de7ee3c58acc",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/gold-correction-v2.json": "b82bac462a391a008a7fe8561390cdebcc38395b88f604d0838b7c1f968d0b6e",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/gold-correction-v3.json": "f30db411a74e72e96c6c576aa56a4911db655111142e05ae429131b7eb6b292e",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/gold-correction-v4.json": "6157b974e33156163acbb99f315cdfbc4386dae20a6a6b23081c7f4cbf2cd8fb",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v2.csv": "152b114f58091e3a1123db7b0390002cacda4b844fe860593eca143d4109cc73",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v3.csv": "21698878f8ebba9c41d34ab45913456a892428cf7b1c18ebf2fcd5a7d038dbad",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.corrected-v4.csv": "775c91bcc872a8cfadd98d7b58c9d45d21fc700a89fe75d37d9b73d96b90731f",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/blind-review.csv": "2af89d22ffc8df94f37ac9e260b46eec5a59248a19f49462ff5ae3936980cc9c",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/frozen-manifest.json": "ec21fe1b6b05cd2a53d852011a9f50fae678ef5fcb2939de80291d9326e4e01d",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.corrected-v2.json": "71518b8258e3d57adb5ba422a49cff9876edb4af9eaa3fa047587eb800a61c34",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.corrected-v3.json": "f6a9b17bc4315a8feec3b77c3df579f5406ddbea61c23835762449084ccc9208",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.corrected-v4.json": "71518b8258e3d57adb5ba422a49cff9876edb4af9eaa3fa047587eb800a61c34",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/packet/readiness-report.json": "f6a9b17bc4315a8feec3b77c3df579f5406ddbea61c23835762449084ccc9208",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/sources/pending-review.csv": "ec48abb0e0a47cbb3381dab183e532703932f9cff8f877c304774c848b0c2d88",
+    "docs/eval/reviews/cluster-relation-directed-2026-10-14/sources/sampling-manifest.json": "1888a4b374e1b01a88ecb1ef5b7aeb93a884c3ac79eeb965eb92980c1a188194",
+    "src/config/prompts.ts": "52a4b9f9e500764af06631836e9819a27887b00a033134bd7466b6953249ed53",
+    "src/lib/ai/contracts.ts": "e63311db39967289bb995a1112d7da5171c90da269003cb1cf0b27e8a40faa53"
+  },
+  "next": [
+    "preserve all supplied labels without reinterpretation",
+    "collect separately source-verified candidates containing demonstrable new actions; human review decides follow_up, do not prefill labels",
+    "if rationale is needed for dev boundary diagnosis, request it rather than invent it; never tune against holdout",
+    "align source-level material with an explicitly frozen replay input contract before any model comparison",
+    "any paid comparison requires renewed authorization"
+  ]
+}
