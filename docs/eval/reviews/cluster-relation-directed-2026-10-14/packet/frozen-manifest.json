@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Private frozen fixture for cluster-quality human review; do not hand to blind reviewers.",
+  "createdAt": "2026-10-14T08:05:01.401Z",
+  "asOf": "2026-10-12T05:17:31.000Z",
+  "baseCommit": "8bc7f44e8aa0978fb2404ed0bd97f1b268e076f2",
+  "methodVersion": "337083957cb4ba0b37917b72d6b47826c3e21732da56723f860055aac2f24cf5",
+  "strategyNote": "Split policy code is frozen via methodVersion; current git HEAD is recorded as a parameter only. The legacy lexical scorer in eval-bm25-vs-lexical.ts is NOT the current production strategy.",
+  "snapshot": {
+    "path": "docs/eval/snapshots/local-qualification-snapshot-2026-10-12.db",
+    "sha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+  },
+  "sourceFiles": {
+    "pendingCsv": {
+      "path": "docs/eval/reviews/cluster-relation-directed-2026-10-14/sources/pending-review.csv",
+      "sha256": "ec48abb0e0a47cbb3381dab183e532703932f9cff8f877c304774c848b0c2d88"
+    },
+    "samplingManifest": {
+      "path": "docs/eval/reviews/cluster-relation-directed-2026-10-14/sources/sampling-manifest.json",
+      "sha256": "1888a4b374e1b01a88ecb1ef5b7aeb93a884c3ac79eeb965eb92980c1a188194"
+    }
+  },
+  "baseline": {
+    "status": "deferred",
+    "note": "Baseline deferred, not completed: no human labels exist yet. The legacy replay output would be diagnostic_only (legacy lexical vs BM25), not the current end-to-end AI pipeline, and must never be presented as a quality result.",
+    "legacyCli": {
+      "path": "/Users/shawn/Developer/GitHub/products/infinitum/scripts/eval-bm25-vs-lexical.ts",
+      "sha256": "5f88a876f5ac18acb8edcd20d4f0cc801b7156028bf6d87c26ff21219d2c3da1"
+    }
+  },
+  "splitPolicy": "whole connected components over shared cluster ids; deterministic 2:1 dev:holdout strata balancing; no component spans splits",
+  "clusterComponents": [
+    {
+      "caseIds": [
+        "DR-01"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-02"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-03"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-04"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-05"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-06"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-07"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-08"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-09"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-10"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-11"
+      ]
+    },
+    {
+      "caseIds": [
+        "DR-12"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "caseId": "DR-01",
+      "split": "dev",
+      "sourceStratum": "multi_event_overlap",
+      "inputSha256": "d0f51774140792b0716a9fec6aa06b373a4f0a7c46d70a5773874b90a840cca5",
+      "clusterIds": [
+        "cmutvyrth009cpf016l30loyv",
+        "cmutvzxzv0009vz016k7b8hoi"
+      ]
+    },
+    {
+      "caseId": "DR-02",
+      "split": "holdout",
+      "sourceStratum": "multi_event_overlap",
+      "inputSha256": "ab3b79c0a30dd8dcd3d06454c42d31fdcaed3f310e0ea1094a014a20c1e8721c",
+      "clusterIds": [
+        "cmutvxa4s0057pf01g1o7np8b",
+        "cmutvzxy50005vz010zz2hyjl"
+      ]
+    },
+    {
+      "caseId": "DR-03",
+      "split": "dev",
+      "sourceStratum": "multi_event_overlap",
+      "inputSha256": "4ed4f2b8a93a75d14104411318856e8f3dd5a5f878f26e7f3013cd71544e1d06",
+      "clusterIds": [
+        "cmucg0yu50087s4013mcucxgr",
+        "cmuczepe500qmp6017os3hah3"
+      ]
+    },
+    {
+      "caseId": "DR-04",
+      "split": "dev",
+      "sourceStratum": "multi_event_overlap",
+      "inputSha256": "465e9920eab83a57c9157d82cfd3f5b16301ea1b358cfc3fb5f9561eb620b0c3",
+      "clusterIds": [
+        "cmucd052g0fbfpi01wpkz63do",
+        "cmued1b5c02jsm701jb3bpj0p"
+      ]
+    },
+    {
+      "caseId": "DR-05",
+      "split": "dev",
+      "sourceStratum": "progress_boundary",
+      "inputSha256": "fb034989ceede316b1209e5f501a147339b0abb60607456e9d493c6959459c9c",
+      "clusterIds": [
+        "cmuhwmuum017pjv01tzsp411e",
+        "cmunoqh4j00x8o3015tr34kd9"
+      ]
+    },
+    {
+      "caseId": "DR-06",
+      "split": "holdout",
+      "sourceStratum": "progress_boundary",
+      "inputSha256": "6df72be8def23f03fe9a284918eae197c8b89e0d59d3ac14de4b7251f7d1fff2",
+      "clusterIds": [
+        "cmur0exj24zq7mt01xtni0iim",
+        "cmuzc75w901n3lk01romd8ad7"
+      ]
+    },
+    {
+      "caseId": "DR-07",
+      "split": "dev",
+      "sourceStratum": "progress_boundary",
+      "inputSha256": "013e81a9fd9fd74e88a7f5464819def746f5dba79ad6537354a209dd402b71d8",
+      "clusterIds": [
+        "cmucdsy2s00j9mx01m0f7bzs2",
+        "cmuzg516a08zvlk01ui8kvvzr"
+      ]
+    },
+    {
+      "caseId": "DR-08",
+      "split": "dev",
+      "sourceStratum": "progress_boundary",
+      "inputSha256": "1a170b9b5b9b109639e06da910145b8a35f2966e00c5082b07d100d04c208395",
+      "clusterIds": [
+        "cmugzpny21bjwlf013489hf6j",
+        "cmut1ixpd29kup001d6kp8w4v"
+      ]
+    },
+    {
+      "caseId": "DR-09",
+      "split": "dev",
+      "sourceStratum": "identity_boundary",
+      "inputSha256": "ef87f06eefcb537fb77a5574e461841ad1c5ac0a392c73cb6a4cebe864a1979d",
+      "clusterIds": [
+        "cmub0pdlt00vkp4010yknaw9i",
+        "cmucdsz8s00jcmx01bp78wbsn"
+      ]
+    },
+    {
+      "caseId": "DR-10",
+      "split": "holdout",
+      "sourceStratum": "identity_boundary",
+      "inputSha256": "7ec98aac89971e3a1fc080a7b43e28880449632ce8f8502898031ec82c87e06f",
+      "clusterIds": [
+        "cmub0p9a800uwp401xxokjy78",
+        "cmucfzt730078s401lyo0o865"
+      ]
+    },
+    {
+      "caseId": "DR-11",
+      "split": "dev",
+      "sourceStratum": "shared_subject_control",
+      "inputSha256": "c072c7a81ee9f84a53bc29e613c6997ee46e63db7b302c181be2080d1464b84e",
+      "clusterIds": [
+        "cmu9ml36200tgmf0152btae8n",
+        "cmugzpqk61bkjlf01dlqrwp4k"
+      ]
+    },
+    {
+      "caseId": "DR-12",
+      "split": "holdout",
+      "sourceStratum": "shared_subject_control",
+      "inputSha256": "598c7b935f91f286cc8c75df4db2e8d052e792604ab41174d45a37e82febed50",
+      "clusterIds": [
+        "cmugzqi1i1bqslf0101w1go8x",
+        "cmunoq1id00t9o301h3c4n53m"
+      ]
+    }
+  ]
+}

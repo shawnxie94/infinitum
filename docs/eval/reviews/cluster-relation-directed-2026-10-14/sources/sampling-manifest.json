@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "stage": "directed_relation_nomination",
+  "createdAt": "2026-10-12T05:17:31.000Z",
+  "asOfMs": 1791782251000,
+  "windowDays": 30,
+  "purpose": "Directed challenge candidates; nomination hints are not labels; no population or release quality claim.",
+  "snapshot": {
+    "path": "docs/eval/snapshots/local-qualification-snapshot-2026-10-12.db",
+    "sha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+  },
+  "selection": {
+    "method": "coordinator nomination from visible titles/summaries and shared concrete entities; no AI prediction/API",
+    "eligibleClusters": 489,
+    "excludedClusters": 192,
+    "captureIsAggregationAvailable": false,
+    "aggregateNominationBasis": "multiple concrete occurrences visible in the frozen summary; NOT verified isAggregation flags"
+  },
+  "exclusionSources": [
+    {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-01/blind-review.csv",
+      "sha256": "560649b6343c1a8558a0d8e0663aa29367875a57bfd183baf43bc91f71af6370"
+    },
+    {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-02/packet/blind-review.csv",
+      "sha256": "da2bd8b787ace6859fec45a32be474f11c70ba5f05aebe01ed49e33a916e3f9f"
+    },
+    {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-12/packet/blind-review.csv",
+      "sha256": "a3755d992b41c7151bdf9620d39a4bd807175b2821476806ae9d6b7dd0d20dc8"
+    },
+    {
+      "path": "docs/eval/reviews/cluster-quality-2026-10-13/packet/blind-review.csv",
+      "sha256": "2ccf36a58b949526e766123805da8019c9e14d3512567e4269fe00c0a4bc594f"
+    },
+    {
+      "path": "docs/eval/reviews/cluster-quality-composite-2026-10-03/dev.csv",
+      "sha256": "e931619281b052d5bc3e3264fb4a6a105959fbd97a9ac040f9e3514cc132acbf"
+    },
+    {
+      "path": "docs/eval/reviews/cluster-quality-composite-2026-10-03/holdout.csv",
+      "sha256": "31a42f8e67ccb444660d352077e7a389010a43e1024328ff27a80684c50817ba"
+    },
+    {
+      "path": "docs/eval/reviews/cluster-quality-composite-2026-10-12/dev.csv",
+      "sha256": "ec91c5c72ef42879ab975f84fb95f7752a037b7b870f2385035fd073ee2523b2"
+    },
+    {
+      "path": "docs/eval/reviews/cluster-quality-composite-2026-10-12/holdout.csv",
+      "sha256": "49b52c85c6945c1723b95224b76a90e9ba0b10c71686b4404bce79d6833db49d"
+    }
+  ],
+  "caseCount": 12,
+  "cases": [
+    {
+      "caseId": "DR-01",
+      "pairKey": "cmutvyrth009cpf016l30loyv|cmutvzxzv0009vz016k7b8hoi",
+      "leftClusterId": "cmutvyrth009cpf016l30loyv",
+      "rightClusterId": "cmutvzxzv0009vz016k7b8hoi",
+      "sourceStratum": "multi_event_overlap",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-02",
+      "pairKey": "cmutvxa4s0057pf01g1o7np8b|cmutvzxy50005vz010zz2hyjl",
+      "leftClusterId": "cmutvxa4s0057pf01g1o7np8b",
+      "rightClusterId": "cmutvzxy50005vz010zz2hyjl",
+      "sourceStratum": "multi_event_overlap",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-03",
+      "pairKey": "cmucg0yu50087s4013mcucxgr|cmuczepe500qmp6017os3hah3",
+      "leftClusterId": "cmucg0yu50087s4013mcucxgr",
+      "rightClusterId": "cmuczepe500qmp6017os3hah3",
+      "sourceStratum": "multi_event_overlap",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-04",
+      "pairKey": "cmucd052g0fbfpi01wpkz63do|cmued1b5c02jsm701jb3bpj0p",
+      "leftClusterId": "cmucd052g0fbfpi01wpkz63do",
+      "rightClusterId": "cmued1b5c02jsm701jb3bpj0p",
+      "sourceStratum": "multi_event_overlap",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-05",
+      "pairKey": "cmuhwmuum017pjv01tzsp411e|cmunoqh4j00x8o3015tr34kd9",
+      "leftClusterId": "cmuhwmuum017pjv01tzsp411e",
+      "rightClusterId": "cmunoqh4j00x8o3015tr34kd9",
+      "sourceStratum": "progress_boundary",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-06",
+      "pairKey": "cmur0exj24zq7mt01xtni0iim|cmuzc75w901n3lk01romd8ad7",
+      "leftClusterId": "cmur0exj24zq7mt01xtni0iim",
+      "rightClusterId": "cmuzc75w901n3lk01romd8ad7",
+      "sourceStratum": "progress_boundary",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-07",
+      "pairKey": "cmucdsy2s00j9mx01m0f7bzs2|cmuzg516a08zvlk01ui8kvvzr",
+      "leftClusterId": "cmucdsy2s00j9mx01m0f7bzs2",
+      "rightClusterId": "cmuzg516a08zvlk01ui8kvvzr",
+      "sourceStratum": "progress_boundary",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-08",
+      "pairKey": "cmugzpny21bjwlf013489hf6j|cmut1ixpd29kup001d6kp8w4v",
+      "leftClusterId": "cmugzpny21bjwlf013489hf6j",
+      "rightClusterId": "cmut1ixpd29kup001d6kp8w4v",
+      "sourceStratum": "progress_boundary",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-09",
+      "pairKey": "cmub0pdlt00vkp4010yknaw9i|cmucdsz8s00jcmx01bp78wbsn",
+      "leftClusterId": "cmub0pdlt00vkp4010yknaw9i",
+      "rightClusterId": "cmucdsz8s00jcmx01bp78wbsn",
+      "sourceStratum": "identity_boundary",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-10",
+      "pairKey": "cmub0p9a800uwp401xxokjy78|cmucfzt730078s401lyo0o865",
+      "leftClusterId": "cmub0p9a800uwp401xxokjy78",
+      "rightClusterId": "cmucfzt730078s401lyo0o865",
+      "sourceStratum": "identity_boundary",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-11",
+      "pairKey": "cmu9ml36200tgmf0152btae8n|cmugzpqk61bkjlf01dlqrwp4k",
+      "leftClusterId": "cmu9ml36200tgmf0152btae8n",
+      "rightClusterId": "cmugzpqk61bkjlf01dlqrwp4k",
+      "sourceStratum": "shared_subject_control",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    },
+    {
+      "caseId": "DR-12",
+      "pairKey": "cmugzqi1i1bqslf0101w1go8x|cmunoq1id00t9o301h3c4n53m",
+      "leftClusterId": "cmugzqi1i1bqslf0101w1go8x",
+      "rightClusterId": "cmunoq1id00t9o301h3c4n53m",
+      "sourceStratum": "shared_subject_control",
+      "snapshotSha256": "c852d2c30c412e222b78915bcabdb92566b60d0439943c171e07dd34ae15b198"
+    }
+  ]
+}
