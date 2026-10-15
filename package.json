@@ -16,6 +16,7 @@
     "worker": "tsx scripts/run-worker.ts",
     "smoke:ai-orchestration": "tsx scripts/smoke-ai-orchestration.ts",
     "lint": "eslint .",
+    "typecheck": "next typegen && tsc --noEmit",
     "fonts:subset": "node scripts/subset-brand-font.mjs",
     "db:setup": "npm run prisma:generate && npm run schema:generate && node scripts/setup-sqlite.mjs prisma/dev.db && tsx scripts/seed-defaults.ts",
     "db:test:setup": "npm run prisma:generate && npm run schema:generate && node scripts/setup-sqlite.mjs prisma/test.db --reset && DATABASE_URL=\"file:./prisma/test.db\" tsx scripts/seed-defaults.ts",

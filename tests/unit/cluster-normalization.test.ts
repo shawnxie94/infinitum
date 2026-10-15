@@ -56,10 +56,39 @@ describe("cluster normalization helpers", () => {
     expect(normalizeEventDateForStorage("2026年4月10日")).toBe("2026-04-10");
     expect(normalizeEventDateForStorage("2026-4")).toBe("2026-04");
     expect(normalizeEventDateForStorage("2026年")).toBe("2026");
-    expect(normalizeEventDateForStorage("2026-02-30")).toBe("2026-02-30");
+    expect(normalizeEventDateForStorage("10月15日")).toBe("10月15日");
     expect(getEventDatePrecision("2026/4/10")).toBe("day");
     expect(getEventDatePrecision("2026-4")).toBe("month");
     expect(getEventDatePrecision("2026年")).toBe("year");
+  });
+
+  it.each([
+    "2025-02-30", "2024-02-30", "0100-02-29", "1900-02-29", "2025-04-31",
+    "2025-00-01", "2025-13-01", "2025-01-00", "2025-01-32", "0000-01-01",
+    "0000", "2025-00", "2025-13",
+  ])("returns null for recognized invalid stored date %s", (date) => {
+    expect(normalizeEventDateForStorage(date)).toBeNull();
+  });
+
+  it.each([
+    ["0096-02-29", "0096-02-29"],
+    ["0400-02-29", "0400-02-29"],
+    ["2000-02-29", "2000-02-29"],
+    ["2025-10-15", "2025-10-15"],
+    ["2099-12-31", "2099-12-31"],
+    ["2025", "2025"],
+    ["2025-4", "2025-04"],
+    ["2025年4月", "2025-04"],
+    ["2025年4月10日", "2025-04-10"],
+    ["2025/4/10", "2025-04-10"],
+    ["2025.4.10", "2025-04-10"],
+    ["2025-4-10T12:30:00Z", "2025-04-10"],
+  ])("preserves valid stored date normalization %s", (date, expected) => {
+    expect(normalizeEventDateForStorage(date)).toBe(expected);
+  });
+
+  it.each([null, "", "   "])("keeps empty stored date %s as null", (date) => {
+    expect(normalizeEventDateForStorage(date)).toBeNull();
   });
 
   it("treats lower-precision dates as compatible without making them exactly equal", () => {

@@ -290,6 +290,7 @@ export function createAiProvider(
           metadata.translateTitle,
           aggregationSplitMaxEvents,
           itemUnderstandingQualityRubric,
+          metadata.title,
         ),
       );
 

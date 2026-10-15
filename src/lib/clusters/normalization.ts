@@ -1,5 +1,6 @@
 import type { AiEventSignature } from "@/lib/ai/provider-types";
 import { collapseWhitespace, trimBoundaryPunctuation } from "@/lib/utils/text";
+import { isValidCalendarDateParts } from "@/lib/utils/calendar-date";
 
 const EVENT_TYPES = new Set<NonNullable<AiEventSignature["eventType"]>>([
   "release",
@@ -141,24 +142,7 @@ function parseEventDateParts(value: string): EventDateParts | null {
 }
 
 function isValidEventDateParts(parts: EventDateParts) {
-  if (parts.year < 1 || parts.year > 9999) {
-    return false;
-  }
-
-  if (parts.month === undefined) {
-    return true;
-  }
-
-  if (parts.month < 1 || parts.month > 12) {
-    return false;
-  }
-
-  if (parts.day === undefined) {
-    return true;
-  }
-
-  const daysInMonth = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
-  return parts.day >= 1 && parts.day <= daysInMonth;
+  return isValidCalendarDateParts(parts);
 }
 
 function formatEventDateParts(parts: EventDateParts) {
@@ -186,7 +170,7 @@ export function normalizeEventDateForStorage(value: string | null | undefined) {
   }
 
   const parsed = parseEventDateParts(normalized);
-  return parsed ? formatEventDateParts(parsed) ?? normalized : normalized;
+  return parsed ? formatEventDateParts(parsed) : normalized;
 }
 
 export function getEventDatePrecision(value: string | null | undefined): EventDatePrecision | null {

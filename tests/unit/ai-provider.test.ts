@@ -58,7 +58,7 @@ describe("ai provider", () => {
       { chat: { completions: { create } } },
     );
 
-    const result = await provider.understandItem("Full source body", {
+    const result = await provider.understandItem("OpenAI 发布 Agent 工具，日期 2026-07-11。", {
       title: "OpenAI releases agent tooling",
       sourceName: "OpenAI",
       translateTitle: true,
@@ -74,6 +74,14 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"isAggregation":false');
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain('"isAggregation":true');
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("页面附加内容不代表正文主体");
+  });
+
+  it("passes original title evidence without another completion", async () => {
+    const create = vi.fn().mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ summary: "Supported summary", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "ok", eventSignature: { eventType: "release", eventSubject: "Alpha", eventAction: "发布", eventObject: "Nova", eventDate: "2026-07-11" }, aggregation: { isAggregation: false, events: [] } }) } }] });
+    const provider = createAiProvider({ apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" }, undefined, { chat: { completions: { create } } });
+    const result = await provider.understandItem("正文无日期。", { title: "Alpha于2026年7月11日发布Nova", translateTitle: false });
+    expect(result.eventSignature.eventDate).toBe("2026-07-11"); expect(result.summary).toBe("Supported summary");
+    expect(result.diagnostics.analysisValid).toBe(true); expect(create).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the item protocol fixed while sending custom instructions separately", async () => {
@@ -234,7 +242,7 @@ describe("ai provider", () => {
       { aggregationSplitMaxEvents: 1 },
     );
 
-    const result = await provider.understandItem("Roundup body", {
+    const result = await provider.understandItem("OpenAI 发布 Agent SDK。Anthropic 上线 Console。", {
       title: "AI roundup",
       sourceName: "Newsletter",
       translateTitle: false,
@@ -284,7 +292,7 @@ describe("ai provider", () => {
       { chat: { completions: { create } } },
     );
 
-    const result = await provider.understandItem("Full source body", {
+    const result = await provider.understandItem("OpenAI 发布 Agent 工具。", {
       title: "OpenAI releases agent tooling",
       sourceName: "OpenAI",
       translateTitle: true,
@@ -322,7 +330,7 @@ describe("ai provider", () => {
       { chat: { completions: { create } } },
     );
 
-    const result = await provider.understandItem("Full source body", {
+    const result = await provider.understandItem("OpenAI 发布 Agent 工具，日期 2026-07-11。", {
       title: "OpenAI releases agent tooling",
       sourceName: "OpenAI",
       translateTitle: true,

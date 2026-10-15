@@ -126,6 +126,10 @@ npm run worker   # 终端 2：后台任务 Worker
 
 本地默认访问 <http://localhost:3000>，管理后台登录入口 <http://localhost:3000/login>。
 
+```bash
+npm run typecheck # 生成 Next.js 路由类型并执行全局 TypeScript 检查，无需先构建或启动服务
+```
+
 ### 数据备份
 
 SQLite 数据库（含 WAL）整体在数据卷内，备份用官方 `.backup` API 产出一致性快照：

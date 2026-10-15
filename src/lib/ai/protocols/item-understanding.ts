@@ -4,6 +4,8 @@ import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { resolveRubricQualityScore, type QualityRubric } from "@/lib/ai/quality-rubric";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import { normalizeOptionalText } from "@/lib/utils/text";
+import { isValidCalendarDateParts } from "@/lib/utils/calendar-date";
+import { hasEventFieldEvidence } from "@/lib/ai/protocols/event-field-evidence";
 import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
 import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import type {
@@ -80,6 +82,7 @@ export function parseItemUnderstandingOutput(
   translateTitle: boolean,
   maxEvents: number,
   qualityRubric: QualityRubric | null = null,
+  sourceTitle = "",
 ): ItemUnderstandingResult {
   const normalized = normalizeModelResponseText(rawContent);
   let parsed: Record<string, unknown>;
@@ -146,10 +149,11 @@ export function parseItemUnderstandingOutput(
   );
   return {
     ...enrichment,
+    eventSignature: sanitizeSignature(enrichment.eventSignature, inputText, sourceTitle),
     summary,
     aggregation: aggregationValid
-      ? { isAggregation, mainEvent, events: isAggregation ? events : [] }
-      : fallback.aggregation,
+      ? sanitizeAggregation({ isAggregation, mainEvent, events: isAggregation ? events : [] }, inputText, sourceTitle)
+      : sanitizeAggregation(fallback.aggregation, inputText, sourceTitle),
     diagnostics: {
       summaryValid,
       analysisValid,
@@ -162,6 +166,25 @@ export function normalizeAggregationSplitMaxEvents(value: number | null | undefi
   return typeof value === "number" && Number.isInteger(value) && value > 0
     ? value
     : DEFAULT_PARSED_AGGREGATION_MAX_EVENTS;
+}
+
+function sanitizeSignature<T extends AiEventSignature | ParsedEventSignature>(signature: T, text: string, title: string): T {
+  const result = { ...signature };
+  if (!hasEventFieldEvidence(text, title, result, "eventObject")) result.eventObject = null;
+  if (!hasEventFieldEvidence(text, title, result, "eventDate")) result.eventDate = null;
+  return result;
+}
+
+function sanitizeAggregation(
+  aggregation: ItemUnderstandingResult["aggregation"],
+  text: string,
+  title: string,
+): ItemUnderstandingResult["aggregation"] {
+  return {
+    ...aggregation,
+    mainEvent: aggregation.mainEvent ? sanitizeSignature(aggregation.mainEvent, text, title) : null,
+    events: aggregation.events.map((event) => sanitizeSignature(event, text, title)),
+  };
 }
 
 function normalizeParsedEventSignature(
@@ -287,9 +310,13 @@ function normalizeEventType(value: string | null | undefined): AiEventSignature[
     : null;
 }
 
-function normalizeEventDate(value: string | null | undefined): string | null {
-  const trimmed = value?.trim() ?? "";
-  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+function normalizeEventDate(value: unknown): string | null {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const [, year, month, day] = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/)!;
+  return isValidCalendarDateParts({ year: Number(year), month: Number(month), day: Number(day) })
+    ? trimmed
+    : null;
 }
 
 function normalizeSourceUrl(value: unknown): string | null {
@@ -329,13 +356,21 @@ function buildEventSignatureFromParsed(
   fallback: AiEventSignature,
 ): AiEventSignature {
   const parsedSignature = parsed.eventSignature ?? {};
+  const explicit = (key: "eventDate" | "eventObject") => {
+    if (Object.prototype.hasOwnProperty.call(parsed, key)) return parsed[key];
+    return Object.prototype.hasOwnProperty.call(parsedSignature, key) ? parsedSignature[key] : undefined;
+  };
+  const dateValue = explicit("eventDate");
+  const objectValue = explicit("eventObject");
 
   return {
     eventType: normalizeEventType(parsed.eventType ?? parsedSignature.eventType) ?? fallback.eventType,
     eventSubject: normalizeOptionalText(parsed.eventSubject ?? parsedSignature.eventSubject, fallback.eventSubject),
     eventAction: normalizeOptionalText(parsed.eventAction ?? parsedSignature.eventAction, fallback.eventAction),
-    eventObject: normalizeOptionalText(parsed.eventObject ?? parsedSignature.eventObject, fallback.eventObject),
-    eventDate: normalizeEventDate(parsed.eventDate ?? parsedSignature.eventDate) ?? fallback.eventDate,
+    eventObject: objectValue === undefined
+      ? fallback.eventObject
+      : normalizeOptionalText(typeof objectValue === "string" ? objectValue : null, null),
+    eventDate: normalizeEventDate(dateValue === undefined ? fallback.eventDate : dateValue),
   };
 }
 
