@@ -1,0 +1,13 @@
+{
+  "processedOriginalTotal": 493,
+  "minOriginalCreatedAtMs": 1782197107198,
+  "maxOriginalCreatedAtMs": 1791873439284,
+  "minKnownOriginalPublishedAtMs": 1782183618000,
+  "unclusteredOriginalsWithin30Days": 0,
+  "clusterStatusCounts": [
+    {
+      "status": "active",
+      "count": 1134
+    }
+  ]
+}

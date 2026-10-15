@@ -1,0 +1,66 @@
+{
+  "dateBoundaries": [
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": "2025-10-15",
+      "parserDate": "2025-10-15",
+      "storageDate": "2025-10-15",
+      "itemSignatureDate": "2025-10-15"
+    },
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": "2025-02-30",
+      "parserDate": "2025-02-30",
+      "storageDate": "2025-02-30",
+      "itemSignatureDate": "2025-02-30"
+    },
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": "2024-02-29",
+      "parserDate": "2024-02-29",
+      "storageDate": "2024-02-29",
+      "itemSignatureDate": "2024-02-29"
+    },
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": "2020-01-01",
+      "parserDate": "2020-01-01",
+      "storageDate": "2020-01-01",
+      "itemSignatureDate": "2020-01-01"
+    },
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": "10月15日",
+      "parserDate": null,
+      "storageDate": "10月15日",
+      "itemSignatureDate": null
+    },
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": "2026-10",
+      "parserDate": null,
+      "storageDate": "2026-10",
+      "itemSignatureDate": null
+    },
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": "2026-10-15",
+      "parserDate": "2026-10-15",
+      "storageDate": "2026-10-15",
+      "itemSignatureDate": "2026-10-15"
+    },
+    {
+      "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+      "input": null,
+      "parserDate": null,
+      "storageDate": null,
+      "itemSignatureDate": null
+    }
+  ],
+  "objectBoundary": {
+    "fixtureKind": "synthetic_parser_boundary_not_historical_model_output",
+    "object": "OpenAI GPT-6Astra",
+    "normalizedObject": "OpenAI GPT-6Astra",
+    "ownershipRoleVerified": false
+  }
+}

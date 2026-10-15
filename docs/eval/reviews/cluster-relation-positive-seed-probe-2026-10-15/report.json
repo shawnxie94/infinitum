@@ -1,0 +1,26 @@
+{
+  "captureAt": "2026-10-14T16:27:17.584Z",
+  "sourceBlindManifestSha256": "fa551275c112e5947436fd751400e4d25f5c9b28173b0b4d3c8b00b8d3e3318f",
+  "previousFrozenRemaining": {
+    "clusters": 20,
+    "articles": 25,
+    "strictVersionTitleSharedPairs": 0
+  },
+  "recentPoolClusters": 141,
+  "rawOriginalArticles": 74,
+  "rawOriginalClusters": 67,
+  "usableCompleteOriginalClusters": 54,
+  "titleAnchorPairs": 1,
+  "pairs": 1,
+  "articles": 3,
+  "withinOldAdmittedFrame": 0,
+  "scope": "7-day active original-source seed corpus; not a newly validated admission queue",
+  "positiveLabelsReceived": 0,
+  "modelRequestsSent": 0,
+  "credentialsRead": false,
+  "productWrites": 0,
+  "readyForModelReplay": false,
+  "qualityPassed": false,
+  "releaseEligible": false,
+  "labelState": "awaiting_human_blind_labels"
+}

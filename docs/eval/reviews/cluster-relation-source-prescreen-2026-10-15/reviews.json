@@ -1,0 +1,264 @@
+[
+  {
+    "reviewId": "PS-01",
+    "left": [
+      {
+        "itemId": "cmuz8p2i03za8m8016vzd8ygm",
+        "clusterId": "cmuz8p2ic3za9m801opoc1cvj",
+        "url": "https://www.aibase.com/zh/news/31460",
+        "originalTitle": "WordPress 7.1. 3 紧急修补 7 洞：Anthropic反过来给全球建站系统补漏",
+        "rawSourceSha256": "22df530685238a467488f49681f04219e8ed51a73185db607541813e23d565de"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv131kdo04j4q101fillffm4",
+        "clusterId": "cmv131l7q04jbq1019a5cyzir",
+        "url": "https://www.aibase.com/zh/news/31503",
+        "originalTitle": "Anthropic重磅推出OSS Scanner，用最强AI模型为全球开源软件免费扫漏洞",
+        "rawSourceSha256": "741d36fbf59dfd7ac3651609982869f572ba1bdc66cefb0a1c03eec9a2730fe3"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "unrelated",
+    "reason": "WordPress 7.1.3 修复7个漏洞，其中Anthropic报告3个。另一篇是Anthropic宣布OSS Scanner免费扫描服务，没有指明WordPress、同一漏洞或同一修补事项。安全业务联系不足以确认事件承接。",
+    "sourceQuotes": [
+      "WordPress在10月6日推出7.1.3版本",
+      "全新的可选接入型漏洞检测服务"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  },
+  {
+    "reviewId": "PS-02",
+    "left": [
+      {
+        "itemId": "cmv3r4t1300j8s501w90u5s20",
+        "clusterId": "cmv3r4ut500jfs501cyzho5ia",
+        "url": "https://www.aibase.com/zh/news/31547",
+        "originalTitle": "月之暗面注册资本飙至 1437 万，年内密集增资动作频频",
+        "rawSourceSha256": "6e26642995fd252440413cbfc4fd981d565f87db80d1bf3ea3f4bc5fe74a4f00"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv4scm4l001hua01gz1140w4",
+        "clusterId": "cmv4scn1e001mua017u8w6bte",
+        "url": "https://www.aibase.com/zh/news/31562",
+        "originalTitle": "赴港 IPO 前夕抛出和解橄榄枝！月之暗面高管与老股东谈判，涉案金额或超 7 亿美元",
+        "rawSourceSha256": "e5793a7a8650776406925932aec5874631110faa84815976807ab39f07e9da5a"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "unrelated",
+    "reason": "注册资本约1157.53万增至1437.23万，与Recurrent.ai投资者索赔/IPO前和解是不同事项。保留原文未把此次增资与和解或争议股份连接，不能凭公司相同归为后续进展。",
+    "sourceQuotes": [
+      "注册资本由原先的约1157.53万元",
+      "本次争议源于 Recurrent.ai"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  },
+  {
+    "reviewId": "PS-03",
+    "left": [
+      {
+        "itemId": "cmv3r54hh00k0s501lae4lfcg",
+        "clusterId": "cmv3r56bh00k5s501a0gxflfn",
+        "url": "https://www.aibase.com/zh/news/31545",
+        "originalTitle": "​知名学者怒批：立即全网下架可联网开放式AI智能体",
+        "rawSourceSha256": "a51a658abcedcd64503a1f658311456c14a23157d3b3ce2425890c1ac3ccaead"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv3r5tob00ois501atfx1iyi",
+        "clusterId": "cmv3r5usy00ots501wfq1ujhy",
+        "url": "https://www.aibase.com/zh/news/31536",
+        "originalTitle": "知名学者亲历纯语音指挥 AI 的沉浸式一周",
+        "rawSourceSha256": "ecb62966745d4faf6ce868b205741db2edc837a913641c118959c5c3be9b39e8"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "unrelated",
+    "reason": "所谓知名学者是不同人：Gary Marcus呼吁召回联网智能体；Azeem Azhar分享GPT-Live语音办公体验。主体与事件均不同。",
+    "sourceQuotes": [
+      "盖瑞·马库斯",
+      "Azeem Azhar"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  },
+  {
+    "reviewId": "PS-04",
+    "left": [
+      {
+        "itemId": "cmv3r54hh00k0s501lae4lfcg",
+        "clusterId": "cmv3r56bh00k5s501a0gxflfn",
+        "url": "https://www.aibase.com/zh/news/31545",
+        "originalTitle": "​知名学者怒批：立即全网下架可联网开放式AI智能体",
+        "rawSourceSha256": "a51a658abcedcd64503a1f658311456c14a23157d3b3ce2425890c1ac3ccaead"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv4ny9lj00akua014vx21psy",
+        "clusterId": "cmv4nybc800aqua012tm20h8k",
+        "url": "https://www.aibase.com/zh/news/31553",
+        "originalTitle": "微软CEO纳德拉发声:呼吁为先进AI模型设立人类可控的“紧急制动”机制",
+        "rawSourceSha256": "75f2a84c6f44ad0e4924da658d27e061d77dafb9164d463599df50ea7a8eed73"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "unrelated",
+    "reason": "Gary Marcus召回呼吁与Satya Nadella安全控制长文是不同主体的独立主张。后文没有说回应前者或推进同一事故的处理。仅AI安全主题相同。",
+    "sourceQuotes": [
+      "立即将所有具备联网能力的开放式AI智能体",
+      "纳德拉于10月10日通过社交平台发表长文"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  },
+  {
+    "reviewId": "PS-05",
+    "left": [
+      {
+        "itemId": "cmuz8p4513zaom8011sh89ggn",
+        "clusterId": "cmuzc5y4r01kclk01bz43mdds",
+        "url": "https://www.aibase.com/zh/news/31456",
+        "originalTitle": "谷歌Gmail暗藏Gemini智能体：APK拆解泄露，未来让AI替你回邮件",
+        "rawSourceSha256": "fb2c0bc489d7affbddb5aaed7c5d66048642155d3ef28b657326ea44e310f204"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv6b5fxa00ijlm01sx0famhf",
+        "clusterId": "cmv6b63gv00iqlm01d5dapel7",
+        "url": "https://www.aibase.com/zh/news/31583",
+        "originalTitle": "谷歌Gemini正在开发“Shop this”新功能 支持跨应用一键识别与购物对比",
+        "rawSourceSha256": "51e8ba1f7d366767111a68892e113fcfa5b33f973a72ffa47a903ef06f2c7461"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "unrelated",
+    "reason": "Gmail APK自动邮件回复与Google Android应用叠加层Shop this购物建议，虽都使用Gemini，但应用、功能及拆解对象不同，无同一发布或功能的后续证据。",
+    "sourceQuotes": [
+      "最新版Gmail应用",
+      "Gemini浮动叠加层"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  },
+  {
+    "reviewId": "PS-06",
+    "left": [
+      {
+        "itemId": "cmuzbzwue00lklk01l00eiyqv",
+        "clusterId": "cmuzc01u500lvlk01efx9wen3",
+        "url": "https://www.aibase.com/zh/news/31478",
+        "originalTitle": "腾讯 WorkBuddy 上线独立文件浏览器！本地文档可直接呼叫 AI 处理",
+        "rawSourceSha256": "ca0d0209e91a48b215c30672fb618ba5ac568bbaa37923e153468968f10f6451"
+      },
+      {
+        "itemId": "cmuzc079700milk011dku62cg",
+        "clusterId": "cmuzc01u500lvlk01efx9wen3",
+        "url": "https://www.aibase.com/zh/news/31472",
+        "originalTitle": "WorkBuddy上线独立文件浏览器:本地文件右键「打开方式」直接调用AI",
+        "rawSourceSha256": "0b4e856bf8eadd4beef61d77bb3ff28f6c92837110616330ff6b94800fbbdb7d"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv1314ld04hkq101et72n0cm",
+        "clusterId": "cmv1315gg04hpq101d1i7fvz4",
+        "url": "http://www.geekpark.net/news/372163",
+        "originalTitle": "我使用国产「个人 AI 助手」的十天｜AI 上新",
+        "rawSourceSha256": "41e1b2533806b4278fbc535b58dae82ec1c60d0667847028d2d2b00492c96a03"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "unrelated",
+    "reason": "WorkBuddy独立文件浏览器发布与Today AI国内版10天体验，是真正不同产品。Review中提到其他模型/应用是上下文，不等于报道WorkBuddy发布。",
+    "sourceQuotes": [
+      "WorkBuddy 今日宣布正式上线独立文件浏览器",
+      "我注意到了 Today AI"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  },
+  {
+    "reviewId": "PS-07",
+    "left": [
+      {
+        "itemId": "cmuzbzwue00lklk01l00eiyqv",
+        "clusterId": "cmuzc01u500lvlk01efx9wen3",
+        "url": "https://www.aibase.com/zh/news/31478",
+        "originalTitle": "腾讯 WorkBuddy 上线独立文件浏览器！本地文档可直接呼叫 AI 处理",
+        "rawSourceSha256": "ca0d0209e91a48b215c30672fb618ba5ac568bbaa37923e153468968f10f6451"
+      },
+      {
+        "itemId": "cmuzc079700milk011dku62cg",
+        "clusterId": "cmuzc01u500lvlk01efx9wen3",
+        "url": "https://www.aibase.com/zh/news/31472",
+        "originalTitle": "WorkBuddy上线独立文件浏览器:本地文件右键「打开方式」直接调用AI",
+        "rawSourceSha256": "0b4e856bf8eadd4beef61d77bb3ff28f6c92837110616330ff6b94800fbbdb7d"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv3r64hl00prs5019rhiekoy",
+        "clusterId": "cmv3r66o900pys5019sh996c0",
+        "url": "https://www.aibase.com/zh/news/31530",
+        "originalTitle": "腾讯元宝上线桌宠:PC端 v2.87.10开启，全天陪伴+拖拽文件摘要",
+        "rawSourceSha256": "735d1783b25efc186e5bc78f75deebe9590829fe4f48ca03513d2b954282de5d"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "unrelated",
+    "reason": "腾讯WorkBuddy文件浏览器与腾讯元宝PC v2.87.10桌宠，提供者相同但产品、功能与发布不同，不能以腾讯或文件摘要能力认作同事件。",
+    "sourceQuotes": [
+      "独立文件浏览器功能",
+      "元宝桌宠已在 PC 端上线"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  },
+  {
+    "reviewId": "PS-08",
+    "left": [
+      {
+        "itemId": "cmuz8p5q43zb0m8017wapjbu6",
+        "clusterId": "cmuzc4vnt01jtlk01khbkqj39",
+        "url": "https://www.aibase.com/zh/news/31453",
+        "originalTitle": "马斯克打破门户之见！Grok Bot将接入Claude等最佳AI模型",
+        "rawSourceSha256": "bd23a4edc6c3126139fec3b4b600e3c66afd39abdaeaccecbc12c6567cd83eca"
+      }
+    ],
+    "right": [
+      {
+        "itemId": "cmv4nyljl00b6ua0140j82mik",
+        "clusterId": "cmv4nz7a900bjua018kmtz1bz",
+        "url": "https://www.aibase.com/zh/news/31549",
+        "originalTitle": "AI 购物新玩法引发争议！马斯克称拍信用卡即可下单，遭 OpenAI 高管公开嘲讽",
+        "rawSourceSha256": "37291c036c94c7579f28522388c9a86db2807d57c41a5d3b45a35232a225469a"
+      }
+    ],
+    "prescreenDecision": "do_not_handoff",
+    "assistantSuggestedRelation": "uncertain",
+    "reason": "多模型Grok Bot与Grok购物可能涉及同一产品，但购物原文没有确认是前文8月测试版常驻云端Grok Bot，也没把购物更新与该多模型调整连接。不能强判unrelated或follow_up；事件链证据不足，暂不交标注。",
+    "sourceQuotes": [
+      "任务导向的多模型混合架构",
+      "Grok 机器人的全新购物功能"
+    ],
+    "gold": null,
+    "humanConfirmed": false,
+    "independentBlindGold": false
+  }
+]

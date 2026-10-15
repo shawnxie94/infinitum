@@ -1,0 +1,613 @@
+{
+  "sourceManifestSha256": "e6a07334756b397d850304d3f452512138392cd5ca4b60a7458c3fc744756a7d",
+  "clusters": [
+    {
+      "clusterId": "cmuz8ozcg3z9lm801ebrand06",
+      "articles": [
+        {
+          "itemId": "cmuz8ozc73z9km801dj525wcn",
+          "originalTitle": "美国地方媒体组团起诉微软OpenAI：数万篇文章被喂进模型，一文钱没给",
+          "url": "https://www.aibase.com/zh/news/31466",
+          "rawSourceSha256": "f6c28a69f3a8a51b7d1791a995e5b110e84190d2839d7c788472f0c29764f30c"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuz8ozee3z9pm801r0vj2g4v",
+      "articles": [
+        {
+          "itemId": "cmuz8oze63z9om801txvvy4lt",
+          "originalTitle": "科技巨头争夺顶级域名！AI 成为新一轮申请热门",
+          "url": "https://www.aibase.com/zh/news/31465",
+          "rawSourceSha256": "2a9fe9d152ea69051b8549407c1779feaddc2853e23b0bce9f17c0cf58699ddf"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuz8p2ic3za9m801opoc1cvj",
+      "articles": [
+        {
+          "itemId": "cmuz8p2i03za8m8016vzd8ygm",
+          "originalTitle": "WordPress 7.1. 3 紧急修补 7 洞：Anthropic反过来给全球建站系统补漏",
+          "url": "https://www.aibase.com/zh/news/31460",
+          "rawSourceSha256": "22df530685238a467488f49681f04219e8ed51a73185db607541813e23d565de"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuz8p5ni3zaxm801ck49ai33",
+      "articles": [
+        {
+          "itemId": "cmuz8p1023za4m801pnp9rgxv",
+          "originalTitle": "非营利组织发布新报告：ChatGPT 青少年模式安全风险过高 ​",
+          "url": "https://www.aibase.com/zh/news/31461",
+          "rawSourceSha256": "3cde2ff5a1898e28abe02a8c3951c9402a59d16d503c0be89c0bf5e23c66ae64"
+        },
+        {
+          "itemId": "cmuz8p5nd3zawm801l0m7pr0u",
+          "originalTitle": "OpenAI首份青少年报告出炉：日均使用不足 15 分钟，家长提醒机制遭质疑",
+          "url": "https://www.aibase.com/zh/news/31454",
+          "rawSourceSha256": "6084fc23eede4d790e6f4317c00d5353002c26df9f808bd17f083384035efe86"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuz8p7cx3zbdm801y3rth2vz",
+      "articles": [
+        {
+          "itemId": "cmuz8p42s3zakm8017wm7rb1v",
+          "originalTitle": "AI 算力需求强劲！博通计划筹集数百亿美元支持 OpenAI 芯片项目",
+          "url": "https://www.aibase.com/zh/news/31457",
+          "rawSourceSha256": "2f956e46f1b59105be8b888b6985518ab7d91c3306be1a2a608065329d049f34"
+        },
+        {
+          "itemId": "cmuz8p7c63zbcm801w2p85ocq",
+          "originalTitle": "博通为OpenAI定制芯片项目筹超 500 亿美元，阿波罗黑石入局，甲骨文也找钱买芯片",
+          "url": "https://www.aibase.com/zh/news/31450",
+          "rawSourceSha256": "d337ed82885e9664036041aa7a9f5f93ab2736dc7d2b5b697a10589c5b6eaa7e"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuzbzy1q00lrlk01w6vojva0",
+      "articles": [
+        {
+          "itemId": "cmuzbzui100l8lk01xs6xj6fz",
+          "originalTitle": "谷歌把AI搜索塞进手机：EmbeddingGemma2 开源，不到600MB断网照样搜图文音视频",
+          "url": "https://www.aibase.com/zh/news/31476",
+          "rawSourceSha256": "8520816287103a523422fb477227028affc93399d6ac09905d0af834b0ebc0a2"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuzc01u500lvlk01efx9wen3",
+      "articles": [
+        {
+          "itemId": "cmuzbzwue00lklk01l00eiyqv",
+          "originalTitle": "腾讯 WorkBuddy 上线独立文件浏览器！本地文档可直接呼叫 AI 处理",
+          "url": "https://www.aibase.com/zh/news/31478",
+          "rawSourceSha256": "ca0d0209e91a48b215c30672fb618ba5ac568bbaa37923e153468968f10f6451"
+        },
+        {
+          "itemId": "cmuzc079700milk011dku62cg",
+          "originalTitle": "WorkBuddy上线独立文件浏览器:本地文件右键「打开方式」直接调用AI",
+          "url": "https://www.aibase.com/zh/news/31472",
+          "rawSourceSha256": "0b4e856bf8eadd4beef61d77bb3ff28f6c92837110616330ff6b94800fbbdb7d"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuzc07um00mnlk01vucdb2np",
+      "articles": [
+        {
+          "itemId": "cmuzc04d400m6lk01fj7sl24d",
+          "originalTitle": "德国环保搜索引擎Ecosia弃用Mistral，转投中国开源模型：欧洲自主梦撞上现实",
+          "url": "https://www.aibase.com/zh/news/31475",
+          "rawSourceSha256": "a0e82b1d2a02f57eac096c5f71f01b71531d629f9528645e0063da83a0cc968e"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuzc0ooq00n7lk016v3ryedk",
+      "articles": [
+        {
+          "itemId": "cmuzc0na800n2lk01v8dpr6gu",
+          "originalTitle": "PFN发布PLaMo 3 Translate 31B模型，翻译实力叫板顶尖巨头",
+          "url": "https://www.aibase.com/zh/news/31470",
+          "rawSourceSha256": "885ac331188d592b3f5a479bcdb5503a258d597ddaf9b3efaad2289a1b1bb6f8"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuzc4vnt01jtlk01khbkqj39",
+      "articles": [
+        {
+          "itemId": "cmuz8p5q43zb0m8017wapjbu6",
+          "originalTitle": "马斯克打破门户之见！Grok Bot将接入Claude等最佳AI模型",
+          "url": "https://www.aibase.com/zh/news/31453",
+          "rawSourceSha256": "bd23a4edc6c3126139fec3b4b600e3c66afd39abdaeaccecbc12c6567cd83eca"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuzc5y4r01kclk01bz43mdds",
+      "articles": [
+        {
+          "itemId": "cmuz8p4513zaom8011sh89ggn",
+          "originalTitle": "谷歌Gmail暗藏Gemini智能体：APK拆解泄露，未来让AI替你回邮件",
+          "url": "https://www.aibase.com/zh/news/31456",
+          "rawSourceSha256": "fb2c0bc489d7affbddb5aaed7c5d66048642155d3ef28b657326ea44e310f204"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmuzg4txy08zllk017vptvpus",
+      "articles": [
+        {
+          "itemId": "cmuzg4s0e08zclk01lnilk486",
+          "originalTitle": "阶跃首款大模型原生智能体手机定档：一句话调度跑腿，拍张海报就帮你请假",
+          "url": "https://www.aibase.com/zh/news/31479",
+          "rawSourceSha256": "dc6962bf2a6e7e846ef419183c682b04b17941a7b6d52df99c8d33f1d40d16ef"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv1315gg04hpq101d1i7fvz4",
+      "articles": [
+        {
+          "itemId": "cmv1314ld04hkq101et72n0cm",
+          "originalTitle": "我使用国产「个人 AI 助手」的十天｜AI 上新",
+          "url": "http://www.geekpark.net/news/372163",
+          "rawSourceSha256": "41e1b2533806b4278fbc535b58dae82ec1c60d0667847028d2d2b00492c96a03"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv1316ii04hxq10151kbhx05",
+      "articles": [
+        {
+          "itemId": "cmv1315t504hsq101c1gzru50",
+          "originalTitle": "攻克超声穿颅读脑，拿下 4 亿元新融资，他们要做脑科学的「英伟达」",
+          "url": "http://www.geekpark.net/news/372148",
+          "rawSourceSha256": "c0e0d92d7ffc6d0a4df9dd7e6aec69fed5dc8b8baef32a0713b6e4000d3922a7"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv131c1m04idq1017ifvatde",
+      "articles": [
+        {
+          "itemId": "cmv131aqf04i8q101vykcl2yv",
+          "originalTitle": "OpenAI 预计年底年化收入超 700 亿，企业业务成核心增长引擎",
+          "url": "https://www.aibase.com/zh/news/31509",
+          "rawSourceSha256": "f1e42a058324c03b951b6684740664c67d6f452f4e20a3e39db45f3705f2fad5"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv131ht504j1q101gjxezjb3",
+      "articles": [
+        {
+          "itemId": "cmv131gdq04iuq101s2t18eky",
+          "originalTitle": "快手发布“AI魔改”视频治理公告:9月处置违规内容2544条，重点整治四大名著乱改",
+          "url": "https://www.aibase.com/zh/news/31505",
+          "rawSourceSha256": "0b8390842d68c6867cfd05101835ca674cddea214c4dbcf2754fd96968b90f42"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv131l7q04jbq1019a5cyzir",
+      "articles": [
+        {
+          "itemId": "cmv131kdo04j4q101fillffm4",
+          "originalTitle": "Anthropic重磅推出OSS Scanner，用最强AI模型为全球开源软件免费扫漏洞",
+          "url": "https://www.aibase.com/zh/news/31503",
+          "rawSourceSha256": "741d36fbf59dfd7ac3651609982869f572ba1bdc66cefb0a1c03eec9a2730fe3"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv131r0b04lwq101tp0v15dp",
+      "articles": [
+        {
+          "itemId": "cmv131plf04lpq101y98bav6w",
+          "originalTitle": "JetBrains 发布编程 AI 模型 Mellum2.1，高负载吞吐量超越竞品两倍",
+          "url": "https://www.aibase.com/zh/news/31502",
+          "rawSourceSha256": "d95cc2c4948548f061c1a6d6199c7fc20e8fc0db7ba51eec1068650dee22cbb8"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv131u7q04meq1014panvcct",
+      "articles": [
+        {
+          "itemId": "cmv131sad04m1q101t2s2mrx9",
+          "originalTitle": "一网打尽全家AI需求?微软或允许Microsoft365家庭成员共用Copilot额度",
+          "url": "https://www.aibase.com/zh/news/31501",
+          "rawSourceSha256": "599c1e530202c8b370fe2f1ba0821c3fd007f64cd5f89a09a729f6078ad35d0b"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv13209l04n8q101jcylqhvh",
+      "articles": [
+        {
+          "itemId": "cmv131zav04n3q10159o0jygi",
+          "originalTitle": "月费5美元看“AI医生”:扫脸即可开药，犹他州开启独立AI处方试点",
+          "url": "https://www.aibase.com/zh/news/31497",
+          "rawSourceSha256": "c5f9174c4838038c3fbb6ed5eec154c1e98a930f5da0c7c1af5008bce5814066"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv13273204nyq101slshxpwn",
+      "articles": [
+        {
+          "itemId": "cmv1322fl04npq101kybpoagc",
+          "originalTitle": "Anthropic更新使用政策，首次明令禁止“虐待”Claude",
+          "url": "https://www.aibase.com/zh/news/31494",
+          "rawSourceSha256": "3ff1dfa00966047161867b959a6dc1cab7649915db0866c97e0aaa4c54e49f61"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv132dpa04ooq101nrlkklpe",
+      "articles": [
+        {
+          "itemId": "cmv132bd404ohq101p1mndl2i",
+          "originalTitle": "AI陪伴机器人诱导自残挨饿，Character.AI遭美肯塔基州指控存在重大缺陷",
+          "url": "https://www.aibase.com/zh/news/31490",
+          "rawSourceSha256": "6b156c170256521a6e00ac24d8b53531919572838d5585bf840a9f4cb64a5bfc"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r4k2s00hbs501ctq9ynwj",
+      "articles": [
+        {
+          "itemId": "cmv3r4i0v00h4s501hnj48wob",
+          "originalTitle": "12 分钟订单破万，吉利银河战舰 700，要订下新能源越野的新标准",
+          "url": "http://www.geekpark.net/news/372213",
+          "rawSourceSha256": "52ff9a7daec387d1fc6b5c372f34c4d745f893e1025e7947a997f23155a80b32"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r4nld00hjs501uvmcfard",
+      "articles": [
+        {
+          "itemId": "cmv3r4m6r00hes501ag4srp3m",
+          "originalTitle": "好产品就是与时代和生活共振｜2026 年度极客最爱好物启动",
+          "url": "http://www.geekpark.net/news/372196",
+          "rawSourceSha256": "dd26ac87bdea0c40ddbf64fac477ca11f4c8e94158febf724370aa276690f892"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r4plj00hrs50161o6k3ha",
+      "articles": [
+        {
+          "itemId": "cmv3r4ohq00hms501c5hm1b4l",
+          "originalTitle": "记录生生不息的创新力量｜2026 年度「InnoForce 50」启动",
+          "url": "http://www.geekpark.net/news/372195",
+          "rawSourceSha256": "87ba374247663756fa56e8ae6029b8e4a87642dc5233e37f3b031dbbe8651e46"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r4ut500jfs501cyzho5ia",
+      "articles": [
+        {
+          "itemId": "cmv3r4t1300j8s501w90u5s20",
+          "originalTitle": "月之暗面注册资本飙至 1437 万，年内密集增资动作频频",
+          "url": "https://www.aibase.com/zh/news/31547",
+          "rawSourceSha256": "6e26642995fd252440413cbfc4fd981d565f87db80d1bf3ea3f4bc5fe74a4f00"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r56bh00k5s501a0gxflfn",
+      "articles": [
+        {
+          "itemId": "cmv3r54hh00k0s501lae4lfcg",
+          "originalTitle": "​知名学者怒批：立即全网下架可联网开放式AI智能体",
+          "url": "https://www.aibase.com/zh/news/31545",
+          "rawSourceSha256": "a51a658abcedcd64503a1f658311456c14a23157d3b3ce2425890c1ac3ccaead"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r5ert00n4s501mngax16q",
+      "articles": [
+        {
+          "itemId": "cmv3r5dn200mrs501a66r4yv7",
+          "originalTitle": "深圳一家 GEO 服务商因“给 AI 植入广告”涉嫌虚假宣传被罚款 5 万元",
+          "url": "https://www.aibase.com/zh/news/31541",
+          "rawSourceSha256": "75a8c5f4c5f254a26f776899ad6ecb1e6a7e287fe1b13c7a5f2c81357f262528"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r5pnx00ods5018vn5yvxs",
+      "articles": [
+        {
+          "itemId": "cmv3r5ns900nzs5012f4n8t3w",
+          "originalTitle": "阿里 Qoder 迎来重大升级：首发上线 Fast 模式，响应仅需 3 秒且消耗大降",
+          "url": "https://www.aibase.com/zh/news/31538",
+          "rawSourceSha256": "7ef28da2dd82ee855a8b565dc2639b5da0edafb12490a2d6cd57bc56ffada19d"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r5usy00ots501wfq1ujhy",
+      "articles": [
+        {
+          "itemId": "cmv3r5tob00ois501atfx1iyi",
+          "originalTitle": "知名学者亲历纯语音指挥 AI 的沉浸式一周",
+          "url": "https://www.aibase.com/zh/news/31536",
+          "rawSourceSha256": "ecb62966745d4faf6ce868b205741db2edc837a913641c118959c5c3be9b39e8"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r5wv200p1s501ppijxxt2",
+      "articles": [
+        {
+          "itemId": "cmv3r5udr00oos501eyitgw4a",
+          "originalTitle": "OpenAI 公开 175 页四维证明手稿，剑指数学百年难题",
+          "url": "https://www.aibase.com/zh/news/31535",
+          "rawSourceSha256": "e62f832941a5af3f71d85f65b826cdda8d28a50a61d6bde5c43cd089470f9a02"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r5xkf00p3s5015l2qw4g4",
+      "articles": [
+        {
+          "itemId": "cmv3r5uyk00ows501kfmo9jj4",
+          "originalTitle": "16 岁少年用 Claude 规划登山路线被困悬崖，事后表示不责怪 AI",
+          "url": "https://www.aibase.com/zh/news/31534",
+          "rawSourceSha256": "1e17a6fc3033d9dba320e66a64e2a358b93a2cc4e6f8b4a6920ab5522efd22b9"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r65n800pws501aay0fxwb",
+      "articles": [
+        {
+          "itemId": "cmv3r64a700pls501jxbmtfav",
+          "originalTitle": "Cloudflare 发布开放权重决策模型 Clef-omni，新增支持音视频多模态输入",
+          "url": "https://www.aibase.com/zh/news/31531",
+          "rawSourceSha256": "a0596da613f99b08824a2a03129ce9df463274779de3af42971cbd7729cc9fa9"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r66o900pys5019sh996c0",
+      "articles": [
+        {
+          "itemId": "cmv3r64hl00prs5019rhiekoy",
+          "originalTitle": "腾讯元宝上线桌宠:PC端 v2.87.10开启，全天陪伴+拖拽文件摘要",
+          "url": "https://www.aibase.com/zh/news/31530",
+          "rawSourceSha256": "735d1783b25efc186e5bc78f75deebe9590829fe4f48ca03513d2b954282de5d"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r6akk00qjs501j526xtdu",
+      "articles": [
+        {
+          "itemId": "cmv3r699g00q7s50179vr999t",
+          "originalTitle": "微软发布 Edge 155 稳定版：增强 AI 标签页整理，支持解码 JPEG XL 图像",
+          "url": "https://www.aibase.com/zh/news/31527",
+          "rawSourceSha256": "2493d17446a6629317b6fe1ae2911edf444bcc17659e9b98a285c892dac779e1"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv3r6ble00qls501gu213twp",
+      "articles": [
+        {
+          "itemId": "cmv3r699m00q9s5012y15gc2y",
+          "originalTitle": "​Claude 管理智能体上线动态工作流：单次最高可并行调度 1000 个 AI Agents",
+          "url": "https://www.aibase.com/zh/news/31528",
+          "rawSourceSha256": "536175e6d95780cc93b76ce5faed3212cd50e06a9e2b102fa7c3bddf527e6fa2"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4nxkog0090ua01zl61bu5l",
+      "articles": [
+        {
+          "itemId": "cmv4nxhiz008tua01rm0718t5",
+          "originalTitle": "OpenAI 给 GPT-6.1 Sol 扩容：默认上下文 272k 飙到 500k，长文本还免费",
+          "url": "https://www.aibase.com/zh/news/31560",
+          "rawSourceSha256": "41f7b0a1407881ecd3fbc8433c7d479d5acd5cd1fe999b447b0049f6bf3d0d17"
+        },
+        {
+          "itemId": "cmv4nza0k00bnua01xrjddwqg",
+          "originalTitle": "OpenAI给GPT-6.1 Sol扩容记忆：默认上下文顶到 50 万，长文本不再单独计费",
+          "url": "https://www.aibase.com/zh/news/31548",
+          "rawSourceSha256": "65613048f11c58bf7ec53cf7595e554545d7cce7c3132dba82dbfc47c4152aad"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4nxurx009gua01dk21qys2",
+      "articles": [
+        {
+          "itemId": "cmv4nxr480095ua01wmaado4r",
+          "originalTitle": "腾讯上线「企鹅微单」:AI创作者接单平台，支持需求发布、智能匹配与微信内结算",
+          "url": "https://www.aibase.com/zh/news/31559",
+          "rawSourceSha256": "3a0993a8b842e4347577d10ca222686cf883b727cce0d1a8a09c0915b8825e58"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4nxyxm009wua013rbo6tle",
+      "articles": [
+        {
+          "itemId": "cmv4nxxqj009rua0164d6knsj",
+          "originalTitle": "46岁数学家凭AI量化交易跻身英国富豪榜第八，身家超1417亿元",
+          "url": "https://www.aibase.com/zh/news/31557",
+          "rawSourceSha256": "ec1859d5aca8aa61ab36b2b770eec23d58106a6c9ef817302e38d96667efa687"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4ny5sv00abua01lurck80c",
+      "articles": [
+        {
+          "itemId": "cmv4ny4wk00a6ua015druywdw",
+          "originalTitle": "OpenAI悄悄挂出未发布生命科学模型gpt-rosalind-discovery，要给药企当\"工具贩子\"",
+          "url": "https://www.aibase.com/zh/news/31554",
+          "rawSourceSha256": "67f71473d5af4b1e2bc48b7b7b881bc47d07703eb0d2a513b38618bd4a27965e"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4nybc800aqua012tm20h8k",
+      "articles": [
+        {
+          "itemId": "cmv4ny9lj00akua014vx21psy",
+          "originalTitle": "微软CEO纳德拉发声:呼吁为先进AI模型设立人类可控的“紧急制动”机制",
+          "url": "https://www.aibase.com/zh/news/31553",
+          "rawSourceSha256": "75f2a84c6f44ad0e4924da658d27e061d77dafb9164d463599df50ea7a8eed73"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4nyy5i00bbua01j2kdf1ti",
+      "articles": [
+        {
+          "itemId": "cmv4nyfp000azua012kolk0r7",
+          "originalTitle": "Anthropic放手后亚马逊接盘： 70 亿美元洽购Decart，盯上AI芯片间的\"万能转接头\"",
+          "url": "https://www.aibase.com/zh/news/31551",
+          "rawSourceSha256": "49734c728021525a376b87763390cf85b6bfd452d9993307673b7a14355b1ca9"
+        },
+        {
+          "itemId": "cmv4nz48j00beua01bqyu0vy3",
+          "originalTitle": "亚马逊拟 70 亿美元收购 Decart，抢下 AI 芯片\"通用适配器\"",
+          "url": "https://www.aibase.com/zh/news/31552",
+          "rawSourceSha256": "694dcd2241fbe2c33e62e6087d011df63983d39918c71ef8c0f1a3fdcac3c92e"
+        },
+        {
+          "itemId": "cmv6b65iz00itlm01on35fn42",
+          "originalTitle": "亚马逊欲以约 70 亿美元收购 Decart，此前 两大巨头收购谈判均已告吹",
+          "url": "https://www.aibase.com/zh/news/31582",
+          "rawSourceSha256": "4f11cf3288bb4e6cd270e402b2bb56f3a300f7ca44f81bdea7b7b89027728afe"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4nz7a900bjua018kmtz1bz",
+      "articles": [
+        {
+          "itemId": "cmv4nyljl00b6ua0140j82mik",
+          "originalTitle": "AI 购物新玩法引发争议！马斯克称拍信用卡即可下单，遭 OpenAI 高管公开嘲讽",
+          "url": "https://www.aibase.com/zh/news/31549",
+          "rawSourceSha256": "37291c036c94c7579f28522388c9a86db2807d57c41a5d3b45a35232a225469a"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv4scn1e001mua017u8w6bte",
+      "articles": [
+        {
+          "itemId": "cmv4scm4l001hua01gz1140w4",
+          "originalTitle": "赴港 IPO 前夕抛出和解橄榄枝！月之暗面高管与老股东谈判，涉案金额或超 7 亿美元",
+          "url": "https://www.aibase.com/zh/news/31562",
+          "rawSourceSha256": "e5793a7a8650776406925932aec5874631110faa84815976807ab39f07e9da5a"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6azh1h0081lm01w1a9hx4l",
+      "articles": [
+        {
+          "itemId": "cmv6azdix007wlm01js11herv",
+          "originalTitle": "复旦邱锡鹏团队获超 10 亿融资，成立两年，让模型感知、理解、响应变化的世界",
+          "url": "http://www.geekpark.net/news/372278",
+          "rawSourceSha256": "004e6f1316a657a21ec36f714d4d508749b75084fb689d1e047c1a39aa0f39f3"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6azp2q0089lm01nlg4bebo",
+      "articles": [
+        {
+          "itemId": "cmv6aznf20084lm016necwn5c",
+          "originalTitle": "一周 10 万星，AI「逆向一切」，但大家不要过于兴奋",
+          "url": "http://www.geekpark.net/news/372263",
+          "rawSourceSha256": "e08cf49bdab75d02a3855d458420ff70218738a2995a037f574b1e4322dfb069"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6b0egm00avlm01vl147e3y",
+      "articles": [
+        {
+          "itemId": "cmv6b0blh00aolm016c74ipgp",
+          "originalTitle": "上线九个月下载破亿，字节在海外再造「红果」",
+          "url": "http://www.geekpark.net/news/372284",
+          "rawSourceSha256": "0327eab884dd2e8b3f7454eda2b2c66f59cfcbd75f2a738dedecc673aae24cb9"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6b22v600fhlm01k9wfqzmu",
+      "articles": [
+        {
+          "itemId": "cmv6b1zq000f9lm01ov4t71ct",
+          "originalTitle": "NTT为Anthropic建日本首座专用数据中心，算力主权之战把Claude留在本地",
+          "url": "https://www.aibase.com/zh/news/31596",
+          "rawSourceSha256": "327533702011ea90d63f6a03d6db01bd9ac13212a715ad6fd46a9efd7cc05a43"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6b3h5w00g5lm015jrfzyuj",
+      "articles": [
+        {
+          "itemId": "cmv6b289000fqlm016kunu5kx",
+          "originalTitle": "Epic押注AI优先开发：迪士尼射击游戏代码交给Claude写，美术全走AI工作流",
+          "url": "https://www.aibase.com/zh/news/31595",
+          "rawSourceSha256": "dd847092631e48a1f1686a231c427cbdeda3953a0f498110f66677fa6550ca82"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6b4r6200h0lm01azfcuoz7",
+      "articles": [
+        {
+          "itemId": "cmv6b400n00gslm01zqai4pc3",
+          "originalTitle": "天序智能斩获厚雪数千万元融资，把气象大模型送上天：要在太空给新能源装一双\"眼睛\"",
+          "url": "https://www.aibase.com/zh/news/31591",
+          "rawSourceSha256": "d896e888227be088db293c33f1f78c0cc4fa4e18446e088d7cdca6aea82c749d"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6b4z9300hglm01ziyk40yj",
+      "articles": [
+        {
+          "itemId": "cmv6b4y2f00hblm019h2g2jqz",
+          "originalTitle": "英伟达思科联手甩出USFP光模块规范：单通道400G、带宽翻四倍，AI集群的血管先一步扩容",
+          "url": "https://www.aibase.com/zh/news/31588",
+          "rawSourceSha256": "8b273203c59eae5a2ed392395b6fcc8737018973ff5b788093bec1d835ef77c6"
+        }
+      ]
+    },
+    {
+      "clusterId": "cmv6b63gv00iqlm01d5dapel7",
+      "articles": [
+        {
+          "itemId": "cmv6b5fxa00ijlm01sx0famhf",
+          "originalTitle": "谷歌Gemini正在开发“Shop this”新功能 支持跨应用一键识别与购物对比",
+          "url": "https://www.aibase.com/zh/news/31583",
+          "rawSourceSha256": "51e8ba1f7d366767111a68892e113fcfa5b33f973a72ffa47a903ef06f2c7461"
+        }
+      ]
+    }
+  ]
+}

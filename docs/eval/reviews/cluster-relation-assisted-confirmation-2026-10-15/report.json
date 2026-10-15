@@ -1,0 +1,34 @@
+{
+  "runId": "2026-10-15-cluster-relation-assisted-confirmation",
+  "sourceHandoffManifestSha256": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+  "confirmedCaseIds": [
+    "PB-08",
+    "PB-09",
+    "PB-10"
+  ],
+  "assistedConfirmedCounts": {
+    "same_event": 2,
+    "follow_up": 1,
+    "synthesis": 0,
+    "unrelated": 0,
+    "uncertain": 0
+  },
+  "newHumanConfirmedRelations": 3,
+  "originalArticles": 7,
+  "realClusters": 6,
+  "humanRationaleProvided": false,
+  "fullRetainedReadingExplicitlyConfirmed": null,
+  "independentBlindProcessConfirmed": null,
+  "independentNewPositiveGold": 0,
+  "productionAdmissionRevalidated": false,
+  "additionalPaidOrExternalModelRequestsSent": 0,
+  "embeddingRequestsSent": 0,
+  "businessWrites": 0,
+  "credentialsRead": false,
+  "qualityPassed": false,
+  "releaseEligible": false,
+  "readyForModelReplay": false,
+  "metrics": null,
+  "previousSixUnrelatedLabelsChanged": false,
+  "PB07HumanConfirmationReceived": false
+}

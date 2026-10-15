@@ -1,0 +1,314 @@
+[
+  {
+    "caseId": "PB-08",
+    "sides": [
+      {
+        "side": "left",
+        "clusterId": "cmu9f0llh03t8mg019ntadfpo",
+        "completeCurrentApprovedMembershipObserved": true,
+        "currentClusterSignature": {
+          "eventType": null,
+          "eventSubject": "Anthropic",
+          "eventAction": "考虑推出新AI模型应对竞争",
+          "eventObject": "OpenAI GPT-6Astra",
+          "eventDate": null
+        },
+        "rebuiltSignatureFromCurrentItems": {
+          "eventType": null,
+          "eventSubject": "Anthropic",
+          "eventAction": "考虑推出新AI模型应对竞争",
+          "eventObject": "OpenAI GPT-6Astra",
+          "eventDate": null
+        },
+        "rebuiltEqualsCurrentSignature": true,
+        "priorFrozenSignature": {
+          "eventType": null,
+          "eventSubject": "Anthropic",
+          "eventAction": "考虑推出新AI模型应对竞争",
+          "eventObject": "OpenAI GPT-6Astra",
+          "eventDate": null
+        },
+        "currentSignatureEqualsPriorFrozen": true,
+        "items": [
+          {
+            "itemId": "cmu9f0lkb03t3mg01bitvc5op",
+            "storedDate": null,
+            "storedObject": "OpenAI GPT-6Astra",
+            "publishedAt": "2026-09-20T01:50:51.000Z",
+            "analysisStatus": "succeeded",
+            "aiProcessedAt": 1789884497962,
+            "itemSignature": {
+              "eventType": null,
+              "eventSubject": "Anthropic",
+              "eventAction": "考虑推出新AI模型应对竞争",
+              "eventObject": "OpenAI GPT-6Astra",
+              "eventDate": null
+            }
+          }
+        ],
+        "clusterUpdatedAt": 1789884506929
+      },
+      {
+        "side": "right",
+        "clusterId": "cmu9ml5e400tymf01tb1yci07",
+        "completeCurrentApprovedMembershipObserved": true,
+        "currentClusterSignature": {
+          "eventType": null,
+          "eventSubject": "Anthropic",
+          "eventAction": "拟推出全新 AI 模型",
+          "eventObject": "GPT-6 Astra 竞争压力",
+          "eventDate": null
+        },
+        "rebuiltSignatureFromCurrentItems": {
+          "eventType": null,
+          "eventSubject": "Anthropic",
+          "eventAction": "拟推出全新 AI 模型",
+          "eventObject": "GPT-6 Astra 竞争压力",
+          "eventDate": null
+        },
+        "rebuiltEqualsCurrentSignature": true,
+        "priorFrozenSignature": {
+          "eventType": null,
+          "eventSubject": "Anthropic",
+          "eventAction": "拟推出全新 AI 模型",
+          "eventObject": "GPT-6 Astra 竞争压力",
+          "eventDate": null
+        },
+        "currentSignatureEqualsPriorFrozen": true,
+        "items": [
+          {
+            "itemId": "cmu9ml5bx00ttmf01ozf00e0m",
+            "storedDate": null,
+            "storedObject": "GPT-6 Astra 竞争压力",
+            "publishedAt": "2026-09-20T07:37:54.000Z",
+            "analysisStatus": "succeeded",
+            "aiProcessedAt": 1789897214011,
+            "itemSignature": {
+              "eventType": null,
+              "eventSubject": "Anthropic",
+              "eventAction": "拟推出全新 AI 模型",
+              "eventObject": "GPT-6 Astra 竞争压力",
+              "eventDate": null
+            }
+          }
+        ],
+        "clusterUpdatedAt": 1789897239188
+      }
+    ],
+    "historicalModelResponseAvailable": false,
+    "historicalExecutedVersionIdentified": false
+  },
+  {
+    "caseId": "PB-09",
+    "sides": [
+      {
+        "side": "left",
+        "clusterId": "cmucg0zo9008fs401uea52vwe",
+        "completeCurrentApprovedMembershipObserved": true,
+        "currentClusterSignature": {
+          "eventType": null,
+          "eventSubject": "阿里云无影团队",
+          "eventAction": "研发",
+          "eventObject": "QwenBook AI设备",
+          "eventDate": null
+        },
+        "rebuiltSignatureFromCurrentItems": {
+          "eventType": null,
+          "eventSubject": "阿里云无影团队",
+          "eventAction": "研发",
+          "eventObject": "QwenBook AI设备",
+          "eventDate": null
+        },
+        "rebuiltEqualsCurrentSignature": true,
+        "priorFrozenSignature": {
+          "eventType": null,
+          "eventSubject": "阿里云无影团队",
+          "eventAction": "研发",
+          "eventObject": "QwenBook AI设备",
+          "eventDate": null
+        },
+        "currentSignatureEqualsPriorFrozen": true,
+        "items": [
+          {
+            "itemId": "cmucg0zk9008as401vbvb3fus",
+            "storedDate": null,
+            "storedObject": "QwenBook AI设备",
+            "publishedAt": "2026-09-22T08:01:36.000Z",
+            "analysisStatus": "succeeded",
+            "aiProcessedAt": 1790067594248,
+            "itemSignature": {
+              "eventType": null,
+              "eventSubject": "阿里云无影团队",
+              "eventAction": "研发",
+              "eventObject": "QwenBook AI设备",
+              "eventDate": null
+            }
+          }
+        ],
+        "clusterUpdatedAt": 1790067625392
+      },
+      {
+        "side": "right",
+        "clusterId": "cmudrfwcy05z7o201kvn178ro",
+        "completeCurrentApprovedMembershipObserved": true,
+        "currentClusterSignature": {
+          "eventType": null,
+          "eventSubject": "阿里云",
+          "eventAction": "发布",
+          "eventObject": "Qwen Book AI智能体电脑",
+          "eventDate": null
+        },
+        "rebuiltSignatureFromCurrentItems": {
+          "eventType": null,
+          "eventSubject": "阿里云",
+          "eventAction": "发布",
+          "eventObject": "Qwen Book AI智能体电脑",
+          "eventDate": null
+        },
+        "rebuiltEqualsCurrentSignature": true,
+        "priorFrozenSignature": {
+          "eventType": null,
+          "eventSubject": "阿里云",
+          "eventAction": "发布",
+          "eventObject": "Qwen Book AI智能体电脑",
+          "eventDate": null
+        },
+        "currentSignatureEqualsPriorFrozen": true,
+        "items": [
+          {
+            "itemId": "cmudrfw7h05z2o2016c2cxcop",
+            "storedDate": null,
+            "storedObject": "Qwen Book AI智能体电脑",
+            "publishedAt": "2026-09-23T06:21:47.000Z",
+            "analysisStatus": "succeeded",
+            "aiProcessedAt": 1790147231691,
+            "itemSignature": {
+              "eventType": null,
+              "eventSubject": "阿里云",
+              "eventAction": "发布",
+              "eventObject": "Qwen Book AI智能体电脑",
+              "eventDate": null
+            }
+          }
+        ],
+        "clusterUpdatedAt": 1790147306649
+      }
+    ],
+    "historicalModelResponseAvailable": false,
+    "historicalExecutedVersionIdentified": false
+  },
+  {
+    "caseId": "PB-10",
+    "sides": [
+      {
+        "side": "left",
+        "clusterId": "cmu9mlbkj00ummf01ugx1hh6t",
+        "completeCurrentApprovedMembershipObserved": true,
+        "currentClusterSignature": {
+          "eventType": null,
+          "eventSubject": "阶跃星辰",
+          "eventAction": "发布并全量开放",
+          "eventObject": "Step 5 Preview 模型",
+          "eventDate": "2025-10-15"
+        },
+        "rebuiltSignatureFromCurrentItems": {
+          "eventType": null,
+          "eventSubject": "阶跃星辰",
+          "eventAction": "发布并全量开放",
+          "eventObject": "Step 5 Preview 模型",
+          "eventDate": "2025-10-15"
+        },
+        "rebuiltEqualsCurrentSignature": true,
+        "priorFrozenSignature": {
+          "eventType": null,
+          "eventSubject": "阶跃星辰",
+          "eventAction": "发布并全量开放",
+          "eventObject": "Step 5 Preview 模型",
+          "eventDate": "2025-10-15"
+        },
+        "currentSignatureEqualsPriorFrozen": true,
+        "items": [
+          {
+            "itemId": "cmu9mlbi400uhmf010li3w36l",
+            "storedDate": "2025-10-15",
+            "storedObject": "Step 5 Preview 模型",
+            "publishedAt": "2026-09-20T06:43:39.000Z",
+            "analysisStatus": "succeeded",
+            "aiProcessedAt": 1789897222010,
+            "itemSignature": {
+              "eventType": null,
+              "eventSubject": "阶跃星辰",
+              "eventAction": "发布并全量开放",
+              "eventObject": "Step 5 Preview 模型",
+              "eventDate": "2025-10-15"
+            }
+          }
+        ],
+        "clusterUpdatedAt": 1789897239190
+      },
+      {
+        "side": "right",
+        "clusterId": "cmu9mlfnx00vamf01admwy04j",
+        "completeCurrentApprovedMembershipObserved": true,
+        "currentClusterSignature": {
+          "eventType": null,
+          "eventSubject": "阶跃",
+          "eventAction": "全量开放",
+          "eventObject": "Step5Preview 旗舰基座模型",
+          "eventDate": null
+        },
+        "rebuiltSignatureFromCurrentItems": {
+          "eventType": null,
+          "eventSubject": "阶跃",
+          "eventAction": "全量开放",
+          "eventObject": "Step5Preview 旗舰基座模型",
+          "eventDate": null
+        },
+        "rebuiltEqualsCurrentSignature": true,
+        "priorFrozenSignature": {
+          "eventType": null,
+          "eventSubject": "阶跃",
+          "eventAction": "全量开放",
+          "eventObject": "Step5Preview 旗舰基座模型",
+          "eventDate": null
+        },
+        "currentSignatureEqualsPriorFrozen": true,
+        "items": [
+          {
+            "itemId": "cmu9mlfm000v4mf01wzm60pro",
+            "storedDate": null,
+            "storedObject": "Step5Preview 基座模型",
+            "publishedAt": "2026-09-20T07:25:31.000Z",
+            "analysisStatus": "succeeded",
+            "aiProcessedAt": 1789897227334,
+            "itemSignature": {
+              "eventType": null,
+              "eventSubject": "阶跃",
+              "eventAction": "全量开放",
+              "eventObject": "Step5Preview 基座模型",
+              "eventDate": null
+            }
+          },
+          {
+            "itemId": "cmuao3hrj009lpf01wagyp6kz",
+            "storedDate": null,
+            "storedObject": "Step5Preview 旗舰基座模型",
+            "publishedAt": "2026-09-21T01:52:50.000Z",
+            "analysisStatus": "succeeded",
+            "aiProcessedAt": 1789964929399,
+            "itemSignature": {
+              "eventType": null,
+              "eventSubject": "阶跃",
+              "eventAction": "全量开放",
+              "eventObject": "Step5Preview 旗舰基座模型",
+              "eventDate": null
+            }
+          }
+        ],
+        "clusterUpdatedAt": 1789964959158
+      }
+    ],
+    "historicalModelResponseAvailable": false,
+    "historicalExecutedVersionIdentified": false
+  }
+]

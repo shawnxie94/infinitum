@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "parentCaptureManifestSha256": "fd48e8f34f87c3a247009594e786b65ebe4751df0143d8d0bdcab7a610bc65fd",
+  "files": {
+    "source-cases.json": "467a8dc1571745a59b2ffb5c928b60bc7fd9044818af41ee531c1ac884f374e8",
+    "review.html": "a2e2caff813df1186a21bd92cccbd592eee64e2be8e3a984f7ddbede16928615",
+    "labels.blank.csv": "65e16cc23c6a2edbd2c8a29582f4d56bc558cf3a26cf3785b19aa481e69d1556",
+    "ai-suggestions.json": "22596abc1495e7d4e53040419b54d6c23f3b4dd495c4cdae51727ea528a788d1",
+    "report.json": "5cf4b1c98a950648eece21e1c12c54aa83a46404a1b5344361956b4edb196b2c",
+    "deferrals.json": "0f0784261e34a4bac1d7798d5560a804e62a4c3cc52dc3bcb90761dd47a93b0b",
+    "README.md": "664a5b687688fc64efeb252453c383ca8fce4121f34eb03a0f2cc4966d861c82"
+  },
+  "producerCodeSha256": "12fb223d816c9a8de84dabe3719d9369772b31f0edc5bade17f64835ca1f5a91",
+  "labelState": "awaiting_assisted_human_confirmation",
+  "sendAllowed": false,
+  "qualityPassed": false,
+  "releaseEligible": false
+}

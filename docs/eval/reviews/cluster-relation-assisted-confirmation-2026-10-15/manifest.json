@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "sourceHandoffManifestSha256": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+  "references": {
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/manifest.json": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf"
+  },
+  "files": {
+    "README.md": "e8b424ec8a6abeedfe5605875af264ba969ff8a707430eec6f9d14b5638f94a7",
+    "confirmation-receipt.json": "66aeb7444691e4b79426ce7cfe27daa1190079dc5ad1e4b80253f2e79b26ecde",
+    "report.json": "5ea3d50cacbcff309518f2e97b92f786e982267ceec7541bed3a347f3167047d",
+    "reviewed-v1.csv": "3feb91e8295513cc4e7d76d00075947af0c4843182055ba666c2b55421589206",
+    "reviewed-v1.json": "7e8a5dca51afa1153b137e3fb0ac9a6a30d7402db8cd6a9cdc48083befc9caec",
+    "user-confirmation.verbatim.txt": "78aa859f14da7643ae461af7feeb01d7cfd63babe4406a74d53692cbbcfb2b09"
+  },
+  "producerCodeSha256": "c5dcb829d8feba04f48c6b339475a927eb106d7695b53d96bc7c941fef2aa6c3",
+  "labelProvenance": "assisted_human_confirmation",
+  "newHumanConfirmedRelations": 3,
+  "independentNewPositiveGold": 0,
+  "sendAllowed": false,
+  "qualityPassed": false,
+  "releaseEligible": false,
+  "readyForModelReplay": false
+}

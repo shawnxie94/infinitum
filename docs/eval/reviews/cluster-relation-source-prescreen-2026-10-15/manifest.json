@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "sourceManifestSha256": "e6a07334756b397d850304d3f452512138392cd5ca4b60a7458c3fc744756a7d",
+  "sourceCaptureSha256": "66d1ea458dbfb4042797db8aed4bc83ea79e86c43eb8a9fde897f8c0b641bf46",
+  "files": {
+    "README.md": "aa1140977190a458b10f368f9768715643554a0719671c845d0634847750b555",
+    "corpus-index.json": "b62189345ae982555afd4975f61a6aa89cf30b4175105738fbcb09a49647a5fb",
+    "report.json": "7fe4f42ff58961ad3cece9e2831a4587a600d41186abde13191afabcb95f68fc",
+    "reviews.json": "70db71a87746be249875e70e1df33742fe067447fd7eaf7a0fe809b72cc0fc0b",
+    "same-cluster-controls.json": "d0a1cdd3febe267263fee45211455438fba19b9ec46bc2750a78bd2fbfafedd5",
+    "source-reading-receipt.json": "add2eada9200a8047b2cf079d5f07a7ed888d8324537d92a5ce5bab51a8fd2d9"
+  },
+  "contextBuilderSha256": "671165fd475ce3639a2047a32f2b3874cfd4ef4dfbf220b498d49918731bed79",
+  "corpusContextSha256": "78d0dfadf92a384f09ee6c661d884bc91094570cfb90e4e7237c8347d5207697",
+  "producerSha256": "bd562f99780134599c937e9ff4d65c10a99892cda4072f61d8575f2104d26294",
+  "sourceScope": "bounded frozen source corpus, not newly captured production admission",
+  "newHumanLabelsReceived": 0,
+  "handoffCandidates": 0,
+  "qualityPassed": false,
+  "releaseEligible": false
+}

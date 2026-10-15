@@ -1,0 +1,76 @@
+{
+  "pairs": [
+    {
+      "left": {
+        "title": "Anthropic 考虑推出新AI模型应对竞争 OpenAI GPT-6Astra",
+        "summary": "路透社报道，Anthropic正考虑在IPO筹备期间推出一款新AI模型，以应对OpenAI近期推出的GPT-6Astra在企业市场带来的竞争压力。三名知情人士透露，公司仍在评估新模型安全性，尚未确定发布时间。该计划与Anthropic CEO达里奥·阿莫代9月12日发表的呼吁行业放缓模型能力迭代的3800字文章形成时间对照。路透援引Ramp数据称，Astra目前约占企业AI支出的13%，Anthropic Claude Fable约8%；截至7月底Anthropic年化营收运行规模超650亿美元，预计2028年达1900亿至2000亿美元，OpenAI同期超400亿美元。Anthropic内部还在权衡研发投入与盈利能力，且IPO可能推迟至11月美国中期选举之后，最早或于10月中旬启动路演。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "考虑推出新AI模型应对竞争",
+        "eventObject": "OpenAI GPT-6Astra",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "title": "Anthropic 拟推出全新 AI 模型 GPT-6 Astra 竞争压力",
+        "summary": "据路透社报道，三位消息人士透露，Anthropic 正考虑推出一款全新 AI 模型，以应对 OpenAI 发布 GPT-6 Astra 后的强劲势头，且此举发生在公司筹备 IPO 前夕。此前 Anthropic CEO 达里奥·阿莫代伊曾发文呼吁放缓模型能力迭代并获奥特曼、马斯克支持。GPT-6 Astra 自 9 月 3 日发布后快速渗透企业市场，Ramp 数据显示其占企业 AI 支出约 13%，Claude Fable 降至约 8%，OpenRouter 上 OpenAI 模型花费两年来首次反超 Anthropic。不过 Anthropic 截至 7 月末年化营收运行率已突破 650 亿美元，仍领先 OpenAI 7 月的 400 亿美元。投资者认为更大威胁来自开源模型崛起及 Meta 计划从调用转向自研，Anthropic 内部仍在权衡新模型安全与盈利的平衡，IPO 可能推迟至 11 月中期选举之后。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "拟推出全新 AI 模型",
+        "eventObject": "GPT-6 Astra 竞争压力",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 0,
+      "pair_id": "p1"
+    },
+    {
+      "left": {
+        "title": "阿里云无影团队 研发 QwenBook AI设备",
+        "summary": "据报道，阿里云无影团队正在研发名为QwenBook的AI设备，定位为原生智能体电脑，产品形态接近\"千问平板\"，主打办公场景，接入Qwen3.8-Max和Qwen3.8-Flash两款模型。QwenBook的产品定义和硬件由团队自主研发，并将无影在云电脑领域积累的系统及端云能力带入项目。团队约150人，系统团队基于无影和阿里云OS团队重组，硬件团队吸纳了多名头部手机厂商人才。该设备并非传统平板的AI功能升级，而是尝试以大模型和智能体为核心交互方式，整合模型、操作系统及端云协同能力。但产品仍处于早期阶段，最终形态和上市计划尚未明确。",
+        "eventType": null,
+        "eventSubject": "阿里云无影团队",
+        "eventAction": "研发",
+        "eventObject": "QwenBook AI设备",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "title": "阿里云 发布 Qwen Book AI智能体电脑",
+        "summary": "2026云栖大会上，阿里云正式发布AI智能体电脑Qwen Book，主打自主理解用户意图、持续学习与长期任务执行。产品搭载Skill键盘阵列、全局AI按键、语音手写笔等交互入口，支持7×24小时运行重度任务，针对传统AI办公中跨应用、跨Agent协同效率不足的问题进行优化。Qwen Book基于\"OS as Harness\"理念，以千问端云模型为核心，深度融合操作系统、应用、云服务与硬件能力，构建可理解、可记忆、可治理的Agent计算环境。阿里云研发副总裁张献涛表示，希望Qwen Book演变为Token驱动、持续成长的智能体载体，推动个人智能向RSI演进。生态方面已与高通、英特尔、罗技、绿联等完成适配，并打通支付宝、千问输入法等阿里系应用，会上还宣布与开源项目Omarchy合作探索面向Agent的新一代桌面操作系统。",
+        "eventType": null,
+        "eventSubject": "阿里云",
+        "eventAction": "发布",
+        "eventObject": "Qwen Book AI智能体电脑",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 0,
+      "pair_id": "p2"
+    },
+    {
+      "left": {
+        "title": "阶跃星辰 发布并全量开放 Step 5 Preview 模型",
+        "summary": "阶跃星辰于昨天突然发布旗舰模型 Step 5 Preview，今天正式全量开放 API 和 Studio，10 月 15 日将发布完整权重模型。该模型采用稀疏 MoE 架构，总参数 600B、激活 27B，支持 100 万 Token 上下文和图文输入。在 AA 榜单 Intelligence Index 中得 44 分，与 Kimi K3 Max 持平；输出速度约 100 Token/s，每任务成本 0.71 美元，低于 Kimi K3 Max 的 2 美元。长任务测试中，模型连续 24 小时自主优化 H100 GPU 内核代码，约 22 小时达 508 TFLOPS，同实验 Claude Opus 5 为 493 TFLOPS；另一实验中其自主设计后训练数据，将 Qwen3-30B-A3B 的 AIME24 准确率从 53.3% 提至 60%。同步开启新用户注册活动，注册送 99 元套餐并可累计获 75 天使用权限。",
+        "eventType": null,
+        "eventSubject": "阶跃星辰",
+        "eventAction": "发布并全量开放",
+        "eventObject": "Step 5 Preview 模型",
+        "eventDate": "2025-10-15",
+        "itemCount": 1
+      },
+      "right": {
+        "title": "阶跃全量开放Step5Preview基座模型 600B稀疏MoE主打高性价比",
+        "summary": "阶跃全量开放新一代旗舰基座模型**Step5Preview**，采用**600B总参数稀疏MoE架构、每次仅激活27B**，原生支持**100万Token上下文**及文本、视觉双输入。该模型在 Artificial Analysis Intelligence Index 上以**44分跻身全球开源模型前三**，单任务成本约为Claude Opus5的**八分之一**。在 ALE-CLI、FrontierFinance、DRACO 等高难度基准上表现领先开源阵营；自建编程评测 StepCodeBench 覆盖*553个代码仓库、33种语言*，并展示出长链路 Vibe Coding 能力。",
+        "eventType": null,
+        "eventSubject": "阶跃",
+        "eventAction": "全量开放",
+        "eventObject": "Step5Preview 旗舰基座模型",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "score": 0,
+      "pair_id": "p3"
+    }
+  ]
+}

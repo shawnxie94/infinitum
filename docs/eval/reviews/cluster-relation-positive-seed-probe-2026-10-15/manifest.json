@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "sourceBlindManifestSha256": "fa551275c112e5947436fd751400e4d25f5c9b28173b0b4d3c8b00b8d3e3318f",
+  "files": {
+    "capture.json": "66d1ea458dbfb4042797db8aed4bc83ea79e86c43eb8a9fde897f8c0b641bf46",
+    "report.json": "e6beb321349fb091aa92700da6de919d7e6116ea52d387c9367959567e8f3aea",
+    "audit.json": "2a55cff1d0368bcd4f1b0cccdaf95f3ba58b3f2a759b559451fe21ee336f8df4",
+    "blind-cases.json": "fce4740140b02b0738c21d12c0caa5378da28e8bf7fcddf49ea63485d942434d",
+    "blind.html": "084acf7d434381342dda9d1b45862e50414502984c8439d6c489f86f20f6b538",
+    "labels.blank.csv": "fde8e5f772c693f3550fee7910f34dc2237d7a3cedc385730d24d643814b4c73"
+  },
+  "probeCodeSha256": "2101f529615f308fbcf41173a1c07c408e439326531dbf0b566c5e70baa612eb",
+  "modelRequestsSent": 0,
+  "productWrites": 0,
+  "positiveLabelsReceived": 0
+}

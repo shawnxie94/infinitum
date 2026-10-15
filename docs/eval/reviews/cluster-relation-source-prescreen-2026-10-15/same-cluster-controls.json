@@ -1,0 +1,48 @@
+[
+  {
+    "id": "CONTROL-01",
+    "articles": [
+      {
+        "itemId": "cmuzbzwue00lklk01l00eiyqv",
+        "clusterId": "cmuzc01u500lvlk01efx9wen3",
+        "url": "https://www.aibase.com/zh/news/31478",
+        "originalTitle": "腾讯 WorkBuddy 上线独立文件浏览器！本地文档可直接呼叫 AI 处理",
+        "rawSourceSha256": "ca0d0209e91a48b215c30672fb618ba5ac568bbaa37923e153468968f10f6451"
+      },
+      {
+        "itemId": "cmuzc079700milk011dku62cg",
+        "clusterId": "cmuzc01u500lvlk01efx9wen3",
+        "url": "https://www.aibase.com/zh/news/31472",
+        "originalTitle": "WorkBuddy上线独立文件浏览器:本地文件右键「打开方式」直接调用AI",
+        "rawSourceSha256": "0b4e856bf8eadd4beef61d77bb3ff28f6c92837110616330ff6b94800fbbdb7d"
+      }
+    ],
+    "assistantSuggestedRelation": "same_event",
+    "reason": "均为10月8日WorkBuddy独立文件浏览器上线，相同主体/功能/使用入口；已经同簇。",
+    "eligibleProductionPair": false,
+    "gold": null
+  },
+  {
+    "id": "CONTROL-02",
+    "articles": [
+      {
+        "itemId": "cmv4nxhiz008tua01rm0718t5",
+        "clusterId": "cmv4nxkog0090ua01zl61bu5l",
+        "url": "https://www.aibase.com/zh/news/31560",
+        "originalTitle": "OpenAI 给 GPT-6.1 Sol 扩容：默认上下文 272k 飙到 500k，长文本还免费",
+        "rawSourceSha256": "41f7b0a1407881ecd3fbc8433c7d479d5acd5cd1fe999b447b0049f6bf3d0d17"
+      },
+      {
+        "itemId": "cmv4nza0k00bnua01xrjddwqg",
+        "clusterId": "cmv4nxkog0090ua01zl61bu5l",
+        "url": "https://www.aibase.com/zh/news/31548",
+        "originalTitle": "OpenAI给GPT-6.1 Sol扩容记忆：默认上下文顶到 50 万，长文本不再单独计费",
+        "rawSourceSha256": "65613048f11c58bf7ec53cf7595e554545d7cce7c3132dba82dbfc47c4152aad"
+      }
+    ],
+    "assistantSuggestedRelation": "same_event",
+    "reason": "均为Tibo宣布Codex与Work环境中GPT-6.1 Sol默认上下文272k到500k且免长上下文附加费；已经同簇。",
+    "eligibleProductionPair": false,
+    "gold": null
+  }
+]

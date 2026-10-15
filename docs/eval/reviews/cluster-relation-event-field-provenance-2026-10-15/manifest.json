@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "references": {
+    "docs/eval/reviews/cluster-relation-input-admission-diagnostic-2026-10-15/manifest.json": "d9b1d8f0743f89946c5ca0db4f1f1fae4aa36a033fcebead9dbe5b78388f6ab5",
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/capture.json": "b3ff20ec1cf084dd0e93c5b727c180137f5858948f22464d9c215ea9b21faee8",
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/ai-suggestions.json": "22596abc1495e7d4e53040419b54d6c23f3b4dd495c4cdae51727ea528a788d1",
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/source-cases.json": "467a8dc1571745a59b2ffb5c928b60bc7fd9044818af41ee531c1ac884f374e8",
+    "src/lib/ai/protocols/item-understanding.ts": "82c1b7a76852f4ad07e363a3fd95bc7f523943be45893c78c1d0758a3abb06d3",
+    "src/lib/clusters/normalization.ts": "b4d695e3f30d13b6a394513e689bde884253a6f1c2556b41adc7828f3cd1bed5",
+    "src/lib/clusters/helpers.ts": "c632f2bbb08d851fe9f53afe72d87572f6845733c1c43421190858e7e9d3fc02",
+    "prisma/schema.prisma": "bb46063d7c0d0565e6b5cfc6c1ed4c68d710c133f4a68054c9d996218e1827ac"
+  },
+  "files": {
+    "readonly-item-cluster-capture.json": "d5cf741b167e4374298fda11459c982a1de53d329d71af3c754e5c8d903d65dd",
+    "provenance-traces.json": "77e4ccd5078d8dc53854b74a40167e8d32561b97182ad32ff977911520fa7689",
+    "report.json": "6a22428eba550e8807563ac6c32c9059adcb368f054bea7ebb556856c9dd0e8c",
+    "synthetic-boundary-reproductions.json": "d64465e3499ff39be540b763f73ee35aa6af31ecb24617cddc29184fedcda589"
+  },
+  "producerCodeSha256": "cc8e985c33940af6de7793e9acb69549a2e116969993533e2ccf095bc43db837",
+  "readonlySqlSha256": "2b0293632c67c4462102ae2ac4d741731f6393267dcf92788a4b95a6e505a581",
+  "sendAllowed": false,
+  "businessWrites": 0,
+  "qualityPassed": false,
+  "releaseEligible": false
+}

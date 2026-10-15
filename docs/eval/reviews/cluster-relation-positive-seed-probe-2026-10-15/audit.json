@@ -1,0 +1,20 @@
+[
+  {
+    "caseId": "PB-07",
+    "leftClusterId": "cmuzc0co500mplk01z2067aa0",
+    "rightClusterId": "cmv3r5zgl00pbs501ucor0u2f",
+    "titleAnchors": [
+      "product:gpt6"
+    ],
+    "productionAdmittedInOldFrame": false,
+    "familyHashes": [
+      "d20dfe33a519d9a473c5b1a313bd5c21db004bd26573780b0063a61acde31ac1",
+      "adc3d17311470f998887cb5a07998ec76a4fe1154e28f80418d3aa136d6b5b08",
+      "5446e304f1b135e99b19f1dcf1e755671badc8117c73e47d25f184a89f66664f",
+      "3e903f04d3a32d68cf446fdbb4190f11f5e2b1f314c8c5f1cef296f958b489ad",
+      "ef6e462629e45c602ed3567ac36010c0989f7a26b91d178030e587efafbc6fab",
+      "3d701983e06c3a2ab8b0ec3af3c5ac58b7e9108e0bfd7a71687cda08433a24b4"
+    ],
+    "gold": null
+  }
+]

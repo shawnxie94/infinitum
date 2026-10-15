@@ -1,0 +1,107 @@
+[
+  {
+    "caseId": "PB-08",
+    "left": [
+      {
+        "title": "Anthropic考虑推出新模型，拟应对OpenAI GPT-6Astra竞争",
+        "url": "https://www.aibase.com/zh/news/31180",
+        "publishedAt": "2026-09-20T01:50:51.000Z",
+        "evidence": {
+          "field": "rssContent",
+          "text": "据路透社报道，Anthropic正考虑在IPO筹备期间推出一款新AI模型，以应对OpenAI GPT-6Astra近期在企业市场形成的竞争压力。三名知情人士透露，公司目前仍在评估新模型的安全性，尚未确定最终发布时间。（Reuters）\n\n这一计划与Anthropic CEO达里奥·阿莫代近期提出的“放缓AI模型能力迭代”主张形成时间上的对照。9月12日，阿莫代发表3800字文章，呼吁行业降低新能力发布速度并重视安全风险。与此同时，9月3日发布的GPT-6Astra获得企业用户关注，部分投资者开始重新评估Anthropic在企业AI市场的竞争地位。\n\n路透援引Ramp数据称，Astra目前约占企业AI支出的13%，Anthropic的Claude Fable约为8%;截至7月底，Anthropic年化营收运行规模已超过650亿美元，并预计2028年营收达到1900亿至2000亿美元。OpenAI同期年化营收运行规模超过400亿美元。（Reuters）\n\nAnthropic内部目前还在权衡模型研发投入与盈利能力。与此同时，开源、开放权重模型降低AI调用成本，也进一步增加商业模型厂商的竞争压力。知情人士称，Anthropic的IPO可能推迟至美国11月中期选举之后，最早或于10月中旬启动路演。",
+          "rawSha256": "53a81a2e8bd51b1ed5ce76361a00d16af698ed14fe64350258749d444b67b901",
+          "characterCount": 552,
+          "completeness": "retained_only_not_verified_against_live_source"
+        }
+      }
+    ],
+    "right": [
+      {
+        "title": "消息称 Anthropic 拟在 IPO 前推出新模型，应对 GPT-6 Astra 冲击",
+        "url": "https://www.aibase.com/zh/news/31198",
+        "publishedAt": "2026-09-20T07:37:54.000Z",
+        "evidence": {
+          "field": "rssContent",
+          "text": "据路透社报道，三位消息人士透露，Anthropic 正考虑推出一款全新人工智能模型，以应对 OpenAI 发布 GPT-6 Astra 之后的强劲发展势头。此事发生在公司筹备 IPO 前夕——就在此前，其首席执行官还呼吁整个 AI 行业放缓技术迭代的脚步。\n\n消息人士称，推新模型意在直面来自直接竞争对手的压力。此前，Anthropic CEO 达里奥·阿莫代伊已向全球 AI 业界发声，呼吁行业放慢新能力发布节奏、妥善处理安全风险。“我们必须放缓 AI 模型能力迭代的速度。”他在 9 月 12 日一篇长达 3800 字的文章中写道。该文描绘了一幅不容乐观的前景：大批 AI 智能体席卷互联网，发展速度超出人类管控范围，观点得到奥特曼与马斯克的支持。\n\nAstra 在企业市场反超，Claude 份额被挤压\n\nOpenAI 于 9 月 3 日发布的 GPT-6 Astra 重点宣传电脑操作、软件工程、网络安全与专业办公能力，已在商业客户中迅速打开局面。企业费用管理平台 Ramp 的数据显示，Astra 目前约占企业 AI 相关支出的 13%，而 Anthropic 的 Claude Fable 约为 8%。在 OpenRouter 上，上周平台用户在 OpenAI 模型上的花费已超过 Anthropic 模型，这是两年半以来 OpenAI 首次在该指标上领先。部分投资者因此重新评估 Anthropic 作为企业级 AI 头部供应商的地位。\n\n不过 Anthropic 仍保有营收优势：截至 7 月末其年化营收运行率已突破 650 亿美元（约合 4366.96 亿元人民币），而 2025 年底仅约 90 亿美元；公司预测 2028 年营收将达 1900 亿至 2000 亿美元。OpenAI 7 月的年化营收运行率则超过 400 亿美元。\n\n更大挑战：开源模型崛起与 Meta 转向自研\n\n投资者认为，更大的潜在威胁来自开源、开放权重模型的兴起——这类模型能降低 Token 调用成本，允许企业自建 AI 基础设施。知情人士称，Meta 原本是 Anthropic 最重要的客户之一，但正计划减少调用其模型，转而自研更多 AI 能力。\n\n一位知情人士透露，Anthropic 在商讨是否发布新版本的同时，仍在评估这款下一代模型的安全水平；公司内部也在讨论如何平衡新模型开发与改善盈利。针对报道，Anthropic 拒绝置评。\n\n上市节奏方面，奥尔特曼已确认 OpenAI 不会在 2026 年启动 IPO；据两名知情人士透露，Anthropic 有可能将 IPO 推迟至美国 11 月中期选举之后，此前路透社曾报道其最早预计 10 月中旬启动 IPO 路演。",
+          "rawSha256": "692e7087e3d0325a7edf90fb77f63a0dd2eea24999a6cae0cba44647f577a706",
+          "characterCount": 1135,
+          "completeness": "retained_only_not_verified_against_live_source"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "PB-09",
+    "left": [
+      {
+        "title": "阿里试水QwenBook AI设备，团队规模约150人",
+        "url": "https://www.aibase.com/zh/news/31270",
+        "publishedAt": "2026-09-22T08:01:36.000Z",
+        "evidence": {
+          "field": "rssContent",
+          "text": "据报道，阿里云旗下无影团队正在研发一款名为QwenBook的AI设备，定位为原生智能体电脑，但产品形态更接近“千问平板”。目前该产品仍处于早期试水阶段，主打办公场景，接入模型包括Qwen3.8-Max和Qwen3.8-Flash。\n\n据一位阿里云人士透露，QwenBook的产品定义和硬件部分由团队自主研发，同时将无影此前在云电脑领域积累的系统及端云能力带入项目。目前QwenBook团队约150人，系统团队主要基于无影和阿里云OS团队重新组建，硬件团队则吸纳了多名头部手机厂商相关人才。\n\n从产品定位来看，QwenBook并非传统平板电脑的AI功能升级，而是尝试以大模型和智能体能力作为核心交互方式，将阿里的模型、操作系统以及端云协同能力整合至新型AI终端中。不过目前产品仍处于早期阶段，其最终形态及具体上市计划尚未明确。",
+          "rawSha256": "dce216c20a99f4b713ca6298bd3204685565dc5ef7a8e7c4a7da56418ea9df20",
+          "characterCount": 362,
+          "completeness": "retained_only_not_verified_against_live_source"
+        }
+      }
+    ],
+    "right": [
+      {
+        "title": "阿里云发布Qwen Book:AI智能体电脑正式亮相",
+        "url": "https://www.aibase.com/zh/news/31301",
+        "publishedAt": "2026-09-23T06:21:47.000Z",
+        "evidence": {
+          "field": "rssContent",
+          "text": "2026云栖大会上，阿里云正式发布AI智能体电脑Qwen Book，主打自主理解用户意图、持续学习与长期任务执行。产品搭载Skill键盘阵列、全局AI按键、语音手写笔等交互入口，并提供支持7×24小时运行重度任务的操作空间，针对传统AI办公中跨应用、跨Agent协同效率不足的问题进行优化。\n\nQwen Book基于“OS as Harness”理念，以千问端云模型为核心，深度融合操作系统、应用、云服务与硬件能力，统一管理交互入口、运行时环境、个人持续上下文以及软硬件操控能力，构建可理解、可记忆、可持续运行和可治理的Agent计算环境。阿里云研发副总裁、终端智能计算事业部总裁张献涛表示，希望Qwen Book从硬件工具进一步演变为Token驱动、持续成长的智能体载体，推动个人智能向RSI演进。\n\n生态方面，Qwen Book已与高通、英特尔、罗技、绿联等伙伴完成适配，并打通支付宝、千问输入法等阿里系应用，同时开放系统接口和能力接入。大会期间，Qwen Book还宣布与开源项目Omarchy合作，共同探索面向Agent的新一代桌面操作系统。",
+          "rawSha256": "22d42c44f6dcc3a709f22c909004d5ec99c1c6d6d5178d095c7ed3d7a490e1d1",
+          "characterCount": 475,
+          "completeness": "retained_only_not_verified_against_live_source"
+        }
+      }
+    ]
+  },
+  {
+    "caseId": "PB-10",
+    "left": [
+      {
+        "title": "阶跃星辰 Step 5 Preview 全量开放：600B 参数打平 K3 级性能，新用户最长白嫖 75 天",
+        "url": "https://www.aibase.com/zh/news/31194",
+        "publishedAt": "2026-09-20T06:43:39.000Z",
+        "evidence": {
+          "field": "rssContent",
+          "text": "昨天一款名为 Step 5 Preview 的国产大模型突然杀出，仅用 6000 亿参数量就达到了 2.8 万亿参数量 K3 级别的性能，性价比非常高。今天该模型正式全量开放——API 和 Studio 已经可以使用，10 月 15 日还将发布完整权重模型。\n\nStep 5 Preview 是阶跃星辰推出的旗舰模型，采用稀疏 MoE 架构，总参数 600B，每次仅激活 27B，支持 100 万 Token 上下文和图文输入。\n\n跑分与长任务：连续 24 小时自主优化 GPU 内核\n\n性能方面，Step 5 Preview 在 AA 榜单的 Intelligence Index 中得分 44 分，与 Kimi K3 Max 持平；输出速度约 100 Token/s，每项任务成本 0.71 美元，而 Kimi K3 Max 为 2 美元。\n\n它也有不错的长任务能力：连续最多 24 小时自主优化一套 H100 GPU 内核，模型自己改代码、跑测试、比较结果再继续迭代，约 22 小时后达到 508 TFLOPS，同一实验中 Claude Opus 5 为 493 TFLOPS。在另一个 24 小时实验里，Step 5 Preview 自己设计后训练数据，把 Qwen3-30B-A3B 在 AIME24 上的准确率从 53.3% 提升到 60%，与 Claude Opus 5 持平，同时消耗更少的标注 Token。\n\n注册就送套餐，累计最高 75 天\n\n阶跃星辰官方同步开启活动：新用户注册送 99 元套餐，登录即得 15 天，完成首次调用再得 15 天，每邀请 1 位好友注册再获 15 天、累计最高 45 天，总福利可达 75 天。\n\n从目前的反馈看，该模型想真正持平 K3 并不那么容易，但也并非为跑分刷榜而生，整体能力与 DeepSeek V4.1 Flash 接近；不过实际使用速度不算快，若后续免费用户增多，速度可能还会下滑。",
+          "rawSha256": "ebc44e99f4fec248e4be751a032d7ab0043b76277ca7d4aea49878ddfaa15b52",
+          "characterCount": 824,
+          "completeness": "retained_only_not_verified_against_live_source"
+        }
+      }
+    ],
+    "right": [
+      {
+        "title": "阶跃甩出 Step 5 Preview：600B 稀疏 MoE 只激活 27B，把开源旗舰的\"性价比边界\"往外推了一格",
+        "url": "https://www.aibase.com/zh/news/31196",
+        "publishedAt": "2026-09-20T07:25:31.000Z",
+        "evidence": {
+          "field": "rssContent",
+          "text": "阶跃今天全量开放新一代旗舰基座 Step5Preview，定位很明确——一款为真实世界里 Agentic 任务而生的主力模型。它想解决的是 AI 模型里那道经典的\"帕累托题\":能力、效率、成本三个目标互相拉扯，历史上想在一个维度上往前走，往往得拿另一个维度去换;而推进帕累托前沿，不是让取舍消失，而是用新设计把整条边界往外推。\n\n这次的推法是稀疏 MoE 架构。Step5Preview 总参数600B，但每次只激活27B，原生支持100万 Token 上下文窗口，并且能直接吃文本和视觉两种输入。在 Artificial Analysis 的 Intelligence Index 里，它拿到44分，挤进全球开源模型前三;更狠的是单任务成本只有 Claude Opus5的八分之一——同一笔预算换更强智能，或者同等能力以更低价格落地，两条路它都给铺了。\n\n硬实力在几个高难度基准上露了脸。在 Agents' Last Exam 的 CLI 子集 ALE-CLI、金融投资研究评测 FrontierFinance，以及跨领域深度研究评测 DRACO 上，Step5Preview 仅次于 GPT-6Astra 或 Claude Opus5，把其他参评的开源模型甩在身后;GDPval-AA v2也采用了截至9月19日的最新结果，DeepSWE v1.1在 SWE-agent harness 下以 temperature=1.0、top_p=0.95评测。\n\n编程这块，阶跃自建了 StepCodeBench，覆盖553个独立代码仓库、9类任务、20个应用领域和33种编程语言。Step5Preview 在整体成功率和跨场景稳定性上都站得住，Bug 修复、功能开发、重构、环境配置这类真实活儿都能接。一个演示里，它读着 ESP32设备的大量开发文档，把一块 ESP32-S3开发板改造成支持蓝牙按键和语音输入的 Vibe Coding 键盘，过程中自己开 COM 串口、调摄像头、截设备图、模拟鼠标，再根据真实报错连续改代码跑调试，一口气干了三个多小时。\n\n长周期任务更见真章。第一项实验给24小时、一张 H100，让它从零优化一个 MLA GPU 内核（头维度512、batch1、64个注意力头、8192token）。Step5Preview 自主改代码、跑内核、测吞吐，遇到跑得通却降速的方案就放弃、从最佳版本接着爬，约22小时后把峰值性能顶到508TFLOPS，压过了 Claude Opus5的493TFLOPS。第二项实验同样24小时，让它通过自动化后训练提升一个 Qwen3-30B-A3B 基础模型在 AIME24上的表现，模型自己决定怎么用标注 API、怎么调数据，最终把准确率从53.3% 拉到60%，和 Opus5持平却更省标注 token。\n\n前端与视觉上，它不只会写网页，还能调用 Blender 建并反复改3D 资产，再接进 Three.js 做交互应用和游戏;甚至从一本1922年的《广九铁路旅行指南》里抽信息，做出行程查询、费用计算和路线回放，让小火车沿百年前的线路跑起来，把史料变成可交互产品。\n\n金融被当成综合能力的试金石。阶跃围绕公司研究这一高难度流程建了三项内部评测:FinStepBench-LiveSearch 考随需求变化检索核验金融信息，CorporateValuation 考把数据和假设转成可复现估值，DeepResearch 考从证据收集到完整研究报告的全程;外部基准 FrontierFinance 则用220道专家题、11543项评分标准覆盖六类投资场景。四项里 Step5Preview 都交出强结果。\n\n从 Step3.5Flash、Step3.7Flash 到 Step5Preview，阶跃押的始终是同一件事:下一阶段的 Scaling 不只是堆更多 Compute，更是把 Compute 用得更高效。今天全量开放之后，完整模型权重将在10月15日释放，这款把\"能力—成本—效率\"重新撮合过一遍的开源旗舰，正等着开发者把它当成 Agent 任务的日常主力。",
+          "rawSha256": "27222692bdce7eb4107faa2f559a73ce9db80e8b9b2de4783b7f6093cf2192c1",
+          "characterCount": 1712,
+          "completeness": "retained_only_not_verified_against_live_source"
+        }
+      },
+      {
+        "title": "阶跃甩出 Step 5 Preview：600B 稀疏 MoE 只激活 27B，把开源旗舰的性价比边界往外推了一格",
+        "url": "https://www.aibase.com/zh/news/31221",
+        "publishedAt": "2026-09-21T01:52:50.000Z",
+        "evidence": {
+          "field": "rssContent",
+          "text": "阶跃今天全量开放新一代旗舰基座 Step5Preview，定位很明确——一款为真实世界里 Agentic 任务而生的主力模型。它想解决的是 AI 模型那道经典的\"帕累托题\":能力、效率、成本三个目标互相拉扯，历史上想在一个维度上往前走，往往得拿另一个维度去换;而推进帕累托前沿，不是让取舍消失，而是用新设计把整条边界往外推。\n\n这次的推法是稀疏 MoE 架构。Step5Preview 总参数600B，但每次只激活27B，原生支持100万 Token 上下文窗口，并且能直接吃文本和视觉两种输入。在 Artificial Analysis 的 Intelligence Index 里，它拿到44分，挤进全球开源模型前三;更狠的是单任务成本只有 Claude Opus5的八分之一——同一笔预算换更强智能，或者同等能力以更低价格落地，两条路它都给铺了。在 Agents' Last Exam 的 CLI 子集 ALE-CLI、金融投资研究评测 FrontierFinance，以及跨领域深度研究评测 DRACO 上，它仅次于 GPT-6Astra 或 Claude Opus5，把其他参评的开源模型甩在身后;GDPval-AA v2也采用了截至9月19日的最新结果，DeepSWE v1.1在 SWE-agent harness 下以 temperature=1.0、top_p=0.95评测。\n\n编程这块，阶跃自建了 StepCodeBench，覆盖553个独立代码仓库、9类任务、20个应用领域和33种编程语言。Step5Preview 在整体成功率和跨场景稳定性上都站得住，Bug 修复、功能开发、重构、环境配置这类真实活儿都能接。一个演示里，它读着 ESP32设备的大量开发文档，把一块 ESP32-S3开发板改造成支持蓝牙按键和语音输入的 Vibe Coding 键盘，过程中自己开 COM 串口、调摄像头、截设备图、模拟鼠标，再根据真实报错连续改代码跑调试，一口气干了三个多小时。\n\n长周期任务更见真章。第一项实验给24小时、一张 H100，让它从零优化一个 MLA GPU 内核（头维度512、batch1、64个注意力头、8192token）。Step5Preview 自主改代码、跑内核、测吞吐，遇到跑得通却降速的方案就放弃、从最佳版本接着爬，约22小时后把峰值性能顶到508TFLOPS，压过了 Claude Opus5的493TFLOPS。第二项实验同样24小时，让它通过自动化后训练提升一个 Qwen3-30B-A3B 基础模型在 AIME24上的表现，模型自己决定怎么用标注 API、怎么调数据，最终把准确率从53.3% 拉到60%，和 Opus5持平却更省标注 token。\n\n前端与视觉上，它不只会写网页，还能调用 Blender 建并反复改3D 资产，再接进 Three.js 做交互应用和游戏;甚至从一本1922年的《广九铁路旅行指南》里抽信息，做出行程查询、费用计算和路线回放，让小火车沿百年前的线路跑起来，把史料变成可交互产品。\n\n金融被当成综合能力的试金石。阶跃围绕公司研究这一高难度流程建了三项内部评测:FinStepBench-LiveSearch 考随需求变化检索核验金融信息，CorporateValuation 考把数据和假设转成可复现估值，DeepResearch 考从证据收集到完整研究报告的全程;外部基准 FrontierFinance 则用220道专家题、11543项评分标准覆盖六类投资场景。四项里 Step5Preview 都交出强结果。\n\n从 Step3.5Flash、Step3.7Flash 到 Step5Preview，阶跃押的始终是同一件事:下一阶段的 Scaling 不只是堆更多 Compute，更是把 Compute 用得更高效。今天全量开放之后，完整模型权重将在10月15日释放，这款把\"能力—成本—效率\"重新撮合过一遍的开源旗舰，正等着开发者把它当成 Agent 任务的日常主力。",
+          "rawSha256": "8bbe29da0530c40dbc51866e844fbc5caed969e0dce182c0b04208bad7cec8eb",
+          "characterCount": 1681,
+          "completeness": "retained_only_not_verified_against_live_source"
+        }
+      }
+    ]
+  }
+]

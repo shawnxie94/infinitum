@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "sourceBlindManifestSha256": "fa551275c112e5947436fd751400e4d25f5c9b28173b0b4d3c8b00b8d3e3318f",
+  "sourceFiles": {
+    "manifest.json": "fa551275c112e5947436fd751400e4d25f5c9b28173b0b4d3c8b00b8d3e3318f",
+    "manifest.sha256": "13605fc9d6a17b6664b62d972a1cc449e77a237a887ea763b7ead86b865e0485",
+    "audit.json": "c1f28019a1fab2d7be574edb067ea4441ca8178adcbef6b333be557c0a6bb622",
+    "labels.blank.csv": "7f3aef278a04c2e16e68a0720c69f7ddf85a56a8706f62b84609358601721019",
+    "blind.html": "c96c208284bafae39e2bc545a8195a7566a8177733000f5c6415ef2105a39cbc"
+  },
+  "fileHashes": {
+    "user-submission.txt": "b9cebee93ee9361778c4bba297c7d599569cc0988cba642639757d484791dc27",
+    "reviewed-v1.csv": "c1679261f735f7f793ac96b76145e9bad536a6f1ea2545bb64bd0c4c28759205",
+    "reviewed-v1.json": "fe6da695b285d93e48a47da787c3847b649b1e93e3b9701acadfe93e1dd3bde2",
+    "README.md": "8b772acff9dfb0479d547f7e1dde62eb50b57d0895976ba3d04ef309012348d2"
+  },
+  "modelRequestsSent": 0,
+  "productDatabaseWrites": 0,
+  "qualityPassed": false,
+  "releaseEligible": false
+}

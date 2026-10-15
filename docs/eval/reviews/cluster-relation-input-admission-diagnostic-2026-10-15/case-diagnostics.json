@@ -1,0 +1,341 @@
+[
+  {
+    "caseId": "PB-08",
+    "assistedConfirmedRelation": "same_event",
+    "gold": null,
+    "independentBlindGold": false,
+    "actualCandidateAdmitted": null,
+    "serializationProjectionOnly": true,
+    "forcedPairScoreForLayout": 0,
+    "scoreIsProductionRecallScore": false,
+    "sides": [
+      {
+        "side": "left",
+        "clusterId": "cmu9f0llh03t8mg019ntadfpo",
+        "status": "active",
+        "sourceGate": 1,
+        "latestPublishedAt": "2026-09-20T01:50:51.000Z",
+        "ageDaysAtCapture": 24.629,
+        "insideSevenDayWindow": false,
+        "baseStatusAndSourceGatePass": true,
+        "windowVerdict": "excluded_outside_7_day_window",
+        "structuredEventDateBeforeSerialization": null,
+        "structuredEventDateAfterSerialization": null,
+        "structuredDateYear": null,
+        "earliestKnownOriginalPublication": "2026-09-20T01:50:51.000Z",
+        "originalPublicationYear": 2026,
+        "rawDtoCharacterCount": 587,
+        "compactSideCharacterCount": 554,
+        "retainedOriginalCharacterCount": 552,
+        "lexicalAnchorChecksOnly": [
+          {
+            "name": "subject",
+            "pattern": "Anthropic",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "wire_story",
+            "pattern": "路透",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "unnamed_model",
+            "pattern": "模型",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "competitor",
+            "pattern": "GPT[ -]*6[ -]*Astra",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          }
+        ],
+        "originalArticleTextInDto": false,
+        "originalArticlePublicationTimesInDto": false,
+        "clusterLatestPublishedAtInDto": false
+      },
+      {
+        "side": "right",
+        "clusterId": "cmu9ml5e400tymf01tb1yci07",
+        "status": "active",
+        "sourceGate": 1,
+        "latestPublishedAt": "2026-09-20T07:37:54.000Z",
+        "ageDaysAtCapture": 24.388,
+        "insideSevenDayWindow": false,
+        "baseStatusAndSourceGatePass": true,
+        "windowVerdict": "excluded_outside_7_day_window",
+        "structuredEventDateBeforeSerialization": null,
+        "structuredEventDateAfterSerialization": null,
+        "structuredDateYear": null,
+        "earliestKnownOriginalPublication": "2026-09-20T07:37:54.000Z",
+        "originalPublicationYear": 2026,
+        "rawDtoCharacterCount": 641,
+        "compactSideCharacterCount": 608,
+        "retainedOriginalCharacterCount": 1135,
+        "lexicalAnchorChecksOnly": [
+          {
+            "name": "subject",
+            "pattern": "Anthropic",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "wire_story",
+            "pattern": "路透",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "unnamed_model",
+            "pattern": "模型",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "competitor",
+            "pattern": "GPT[ -]*6[ -]*Astra",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          }
+        ],
+        "originalArticleTextInDto": false,
+        "originalArticlePublicationTimesInDto": false,
+        "clusterLatestPublishedAtInDto": false
+      }
+    ],
+    "firstProvableExclusionAtCapture": "outside_7_day_window",
+    "downstreamStages": {
+      "scanCapRanking": "not_needed_for_proven_window_exclusion",
+      "dirtyHashGate": "not_executed_out_of_window",
+      "entityCanonicalization": "not_executed_no_resolver_snapshot_replay",
+      "bm25Recall": "not_executed_out_of_window",
+      "vectorRecall": "not_executed_out_of_window",
+      "cleanPairCacheTTL": "not_executed_out_of_window",
+      "priorDecisions": "not_executed_out_of_window",
+      "cannotLinkOrMustLink": "not_executed_out_of_window",
+      "modelCall": "not_executed_no_authorization"
+    },
+    "historicalAdmissionOrModelOutcome": null
+  },
+  {
+    "caseId": "PB-09",
+    "assistedConfirmedRelation": "follow_up",
+    "gold": null,
+    "independentBlindGold": false,
+    "actualCandidateAdmitted": null,
+    "serializationProjectionOnly": true,
+    "forcedPairScoreForLayout": 0,
+    "scoreIsProductionRecallScore": false,
+    "sides": [
+      {
+        "side": "left",
+        "clusterId": "cmucg0zo9008fs401uea52vwe",
+        "status": "active",
+        "sourceGate": 1,
+        "latestPublishedAt": "2026-09-22T08:01:36.000Z",
+        "ageDaysAtCapture": 22.371,
+        "insideSevenDayWindow": false,
+        "baseStatusAndSourceGatePass": true,
+        "windowVerdict": "excluded_outside_7_day_window",
+        "structuredEventDateBeforeSerialization": null,
+        "structuredEventDateAfterSerialization": null,
+        "structuredDateYear": null,
+        "earliestKnownOriginalPublication": "2026-09-22T08:01:36.000Z",
+        "originalPublicationYear": 2026,
+        "rawDtoCharacterCount": 473,
+        "compactSideCharacterCount": 440,
+        "retainedOriginalCharacterCount": 362,
+        "lexicalAnchorChecksOnly": [
+          {
+            "name": "product",
+            "pattern": "Qwen\\s*Book",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "research_or_launch",
+            "pattern": "研发|发布",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "early_or_official_stage",
+            "pattern": "早期|尚未明确|正式发布",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          }
+        ],
+        "originalArticleTextInDto": false,
+        "originalArticlePublicationTimesInDto": false,
+        "clusterLatestPublishedAtInDto": false
+      },
+      {
+        "side": "right",
+        "clusterId": "cmudrfwcy05z7o201kvn178ro",
+        "status": "active",
+        "sourceGate": 1,
+        "latestPublishedAt": "2026-09-23T06:21:47.000Z",
+        "ageDaysAtCapture": 21.441,
+        "insideSevenDayWindow": false,
+        "baseStatusAndSourceGatePass": true,
+        "windowVerdict": "excluded_outside_7_day_window",
+        "structuredEventDateBeforeSerialization": null,
+        "structuredEventDateAfterSerialization": null,
+        "structuredDateYear": null,
+        "earliestKnownOriginalPublication": "2026-09-23T06:21:47.000Z",
+        "originalPublicationYear": 2026,
+        "rawDtoCharacterCount": 570,
+        "compactSideCharacterCount": 537,
+        "retainedOriginalCharacterCount": 475,
+        "lexicalAnchorChecksOnly": [
+          {
+            "name": "product",
+            "pattern": "Qwen\\s*Book",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "research_or_launch",
+            "pattern": "研发|发布",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "early_or_official_stage",
+            "pattern": "早期|尚未明确|正式发布",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          }
+        ],
+        "originalArticleTextInDto": false,
+        "originalArticlePublicationTimesInDto": false,
+        "clusterLatestPublishedAtInDto": false
+      }
+    ],
+    "firstProvableExclusionAtCapture": "outside_7_day_window",
+    "downstreamStages": {
+      "scanCapRanking": "not_needed_for_proven_window_exclusion",
+      "dirtyHashGate": "not_executed_out_of_window",
+      "entityCanonicalization": "not_executed_no_resolver_snapshot_replay",
+      "bm25Recall": "not_executed_out_of_window",
+      "vectorRecall": "not_executed_out_of_window",
+      "cleanPairCacheTTL": "not_executed_out_of_window",
+      "priorDecisions": "not_executed_out_of_window",
+      "cannotLinkOrMustLink": "not_executed_out_of_window",
+      "modelCall": "not_executed_no_authorization"
+    },
+    "historicalAdmissionOrModelOutcome": null
+  },
+  {
+    "caseId": "PB-10",
+    "assistedConfirmedRelation": "same_event",
+    "gold": null,
+    "independentBlindGold": false,
+    "actualCandidateAdmitted": null,
+    "serializationProjectionOnly": true,
+    "forcedPairScoreForLayout": 0,
+    "scoreIsProductionRecallScore": false,
+    "sides": [
+      {
+        "side": "left",
+        "clusterId": "cmu9mlbkj00ummf01ugx1hh6t",
+        "status": "active",
+        "sourceGate": 1,
+        "latestPublishedAt": "2026-09-20T06:43:39.000Z",
+        "ageDaysAtCapture": 24.426,
+        "insideSevenDayWindow": false,
+        "baseStatusAndSourceGatePass": true,
+        "windowVerdict": "excluded_outside_7_day_window",
+        "structuredEventDateBeforeSerialization": "2025-10-15",
+        "structuredEventDateAfterSerialization": "2025-10-15",
+        "structuredDateYear": "2025",
+        "earliestKnownOriginalPublication": "2026-09-20T06:43:39.000Z",
+        "originalPublicationYear": 2026,
+        "rawDtoCharacterCount": 640,
+        "compactSideCharacterCount": 607,
+        "retainedOriginalCharacterCount": 824,
+        "lexicalAnchorChecksOnly": [
+          {
+            "name": "product",
+            "pattern": "Step\\s*5\\s*Preview",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "availability",
+            "pattern": "全量开放",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "parameter_size",
+            "pattern": "600B|6000亿",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          }
+        ],
+        "originalArticleTextInDto": false,
+        "originalArticlePublicationTimesInDto": false,
+        "clusterLatestPublishedAtInDto": false
+      },
+      {
+        "side": "right",
+        "clusterId": "cmu9mlfnx00vamf01admwy04j",
+        "status": "active",
+        "sourceGate": 1,
+        "latestPublishedAt": "2026-09-21T01:52:50.000Z",
+        "ageDaysAtCapture": 23.627,
+        "insideSevenDayWindow": false,
+        "baseStatusAndSourceGatePass": true,
+        "windowVerdict": "excluded_outside_7_day_window",
+        "structuredEventDateBeforeSerialization": null,
+        "structuredEventDateAfterSerialization": null,
+        "structuredDateYear": null,
+        "earliestKnownOriginalPublication": "2026-09-20T07:25:31.000Z",
+        "originalPublicationYear": 2026,
+        "rawDtoCharacterCount": 517,
+        "compactSideCharacterCount": 484,
+        "retainedOriginalCharacterCount": 3393,
+        "lexicalAnchorChecksOnly": [
+          {
+            "name": "product",
+            "pattern": "Step\\s*5\\s*Preview",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "availability",
+            "pattern": "全量开放",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          },
+          {
+            "name": "parameter_size",
+            "pattern": "600B|6000亿",
+            "presentInOriginal": true,
+            "presentInCompactDto": true
+          }
+        ],
+        "originalArticleTextInDto": false,
+        "originalArticlePublicationTimesInDto": false,
+        "clusterLatestPublishedAtInDto": false
+      }
+    ],
+    "firstProvableExclusionAtCapture": "outside_7_day_window",
+    "downstreamStages": {
+      "scanCapRanking": "not_needed_for_proven_window_exclusion",
+      "dirtyHashGate": "not_executed_out_of_window",
+      "entityCanonicalization": "not_executed_no_resolver_snapshot_replay",
+      "bm25Recall": "not_executed_out_of_window",
+      "vectorRecall": "not_executed_out_of_window",
+      "cleanPairCacheTTL": "not_executed_out_of_window",
+      "priorDecisions": "not_executed_out_of_window",
+      "cannotLinkOrMustLink": "not_executed_out_of_window",
+      "modelCall": "not_executed_no_authorization"
+    },
+    "historicalAdmissionOrModelOutcome": null
+  }
+]

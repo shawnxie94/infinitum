@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "references": {
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/manifest.json": "fd48e8f34f87c3a247009594e786b65ebe4751df0143d8d0bdcab7a610bc65fd",
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/manifest.json": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+    "docs/eval/reviews/cluster-relation-assisted-confirmation-2026-10-15/manifest.json": "64e889c47c9eb41fbcc4c5be4c8cf329b82b0bd81a7e7ac514508c996ef6b906",
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/capture.json": "b3ff20ec1cf084dd0e93c5b727c180137f5858948f22464d9c215ea9b21faee8",
+    "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/source-cases.json": "467a8dc1571745a59b2ffb5c928b60bc7fd9044818af41ee531c1ac884f374e8",
+    "docs/eval/reviews/cluster-relation-assisted-confirmation-2026-10-15/reviewed-v1.json": "7e8a5dca51afa1153b137e3fb0ac9a6a30d7402db8cd6a9cdc48083befc9caec",
+    "src/lib/clusters/helpers.ts": "c632f2bbb08d851fe9f53afe72d87572f6845733c1c43421190858e7e9d3fc02",
+    "src/lib/clusters/normalization.ts": "b4d695e3f30d13b6a394513e689bde884253a6f1c2556b41adc7828f3cd1bed5",
+    "src/lib/ai/protocols/cluster.ts": "c5ae0be9cb14ce33a797d4f5753c41948c5f47f7c10e7d90bcb5749279782129",
+    "src/config/constants.ts": "53656d45bef68b82f14fa4c7843c086e1d394a792a20e19371e4c72891338a0c",
+    "src/lib/clusters/service.ts": "2d123b79606b59f51305b53c4c4856c5f4b50702e0dd5d89792ed029f6dffe4b",
+    "scripts/prepare-cluster-relation-production-bridge.ts": "f205e3f25603887078ac010c5fae346cce173b6e5db9e1ad0fcd558fc67e50d5"
+  },
+  "files": {
+    "raw-dto-projection.json": "67a0b022f17ef00c26f9509a9135789d137564a297aaad769762ba1d62b2e324",
+    "compact-dto-projection.json": "e1de7c2c986e29f6d4494ac9ffc8d62c93992ef9ebae23ccbaafe5a221b4a399",
+    "case-diagnostics.json": "8f22fb1816d66b8517e10bec12216e5ec1564b5dc9513febfb823af54e1a826d",
+    "report.json": "4a8186efcb6d54d4ca6bded65309940c111cea781ad47a3266bc20762e295f43"
+  },
+  "producerCodeSha256": "725f993ee7b2d23f7ffb561ec2f54293ee907bf755b5b88f2387c8b71ec8ee21",
+  "projectionOnly": true,
+  "sendAllowed": false,
+  "qualityPassed": false,
+  "releaseEligible": false
+}

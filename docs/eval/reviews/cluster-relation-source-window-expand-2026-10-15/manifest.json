@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "references": {
+    "docs/eval/reviews/cluster-relation-positive-seed-probe-2026-10-15/manifest.json": "e6a07334756b397d850304d3f452512138392cd5ca4b60a7458c3fc744756a7d",
+    "docs/eval/reviews/cluster-relation-positive-seed-probe-2026-10-15/capture.json": "66d1ea458dbfb4042797db8aed4bc83ea79e86c43eb8a9fde897f8c0b641bf46",
+    "docs/eval/reviews/cluster-relation-source-prescreen-2026-10-15/manifest.json": "a1a242f798822f3344880e9619b09f763bb1a781146dc7176af4e90711e1f47e",
+    "docs/eval/reviews/cluster-relation-source-prescreen-2026-10-15/source-reading-receipt.json": "add2eada9200a8047b2cf079d5f07a7ed888d8324537d92a5ce5bab51a8fd2d9",
+    "docs/eval/reviews/cluster-relation-source-prescreen-2026-10-15/corpus-index.json": "b62189345ae982555afd4975f61a6aa89cf30b4175105738fbcb09a49647a5fb",
+    "docs/eval/reviews/cluster-relation-production-blind-pack-2026-10-14/packet/manifest.json": "fa551275c112e5947436fd751400e4d25f5c9b28173b0b4d3c8b00b8d3e3318f"
+  },
+  "files": {
+    "capture.json": "b3ff20ec1cf084dd0e93c5b727c180137f5858948f22464d9c215ea9b21faee8",
+    "inventory-statistics.json": "2a818a974d5f6af356a7a014747ecbd0737657ffa84ceeb36060ad2c5073e24a",
+    "report.json": "e99a4460bd763feb3e794952ef43ec3247e75c2628125694d5f94371750babdf",
+    "source-corpus.json": "51f71a7a7dc541b36f8e93d2c916396a62e2eccb79568fd03d35c665b23b866e",
+    "extra-cluster-ids.json": "0f4b5e1c19ba5f0593e3fff79ac7c19ae2a0e00902770e5b1d66a3d1972e60c0"
+  },
+  "captureSqlSha256": "b44a4947486586060e804c51e5919c83dd5d0293220df3d1f18f95ea00def7c8",
+  "probeCodeSha256": "d3c0e6a8fcded8765397c0056b734a843bbdbcaffee2489db1ca44d13d3b2d1a",
+  "additionalPaidOrExternalModelRequestsSent": 0,
+  "businessWrites": 0
+}

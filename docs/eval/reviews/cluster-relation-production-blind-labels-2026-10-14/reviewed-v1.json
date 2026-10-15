@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "receivedAt": "2026-10-14T16:13:19.930827+00:00",
+  "sourceBlindManifestSha256": "fa551275c112e5947436fd751400e4d25f5c9b28173b0b4d3c8b00b8d3e3318f",
+  "submissionSha256": "b9cebee93ee9361778c4bba297c7d599569cc0988cba642639757d484791dc27",
+  "labelState": "human_relations_received_evidence_pending",
+  "labels": [
+    {
+      "caseId": "PB-01",
+      "relation": "unrelated",
+      "expectedAction": "do_not_merge",
+      "labeler": "user",
+      "provenance": "human_user_submission_relation_only",
+      "evidence": null,
+      "completeReadingConfirmed": null,
+      "independentBlindingVerified": false,
+      "leftClusterId": "cmv6b3n0p00ghlm01p7uq8d80",
+      "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g"
+    },
+    {
+      "caseId": "PB-02",
+      "relation": "unrelated",
+      "expectedAction": "do_not_merge",
+      "labeler": "user",
+      "provenance": "human_user_submission_relation_only",
+      "evidence": null,
+      "completeReadingConfirmed": null,
+      "independentBlindingVerified": false,
+      "leftClusterId": "cmv131yym04n0q101wfuriulr",
+      "rightClusterId": "cmv4o3jq5012fua01l1br7c2j"
+    },
+    {
+      "caseId": "PB-03",
+      "relation": "unrelated",
+      "expectedAction": "do_not_merge",
+      "labeler": "user",
+      "provenance": "human_user_submission_relation_only",
+      "evidence": null,
+      "completeReadingConfirmed": null,
+      "independentBlindingVerified": false,
+      "leftClusterId": "cmv131h4r04izq101ovqreb3b",
+      "rightClusterId": "cmuz8p2kz3zahm8011yactf9i"
+    },
+    {
+      "caseId": "PB-04",
+      "relation": "unrelated",
+      "expectedAction": "do_not_merge",
+      "labeler": "user",
+      "provenance": "human_user_submission_relation_only",
+      "evidence": null,
+      "completeReadingConfirmed": null,
+      "independentBlindingVerified": false,
+      "leftClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+      "rightClusterId": "cmv3r548h00jxs5016ww2oine"
+    },
+    {
+      "caseId": "PB-05",
+      "relation": "unrelated",
+      "expectedAction": "do_not_merge",
+      "labeler": "user",
+      "provenance": "human_user_submission_relation_only",
+      "evidence": null,
+      "completeReadingConfirmed": null,
+      "independentBlindingVerified": false,
+      "leftClusterId": "cmuzc041900m3lk01sgdwpjjx",
+      "rightClusterId": "cmuzc5kn301k6lk01irjc3wf0"
+    },
+    {
+      "caseId": "PB-06",
+      "relation": "unrelated",
+      "expectedAction": "do_not_merge",
+      "labeler": "user",
+      "provenance": "human_user_submission_relation_only",
+      "evidence": null,
+      "completeReadingConfirmed": null,
+      "independentBlindingVerified": false,
+      "leftClusterId": "cmv6b1fzk00eolm01pc2t2xlu",
+      "rightClusterId": "cmv6b56u600hxlm01uvx2avlf"
+    }
+  ],
+  "counts": {
+    "same_event": 0,
+    "follow_up": 0,
+    "synthesis": 0,
+    "unrelated": 6,
+    "uncertain": 0
+  },
+  "humanRelationsReceived": 6,
+  "evidenceProvided": 0,
+  "independentlyConfirmedFollowUp": 0,
+  "modelRequestsSent": 0,
+  "credentialsRead": false,
+  "productDatabaseWrites": 0,
+  "modelEffectMeasured": false,
+  "modelMetrics": {
+    "relationAccuracy": null,
+    "falseMergeRate": null,
+    "missedMergeRate": null
+  },
+  "qualityPassed": false,
+  "releaseEligible": false
+}

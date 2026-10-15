@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-14T17:08:40.106367+00:00",
+  "userMessageFile": "user-confirmation.verbatim.txt",
+  "userMessageSha256": "78aa859f14da7643ae461af7feeb01d7cfd63babe4406a74d53692cbbcfb2b09",
+  "userMessageVerbatim": "确认，和你建议一致",
+  "mappingBasis": "User accepted the immediately preceding PB08/PB09/PB10 suggestion table as a whole. This is a mapping of that acceptance, not verbatim per-case labels or user-authored rationale.",
+  "suggestionsVisibleBeforeConfirmation": true,
+  "sourceHandoffManifestSha256": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+  "caseAssignments": {
+    "PB-08": "same_event",
+    "PB-09": "follow_up",
+    "PB-10": "same_event"
+  },
+  "humanEvidenceProvided": false,
+  "fullReadingExplicitlyConfirmed": null,
+  "independentBlindProcessConfirmed": null
+}

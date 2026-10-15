@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "labelState": "assisted_relations_confirmed_without_separate_human_rationale",
+  "confirmationReceiptSha256": "66aeb7444691e4b79426ce7cfe27daa1190079dc5ad1e4b80253f2e79b26ecde",
+  "sourceHandoffManifestSha256": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+  "labels": [
+    {
+      "caseId": "PB-08",
+      "relation": "same_event",
+      "confirmationKind": "aggregate_acceptance_of_last_displayed_suggestions",
+      "labelProvenance": "assisted_human_confirmation",
+      "humanConfirmed": true,
+      "labelerRole": "user",
+      "labelerIdentity": null,
+      "humanEvidence": null,
+      "fullReadingConfirmed": null,
+      "blindProcessConfirmed": null,
+      "suggestionsPreviouslyDisclosed": true,
+      "assistantReasonReference": {
+        "file": "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/ai-suggestions.json",
+        "caseId": "PB-08",
+        "reason": "两篇均引述路透三位知情人士，报道Anthropic在IPO前评估新模型以应对GPT-6 Astra竞争；安全评估未完、9月12日CEO文章、Ramp的13%/8%份额、7月收入与IPO节奏等独特细节一致。后一篇补充细节，没有独立的新发布或阶段。"
+      },
+      "sourceHandoffManifestSha256": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+      "leftClusterId": "cmu9f0llh03t8mg019ntadfpo",
+      "rightClusterId": "cmu9ml5e400tymf01tb1yci07",
+      "leftItemIds": [
+        "cmu9f0lkb03t3mg01bitvc5op"
+      ],
+      "rightItemIds": [
+        "cmu9ml5bx00ttmf01ozf00e0m"
+      ],
+      "familyHashes": [
+        "616db79dd4feeea09bf5bfabe822ea4cb6a79f4883e299369022a79bebbea2c2",
+        "327371ae54ec040dd4ebecd9b860a8aa827d5ba7258ba2b68df127359bc690b5",
+        "73d6a5d85bcb066aac3c69494fe5ae374c606d90828f2728a2d75c0e3c0248b8",
+        "08a8c5d295bf1df15c5525775605d46ccbd65d047bcd498f1e15e32b374fe557"
+      ],
+      "productionAdmissionRevalidated": false,
+      "gold": null,
+      "independentBlindGold": false
+    },
+    {
+      "caseId": "PB-09",
+      "relation": "follow_up",
+      "confirmationKind": "aggregate_acceptance_of_last_displayed_suggestions",
+      "labelProvenance": "assisted_human_confirmation",
+      "humanConfirmed": true,
+      "labelerRole": "user",
+      "labelerIdentity": null,
+      "humanEvidence": null,
+      "fullReadingConfirmed": null,
+      "blindProcessConfirmed": null,
+      "suggestionsPreviouslyDisclosed": true,
+      "assistantReasonReference": {
+        "file": "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/ai-suggestions.json",
+        "caseId": "PB-09",
+        "reason": "同一阿里云QwenBook原生智能体电脑项目：前文是研发/早期试水、最终形态和上市计划未明确；后文在云栖大会正式发布，并给出OS、硬件交互及生态合作。是明确的研发消息到公开发布的新阶段，不只品牌相同。风险：仅按保留原文把QwenBook/Qwen Book视为同一项目，未核验官方原始发布或产品变体。"
+      },
+      "sourceHandoffManifestSha256": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+      "leftClusterId": "cmucg0zo9008fs401uea52vwe",
+      "rightClusterId": "cmudrfwcy05z7o201kvn178ro",
+      "leftItemIds": [
+        "cmucg0zk9008as401vbvb3fus"
+      ],
+      "rightItemIds": [
+        "cmudrfw7h05z2o2016c2cxcop"
+      ],
+      "familyHashes": [
+        "6a93eeb2e11b48e7c63a454ad2b6b9744a8ddd6b5df129007714e265906fe4dc",
+        "c86a6081b752330bee230eeb59cc4c47ce9cb861ec8e5d9b5a79ee78c0c91d8a",
+        "ca444b893e23f996bd257fe8d6f8bc19cd92d32af219da8ff8ca2fbd8587cefd",
+        "d2dd846139625c3448a28502580b982bf1072aa1d1cc59d27eb314c76c12a802"
+      ],
+      "productionAdmissionRevalidated": false,
+      "gold": null,
+      "independentBlindGold": false
+    },
+    {
+      "caseId": "PB-10",
+      "relation": "same_event",
+      "confirmationKind": "aggregate_acceptance_of_last_displayed_suggestions",
+      "labelProvenance": "assisted_human_confirmation",
+      "humanConfirmed": true,
+      "labelerRole": "user",
+      "labelerIdentity": null,
+      "humanEvidence": null,
+      "fullReadingConfirmed": null,
+      "blindProcessConfirmed": null,
+      "suggestionsPreviouslyDisclosed": true,
+      "assistantReasonReference": {
+        "file": "docs/eval/reviews/cluster-relation-source-window-expand-2026-10-15/handoff/ai-suggestions.json",
+        "caseId": "PB-10",
+        "reason": "两侧主事件均为Step 5 Preview全量开放，而不是泛泛讨论阶跃品牌；600B/27B、100万上下文、44分、508/493 TFLOPS、AIME24的53.3%到60%、10月15日权重安排均一致。右侧含两篇保留原稿，完整纳入整簇；报道日期和篇幅不同不构成新阶段。"
+      },
+      "sourceHandoffManifestSha256": "0481b7d87f7b9077f4f6d0d7a90c8febb7a22bc61596ecc7718a4c23968110bf",
+      "leftClusterId": "cmu9mlbkj00ummf01ugx1hh6t",
+      "rightClusterId": "cmu9mlfnx00vamf01admwy04j",
+      "leftItemIds": [
+        "cmu9mlbi400uhmf010li3w36l"
+      ],
+      "rightItemIds": [
+        "cmu9mlfm000v4mf01wzm60pro",
+        "cmuao3hrj009lpf01wagyp6kz"
+      ],
+      "familyHashes": [
+        "20238410b4c92a16740d81723cfcc98fa6d81e17d415942189f52b0f24e25c7b",
+        "7a6d4c57b0948e55d22435c8eb731869dcde15fb4505f955561c4c596b1d3523",
+        "b4d488eb65d81c4081936741f949964a040050c0a00aa3fefde021202273dd1a",
+        "9ab8d037eb079110c0fb10412df719ad504238706941cfff8223c1127dee435a",
+        "98f205d3e9efb3db27a52dca32e624174c0f3ac73245376193ba2ccd31aa67b0",
+        "187e485da22f624a31d267273479cc7f303805cbffd006b05c9350e7f1694475"
+      ],
+      "productionAdmissionRevalidated": false,
+      "gold": null,
+      "independentBlindGold": false
+    }
+  ],
+  "assistedConfirmedCounts": {
+    "same_event": 2,
+    "follow_up": 1,
+    "synthesis": 0,
+    "unrelated": 0,
+    "uncertain": 0
+  },
+  "newHumanConfirmedRelations": 3,
+  "independentNewPositiveGold": 0,
+  "qualityPassed": false,
+  "releaseEligible": false,
+  "readyForModelReplay": false
+}

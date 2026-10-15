@@ -1,0 +1,16 @@
+[
+  {
+    "leftClusterId": "cmu965vbu2oivo501nh2h1zgd",
+    "rightClusterId": "cmuaqw315006sqn01p3k1qr4s",
+    "decision": "not_handed_off",
+    "reason": "共享Gemini/Irregular三家系统测试事件，但后一篇大量综合四家实验室的其他突破、披露与监管。整个簇的same_event/synthesis边界更混杂，优先交更干净的候选，不截正文硬造正例。",
+    "gold": null
+  },
+  {
+    "leftClusterId": "cmu9f08qa03r9mg01wm19axa1",
+    "rightClusterId": "cmu9mlbkj00ummf01ugx1hh6t",
+    "decision": "not_handed_off",
+    "reason": "初始发布与全量开放可能构成后续，但同日刊发及首篇未明确访问阶段，边界比QwenBook研发到官宣更模糊；且与PB10复用簇/来源，保持本批案例不复用。",
+    "gold": null
+  }
+]

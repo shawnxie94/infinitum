@@ -1,0 +1,45 @@
+{
+  "runId": "2026-10-15-cluster-relation-source-window-expand",
+  "capturedAt": "2026-10-14T16:56:22.374Z",
+  "windowDays": 30,
+  "windowBasis": "cluster latestPublishedAt; retain whole approved original membership, including earlier member publication dates",
+  "clusterStatusFilter": "all statuses with projected original members; sourceGate retained; not production admission",
+  "scanLimit": 1000,
+  "scanLimitHit": false,
+  "recentPoolClusters": 477,
+  "rawOriginalClusters": 216,
+  "rawOriginalArticles": 243,
+  "eligibleCompleteClusters": 169,
+  "eligibleOriginalArticles": 192,
+  "extraRawOriginalArticlesSincePriorCapture": 193,
+  "extraEligibleOriginalArticlesSincePriorCapture": 155,
+  "extraEligibleClustersSincePriorCapture": 135,
+  "previouslyTitleTriagedRemainingClusters": 34,
+  "previouslyDisclosedClustersExcluded": 32,
+  "inventoryStatistics": {
+    "processedOriginalTotal": 493,
+    "minOriginalCreatedAtMs": 1782197107198,
+    "maxOriginalCreatedAtMs": 1791873439284,
+    "minKnownOriginalPublishedAtMs": 1782183618000,
+    "unclusteredOriginalsWithin30Days": 0,
+    "clusterStatusCounts": [
+      {
+        "status": "active",
+        "count": 1134
+      }
+    ]
+  },
+  "handoffCandidates": 0,
+  "newHumanLabelsReceived": 0,
+  "usedCurrentAssistantForPrescreen": true,
+  "additionalPaidOrExternalModelRequestsSent": 0,
+  "embeddingRequestsSent": 0,
+  "credentialsRead": false,
+  "businessWrites": 0,
+  "qualityPassed": false,
+  "releaseEligible": false,
+  "readyForModelReplay": false,
+  "liveFinalAdmissionRevalidated": false,
+  "status": "new_sources_require_content_prescreen",
+  "sourceFullTextCompletenessVerified": false
+}
