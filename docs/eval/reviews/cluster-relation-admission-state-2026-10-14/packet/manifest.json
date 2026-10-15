@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-14T15:28:57.226Z",
+  "containerImageId": "sha256:579a05517ff5e3b90ea2975526ea1470a7b2ff0b0e08fe96c0a8b91da36ee5d4",
+  "previousBridgeSha256": "8972f3375abc15df9a0e587377ff9c0e9bee15b7def09999e6a90382a739df45",
+  "codeHashes": {
+    "scripts/prepare-cluster-relation-production-bridge.ts": "f205e3f25603887078ac010c5fae346cce173b6e5db9e1ad0fcd558fc67e50d5",
+    "scripts/prepare-cluster-relation-source-replay.ts": "0f50d22661760a12e9222575fcdb4baefa5c18414a8ee6a791be74f80b5c2ffa",
+    "scripts/score-cluster-relation-source-replay.ts": "11ab96480762fd55ab21e37533905f1a3baac5025332cace8fa7d9e8e5607e72",
+    "src/config/constants.ts": "53656d45bef68b82f14fa4c7843c086e1d394a792a20e19371e4c72891338a0c",
+    "src/lib/clusters/helpers.ts": "c632f2bbb08d851fe9f53afe72d87572f6845733c1c43421190858e7e9d3fc02",
+    "src/lib/clusters/bm25.ts": "a7a80ce0fb13fb5565505e877bf47b275cec22c2a30a264ac6ecaa938b1ec460",
+    "src/lib/clusters/normalization.ts": "b4d695e3f30d13b6a394513e689bde884253a6f1c2556b41adc7828f3cd1bed5",
+    "src/lib/clusters/service.ts": "2d123b79606b59f51305b53c4c4856c5f4b50702e0dd5d89792ed029f6dffe4b",
+    "src/lib/ai/protocols/cluster.ts": "c5ae0be9cb14ce33a797d4f5753c41948c5f47f7c10e7d90bcb5749279782129",
+    "src/lib/ai/contracts.ts": "e63311db39967289bb995a1112d7da5171c90da269003cb1cf0b27e8a40faa53",
+    "src/lib/ai/provider-next.ts": "8028225fe4007541d86ec880a95e9ad5288cf8fd6cc75402072b5ae369ed6415",
+    "src/lib/entities/mention-resolution.ts": "38dc706414b7788f127c847604e58bfab29784ba64c76c66cd788d83a8498f8c",
+    "src/lib/clusters/constraints.ts": "01fbfcf48b57acf9b6e2c48f49bfa7dc4beb176bde896f045d7bf9ca942e22eb",
+    "src/lib/clusters/decisions.ts": "9d06a408b3993626bbaa65d5962195e25395bc0b9a62c64a574f08e8734e4a81",
+    "scripts/prepare-cluster-relation-admission-state.ts": "0c742ed9ac120cf7ab6af033dbca5f34d96b1cb440c22daa6366fc9e1ee78ece",
+    "src/lib/entities/normalization.ts": "ac6811cd39eb4adffb6e7bb5bdfa9d83e116bb42d4214cbbd86d9e3188dbb089"
+  },
+  "fileHashes": {
+    "snapshot.json": "e32bc09f52d7ceaa9a4498d60b7da1a8d46fb96a2843f364ff188b5d9998b48e",
+    "state.json": "efe493bd5471edcf4d06e4668d1d1bfd28e7a39ae78b8e4492ac3c0e65473930",
+    "inventory.json": "2b6d569485e90233da06c9751beb20ade7010e413fc0d676053c1bebfd81aac4",
+    "dto-with-ids.json": "0935656bafa24055da228fbf58f217932f782e922720a675c37a297833a30f56",
+    "model-batches.json": "1d31674317e0541ae785c9ebb46ba0a46453c58215fa282b1cf7cd3bb851455c",
+    "routing.json": "83104d8e1b455a74b67c31272749e00ad0e0867a3ef49a332764872e7602a3fb",
+    "report.json": "f07175ae6355b382e371f5dfc8055b84334b2b0bdccc1040ff127a9917f410b0",
+    "stages.json": "87b87961a2af6feed62152f573084996705e3b0b4db650ffc6e12649ce9b2d17"
+  },
+  "requestsSent": 0,
+  "credentialsRead": false,
+  "productDatabaseWrites": 0,
+  "readyForModelReplay": false,
+  "qualityPassed": false,
+  "releaseEligible": false
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "frameSha256": "04215bfd953cd798ca8e968a199091c91638077a353c10b29d9921e869915f71",
+  "fileHashes": {
+    "capture.json": "572cfe4d2184b2e621196527b7fc596e9aed45aea9a48df75020d9283d8c9edd",
+    "inventory.json": "d333eac33293aca1a0d41032768137521346f261d4c72f9e110b73a39f7895ed",
+    "blind-cases.json": "f6a20ea06ecab5428846b294a18b7f8470330a6eb2529027a5c557567e76f6e3",
+    "blind.html": "c96c208284bafae39e2bc545a8195a7566a8177733000f5c6415ef2105a39cbc",
+    "labels.blank.csv": "7f3aef278a04c2e16e68a0720c69f7ddf85a56a8706f62b84609358601721019",
+    "audit.json": "c1f28019a1fab2d7be574edb067ea4441ca8178adcbef6b333be557c0a6bb622",
+    "report.json": "768eed8e00b6f11c93295ae2f3802aa24e0f71dc39385d0961e857acc561a6d4"
+  },
+  "codeHashes": {
+    "scripts/prepare-cluster-relation-production-blind-pack.ts": "4d66f22ff719129d12dab92eeef2570b48040b8998bfc35b9c2b7b818ab1eda2",
+    "scripts/prepare-cluster-relation-admission-state.ts": "0c742ed9ac120cf7ab6af033dbca5f34d96b1cb440c22daa6366fc9e1ee78ece",
+    "scripts/prepare-cluster-relation-production-bridge.ts": "f205e3f25603887078ac010c5fae346cce173b6e5db9e1ad0fcd558fc67e50d5",
+    "src/lib/clusters/helpers.ts": "c632f2bbb08d851fe9f53afe72d87572f6845733c1c43421190858e7e9d3fc02",
+    "src/lib/clusters/normalization.ts": "b4d695e3f30d13b6a394513e689bde884253a6f1c2556b41adc7828f3cd1bed5"
+  },
+  "labelState": "awaiting_human_blind_labels",
+  "requestsSent": 0,
+  "credentialsRead": false,
+  "businessWrites": 0,
+  "sendAllowed": false,
+  "qualityPassed": false,
+  "releaseEligible": false
+}

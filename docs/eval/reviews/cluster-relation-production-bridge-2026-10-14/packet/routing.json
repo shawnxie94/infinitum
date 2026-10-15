@@ -1,0 +1,978 @@
+[
+  {
+    "batchIndex": 0,
+    "pairId": "p1",
+    "leftClusterId": "cmv4nxw12009iua01bu2w2etz",
+    "rightClusterId": "cmv6b1cit00eklm01mt6saxoi",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 0,
+    "pairId": "p2",
+    "leftClusterId": "cmutvxst9006epf01vkca214q",
+    "rightClusterId": "cmv3r65n800pws501aay0fxwb",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 0,
+    "pairId": "p3",
+    "leftClusterId": "cmuzc0co500mplk01z2067aa0",
+    "rightClusterId": "cmuz8p7853zb9m8019p6o8twk",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 1,
+    "pairId": "p1",
+    "leftClusterId": "cmv4nxxbm009oua01cuwcv8ok",
+    "rightClusterId": "cmv6b1oxu00ezlm01oigs491c",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 1,
+    "pairId": "p2",
+    "leftClusterId": "cmv4nxw12009iua01bu2w2etz",
+    "rightClusterId": "cmv13273204nyq101slshxpwn",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 1,
+    "pairId": "p3",
+    "leftClusterId": "cmv132ciw04omq1019q96qecw",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 2,
+    "pairId": "p1",
+    "leftClusterId": "cmv4scn1e001mua017u8w6bte",
+    "rightClusterId": "cmv131c1m04idq1017ifvatde",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 2,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8niwb3z5km801al3tt68y",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 2,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b1ts100f1lm01fiysewc0",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 3,
+    "pairId": "p1",
+    "leftClusterId": "cmuz8nnjv3z5pm801g5rtoqqs",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 3,
+    "pairId": "p2",
+    "leftClusterId": "cmuzc5kn301k6lk01irjc3wf0",
+    "rightClusterId": "cmuz8p7cx3zbdm801y3rth2vz",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 3,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b1fzk00eolm01pc2t2xlu",
+    "rightClusterId": "cmv6b56u600hxlm01uvx2avlf",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 4,
+    "pairId": "p1",
+    "leftClusterId": "cmv4nyy5i00bbua01j2kdf1ti",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 4,
+    "pairId": "p2",
+    "leftClusterId": "cmv4nxw12009iua01bu2w2etz",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 4,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b1fzk00eolm01pc2t2xlu",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 5,
+    "pairId": "p1",
+    "leftClusterId": "cmv3r4xue00jls501ac86fvji",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 5,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r4xue00jls501ac86fvji",
+    "rightClusterId": "cmv131e5b04ilq101trpv9tsw",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 5,
+    "pairId": "p3",
+    "leftClusterId": "cmuzc5kn301k6lk01irjc3wf0",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 6,
+    "pairId": "p1",
+    "leftClusterId": "cmuz8ms653z0xm801rps0457k",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 6,
+    "pairId": "p2",
+    "leftClusterId": "cmv4nxxbm009oua01cuwcv8ok",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 6,
+    "pairId": "p3",
+    "leftClusterId": "cmv4scn1e001mua017u8w6bte",
+    "rightClusterId": "cmuz8oowo3z95m801133bbrzm",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 7,
+    "pairId": "p1",
+    "leftClusterId": "cmutvxst9006epf01vkca214q",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 7,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r4ut500jfs501cyzho5ia",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 7,
+    "pairId": "p3",
+    "leftClusterId": "cmuzc5kn301k6lk01irjc3wf0",
+    "rightClusterId": "cmuzc041900m3lk01sgdwpjjx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 8,
+    "pairId": "p1",
+    "leftClusterId": "cmv3r4ut500jfs501cyzho5ia",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 8,
+    "pairId": "p2",
+    "leftClusterId": "cmv4scn1e001mua017u8w6bte",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 8,
+    "pairId": "p3",
+    "leftClusterId": "cmv131n4s04liq101h9wep5jk",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 9,
+    "pairId": "p1",
+    "leftClusterId": "cmuzc4vnt01jtlk01khbkqj39",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 9,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r548h00jxs5016ww2oine",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 9,
+    "pairId": "p3",
+    "leftClusterId": "cmv3r4xue00jls501ac86fvji",
+    "rightClusterId": "cmv6azp2q0089lm01nlg4bebo",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 10,
+    "pairId": "p1",
+    "leftClusterId": "cmv131yac04myq101qla926zm",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 10,
+    "pairId": "p2",
+    "leftClusterId": "cmv131yac04myq101qla926zm",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 10,
+    "pairId": "p3",
+    "leftClusterId": "cmv3r4wro00jjs501q1fhevzj",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 11,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b56u600hxlm01uvx2avlf",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 11,
+    "pairId": "p2",
+    "leftClusterId": "cmv4nxxbm009oua01cuwcv8ok",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 11,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8p7853zb9m8019p6o8twk",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 12,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b1ybn00f6lm01i9jauo7z",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 12,
+    "pairId": "p2",
+    "leftClusterId": "cmv131yac04myq101qla926zm",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 12,
+    "pairId": "p3",
+    "leftClusterId": "cmv4nyy5i00bbua01j2kdf1ti",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 13,
+    "pairId": "p1",
+    "leftClusterId": "cmuzc5y4r01kclk01bz43mdds",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 13,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8ozee3z9pm801r0vj2g4v",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 13,
+    "pairId": "p3",
+    "leftClusterId": "cmv4nxkog0090ua01zl61bu5l",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 14,
+    "pairId": "p1",
+    "leftClusterId": "cmuz8p5s63zb5m8010x4rjew3",
+    "rightClusterId": "cmv4nxw12009iua01bu2w2etz",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 14,
+    "pairId": "p2",
+    "leftClusterId": "cmuzc0hf500mulk01nfp9pvd0",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 14,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8p5s63zb5m8010x4rjew3",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 15,
+    "pairId": "p1",
+    "leftClusterId": "cmuz8ozer3z9tm801ugf9rgny",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 15,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8ms653z0xm801rps0457k",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 15,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8niwb3z5km801al3tt68y",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 16,
+    "pairId": "p1",
+    "leftClusterId": "cmv4nxurx009gua01dk21qys2",
+    "rightClusterId": "cmv4nz7a900bjua018kmtz1bz",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 16,
+    "pairId": "p2",
+    "leftClusterId": "cmuzc0co500mplk01z2067aa0",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 16,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b56u600hxlm01uvx2avlf",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 17,
+    "pairId": "p1",
+    "leftClusterId": "cmv131n4s04liq101h9wep5jk",
+    "rightClusterId": "cmv3r6ble00qls501gu213twp",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 17,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r4wro00jjs501q1fhevzj",
+    "rightClusterId": "cmv3r5ns400nxs501feqskl6o",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 17,
+    "pairId": "p3",
+    "leftClusterId": "cmutvxst9006epf01vkca214q",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 18,
+    "pairId": "p1",
+    "leftClusterId": "cmv3r548h00jxs5016ww2oine",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 18,
+    "pairId": "p2",
+    "leftClusterId": "cmv4nxurx009gua01dk21qys2",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 18,
+    "pairId": "p3",
+    "leftClusterId": "cmuzc0hf500mulk01nfp9pvd0",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 19,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b0c4m00atlm01h245ojo1",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 19,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8ms653z0xm801rps0457k",
+    "rightClusterId": "cmuzc041900m3lk01sgdwpjjx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 19,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b3n0p00ghlm01p7uq8d80",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 20,
+    "pairId": "p1",
+    "leftClusterId": "cmuzc0hf500mulk01nfp9pvd0",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 20,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8oiln3z8vm801d3dj2ftn",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 20,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8p5s63zb5m8010x4rjew3",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 21,
+    "pairId": "p1",
+    "leftClusterId": "cmuzc0co500mplk01z2067aa0",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 21,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8p7853zb9m8019p6o8twk",
+    "rightClusterId": "cmuz8n8oz3z2um801y67mhsd5",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 21,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b1fzk00eolm01pc2t2xlu",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 22,
+    "pairId": "p1",
+    "leftClusterId": "cmv4o3jq5012fua01l1br7c2j",
+    "rightClusterId": "cmv131yym04n0q101wfuriulr",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 22,
+    "pairId": "p2",
+    "leftClusterId": "cmv4o3jq5012fua01l1br7c2j",
+    "rightClusterId": "cmv6b4r6200h0lm01azfcuoz7",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 22,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b4x0h00h8lm01gh9a3rct",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 23,
+    "pairId": "p1",
+    "leftClusterId": "cmv4nxkog0090ua01zl61bu5l",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 23,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8oiln3z8vm801d3dj2ftn",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 23,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8ozer3z9tm801ugf9rgny",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 24,
+    "pairId": "p1",
+    "leftClusterId": "cmv132ciw04omq1019q96qecw",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 24,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r5okg00obs501ewflwdvn",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 24,
+    "pairId": "p3",
+    "leftClusterId": "cmuzc4vnt01jtlk01khbkqj39",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 25,
+    "pairId": "p1",
+    "leftClusterId": "cmv6azctr007tlm01qb1wsgw2",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 25,
+    "pairId": "p2",
+    "leftClusterId": "cmv131n4s04liq101h9wep5jk",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 25,
+    "pairId": "p3",
+    "leftClusterId": "cmv4o3jq5012fua01l1br7c2j",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 26,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b0c4m00atlm01h245ojo1",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 26,
+    "pairId": "p2",
+    "leftClusterId": "cmuzc4vnt01jtlk01khbkqj39",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 26,
+    "pairId": "p3",
+    "leftClusterId": "cmv4nxkog0090ua01zl61bu5l",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 27,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b3n0p00ghlm01p7uq8d80",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 27,
+    "pairId": "p2",
+    "leftClusterId": "cmv6b1ybn00f6lm01i9jauo7z",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 27,
+    "pairId": "p3",
+    "leftClusterId": "cmv3r5okg00obs501ewflwdvn",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 28,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b0c4m00atlm01h245ojo1",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 28,
+    "pairId": "p2",
+    "leftClusterId": "cmv131h4r04izq101ovqreb3b",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 28,
+    "pairId": "p3",
+    "leftClusterId": "cmv131h4r04izq101ovqreb3b",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 29,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b1ts100f1lm01fiysewc0",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 29,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8ozee3z9pm801r0vj2g4v",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 29,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8nnjv3z5pm801g5rtoqqs",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 30,
+    "pairId": "p1",
+    "leftClusterId": "cmv6azctr007tlm01qb1wsgw2",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 30,
+    "pairId": "p2",
+    "leftClusterId": "cmv132ciw04omq1019q96qecw",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 30,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b4x0h00h8lm01gh9a3rct",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 31,
+    "pairId": "p1",
+    "leftClusterId": "cmv4nxurx009gua01dk21qys2",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 31,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r548h00jxs5016ww2oine",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 31,
+    "pairId": "p3",
+    "leftClusterId": "cmuzc5y4r01kclk01bz43mdds",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 32,
+    "pairId": "p1",
+    "leftClusterId": "cmv3r5okg00obs501ewflwdvn",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 32,
+    "pairId": "p2",
+    "leftClusterId": "cmv6b25n600fllm01001zm0y0",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 32,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b1ts100f1lm01fiysewc0",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 33,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b4x0h00h8lm01gh9a3rct",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 33,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r4zcy00jns501em45n0fm",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 33,
+    "pairId": "p3",
+    "leftClusterId": "cmv6b25n600fllm01001zm0y0",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 34,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b3n0p00ghlm01p7uq8d80",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 34,
+    "pairId": "p2",
+    "leftClusterId": "cmv131h4r04izq101ovqreb3b",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 34,
+    "pairId": "p3",
+    "leftClusterId": "cmv3r4wro00jjs501q1fhevzj",
+    "rightClusterId": "cmv131r0b04lwq101tp0v15dp",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 35,
+    "pairId": "p1",
+    "leftClusterId": "cmv3r4zcy00jns501em45n0fm",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 35,
+    "pairId": "p2",
+    "leftClusterId": "cmuzc5y4r01kclk01bz43mdds",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 35,
+    "pairId": "p3",
+    "leftClusterId": "cmv3r4zcy00jns501em45n0fm",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 36,
+    "pairId": "p1",
+    "leftClusterId": "cmv4nyy5i00bbua01j2kdf1ti",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 36,
+    "pairId": "p2",
+    "leftClusterId": "cmv13127204hhq101cb8oomw5",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 36,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8ozee3z9pm801r0vj2g4v",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 37,
+    "pairId": "p1",
+    "leftClusterId": "cmv3r4ut500jfs501cyzho5ia",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 37,
+    "pairId": "p2",
+    "leftClusterId": "cmv6azctr007tlm01qb1wsgw2",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 37,
+    "pairId": "p3",
+    "leftClusterId": "cmuz8ozer3z9tm801ugf9rgny",
+    "rightClusterId": "cmuz8ozcg3z9lm801ebrand06",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 38,
+    "pairId": "p1",
+    "leftClusterId": "cmuz8oiln3z8vm801d3dj2ftn",
+    "rightClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 38,
+    "pairId": "p2",
+    "leftClusterId": "cmv3r5jnf00nrs5014pdr6cnn",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 38,
+    "pairId": "p3",
+    "leftClusterId": "cmv13127204hhq101cb8oomw5",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 39,
+    "pairId": "p1",
+    "leftClusterId": "cmv6b25n600fllm01001zm0y0",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 39,
+    "pairId": "p2",
+    "leftClusterId": "cmuz8niwb3z5km801al3tt68y",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 39,
+    "pairId": "p3",
+    "leftClusterId": "cmv3r5jnf00nrs5014pdr6cnn",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 40,
+    "pairId": "p1",
+    "leftClusterId": "cmuz8nnjv3z5pm801g5rtoqqs",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  },
+  {
+    "batchIndex": 40,
+    "pairId": "p2",
+    "leftClusterId": "cmv6b1ybn00f6lm01i9jauo7z",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "gold": null,
+    "requiresClusterLevelReview": true
+  }
+]

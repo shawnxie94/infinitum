@@ -1,0 +1,102 @@
+[
+  {
+    "caseId": "PB-01",
+    "leftClusterId": "cmv6b3n0p00ghlm01p7uq8d80",
+    "rightClusterId": "cmuz8p2kr3zafm8018jxhqd3g",
+    "familyHashes": [
+      "af1e270589d0a3ead04aa2efec1ac20b7e9b61cc40fb333713915dd06a8e9b56",
+      "9e110b9c47f659814bb16299ca7670ee669b3642a53b6defb479247c4f67b6d9",
+      "c74b21c1f58370d83be0fe1ff63d3222799d9f98e30b15c053e5a5a5d892a0aa",
+      "df08acb8b23e2b7c31cc701c32b3184c1448c923de41d3f697b439d9999b2404",
+      "8e9e4ac90bb0a1c6536811e8703d089c6ba8aab6c54135bec6bc5d94ac6005f0",
+      "4d5213f13731a186ba286df6aef4da44412eddfe6e8957524f6dce5a7e71b54c"
+    ],
+    "rank": "0eb5fe8fa8103b74c66c23d4345a26e9bdba0798c7ef2e2fdd243b18a1436568",
+    "stratum": "time_separated",
+    "gapHours": 121.55333333333333,
+    "gold": null
+  },
+  {
+    "caseId": "PB-02",
+    "leftClusterId": "cmv131yym04n0q101wfuriulr",
+    "rightClusterId": "cmv4o3jq5012fua01l1br7c2j",
+    "familyHashes": [
+      "fd8a5d13141701adaf5e3fa3f7f4e58cede82b2a2e232e0f0a98a4703c09a42f",
+      "e38e57d7e45c2ff2e7548ea5fa1e414a83b8bb174287b3d05357f04084cad658",
+      "c9e6973e0053d470b75ca38d5f461861b4b0918f1a5a8f8c19cfe5720c19299b",
+      "4b33fe3665f3d54731edec635157199d2e7b5215d6120887a14fe236e0e7da3d"
+    ],
+    "rank": "0fcd2c42211f88cbf0d316455487eb2dc1c539d1e87bafdc96332e031dd5942a",
+    "stratum": "near_or_unknown_time",
+    "gapHours": 6.200277777777778,
+    "gold": null
+  },
+  {
+    "caseId": "PB-03",
+    "leftClusterId": "cmv131h4r04izq101ovqreb3b",
+    "rightClusterId": "cmuz8p2kz3zahm8011yactf9i",
+    "familyHashes": [
+      "7c869d4436599cd069f5c15f3e6986aa14a0e73c12173a385862b9bf73ba1bd9",
+      "c4abd37543a9587a4636fc7d465b358083d5d49989b6c4f30591e921fe66df3a",
+      "7ccb748f02007c165f34cc892984b17d722845c12d7b25798c8c33e8a21e639b",
+      "7e03cd6d072fff22e623ba7b9314947b0447d2c86a8bf943c485cf9b3e304d49",
+      "10880431e9bfd0f42a5517237dcbc23585d7b9c1d5d5e28f610d6596f72673d9",
+      "0f20315d9054f5acc5b155ee373750da6a3df39730451bc9f53d835e9d6d9b33"
+    ],
+    "rank": "12d121b91008a9a181f57ba18532b99086139013a2187e004408df5dbb7a62d3",
+    "stratum": "time_separated",
+    "gapHours": 29.8075,
+    "gold": null
+  },
+  {
+    "caseId": "PB-04",
+    "leftClusterId": "cmuz8p0yh3za1m801tgwhc6dx",
+    "rightClusterId": "cmv3r548h00jxs5016ww2oine",
+    "familyHashes": [
+      "382fe0eff206cac2206e31e36f6619d956f00f8862b254b2f7efb54e29ff2918",
+      "1a410f3616cc5535b8dec4bd35c860b50beb4dcbd67ec626f407898634ef5fc8",
+      "838bd9b67538c4fd0fdc03d6e0d03c4559bf0f61f065cae963ade749ec25420f",
+      "6b79c3f7f039296aed397429883c5da7cc9f2c51995d411da5ce368b0465ccda",
+      "3aa0352b11be24fc85777684db3bdea15e53ee0835e909e5e4f4ada58296ee43",
+      "f7c919ed45b3d47a439eff1598b062bc14e5aca632ee352aa38039a0f17b3656"
+    ],
+    "rank": "2d107db771810987f5f8eb54aad0f2ec5fb244a3ae500377570da008bb094837",
+    "stratum": "time_separated",
+    "gapHours": 52.405833333333334,
+    "gold": null
+  },
+  {
+    "caseId": "PB-05",
+    "leftClusterId": "cmuzc041900m3lk01sgdwpjjx",
+    "rightClusterId": "cmuzc5kn301k6lk01irjc3wf0",
+    "familyHashes": [
+      "0ecc92cd2730f4b049147c607b971eb508fa2aa0ae437b3a3ff1aa63edb45697",
+      "99c0ee3abec4aa22e70e27198ae84b95a40daae33dfd563a665561c66ecd5559",
+      "a8c8df8aa19803e7f0a199aa171ca9e46fbb254d11601ecd44a8d41e72ca8f15",
+      "5f7f8a266db9bc54ac1da42fb57b04cd3c5c0beed23159faa9f4fc21693ca080"
+    ],
+    "rank": "b7948cf01ab4ea3a26342ffd635182a6bbc244ff9d629a5bd9a8464cc4b0ed84",
+    "stratum": "near_or_unknown_time",
+    "gapHours": 6.174166666666666,
+    "gold": null
+  },
+  {
+    "caseId": "PB-06",
+    "leftClusterId": "cmv6b1fzk00eolm01pc2t2xlu",
+    "rightClusterId": "cmv6b56u600hxlm01uvx2avlf",
+    "familyHashes": [
+      "de8e61e5319ba1ad8336349aa084e8ff1a4d0114f13e6a8ea852dcfe98efd0a1",
+      "1fdc56d3bcc47c0a88f693a81230b875748fdcb5a44cd34535c7d0f543be75a9",
+      "5efd09ab717836cba42ebe9bf923b76525fcf2c36e386ff43c910bfef6b6990e",
+      "dddae389412e19a5121cf53d4c6802738a5f8c1ef08866e6e50208b5d83ea494",
+      "0af8fd483f68fd9667725d2807fea830a97b0aad14b0d9a6687c1f85be6b4e86",
+      "09aa4e6644d3cdc163c657a7cec88a67a15a253be932ccb5471a4fca3eb0c3b4",
+      "415bc68a0dd219badc990ffd4963417a679d1cb1636336348e941371cd605972",
+      "79be5d4e7e3305862068f7ac491132bcce818585449e13e78d4e940bfa295d1f"
+    ],
+    "rank": "e7d26d254ad6440f9ba2ae0bd111c39c022ae3d5e899b16a987ac26a8df1831d",
+    "stratum": "near_or_unknown_time",
+    "gapHours": 4.218333333333334,
+    "gold": null
+  }
+]

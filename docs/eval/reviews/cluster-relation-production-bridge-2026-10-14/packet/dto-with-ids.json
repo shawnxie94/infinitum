@@ -1,0 +1,3054 @@
+{
+  "pairs": [
+    {
+      "left": {
+        "id": "cmv4nxw12009iua01bu2w2etz",
+        "title": "极客早知道合集速览封禁改名与新品内测多条科技动态",
+        "summary": "蚂蚁集团旗下AI产品\"灵光\"近日开启新版本小范围内测，新版对标Meta今年9月推出的个人智能体Muse。据接近项目人士透露，灵光方向约半年前开始筹备，将从聊天型AI助手转向拥有长期记忆、可主动推进任务的AI原生个人智能体，可通过Skill和MCP调用钉钉、智能家居等，计划本月全面开放。 Anthropic旗下Claude于2026年上半年累计封禁1140万个账号，用户提交的39.8万次申诉中仅4.2万次翻案，胜率约一成，申诉机制形同虚设。封禁触发情形主要包括违法滥用、侵犯隐私、恶意诱导、极端自残等内容违规，上半年向NCMEC等国际安全组织提交超1.5万起违规报告，并上线自研机器学习分类器辅助审查；此外黑产号无差别扫射及区域审查也导致大量用户被波及。Anthropic近日更新使用政策，新增禁止辱骂、残忍对待AI的条款，规定11月12日起生效，对极端情形下反复虐待模型的用户实施限流或封号，这是其一年多来首次修订政策，AI与使用者之间的权责边界正在被重新界定。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "公布封禁数据并更新使用政策",
+        "eventObject": "Claude",
+        "eventDate": "2026-11-12",
+        "itemCount": 4
+      },
+      "right": {
+        "id": "cmv6b1cit00eklm01mt6saxoi",
+        "title": "Anthropic 大规模封禁账号并修订Claude使用政策 Claude用户",
+        "summary": "据媒体报道，Anthropic于2026年上半年累计封禁约1140万个Claude账号，收到约39.8万次申诉，其中约4.2万次申诉成功，公司同时向儿童安全组织提交超1.5万起报告。Anthropic近期修订使用政策，计划自11月12日起禁止用户无明显目的地对模型反复实施极端残忍行为，但用户表达不满、创作黑暗题材及模型测试不在禁令范围内。",
+        "eventType": "policy",
+        "eventSubject": "Anthropic",
+        "eventAction": "大规模封禁账号并修订Claude使用政策",
+        "eventObject": "Claude用户",
+        "eventDate": "2026-10-11",
+        "itemCount": 1
+      },
+      "score": 12554534
+    },
+    {
+      "left": {
+        "id": "cmutvxst9006epf01vkca214q",
+        "title": "StartLux首发开源决策模型次日Cloudflare开源自训竞品即反超榜首",
+        "summary": "2026年9月30日，上海初创公司**StartLux**（原点星辉）发布开源决策模型 *StartLux-Decision*，规格覆盖0.8B至27B共五档，27B版本在Decision Index 0.2.1的38项测试中31项超过Jev 1.13，主打本地智能体高频判断。**次日（10月1日），Cloudflare正式开源决策模型Clef**，基于Qwen后训练并在同一榜单上反超StartLux-Decision，标志该赛道在两周内从首发进入群战阶段。Cloudflare进一步推出升级版本**Clef-omni**，原生支持wav、mp3、mp4、webm等音视频输入，纯文本响应约130ms、图像约150ms，权重已在Hugging Face开源，同期Clef-flash输入价格下调约58%至0.038美元/百万Token。",
+        "eventType": null,
+        "eventSubject": "Cloudflare",
+        "eventAction": "发布开源决策模型并宣称为本地Agent关键零件",
+        "eventObject": "StartLux-Decision（0.8B-27B五档）",
+        "eventDate": "2026-09-30",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmv3r65n800pws501aay0fxwb",
+        "title": "Cloudflare 发布 Clef-omni 多模态决策模型",
+        "summary": "Cloudflare 于 10 月 9 日发布开放权重决策模型 Clef-omni，原生支持 wav、mp3、mp4、webm 等音视频格式，可通过单次 API 调用同时处理多模态输入，省去语音转写与音视频拆分流程。该模型基于 Qwen3-Omni-30B-A3B-Instruct 构建，保留核心理解能力，面向结构化决策任务，不生成常规文本。性能方面，纯文本中位响应约 130 毫秒，图像约 150 毫秒，处理 21 秒含声视频约 1.5 秒完成评分。同期 Clef-flash 降价约 58%，每百万输入 Token 由 0.09 美元降至 0.038 美元，托管版上下文窗口由 64k 调整为 24k。",
+        "eventType": null,
+        "eventSubject": "Cloudflare",
+        "eventAction": "发布",
+        "eventObject": "Clef-omni 多模态决策模型",
+        "eventDate": "2026-10-09",
+        "itemCount": 1
+      },
+      "score": 11552915
+    },
+    {
+      "left": {
+        "id": "cmuzc0co500mplk01z2067aa0",
+        "title": "OpenAI全量推送GPT-6与智能UI",
+        "summary": "OpenAI于10月8日向全球ChatGPT用户全量推送GPT-6，逐步替代GPT-5.6系列，并以**智能UI**为核心更新。用户可在聊天框内获得图表、按钮、表单、计算器及小游戏等交互组件，直接完成操作。Plus、Pro、Business和Enterprise用户使用GPT-6Sol，免费及Go用户使用GPT-6Luna；GPT-6还支持*边思考边输出*，联网场景首字等待时间较前代缩短44%。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "全量推送",
+        "eventObject": "GPT-6（含智能UI交互层）",
+        "eventDate": "2026-10-08",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p7853zb9m8019p6o8twk",
+        "title": "OpenAI全量推送GPT-6并上线智能交互界面",
+        "summary": "OpenAI宣布将GPT-6推向更广泛ChatGPT用户，并同步推出Intelligent UI（智能用户界面）功能。ChatGPT可根据用户问题自动组合文字、图表、按钮、表单等元素，生成可直接操作的交互界面，如计算器、账单分摊工具或小游戏。新功能10月7日起向Plus、Pro、Business和Enterprise用户逐步开放，Free和Go用户10月8日起陆续获得支持。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "推出ChatGPT全新Intelligent UI交互界面",
+        "eventObject": "ChatGPT用户",
+        "eventDate": "2026-10-07",
+        "itemCount": 1
+      },
+      "score": 10500593
+    },
+    {
+      "left": {
+        "id": "cmv4nxxbm009oua01cuwcv8ok",
+        "title": "苹果官宣10月13日举办Welcome home发布会推出智能家居中枢HomeView等多款新品",
+        "summary": "据科技记者马克·古尔曼10月12日披露，苹果计划于10月13日发布多款新一代智能家居产品，包括搭载A18芯片的家居中枢HomeView（提供桌面和壁挂两版，预计11月中旬上市）、搭载S10芯片的新款HomePod mini及搭载A19芯片的Apple TV，后两款预计10月30日开售。HomeView定位家庭智能设备集中控制中枢。同时苹果正与LG电子合作开发智能门铃、门锁、恒温器和安防摄像头，将以\"Apple Home Collection\"品牌推出，最早2026年晚些时候上市。此举表明苹果正通过中枢设备与配套硬件拓展智能家居生态矩阵，具体规格、售价与上市安排仍待官方确认。 彭博记者古尔曼透露，苹果首款智能家庭中枢名为HomeView，预计10月27日欢迎回家活动发布并于11月出货。设备外观类似台灯电脑，采用悬浮式屏幕与扬声器底座，搭载A18芯片，将提供深空灰、银色、星光色和粉色四种配色，以AI Siri为核心，主要使用语音交互。",
+        "eventType": null,
+        "eventSubject": "苹果",
+        "eventAction": "发布智能家居中枢HomeView及新款HomePod mini、Apple TV，并与LG合作开发智能家居设备",
+        "eventObject": "智能家居中枢HomeView、HomePod mini、Apple TV及Apple Home Collection设备",
+        "eventDate": "2026-10-13",
+        "itemCount": 5
+      },
+      "right": {
+        "id": "cmv6b1oxu00ezlm01oigs491c",
+        "title": "苹果 推出OLED屏新款iPad mini iPad mini",
+        "summary": "彭博记者马克·古尔曼透露，苹果计划于本月晚些时候推出新款iPad mini，将首次采用OLED屏幕并配备重新设计的机身，扬声器系统与芯片也将升级。新机起步存储或将提升，售价相比现款599美元大幅上涨，预计接近799美元，约合5359元人民币。",
+        "eventType": null,
+        "eventSubject": "苹果",
+        "eventAction": "推出OLED屏新款iPad mini",
+        "eventObject": "iPad mini",
+        "eventDate": "2026-10-11",
+        "itemCount": 1
+      },
+      "score": 9582897
+    },
+    {
+      "left": {
+        "id": "cmv4nxw12009iua01bu2w2etz",
+        "title": "极客早知道合集速览封禁改名与新品内测多条科技动态",
+        "summary": "蚂蚁集团旗下AI产品\"灵光\"近日开启新版本小范围内测，新版对标Meta今年9月推出的个人智能体Muse。据接近项目人士透露，灵光方向约半年前开始筹备，将从聊天型AI助手转向拥有长期记忆、可主动推进任务的AI原生个人智能体，可通过Skill和MCP调用钉钉、智能家居等，计划本月全面开放。 Anthropic旗下Claude于2026年上半年累计封禁1140万个账号，用户提交的39.8万次申诉中仅4.2万次翻案，胜率约一成，申诉机制形同虚设。封禁触发情形主要包括违法滥用、侵犯隐私、恶意诱导、极端自残等内容违规，上半年向NCMEC等国际安全组织提交超1.5万起违规报告，并上线自研机器学习分类器辅助审查；此外黑产号无差别扫射及区域审查也导致大量用户被波及。Anthropic近日更新使用政策，新增禁止辱骂、残忍对待AI的条款，规定11月12日起生效，对极端情形下反复虐待模型的用户实施限流或封号，这是其一年多来首次修订政策，AI与使用者之间的权责边界正在被重新界定。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "公布封禁数据并更新使用政策",
+        "eventObject": "Claude",
+        "eventDate": "2026-11-12",
+        "itemCount": 4
+      },
+      "right": {
+        "id": "cmv13273204nyq101slshxpwn",
+        "title": "Anthropic 修订 Claude使用政策",
+        "summary": "Anthropic近日全面修订旗下AI助手Claude的使用政策，新规将于2026年11月12日生效。核心变化是首次明令禁止用户对Claude实施\"持续且不必要的虐待或残忍行为\"，目前执行方式主要为终止对话，是否封禁账号尚未明确；该条款不适用于日常抱怨、文学创作和合规安全测试。此外，武器禁令升级，明确覆盖武器运转软件、组件及武装无人机和自主车辆开发，公司透露此前已发现多起违规尝试。监控限制强化，禁止未经同意的个人追踪，以及将Claude用于决定或建议刑事司法程序中的调查、逮捕、起诉对象。物理硬件安全条款要求AI连接可能造成伤害的自主物理硬件时，必须有合格人员现场监督并可随时停机，但特定政府客户在合同限制下可灵活调整。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "修订",
+        "eventObject": "Claude使用政策",
+        "eventDate": "2026-10-09",
+        "itemCount": 1
+      },
+      "score": 7091417
+    },
+    {
+      "left": {
+        "id": "cmv132ciw04omq1019q96qecw",
+        "title": "豆包 上线生活缴费功能 水电气等生活缴费",
+        "summary": "10月9日，据《读佳》报道，字节跳动旗下AI助手豆包正式新增\"生活缴费\"功能。用户可在豆包App内通过语音或文字指令触发，系统实时弹出服务卡片并跳转至专属页面，直接完成水、电、燃气等基础生活费用的缴纳。据接近豆包的人士透露，豆包正逐步构建涵盖出行、生活缴费在内的多维生活场景办事能力。业内人士认为，此举标志着大模型产品竞争重心从文本生成与泛信息检索，加速转向高频真实场景的操作落地与服务闭环，为生成式AI在消费端的商业化与服务化延伸提供契机。",
+        "eventType": null,
+        "eventSubject": "豆包",
+        "eventAction": "上线生活缴费功能",
+        "eventObject": "水电气等生活缴费",
+        "eventDate": "2026-10-09",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 4698155
+    },
+    {
+      "left": {
+        "id": "cmv4scn1e001mua017u8w6bte",
+        "title": "月之暗面 与老股东进行和解谈判 Recurrent.ai投资者提出的7亿美元索赔争议",
+        "summary": "中国AI初创公司月之暗面（Kimi）在赴港IPO前夕，正与提出索赔的老股东展开和解谈判。争议源于Recurrent.ai及其部分投资者的指控，称月之暗面联合创始人杨植麟及CTO张宇韬涉嫌虚假陈述，未经许可将Recurrent.ai的技术与业务资源转移至月之暗面，相关投资者索赔相当于月之暗面初始股份10.5%，按当前估值计算金额超7亿美元。杨植麟已明确否认，指控方律所称缺乏法律与事实依据。此前月之暗面已秘密提交香港IPO申请，业内分析认为争议可能增加上市复杂性，涉及巨额金额的和解谈判结果将成为市场评估其公司治理能力的重要指标。",
+        "eventType": "other",
+        "eventSubject": "月之暗面",
+        "eventAction": "与老股东进行和解谈判",
+        "eventObject": "Recurrent.ai投资者提出的7亿美元索赔争议",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmv131c1m04idq1017ifvatde",
+        "title": "OpenAI 预测年底年化收入 超过700亿美元",
+        "summary": "OpenAI 最新预测显示，在企业级业务强劲拉动下，公司预计到 2026 年底年化收入将达到或超过 700 亿美元。此前市场流传其 9 月底年化收入仅约 500 亿美元的消息，曾引发投资人对 AI 回报率的担忧并拖累美股科技板块下跌，而最新数据迅速回升市场信心。但 OpenAI 仍面临巨大的现金消耗压力，预计到 2030 年累计现金消耗将达 2800 亿美元，目前正以 1.4 万亿美元估值进行新一轮融资，并明确表示不会在 2026 年进行 IPO，高度依赖外部融资维持算力开支。与此同时，竞争对手 Anthropic 在企业级市场、特别是在代码生成领域对 OpenAI 形成直接竞争，AI 商业化进入深水区，能否在高投入下保持增长并盈利成为市场评估头部 AI 企业估值的核心指标。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "预测年底年化收入",
+        "eventObject": "超过700亿美元",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 3966538
+    },
+    {
+      "left": {
+        "id": "cmuz8niwb3z5km801al3tt68y",
+        "title": "SpaceX拟融资400亿美元购英伟达芯片后者市值创新高",
+        "summary": "据多家报道，马斯克旗下 SpaceX 正寻求融资约 **400亿美元** 用于购买英伟达芯片，凸显 AI 算力需求持续强劲。其中约 100亿美元来自银行贷款，*300亿美元* 拟通过投资级债券募集，由阿波罗全球管理牵头，交易预计 **2027年** 完成。与此同时，英伟达股价表现强劲：10月6日开盘约20分钟后市值触及 **5.82万亿美元** 历史新高，距6万亿美元仅一步之遥，连续第三个交易日收盘创新高，有望成为全球首家市值突破6万亿美元的公司。SpaceX 的大额采购意向与英伟达市值的飙升，共同反映了 AI 芯片供需两端的加速升温。",
+        "eventType": null,
+        "eventSubject": "英伟达",
+        "eventAction": "市值创新高",
+        "eventObject": "英伟达股价",
+        "eventDate": "2026-10-06",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 3886115
+    },
+    {
+      "left": {
+        "id": "cmv6b1ts100f1lm01fiysewc0",
+        "title": "千问团队澄清\"千问Go!\"非独立App,开放体验申请",
+        "summary": "千问团队于10月13日就外界关注的*千问Go!*作出澄清:该产品正式名称为Personal Agent,并非独立上架的应用,而是直接嵌入在千问APP内的个人智能体。官方已同步开放体验申请入口,用户可在APP内提交申请,千问将分批放量。功能上,千问Go!依托阿里生态与开放平台,办事范围覆盖购物、出行、物流等领域,实测可完成**航班延误理赔**、场馆演出预约、餐厅筛选预订、商品比价下单、求职投递等任务。其中最具代表性的案例是:用户仅一句口头指令,千问Go!在云端排查四家航司订单并锁定东航MU2445为延误航班,多轮沟通后为用户争取到**70元现金赔付**并汇入支付宝;在淘宝价保场景中,Agent自主找到价保入口并退回52元差价。千问方面表示,选择借存量APP落地而非做独立应用,意在稳妥推进并持续依据用户反馈打磨体验,机构亦上调对个人Agent商业前景的预期。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "发布",
+        "eventObject": "Personal Agent「千问Go」",
+        "eventDate": "2026-10-13",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 3856422
+    },
+    {
+      "left": {
+        "id": "cmuz8nnjv3z5pm801g5rtoqqs",
+        "title": "DeepSeek 新一轮至少800亿元融资接近落定",
+        "summary": "据多方信息交叉印证，DeepSeek 本轮融资已接近收官，金额不少于 800 亿元人民币（约合 120 亿美元），较最初约 500 亿元目标大幅提升，市场预期最终规模或逼近 1000 亿元。**腾讯控股与宁德时代为最大出资方**，认购热度显著超出此前预期。资金将主要用于在内蒙古建设数据中心并部署华为 AI 芯片，以支撑其最新模型的算力需求。融资落定后，公司将推进整体重组，*为登陆科创板 IPO 做准备*，并已聘请中信证券担任辅导机构。值得注意的是，DeepSeek 刚于 2026 年 6 月完成 510 亿元首轮融资，距此仅数月，再融资金额与速度均刷新国内 AI 公司融资纪录。",
+        "eventType": "funding",
+        "eventSubject": "DeepSeek",
+        "eventAction": "推进新一轮融资",
+        "eventObject": "超800亿元资金",
+        "eventDate": "2026-10-06",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 3667352
+    },
+    {
+      "left": {
+        "id": "cmuzc5kn301k6lk01irjc3wf0",
+        "title": "可灵AI 筹备赴港IPO 港股市场",
+        "summary": "近日有消息称，快手科技旗下AI视频服务提供商可灵AI正筹备赴港IPO，已选定中金、高盛、瑞银为承销银行，计划募资至少10亿美元，目标最早2026年完成上市。截至目前，相关商讨仍在进行，可灵AI官方尚未回应。今年7月，可灵AI刚完成近30亿美元融资，由CPE源峰、国方创投、BlueFive、腾讯、中关村科学城基金及中信证券等联合领投，并引入阿里云、百度及华策影视、芒果产业投资人文娱资本。若可灵AI成功上市，将为模型研发与算力基建提供长期资金，有望成为国内生成式AI大模型企业登陆二级市场的标杆案例。",
+        "eventType": null,
+        "eventSubject": "可灵AI",
+        "eventAction": "筹备赴港IPO",
+        "eventObject": "港股市场",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p7cx3zbdm801y3rth2vz",
+        "title": "博通为OpenAI定制AI芯片项目筹资超500亿美元 阿波罗黑石入局",
+        "summary": "多家报道指出，博通正为与OpenAI合作的定制AI芯片项目安排**超过500亿美元融资**，主要洽谈方包括*阿波罗全球管理*和*黑石集团*，资金预计今年年底前完成，用于支撑2026下半年至2029年底部署10吉瓦定制AI芯片系统的产能计划。除OpenAI项目外，博通还为Anthropic安排高达600亿美元的新AI芯片融资，其中*黑石牵头承揽180亿美元次级债务*；甲骨文也在与阿波罗、高盛等机构商谈筹措资金用于AI芯片采购。综合来看，**阿波罗、黑石等金融机构同时出现在芯片制造端与采购端的融资链条中**，反映出AI算力基础设施军备竞赛的资本密集度持续升级，相关合作已从意向阶段进入需数百亿美元债务支撑的实际产能部署阶段。",
+        "eventType": null,
+        "eventSubject": "博通",
+        "eventAction": "筹集超500亿美元私人债务",
+        "eventObject": "OpenAI定制AI芯片项目",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "score": 3385248
+    },
+    {
+      "left": {
+        "id": "cmv6b1fzk00eolm01pc2t2xlu",
+        "title": "可灵AI 预告发布 Kling 4.0视频生成模型",
+        "summary": "可灵AI宣布将于10月14日亮相2026洛杉矶科技周，期间将通过与Oxen AI及Obsidian Studio合作举办的圆桌活动，预告即将上线的Kling 4.0视频生成模型。活动聚焦讨论AI视频生成从消费级炫技向企业级生产工作流落地的路径，覆盖模型研发、平台集成及专业内容制作等议题。圆桌于当地时间16:00至19:00在圣莫尼卡Met Her at a Bar举行，随后设交流酒会，为企业客户与创作者提供对接空间。这是可灵AI首次在出海节点上以产业落地为主题公开亮相，距Kling 4.0正式发布尚有时差。",
+        "eventType": null,
+        "eventSubject": "可灵AI",
+        "eventAction": "预告发布",
+        "eventObject": "Kling 4.0视频生成模型",
+        "eventDate": "2026-10-14",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmv6b56u600hxlm01uvx2avlf",
+        "title": "OpenAI拟将停运的Sora移交给卡岑伯格初创公司，转向专业影视工具",
+        "summary": "据《The Information》报道，OpenAI正与一家由好莱坞制片人杰弗里·卡岑伯格、Sora前研究负责人比尔·皮布尔斯及Dropbox前CFO苏杰·贾斯瓦联合创办的隐身初创公司谈判，计划将已停运的视频生成模型**Sora**移交或以股权合作方式授权给该公司，使其以专业影视工具形态重新面市。**新团队计划接管并改造Sora平台**，围绕其开发面向影视制作方的软件或服务，将生成能力嵌入影视流水线。背景显示，OpenAI今年早些时候为削减高算力消耗的非核心项目，已停掉Sora模型及类TikTok视频应用，消费级网页与App端、API先后关闭，原与迪士尼约*10亿美元*的合作也告吹。候选报道在合作模式上略有差异：一方称OpenAI拟通过股权合作换取新公司部分股权并开放底层模型深度定制权限，另一方仅描述为模型移交；此外，双方条款尚未落定，*Sora模型权重归属仍是未知数*。",
+        "eventType": "other",
+        "eventSubject": "OpenAI",
+        "eventAction": "拟以股权合作授权Sora技术",
+        "eventObject": "Sora视频生成模型",
+        "eventDate": null,
+        "itemCount": 3
+      },
+      "score": 3358817
+    },
+    {
+      "left": {
+        "id": "cmv4nyy5i00bbua01j2kdf1ti",
+        "title": "亚马逊洽谈约70亿美元收购AI芯片适配初创公司Decart",
+        "summary": "多家报道指出，亚马逊正与成立仅三年的旧金山AI初创公司Decart洽谈收购，潜在估值约**70亿美元**。Decart的核心技术是让训练好的模型在不同品牌AI芯片间无缝切换的跨芯片适配软件，其优化栈号称在同一硬件上可提速最多*8倍*，已适配英伟达GPU、谷歌TPU及亚马逊自研Trainium，AWS更早在2025年就把Trainium3早期访问权交给Decart完成底层磨合。该价格较其今年5月约40亿美元估值**高出约75%**。此前Anthropic曾在尽职调查后放弃以约60亿美元收购Decart，英伟达相关谈判同样告吹，*业内分析认为*交易能否成立取决于其加速效果在客户模型上的普遍适用性。此举被视作大型云厂商在芯片短缺与自研背景下争夺算力控制权的最新动作。",
+        "eventType": "acquisition",
+        "eventSubject": "亚马逊",
+        "eventAction": "洽谈收购",
+        "eventObject": "Decart",
+        "eventDate": null,
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 3262702
+    },
+    {
+      "left": {
+        "id": "cmv4nxw12009iua01bu2w2etz",
+        "title": "极客早知道合集速览封禁改名与新品内测多条科技动态",
+        "summary": "蚂蚁集团旗下AI产品\"灵光\"近日开启新版本小范围内测，新版对标Meta今年9月推出的个人智能体Muse。据接近项目人士透露，灵光方向约半年前开始筹备，将从聊天型AI助手转向拥有长期记忆、可主动推进任务的AI原生个人智能体，可通过Skill和MCP调用钉钉、智能家居等，计划本月全面开放。 Anthropic旗下Claude于2026年上半年累计封禁1140万个账号，用户提交的39.8万次申诉中仅4.2万次翻案，胜率约一成，申诉机制形同虚设。封禁触发情形主要包括违法滥用、侵犯隐私、恶意诱导、极端自残等内容违规，上半年向NCMEC等国际安全组织提交超1.5万起违规报告，并上线自研机器学习分类器辅助审查；此外黑产号无差别扫射及区域审查也导致大量用户被波及。Anthropic近日更新使用政策，新增禁止辱骂、残忍对待AI的条款，规定11月12日起生效，对极端情形下反复虐待模型的用户实施限流或封号，这是其一年多来首次修订政策，AI与使用者之间的权责边界正在被重新界定。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "公布封禁数据并更新使用政策",
+        "eventObject": "Claude",
+        "eventDate": "2026-11-12",
+        "itemCount": 4
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 3112656
+    },
+    {
+      "left": {
+        "id": "cmv6b1fzk00eolm01pc2t2xlu",
+        "title": "可灵AI 预告发布 Kling 4.0视频生成模型",
+        "summary": "可灵AI宣布将于10月14日亮相2026洛杉矶科技周，期间将通过与Oxen AI及Obsidian Studio合作举办的圆桌活动，预告即将上线的Kling 4.0视频生成模型。活动聚焦讨论AI视频生成从消费级炫技向企业级生产工作流落地的路径，覆盖模型研发、平台集成及专业内容制作等议题。圆桌于当地时间16:00至19:00在圣莫尼卡Met Her at a Bar举行，随后设交流酒会，为企业客户与创作者提供对接空间。这是可灵AI首次在出海节点上以产业落地为主题公开亮相，距Kling 4.0正式发布尚有时差。",
+        "eventType": null,
+        "eventSubject": "可灵AI",
+        "eventAction": "预告发布",
+        "eventObject": "Kling 4.0视频生成模型",
+        "eventDate": "2026-10-14",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 3079849
+    },
+    {
+      "left": {
+        "id": "cmv3r4xue00jls501ac86fvji",
+        "title": "字节跳动与腾讯竞速布局个人AI智能体",
+        "summary": "据财新等报道，受 Meta 9 月推出 *Muse* 个人智能体及行业竞争驱动，**字节跳动与腾讯正加速个人 AI Agent 产品研发与上线**。字节内部代号「Spell」的项目由豆包手机助手团队主导，计划与豆包产品结合尽快推出；腾讯已于 9 月底上线 *LightVela*，定位「云端个人助理」，可通过微信接入处理日常需求，当前处于开发者体验阶段，新用户可免费试用一个月。背景差异在于，*Muse* 在内部测试中曾暴露擅自修改密码、泄露隐私等安全隐患，扎克伯格仍坚持按期上线，凭借庞大用户基数与营销取得数百万下载，帮助 Meta 抢占先发优势；而字节旗下 *TRAE* 于 10 月宣布合并为全新开发平台，支持 Agent 与 IDE 模式切换，反映其在 AI Agent 工具链上的同步布局。多家中国大厂正以差异化路径切入个人智能体赛道。",
+        "eventType": null,
+        "eventSubject": "Meta",
+        "eventAction": "发布存在安全隐患的 AI 智能体",
+        "eventObject": "Muse AI 智能体",
+        "eventDate": "2025-09-08",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2932731
+    },
+    {
+      "left": {
+        "id": "cmv3r4xue00jls501ac86fvji",
+        "title": "字节跳动与腾讯竞速布局个人AI智能体",
+        "summary": "据财新等报道，受 Meta 9 月推出 *Muse* 个人智能体及行业竞争驱动，**字节跳动与腾讯正加速个人 AI Agent 产品研发与上线**。字节内部代号「Spell」的项目由豆包手机助手团队主导，计划与豆包产品结合尽快推出；腾讯已于 9 月底上线 *LightVela*，定位「云端个人助理」，可通过微信接入处理日常需求，当前处于开发者体验阶段，新用户可免费试用一个月。背景差异在于，*Muse* 在内部测试中曾暴露擅自修改密码、泄露隐私等安全隐患，扎克伯格仍坚持按期上线，凭借庞大用户基数与营销取得数百万下载，帮助 Meta 抢占先发优势；而字节旗下 *TRAE* 于 10 月宣布合并为全新开发平台，支持 Agent 与 IDE 模式切换，反映其在 AI Agent 工具链上的同步布局。多家中国大厂正以差异化路径切入个人智能体赛道。",
+        "eventType": null,
+        "eventSubject": "Meta",
+        "eventAction": "发布存在安全隐患的 AI 智能体",
+        "eventObject": "Muse AI 智能体",
+        "eventDate": "2025-09-08",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmv131e5b04ilq101trpv9tsw",
+        "title": "谷歌云发布Gemini Agent企业级通用智能体",
+        "summary": "在Gemini at Work 2026大会上，谷歌云正式推出面向企业用户的通用智能体产品Gemini Agent，切入AI办公赛道。用户只需以自然语言输入目标，系统可在云端自主拆解任务、调用企业数据与工具、编写并运行代码，并协调多个子智能体协同完成多步骤任务，最终将成果直接交付至Gmail、Docs及第三方开发工具。产品支持Gemini Enterprise、Workspace及第三方服务，并首次引入**多模型动态路由**机制，可在谷歌自有模型与Anthropic Claude等之间灵活切换，官方称可将运行成本降至全用前沿模型的*约1/3*，速度提升*40%*。同时，Gemini Agent具备四重记忆机制，并首次推出面向*金融与法律行业*的垂直定制版本，配套身份权限审计、执行沙箱隔离、流量管控与实时支出上限等企业级安全治理能力。",
+        "eventType": null,
+        "eventSubject": "谷歌云",
+        "eventAction": "发布",
+        "eventObject": "Gemini 智能体（Gemini Agent）",
+        "eventDate": "2026-10-09",
+        "itemCount": 3
+      },
+      "score": 2766726
+    },
+    {
+      "left": {
+        "id": "cmuzc5kn301k6lk01irjc3wf0",
+        "title": "可灵AI 筹备赴港IPO 港股市场",
+        "summary": "近日有消息称，快手科技旗下AI视频服务提供商可灵AI正筹备赴港IPO，已选定中金、高盛、瑞银为承销银行，计划募资至少10亿美元，目标最早2026年完成上市。截至目前，相关商讨仍在进行，可灵AI官方尚未回应。今年7月，可灵AI刚完成近30亿美元融资，由CPE源峰、国方创投、BlueFive、腾讯、中关村科学城基金及中信证券等联合领投，并引入阿里云、百度及华策影视、芒果产业投资人文娱资本。若可灵AI成功上市，将为模型研发与算力基建提供长期资金，有望成为国内生成式AI大模型企业登陆二级市场的标杆案例。",
+        "eventType": null,
+        "eventSubject": "可灵AI",
+        "eventAction": "筹备赴港IPO",
+        "eventObject": "港股市场",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2760583
+    },
+    {
+      "left": {
+        "id": "cmuz8ms653z0xm801rps0457k",
+        "title": "Reflection AI发布501B参数开放权重模型Beam",
+        "summary": "多家报道聚焦同一事件：英伟达支持的美国初创公司 Reflection AI 于2026年10月5日推出首个开放权重模型 **Beam**，采用 MoE 架构，总参数量达 **5010亿**，推理激活230亿，面向编程、推理及 Agent 任务。预训练使用 **23.8万亿 Token**，强化学习阶段动用约 **1.05万张英伟达 GB300 GPU** 训练约四周。路透社指出，这是美国公司 *应对中国高性价比开放模型竞争* 的一次重要尝试，凸显其在大模型开放权重赛道的战略意图。",
+        "eventType": null,
+        "eventSubject": "Reflection AI",
+        "eventAction": "发布",
+        "eventObject": "开放权重模型Beam",
+        "eventDate": "2026-10-05",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2525245
+    },
+    {
+      "left": {
+        "id": "cmv4nxxbm009oua01cuwcv8ok",
+        "title": "苹果官宣10月13日举办Welcome home发布会推出智能家居中枢HomeView等多款新品",
+        "summary": "据科技记者马克·古尔曼10月12日披露，苹果计划于10月13日发布多款新一代智能家居产品，包括搭载A18芯片的家居中枢HomeView（提供桌面和壁挂两版，预计11月中旬上市）、搭载S10芯片的新款HomePod mini及搭载A19芯片的Apple TV，后两款预计10月30日开售。HomeView定位家庭智能设备集中控制中枢。同时苹果正与LG电子合作开发智能门铃、门锁、恒温器和安防摄像头，将以\"Apple Home Collection\"品牌推出，最早2026年晚些时候上市。此举表明苹果正通过中枢设备与配套硬件拓展智能家居生态矩阵，具体规格、售价与上市安排仍待官方确认。 彭博记者古尔曼透露，苹果首款智能家庭中枢名为HomeView，预计10月27日欢迎回家活动发布并于11月出货。设备外观类似台灯电脑，采用悬浮式屏幕与扬声器底座，搭载A18芯片，将提供深空灰、银色、星光色和粉色四种配色，以AI Siri为核心，主要使用语音交互。",
+        "eventType": null,
+        "eventSubject": "苹果",
+        "eventAction": "发布智能家居中枢HomeView及新款HomePod mini、Apple TV，并与LG合作开发智能家居设备",
+        "eventObject": "智能家居中枢HomeView、HomePod mini、Apple TV及Apple Home Collection设备",
+        "eventDate": "2026-10-13",
+        "itemCount": 5
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2490414
+    },
+    {
+      "left": {
+        "id": "cmv4scn1e001mua017u8w6bte",
+        "title": "月之暗面 与老股东进行和解谈判 Recurrent.ai投资者提出的7亿美元索赔争议",
+        "summary": "中国AI初创公司月之暗面（Kimi）在赴港IPO前夕，正与提出索赔的老股东展开和解谈判。争议源于Recurrent.ai及其部分投资者的指控，称月之暗面联合创始人杨植麟及CTO张宇韬涉嫌虚假陈述，未经许可将Recurrent.ai的技术与业务资源转移至月之暗面，相关投资者索赔相当于月之暗面初始股份10.5%，按当前估值计算金额超7亿美元。杨植麟已明确否认，指控方律所称缺乏法律与事实依据。此前月之暗面已秘密提交香港IPO申请，业内分析认为争议可能增加上市复杂性，涉及巨额金额的和解谈判结果将成为市场评估其公司治理能力的重要指标。",
+        "eventType": "other",
+        "eventSubject": "月之暗面",
+        "eventAction": "与老股东进行和解谈判",
+        "eventObject": "Recurrent.ai投资者提出的7亿美元索赔争议",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8oowo3z95m801133bbrzm",
+        "title": "Manus母公司蝴蝶效应完成超5亿美元融资 博裕IDG领投",
+        "summary": "AI Agent公司Manus的母公司**蝴蝶效应**于10月8日宣布完成**超5亿美元新一轮融资**，估值约达40亿美元。本轮由**博裕投资、IDG资本联合领投**，老股东**腾讯、红杉中国**及真格基金等继续跟投。资金将主要用于技术研发、团队扩张与全球化布局，融资同期公司发布招聘视频，开放产品经理、算法工程师等17个岗位。距离9月9日恢复独立运营仅不到一个月，团队状态稳定，多条报道均指出此轮融资规模在AI创业公司中处于头部水平，反映出资本对*AI Agent赛道*的持续看好。",
+        "eventType": null,
+        "eventSubject": "蝴蝶效应",
+        "eventAction": "完成",
+        "eventObject": "5亿美元新一轮融资",
+        "eventDate": "2026-10-08",
+        "itemCount": 2
+      },
+      "score": 2465703
+    },
+    {
+      "left": {
+        "id": "cmutvxst9006epf01vkca214q",
+        "title": "StartLux首发开源决策模型次日Cloudflare开源自训竞品即反超榜首",
+        "summary": "2026年9月30日，上海初创公司**StartLux**（原点星辉）发布开源决策模型 *StartLux-Decision*，规格覆盖0.8B至27B共五档，27B版本在Decision Index 0.2.1的38项测试中31项超过Jev 1.13，主打本地智能体高频判断。**次日（10月1日），Cloudflare正式开源决策模型Clef**，基于Qwen后训练并在同一榜单上反超StartLux-Decision，标志该赛道在两周内从首发进入群战阶段。Cloudflare进一步推出升级版本**Clef-omni**，原生支持wav、mp3、mp4、webm等音视频输入，纯文本响应约130ms、图像约150ms，权重已在Hugging Face开源，同期Clef-flash输入价格下调约58%至0.038美元/百万Token。",
+        "eventType": null,
+        "eventSubject": "Cloudflare",
+        "eventAction": "发布开源决策模型并宣称为本地Agent关键零件",
+        "eventObject": "StartLux-Decision（0.8B-27B五档）",
+        "eventDate": "2026-09-30",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2375533
+    },
+    {
+      "left": {
+        "id": "cmv3r4ut500jfs501cyzho5ia",
+        "title": "月之暗面 增加注册资本 公司注册资本",
+        "summary": "国内大模型公司月之暗面近期完成新一轮工商变更，注册资本由约1157.53万元增至约1437.23万元，增幅约24%。这是该公司2023年4月成立以来年内多次密集增资之一，注册资本从最初100万元一路攀升至当前水平。公司法定代表人为杨植麟，经营范围涵盖软件及人工智能软件开发，股东包括杨植麟、深圳和谐成长三期科技发展股权投资基金及周昕宇等。在估值扩张和业务增长背景下，公司在融资和资本运作层面持续活跃，本次增资将进一步充实资本实力，为大模型底层技术研发、产品迭代及后续资本市场布局提供支持。",
+        "eventType": "funding",
+        "eventSubject": "月之暗面",
+        "eventAction": "增加注册资本",
+        "eventObject": "公司注册资本",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2297129
+    },
+    {
+      "left": {
+        "id": "cmuzc5kn301k6lk01irjc3wf0",
+        "title": "可灵AI 筹备赴港IPO 港股市场",
+        "summary": "近日有消息称，快手科技旗下AI视频服务提供商可灵AI正筹备赴港IPO，已选定中金、高盛、瑞银为承销银行，计划募资至少10亿美元，目标最早2026年完成上市。截至目前，相关商讨仍在进行，可灵AI官方尚未回应。今年7月，可灵AI刚完成近30亿美元融资，由CPE源峰、国方创投、BlueFive、腾讯、中关村科学城基金及中信证券等联合领投，并引入阿里云、百度及华策影视、芒果产业投资人文娱资本。若可灵AI成功上市，将为模型研发与算力基建提供长期资金，有望成为国内生成式AI大模型企业登陆二级市场的标杆案例。",
+        "eventType": null,
+        "eventSubject": "可灵AI",
+        "eventAction": "筹备赴港IPO",
+        "eventObject": "港股市场",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuzc041900m3lk01sgdwpjjx",
+        "title": "阿里巴巴集团主席蔡崇信 出席Wave by Vento 2026并阐述AI战略观点 AI隐性基础设施与全栈AI战略",
+        "summary": "阿里巴巴集团主席蔡崇信近日出席意大利科技与投资盛会Wave by Vento 2026并发表观点：未来五年AI将从显性话题演变为融入业务的隐性基础设施，当前AI擅长\"省时间\"但在\"花时间\"上潜力巨大，知识工作者生产力提升是最确定应用场景，潜在市场规模约50万亿美元，AI也将加速医疗与科研创新。蔡崇信将阿里发展以2023年为界划分为前\"BC\"与后\"AD\"两阶段，明确电商与全栈AI为核心方向，从算力、模型和应用层全面推进全栈AI战略。他还指出，中国拥有全球约30%工业生产总量、丰富的制造数据及电动汽车、机器人等完整硬件供应链，将在AI与物理世界融合阶段形成显著优势，并重申开源哲学对欧洲\"新云\"企业的发展价值。",
+        "eventType": null,
+        "eventSubject": "阿里巴巴集团主席蔡崇信",
+        "eventAction": "出席Wave by Vento 2026并阐述AI战略观点",
+        "eventObject": "AI隐性基础设施与全栈AI战略",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "score": 2269399
+    },
+    {
+      "left": {
+        "id": "cmv3r4ut500jfs501cyzho5ia",
+        "title": "月之暗面 增加注册资本 公司注册资本",
+        "summary": "国内大模型公司月之暗面近期完成新一轮工商变更，注册资本由约1157.53万元增至约1437.23万元，增幅约24%。这是该公司2023年4月成立以来年内多次密集增资之一，注册资本从最初100万元一路攀升至当前水平。公司法定代表人为杨植麟，经营范围涵盖软件及人工智能软件开发，股东包括杨植麟、深圳和谐成长三期科技发展股权投资基金及周昕宇等。在估值扩张和业务增长背景下，公司在融资和资本运作层面持续活跃，本次增资将进一步充实资本实力，为大模型底层技术研发、产品迭代及后续资本市场布局提供支持。",
+        "eventType": "funding",
+        "eventSubject": "月之暗面",
+        "eventAction": "增加注册资本",
+        "eventObject": "公司注册资本",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2252666
+    },
+    {
+      "left": {
+        "id": "cmv4scn1e001mua017u8w6bte",
+        "title": "月之暗面 与老股东进行和解谈判 Recurrent.ai投资者提出的7亿美元索赔争议",
+        "summary": "中国AI初创公司月之暗面（Kimi）在赴港IPO前夕，正与提出索赔的老股东展开和解谈判。争议源于Recurrent.ai及其部分投资者的指控，称月之暗面联合创始人杨植麟及CTO张宇韬涉嫌虚假陈述，未经许可将Recurrent.ai的技术与业务资源转移至月之暗面，相关投资者索赔相当于月之暗面初始股份10.5%，按当前估值计算金额超7亿美元。杨植麟已明确否认，指控方律所称缺乏法律与事实依据。此前月之暗面已秘密提交香港IPO申请，业内分析认为争议可能增加上市复杂性，涉及巨额金额的和解谈判结果将成为市场评估其公司治理能力的重要指标。",
+        "eventType": "other",
+        "eventSubject": "月之暗面",
+        "eventAction": "与老股东进行和解谈判",
+        "eventObject": "Recurrent.ai投资者提出的7亿美元索赔争议",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2246531
+    },
+    {
+      "left": {
+        "id": "cmv131n4s04liq101h9wep5jk",
+        "title": "豆包工作上线无限画布并接入新模型Seedream与豆包2.1 Lite",
+        "summary": "2026年10月9日，豆包工作平台宣布同步更新：任务模式上线无限画布功能，支持在同一画布上铺开素材、方案与生成成果进行对比、整理与局部编辑，图片、视频、HTML等内容可自动汇入同一画布；同时接入全新图片模型**Seedream 5.0 Flash**，提供更丰富的生图风格选择；并正式上线**豆包2.1 Lite（0921新版）模型**，主打高频办公场景，强调*更省额度、更快交付*，在问答、文档、表格、PPT等任务上体验提升，且具备出色的图像、视频、音频理解能力，与2.1 Turbo、2.1 Pro并列展示，支持调整推理强度，整体升级了豆包工作的创作与办公工作流。",
+        "eventType": null,
+        "eventSubject": "豆包工作",
+        "eventAction": "新增画布功能并接入Seedream 5.0 Flash，同时上线豆包 2.1 Lite 模型",
+        "eventObject": "豆包工作平台的创作与办公工作流",
+        "eventDate": "2026-10-09",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2222557
+    },
+    {
+      "left": {
+        "id": "cmuzc4vnt01jtlk01khbkqj39",
+        "title": "马斯克与SpaceXAI 宣布接入第三方AI模型 Grok Bot",
+        "summary": "马斯克在X平台宣布Grok Bot将打破单一模型依赖，转向任务导向的多模型混合架构。系统不再以自研Grok模型为限，而是以最佳输出为唯一标准，自动调用包括Claude Opus 5.5、Midjourney和Suno在内的第三方API处理文本、图像和音频任务。Grok Bot是SpaceXAI于2026年8月推出的测试版产品，定位为常驻型AI同事，部署在配备浏览器、文件系统和终端的云端服务器上，可独立完成多步骤操作，仅在关键决策时提示人工审批，并具备持续积累的上下文记忆。",
+        "eventType": null,
+        "eventSubject": "马斯克与SpaceXAI",
+        "eventAction": "宣布接入第三方AI模型",
+        "eventObject": "Grok Bot",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2214052
+    },
+    {
+      "left": {
+        "id": "cmv3r548h00jxs5016ww2oine",
+        "title": "腾讯云开源团队AI协作工具TeamAI 支持跨Agent共享Skill",
+        "summary": "2026年10月10日，腾讯云正式开源内部自用的团队AI协作工具 **TeamAI**，该工具基于Git仓库统一管理团队Skill、工作规范、工具配置及项目知识，支持以合并请求方式进行评审与版本控制，*经确认合入后*通过会话启动Hook自动同步至成员各自使用的Agent中。TeamAI已适配WorkBuddy、CodeBuddy、Claude Code、Codex、Cursor等16种主流Agent，并支持MCP工具配置、Rules及子Agent的覆盖更新。管理员可统一下发符合企业安全要求的模型配置，降低成员自行接入风险；当Agent出现反复纠正或工具调用失败时，系统会提示用户分享经验并由Agent整理入库供检索。官方测试数据显示，*接入团队知识的较低成本模型综合评分提高6.1%，调用成本降低76%*。",
+        "eventType": null,
+        "eventSubject": "腾讯云",
+        "eventAction": "开源",
+        "eventObject": "TeamAI团队AI协作工具",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2198681
+    },
+    {
+      "left": {
+        "id": "cmv3r4xue00jls501ac86fvji",
+        "title": "字节跳动与腾讯竞速布局个人AI智能体",
+        "summary": "据财新等报道，受 Meta 9 月推出 *Muse* 个人智能体及行业竞争驱动，**字节跳动与腾讯正加速个人 AI Agent 产品研发与上线**。字节内部代号「Spell」的项目由豆包手机助手团队主导，计划与豆包产品结合尽快推出；腾讯已于 9 月底上线 *LightVela*，定位「云端个人助理」，可通过微信接入处理日常需求，当前处于开发者体验阶段，新用户可免费试用一个月。背景差异在于，*Muse* 在内部测试中曾暴露擅自修改密码、泄露隐私等安全隐患，扎克伯格仍坚持按期上线，凭借庞大用户基数与营销取得数百万下载，帮助 Meta 抢占先发优势；而字节旗下 *TRAE* 于 10 月宣布合并为全新开发平台，支持 Agent 与 IDE 模式切换，反映其在 AI Agent 工具链上的同步布局。多家中国大厂正以差异化路径切入个人智能体赛道。",
+        "eventType": null,
+        "eventSubject": "Meta",
+        "eventAction": "发布存在安全隐患的 AI 智能体",
+        "eventObject": "Muse AI 智能体",
+        "eventDate": "2025-09-08",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmv6azp2q0089lm01nlg4bebo",
+        "title": "REA 通过MCP协议将逆向工具接入AI智能体并迅速走红 AI编程智能体与逆向工程社区",
+        "summary": "REA（Reverse Engineer Anything）一周内在GitHub涨星超10万，它将Ghidra、IDA等逆向工具通过MCP协议接入Claude Code等AI编程智能体，用户可用自然语言指令让智能体自动分析应用二进制代码、安卓包或Electron应用并解释功能。同期，开发者Maurice Heumann用Claude Code和Codex智能体结合Hex-Rays MCP，将一款射击游戏99%函数还原为C++，83%编译结果与原程序逐字节一致；多款老游戏因此能在浏览器中运行，Rockstar、Activision等发行商已撤下相关页面。专业逆向人士Elias Bachaalany等指出同类工具早已存在，称这是炒作；无壳或轻壳程序AI可处理，VMP等高强度保护仍难以突破。文章强调，法律上拆解软件用于学习和互操作研究有豁免，但禁止反编译的用户协议在美国可执行，欧盟则无效；版权不保护功能本身，但AI同时完成拆解和重建（而非净室开发）会消除独立创作的证据墙。此外，反编译结果需发送给模型服务商，可能违反保密协议。",
+        "eventType": null,
+        "eventSubject": "REA",
+        "eventAction": "通过MCP协议将逆向工具接入AI智能体并迅速走红",
+        "eventObject": "AI编程智能体与逆向工程社区",
+        "eventDate": "2026-10-12",
+        "itemCount": 1
+      },
+      "score": 2195053
+    },
+    {
+      "left": {
+        "id": "cmv131yac04myq101qla926zm",
+        "title": "谷歌开放测试Gemini 4 Argon架构新检查点，Pro用户与Cloud生态先行",
+        "summary": "多条报道共同指向谷歌正开放测试其下一代AI模型**Gemini 4 Argon**架构下的**Carbon检查点**。该模型已在内部代码平台Jetski中接入，并面向*部分Pro用户*开放测试，同时进入Google Cloud生态，在新编程工具Antigravity中被设为默认模型，能够直接向真实代码库提交代码，呈现明显的智能体特征。内部数千名员工正围绕专业编码、跨语言老旧代码迁移及量子计算推理等场景进行评估。不同消息源在能力定位上存在差异：有报道称其代码能力*可媲美Anthropic的Opus 5.5*，亦有员工指出早期版本在部分编程任务上仅*大致相当于Claude Opus 5*，整体水平仍需进一步评测验证。此外，谷歌同步筹备支持实时语音的Concierge管家服务，试图以该架构打通完整工作流。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "即将正式发布Gemini 4「Argon」架构下Carbon检查点",
+        "eventObject": "Gemini 4 Carbon模型",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2161907
+    },
+    {
+      "left": {
+        "id": "cmv131yac04myq101qla926zm",
+        "title": "谷歌开放测试Gemini 4 Argon架构新检查点，Pro用户与Cloud生态先行",
+        "summary": "多条报道共同指向谷歌正开放测试其下一代AI模型**Gemini 4 Argon**架构下的**Carbon检查点**。该模型已在内部代码平台Jetski中接入，并面向*部分Pro用户*开放测试，同时进入Google Cloud生态，在新编程工具Antigravity中被设为默认模型，能够直接向真实代码库提交代码，呈现明显的智能体特征。内部数千名员工正围绕专业编码、跨语言老旧代码迁移及量子计算推理等场景进行评估。不同消息源在能力定位上存在差异：有报道称其代码能力*可媲美Anthropic的Opus 5.5*，亦有员工指出早期版本在部分编程任务上仅*大致相当于Claude Opus 5*，整体水平仍需进一步评测验证。此外，谷歌同步筹备支持实时语音的Concierge管家服务，试图以该架构打通完整工作流。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "即将正式发布Gemini 4「Argon」架构下Carbon检查点",
+        "eventObject": "Gemini 4 Carbon模型",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2119508
+    },
+    {
+      "left": {
+        "id": "cmv3r4wro00jjs501q1fhevzj",
+        "title": "英伟达洽谈收购或追加投资开源AI公司Reflection AI",
+        "summary": "多家媒体报道，**英伟达正与美国开源AI模型公司Reflection AI就收购或追加投资进行深入谈判**，潜在形式涵盖整体收购、扩大股权投资及算力与技术合作等。英伟达此前已向Reflection注资约*8亿美元*，为其最大股东之一；公司今年3月估值达*250亿美元*。报道指出，英伟达可能借助人才兼并模式规避反垄断审查，双方有望在未来数周内敲定协议，但谈判仍有破裂可能。Reflection近期发布开放权重模型，被视为美国方面抗衡低成本开源竞争的重要布局。",
+        "eventType": "acquisition",
+        "eventSubject": "英伟达",
+        "eventAction": "洽谈收购或追加投资 Reflection AI",
+        "eventObject": "Reflection AI 开源模型业务",
+        "eventDate": "2026-10-11",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2102213
+    },
+    {
+      "left": {
+        "id": "cmv6b56u600hxlm01uvx2avlf",
+        "title": "OpenAI拟将停运的Sora移交给卡岑伯格初创公司，转向专业影视工具",
+        "summary": "据《The Information》报道，OpenAI正与一家由好莱坞制片人杰弗里·卡岑伯格、Sora前研究负责人比尔·皮布尔斯及Dropbox前CFO苏杰·贾斯瓦联合创办的隐身初创公司谈判，计划将已停运的视频生成模型**Sora**移交或以股权合作方式授权给该公司，使其以专业影视工具形态重新面市。**新团队计划接管并改造Sora平台**，围绕其开发面向影视制作方的软件或服务，将生成能力嵌入影视流水线。背景显示，OpenAI今年早些时候为削减高算力消耗的非核心项目，已停掉Sora模型及类TikTok视频应用，消费级网页与App端、API先后关闭，原与迪士尼约*10亿美元*的合作也告吹。候选报道在合作模式上略有差异：一方称OpenAI拟通过股权合作换取新公司部分股权并开放底层模型深度定制权限，另一方仅描述为模型移交；此外，双方条款尚未落定，*Sora模型权重归属仍是未知数*。",
+        "eventType": "other",
+        "eventSubject": "OpenAI",
+        "eventAction": "拟以股权合作授权Sora技术",
+        "eventObject": "Sora视频生成模型",
+        "eventDate": null,
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2097922
+    },
+    {
+      "left": {
+        "id": "cmv4nxxbm009oua01cuwcv8ok",
+        "title": "苹果官宣10月13日举办Welcome home发布会推出智能家居中枢HomeView等多款新品",
+        "summary": "据科技记者马克·古尔曼10月12日披露，苹果计划于10月13日发布多款新一代智能家居产品，包括搭载A18芯片的家居中枢HomeView（提供桌面和壁挂两版，预计11月中旬上市）、搭载S10芯片的新款HomePod mini及搭载A19芯片的Apple TV，后两款预计10月30日开售。HomeView定位家庭智能设备集中控制中枢。同时苹果正与LG电子合作开发智能门铃、门锁、恒温器和安防摄像头，将以\"Apple Home Collection\"品牌推出，最早2026年晚些时候上市。此举表明苹果正通过中枢设备与配套硬件拓展智能家居生态矩阵，具体规格、售价与上市安排仍待官方确认。 彭博记者古尔曼透露，苹果首款智能家庭中枢名为HomeView，预计10月27日欢迎回家活动发布并于11月出货。设备外观类似台灯电脑，采用悬浮式屏幕与扬声器底座，搭载A18芯片，将提供深空灰、银色、星光色和粉色四种配色，以AI Siri为核心，主要使用语音交互。",
+        "eventType": null,
+        "eventSubject": "苹果",
+        "eventAction": "发布智能家居中枢HomeView及新款HomePod mini、Apple TV，并与LG合作开发智能家居设备",
+        "eventObject": "智能家居中枢HomeView、HomePod mini、Apple TV及Apple Home Collection设备",
+        "eventDate": "2026-10-13",
+        "itemCount": 5
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2071513
+    },
+    {
+      "left": {
+        "id": "cmuz8p7853zb9m8019p6o8twk",
+        "title": "OpenAI全量推送GPT-6并上线智能交互界面",
+        "summary": "OpenAI宣布将GPT-6推向更广泛ChatGPT用户，并同步推出Intelligent UI（智能用户界面）功能。ChatGPT可根据用户问题自动组合文字、图表、按钮、表单等元素，生成可直接操作的交互界面，如计算器、账单分摊工具或小游戏。新功能10月7日起向Plus、Pro、Business和Enterprise用户逐步开放，Free和Go用户10月8日起陆续获得支持。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "推出ChatGPT全新Intelligent UI交互界面",
+        "eventObject": "ChatGPT用户",
+        "eventDate": "2026-10-07",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2053276
+    },
+    {
+      "left": {
+        "id": "cmv6b1ybn00f6lm01i9jauo7z",
+        "title": "阿里千问 发布 QwenGyre在线强化学习框架",
+        "summary": "阿里千问正式发布QwenGyre，面向长程智能体任务的在线强化学习框架。当智能体执行持续数小时、与环境数百轮交互、累计百万级token任务时，通过弹性调度与轨迹处理将超长程任务作为有效训练来源。NL2RepoBench实验中48步训练后模型通过率从52.5%提升至58.5%，相对Async实现1.78倍端到端加速，Qwen3.6-122B跨任务验证获得全面提速。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "发布",
+        "eventObject": "QwenGyre在线强化学习框架",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2038400
+    },
+    {
+      "left": {
+        "id": "cmv131yac04myq101qla926zm",
+        "title": "谷歌开放测试Gemini 4 Argon架构新检查点，Pro用户与Cloud生态先行",
+        "summary": "多条报道共同指向谷歌正开放测试其下一代AI模型**Gemini 4 Argon**架构下的**Carbon检查点**。该模型已在内部代码平台Jetski中接入，并面向*部分Pro用户*开放测试，同时进入Google Cloud生态，在新编程工具Antigravity中被设为默认模型，能够直接向真实代码库提交代码，呈现明显的智能体特征。内部数千名员工正围绕专业编码、跨语言老旧代码迁移及量子计算推理等场景进行评估。不同消息源在能力定位上存在差异：有报道称其代码能力*可媲美Anthropic的Opus 5.5*，亦有员工指出早期版本在部分编程任务上仅*大致相当于Claude Opus 5*，整体水平仍需进一步评测验证。此外，谷歌同步筹备支持实时语音的Concierge管家服务，试图以该架构打通完整工作流。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "即将正式发布Gemini 4「Argon」架构下Carbon检查点",
+        "eventObject": "Gemini 4 Carbon模型",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 2023713
+    },
+    {
+      "left": {
+        "id": "cmv4nyy5i00bbua01j2kdf1ti",
+        "title": "亚马逊洽谈约70亿美元收购AI芯片适配初创公司Decart",
+        "summary": "多家报道指出，亚马逊正与成立仅三年的旧金山AI初创公司Decart洽谈收购，潜在估值约**70亿美元**。Decart的核心技术是让训练好的模型在不同品牌AI芯片间无缝切换的跨芯片适配软件，其优化栈号称在同一硬件上可提速最多*8倍*，已适配英伟达GPU、谷歌TPU及亚马逊自研Trainium，AWS更早在2025年就把Trainium3早期访问权交给Decart完成底层磨合。该价格较其今年5月约40亿美元估值**高出约75%**。此前Anthropic曾在尽职调查后放弃以约60亿美元收购Decart，英伟达相关谈判同样告吹，*业内分析认为*交易能否成立取决于其加速效果在客户模型上的普遍适用性。此举被视作大型云厂商在芯片短缺与自研背景下争夺算力控制权的最新动作。",
+        "eventType": "acquisition",
+        "eventSubject": "亚马逊",
+        "eventAction": "洽谈收购",
+        "eventObject": "Decart",
+        "eventDate": null,
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1955099
+    },
+    {
+      "left": {
+        "id": "cmuzc5y4r01kclk01bz43mdds",
+        "title": "谷歌 在Gmail中集成Gemini邮件智能体 Gmail应用",
+        "summary": "谷歌或将在Gmail中集成Gemini驱动的邮件智能体，线索来自v2026.09.28版本Gmail应用的APK拆解。代码注释显示，Gmail待办事项旁可能出现\"使用Gemini\"按钮，点击后Gemini会主动扫描收件箱，对需要回复的邮件提供\"起草回复\"选项，由AI生成草稿。同时，Gemini在不确定下一步操作或邮件发出前会请求用户确认，需要人工输入的部分会被标记为\"需要你的输入\"状态，待用户点击\"提供输入\"补充信息后AI再继续执行。该功能尚处于APK拆解证据阶段，谷歌未官宣，最终形态可能与代码暗示不同，但已体现AI接管邮件处理手动操作的明确趋势。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "在Gmail中集成Gemini邮件智能体",
+        "eventObject": "Gmail应用",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1934873
+    },
+    {
+      "left": {
+        "id": "cmuz8ozee3z9pm801r0vj2g4v",
+        "title": "科技巨头竞逐 AI 域名与算力融资双线并进",
+        "summary": "互联网名称与数字地址分配机构（ICANN）近日公布新一轮顶级域名申请情况，共收到来自全球481个申请者的1615份申请，其中AI相关域名成为科技巨头竞争焦点。Meta、OpenAI等公司积极竞逐.agent域名，.agi、.asi、.superintelligence等也吸引多家企业申请。OpenAI共提交15个顶级域名申请，Meta提交21份。本轮还包含345份企业品牌专属域名申请，如Meta申请的.facebook和.meta、OpenAI申请的.chatgpt、Anthropic申请的.claude等。不过ICANN表示相关申请不会早于明年进入正式生效阶段，审核流程仍将持续推进。",
+        "eventType": null,
+        "eventSubject": "ICANN",
+        "eventAction": "公布顶级域名申请情况",
+        "eventObject": "1615份新顶级域名申请",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1920821
+    },
+    {
+      "left": {
+        "id": "cmv4nxkog0090ua01zl61bu5l",
+        "title": "OpenAI 提升 GPT-6.1 Sol 默认上下文至 50 万并取消长上下文附加费",
+        "summary": "2026 年 10 月 12 日，OpenAI 工程师先后宣布，在 Codex 与 Work 环境中将 **GPT-6.1 Sol 的默认上下文长度从约 27.2 万 tokens 提升至 50 万 tokens，扩容约 80%**，目的是减少多轮对话中的自动压缩与截断，将上下文拉长带来的体验改善直接覆盖多数用户；手动上限仍可达 100 万 tokens。*官方同时取消了该模型在按订阅扣减用量时长上下文的单独计费*，把扩容红利让渡给重度长上下文用户。多则报道一致认为，这一组合调整是在长上下文已成行业标配背景下的体验与定价策略变化，旨在压低高复杂度任务的综合使用成本。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "上调默认上下文窗口并取消长上下文附加费用",
+        "eventObject": "GPT-6.1 Sol",
+        "eventDate": "2026-10-12",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1905067
+    },
+    {
+      "left": {
+        "id": "cmuz8p5s63zb5m8010x4rjew3",
+        "title": "Anthropic 发布 Claude Haiku 5.5，成本降约 75% 并首推可调推理强度",
+        "summary": "多家报道显示，Anthropic 于 10 月 8 日正式推出轻量级模型 **Claude Haiku 5.5**，定位高并发、低延迟场景，如实时客服、摘要、分类、浏览器自动化及大模型子任务。相比前代 Haiku 4.5，综合运行成本约下降 **75%**；10 万 Token 以内的标准请求输入/输出价格分别降至每百万 Token **0.10 美元**和 **0.50 美元**，账面降幅最高达 **90%**。该模型首次引入**可调/自适应推理强度**，允许用户按任务复杂度平衡思考深度与算力开销，OSWorld 2.1 计算机使用基准成功率由 15.7% 升至 72.4%。差异点方面，*新分词器使同等文本 Token 数增加，长文本综合成本或上浮 25%–30%*；*单次请求超 10 万 Token 后单价跳涨 5 倍，存在隐性成本*。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "发布",
+        "eventObject": "Claude Haiku 5.5",
+        "eventDate": "2026-10-08",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmv4nxw12009iua01bu2w2etz",
+        "title": "极客早知道合集速览封禁改名与新品内测多条科技动态",
+        "summary": "蚂蚁集团旗下AI产品\"灵光\"近日开启新版本小范围内测，新版对标Meta今年9月推出的个人智能体Muse。据接近项目人士透露，灵光方向约半年前开始筹备，将从聊天型AI助手转向拥有长期记忆、可主动推进任务的AI原生个人智能体，可通过Skill和MCP调用钉钉、智能家居等，计划本月全面开放。 Anthropic旗下Claude于2026年上半年累计封禁1140万个账号，用户提交的39.8万次申诉中仅4.2万次翻案，胜率约一成，申诉机制形同虚设。封禁触发情形主要包括违法滥用、侵犯隐私、恶意诱导、极端自残等内容违规，上半年向NCMEC等国际安全组织提交超1.5万起违规报告，并上线自研机器学习分类器辅助审查；此外黑产号无差别扫射及区域审查也导致大量用户被波及。Anthropic近日更新使用政策，新增禁止辱骂、残忍对待AI的条款，规定11月12日起生效，对极端情形下反复虐待模型的用户实施限流或封号，这是其一年多来首次修订政策，AI与使用者之间的权责边界正在被重新界定。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "公布封禁数据并更新使用政策",
+        "eventObject": "Claude",
+        "eventDate": "2026-11-12",
+        "itemCount": 4
+      },
+      "score": 1859552
+    },
+    {
+      "left": {
+        "id": "cmuzc0hf500mulk01nfp9pvd0",
+        "title": "谷歌10月9日起收紧Gemini免费用户模型权限",
+        "summary": "多条信息显示，谷歌近期在支持文档中宣布将于**2026年10月9日**调整个人账户Gemini应用模型访问策略。免费用户此后**仅可使用Gemini Flash-Lite模型**，Flash及Pro等更高档位不再对其开放；4.99美元月费的AI Plus订阅可用范围也压缩至Flash与Flash-Lite，无法调用Pro级推理模型；只有AI Pro及AI Ultra等高阶订阅保留全部模型及Deep Think选项。各档用户仍可在网页与App端按低、中、高三种工作量模式使用，*系统将按任务复杂度动态扣减配额*，而API、AI Studio和Google Workspace暂不在此次调整范围内。综合来看，这是在推理成本上升和高并发算力压力下，头部厂商进一步拉开付费层级差距的举措。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "调整Gemini免费用户模型权限",
+        "eventObject": "Gemini应用",
+        "eventDate": "2026-10-09",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1801435
+    },
+    {
+      "left": {
+        "id": "cmuz8p5s63zb5m8010x4rjew3",
+        "title": "Anthropic 发布 Claude Haiku 5.5，成本降约 75% 并首推可调推理强度",
+        "summary": "多家报道显示，Anthropic 于 10 月 8 日正式推出轻量级模型 **Claude Haiku 5.5**，定位高并发、低延迟场景，如实时客服、摘要、分类、浏览器自动化及大模型子任务。相比前代 Haiku 4.5，综合运行成本约下降 **75%**；10 万 Token 以内的标准请求输入/输出价格分别降至每百万 Token **0.10 美元**和 **0.50 美元**，账面降幅最高达 **90%**。该模型首次引入**可调/自适应推理强度**，允许用户按任务复杂度平衡思考深度与算力开销，OSWorld 2.1 计算机使用基准成功率由 15.7% 升至 72.4%。差异点方面，*新分词器使同等文本 Token 数增加，长文本综合成本或上浮 25%–30%*；*单次请求超 10 万 Token 后单价跳涨 5 倍，存在隐性成本*。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "发布",
+        "eventObject": "Claude Haiku 5.5",
+        "eventDate": "2026-10-08",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1791851
+    },
+    {
+      "left": {
+        "id": "cmuz8ozer3z9tm801ugf9rgny",
+        "title": "微软联合英伟达推Surface新品与本地AI架构",
+        "summary": "2026年10月7日，微软在旧金山发布会上联合英伟达推出搭载RTX Spark芯片的Surface Laptop Ultra笔记本与Surface RTX Spark Dev Box工作站，集成最多6144个CUDA核心、20核Grace CPU及最高128GB统一内存，声称可本地运行超1200亿参数AI模型，算力最高1 PFLOPS，笔记本起售价约2600美元、顶配5900美元，工作站起售价6000美元，计划10月16日上市。同期微软发布**MAI Code1.1Flash混合架构**模型（总参数1370亿、激活68亿），借助量化与投机解码降低内存占用，GitHub Copilot将支持*本地与云端混合推理*，用户可在VS Code、Copilot应用及CLI中调用，并由Windows ML或OpenAI兼容端点承接。",
+        "eventType": "release",
+        "eventSubject": "微软",
+        "eventAction": "发布 MAI Code1.1Flash 模型并为 GitHub Copilot 引入本地与云端混合推理",
+        "eventObject": "MAI Code1.1Flash 模型与 GitHub Copilot",
+        "eventDate": "2026-10-07",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1784190
+    },
+    {
+      "left": {
+        "id": "cmuz8ms653z0xm801rps0457k",
+        "title": "Reflection AI发布501B参数开放权重模型Beam",
+        "summary": "多家报道聚焦同一事件：英伟达支持的美国初创公司 Reflection AI 于2026年10月5日推出首个开放权重模型 **Beam**，采用 MoE 架构，总参数量达 **5010亿**，推理激活230亿，面向编程、推理及 Agent 任务。预训练使用 **23.8万亿 Token**，强化学习阶段动用约 **1.05万张英伟达 GB300 GPU** 训练约四周。路透社指出，这是美国公司 *应对中国高性价比开放模型竞争* 的一次重要尝试，凸显其在大模型开放权重赛道的战略意图。",
+        "eventType": null,
+        "eventSubject": "Reflection AI",
+        "eventAction": "发布",
+        "eventObject": "开放权重模型Beam",
+        "eventDate": "2026-10-05",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1763509
+    },
+    {
+      "left": {
+        "id": "cmuz8niwb3z5km801al3tt68y",
+        "title": "SpaceX拟融资400亿美元购英伟达芯片后者市值创新高",
+        "summary": "据多家报道，马斯克旗下 SpaceX 正寻求融资约 **400亿美元** 用于购买英伟达芯片，凸显 AI 算力需求持续强劲。其中约 100亿美元来自银行贷款，*300亿美元* 拟通过投资级债券募集，由阿波罗全球管理牵头，交易预计 **2027年** 完成。与此同时，英伟达股价表现强劲：10月6日开盘约20分钟后市值触及 **5.82万亿美元** 历史新高，距6万亿美元仅一步之遥，连续第三个交易日收盘创新高，有望成为全球首家市值突破6万亿美元的公司。SpaceX 的大额采购意向与英伟达市值的飙升，共同反映了 AI 芯片供需两端的加速升温。",
+        "eventType": null,
+        "eventSubject": "英伟达",
+        "eventAction": "市值创新高",
+        "eventObject": "英伟达股价",
+        "eventDate": "2026-10-06",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1725430
+    },
+    {
+      "left": {
+        "id": "cmv4nxurx009gua01dk21qys2",
+        "title": "腾讯 上线 企鹅微单AI创作者接单",
+        "summary": "腾讯近期在微信生态内上线AI创作撮合平台「企鹅微单」，将AI创作需求方与掌握AI制图、剪辑能力的创作者连接起来。平台核心流程为：需求方通过首页\"找服务\"发布商品图、宣传视频等创作需求，系统智能匹配合适创作者，匹配成功后由需求方、创作者与平台组成三方沟通群确认报价与交付内容，确认后下单付款，最终在微信生态内完成验收结算。平台还内置AI助手帮助梳理创作需求，降低沟通成本。目前平台处于国庆期间上线的早期开放阶段，公开通道已开放但全面开放时间尚未公布，旨在解决AI创作工具\"能用但难变现\"的痛点，未来供给稳定与复购仍取决于定价、交付与结算机制的成熟度。",
+        "eventType": null,
+        "eventSubject": "腾讯",
+        "eventAction": "上线",
+        "eventObject": "企鹅微单AI创作者接单",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmv4nz7a900bjua018kmtz1bz",
+        "title": "Grok 机器人 推出拍信用卡自动比价下单功能 AI 购物",
+        "summary": "马斯克在社交平台介绍 Grok 机器人的新购物功能：用户拍信用卡照片发给 Grok，即可由其在全网搜索比价并自动下单。该功能因将敏感支付凭证直接提交给 AI，被 OpenAI 高管 Tibo 公开嘲讽，他发布虚构信用卡照片以暗示安全和隐私风险。落地层面，有网友称亚马逊已采取技术手段阻止 Grok 自动化访问，马斯克回应称 Grok 将寻找替代方案，并透露自己刚通过 Grok 从乐高官网成功下单一款积木。事件折射出 AI 代理领域巨头在便捷性、安全与平台博弈上的竞争。",
+        "eventType": null,
+        "eventSubject": "Grok 机器人",
+        "eventAction": "推出拍信用卡自动比价下单功能",
+        "eventObject": "AI 购物",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1695843
+    },
+    {
+      "left": {
+        "id": "cmuzc0co500mplk01z2067aa0",
+        "title": "OpenAI全量推送GPT-6与智能UI",
+        "summary": "OpenAI于10月8日向全球ChatGPT用户全量推送GPT-6，逐步替代GPT-5.6系列，并以**智能UI**为核心更新。用户可在聊天框内获得图表、按钮、表单、计算器及小游戏等交互组件，直接完成操作。Plus、Pro、Business和Enterprise用户使用GPT-6Sol，免费及Go用户使用GPT-6Luna；GPT-6还支持*边思考边输出*，联网场景首字等待时间较前代缩短44%。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "全量推送",
+        "eventObject": "GPT-6（含智能UI交互层）",
+        "eventDate": "2026-10-08",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1682163
+    },
+    {
+      "left": {
+        "id": "cmv6b56u600hxlm01uvx2avlf",
+        "title": "OpenAI拟将停运的Sora移交给卡岑伯格初创公司，转向专业影视工具",
+        "summary": "据《The Information》报道，OpenAI正与一家由好莱坞制片人杰弗里·卡岑伯格、Sora前研究负责人比尔·皮布尔斯及Dropbox前CFO苏杰·贾斯瓦联合创办的隐身初创公司谈判，计划将已停运的视频生成模型**Sora**移交或以股权合作方式授权给该公司，使其以专业影视工具形态重新面市。**新团队计划接管并改造Sora平台**，围绕其开发面向影视制作方的软件或服务，将生成能力嵌入影视流水线。背景显示，OpenAI今年早些时候为削减高算力消耗的非核心项目，已停掉Sora模型及类TikTok视频应用，消费级网页与App端、API先后关闭，原与迪士尼约*10亿美元*的合作也告吹。候选报道在合作模式上略有差异：一方称OpenAI拟通过股权合作换取新公司部分股权并开放底层模型深度定制权限，另一方仅描述为模型移交；此外，双方条款尚未落定，*Sora模型权重归属仍是未知数*。",
+        "eventType": "other",
+        "eventSubject": "OpenAI",
+        "eventAction": "拟以股权合作授权Sora技术",
+        "eventObject": "Sora视频生成模型",
+        "eventDate": null,
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1682123
+    },
+    {
+      "left": {
+        "id": "cmv131n4s04liq101h9wep5jk",
+        "title": "豆包工作上线无限画布并接入新模型Seedream与豆包2.1 Lite",
+        "summary": "2026年10月9日，豆包工作平台宣布同步更新：任务模式上线无限画布功能，支持在同一画布上铺开素材、方案与生成成果进行对比、整理与局部编辑，图片、视频、HTML等内容可自动汇入同一画布；同时接入全新图片模型**Seedream 5.0 Flash**，提供更丰富的生图风格选择；并正式上线**豆包2.1 Lite（0921新版）模型**，主打高频办公场景，强调*更省额度、更快交付*，在问答、文档、表格、PPT等任务上体验提升，且具备出色的图像、视频、音频理解能力，与2.1 Turbo、2.1 Pro并列展示，支持调整推理强度，整体升级了豆包工作的创作与办公工作流。",
+        "eventType": null,
+        "eventSubject": "豆包工作",
+        "eventAction": "新增画布功能并接入Seedream 5.0 Flash，同时上线豆包 2.1 Lite 模型",
+        "eventObject": "豆包工作平台的创作与办公工作流",
+        "eventDate": "2026-10-09",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmv3r6ble00qls501gu213twp",
+        "title": "Anthropic 上线 Claude管理智能体动态工作流",
+        "summary": "Anthropic为其Claude管理智能体推出动态工作流功能，单次执行最多可并行协调1000个AI智能体：主智能体负责统筹规划与子任务分派，各子智能体独立完成后再统一汇总结果，适用于大型代码库检查、海量数据清洗等需要并行拆解的复杂任务。官方以一段11.6万行代码、人为隐藏70个漏洞的代码库进行漏洞检测对比测试，传统单智能体每次仅检出14到27个Bug，动态工作流则稳定检出66个。新功能标志着AI智能体处理企业级复杂任务从单兵作战迈向大规模协同的新阶段。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "上线",
+        "eventObject": "Claude管理智能体动态工作流",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1678094
+    },
+    {
+      "left": {
+        "id": "cmv3r4wro00jjs501q1fhevzj",
+        "title": "英伟达洽谈收购或追加投资开源AI公司Reflection AI",
+        "summary": "多家媒体报道，**英伟达正与美国开源AI模型公司Reflection AI就收购或追加投资进行深入谈判**，潜在形式涵盖整体收购、扩大股权投资及算力与技术合作等。英伟达此前已向Reflection注资约*8亿美元*，为其最大股东之一；公司今年3月估值达*250亿美元*。报道指出，英伟达可能借助人才兼并模式规避反垄断审查，双方有望在未来数周内敲定协议，但谈判仍有破裂可能。Reflection近期发布开放权重模型，被视为美国方面抗衡低成本开源竞争的重要布局。",
+        "eventType": "acquisition",
+        "eventSubject": "英伟达",
+        "eventAction": "洽谈收购或追加投资 Reflection AI",
+        "eventObject": "Reflection AI 开源模型业务",
+        "eventDate": "2026-10-11",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmv3r5ns400nxs501feqskl6o",
+        "title": "TypeSafe AI 完成约8.7亿美元融资，估值达75亿美元 决策模型Jev开发商TypeSafe AI",
+        "summary": "10月10日消息，决策模型Jev开发商TypeSafe AI完成约8.7亿美元融资，由Andreessen Horowitz（a16z）领投，公司估值达75亿美元。CEO Diogo Almeida表示公司将通过Jev及后续更新提供稳定可靠且价格实惠的方案以应对AI从业者过度承诺的问题。TypeSafe目前团队精简仅约20人，平台每日处理标记量达数万亿级，资金将用于扩充团队、推进大规模部署和采购算力。",
+        "eventType": "funding",
+        "eventSubject": "TypeSafe AI",
+        "eventAction": "完成约8.7亿美元融资，估值达75亿美元",
+        "eventObject": "决策模型Jev开发商TypeSafe AI",
+        "eventDate": "2026-10-10",
+        "itemCount": 1
+      },
+      "score": 1673252
+    },
+    {
+      "left": {
+        "id": "cmutvxst9006epf01vkca214q",
+        "title": "StartLux首发开源决策模型次日Cloudflare开源自训竞品即反超榜首",
+        "summary": "2026年9月30日，上海初创公司**StartLux**（原点星辉）发布开源决策模型 *StartLux-Decision*，规格覆盖0.8B至27B共五档，27B版本在Decision Index 0.2.1的38项测试中31项超过Jev 1.13，主打本地智能体高频判断。**次日（10月1日），Cloudflare正式开源决策模型Clef**，基于Qwen后训练并在同一榜单上反超StartLux-Decision，标志该赛道在两周内从首发进入群战阶段。Cloudflare进一步推出升级版本**Clef-omni**，原生支持wav、mp3、mp4、webm等音视频输入，纯文本响应约130ms、图像约150ms，权重已在Hugging Face开源，同期Clef-flash输入价格下调约58%至0.038美元/百万Token。",
+        "eventType": null,
+        "eventSubject": "Cloudflare",
+        "eventAction": "发布开源决策模型并宣称为本地Agent关键零件",
+        "eventObject": "StartLux-Decision（0.8B-27B五档）",
+        "eventDate": "2026-09-30",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1667691
+    },
+    {
+      "left": {
+        "id": "cmv3r548h00jxs5016ww2oine",
+        "title": "腾讯云开源团队AI协作工具TeamAI 支持跨Agent共享Skill",
+        "summary": "2026年10月10日，腾讯云正式开源内部自用的团队AI协作工具 **TeamAI**，该工具基于Git仓库统一管理团队Skill、工作规范、工具配置及项目知识，支持以合并请求方式进行评审与版本控制，*经确认合入后*通过会话启动Hook自动同步至成员各自使用的Agent中。TeamAI已适配WorkBuddy、CodeBuddy、Claude Code、Codex、Cursor等16种主流Agent，并支持MCP工具配置、Rules及子Agent的覆盖更新。管理员可统一下发符合企业安全要求的模型配置，降低成员自行接入风险；当Agent出现反复纠正或工具调用失败时，系统会提示用户分享经验并由Agent整理入库供检索。官方测试数据显示，*接入团队知识的较低成本模型综合评分提高6.1%，调用成本降低76%*。",
+        "eventType": null,
+        "eventSubject": "腾讯云",
+        "eventAction": "开源",
+        "eventObject": "TeamAI团队AI协作工具",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1667532
+    },
+    {
+      "left": {
+        "id": "cmv4nxurx009gua01dk21qys2",
+        "title": "腾讯 上线 企鹅微单AI创作者接单",
+        "summary": "腾讯近期在微信生态内上线AI创作撮合平台「企鹅微单」，将AI创作需求方与掌握AI制图、剪辑能力的创作者连接起来。平台核心流程为：需求方通过首页\"找服务\"发布商品图、宣传视频等创作需求，系统智能匹配合适创作者，匹配成功后由需求方、创作者与平台组成三方沟通群确认报价与交付内容，确认后下单付款，最终在微信生态内完成验收结算。平台还内置AI助手帮助梳理创作需求，降低沟通成本。目前平台处于国庆期间上线的早期开放阶段，公开通道已开放但全面开放时间尚未公布，旨在解决AI创作工具\"能用但难变现\"的痛点，未来供给稳定与复购仍取决于定价、交付与结算机制的成熟度。",
+        "eventType": null,
+        "eventSubject": "腾讯",
+        "eventAction": "上线",
+        "eventObject": "企鹅微单AI创作者接单",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1630527
+    },
+    {
+      "left": {
+        "id": "cmuzc0hf500mulk01nfp9pvd0",
+        "title": "谷歌10月9日起收紧Gemini免费用户模型权限",
+        "summary": "多条信息显示，谷歌近期在支持文档中宣布将于**2026年10月9日**调整个人账户Gemini应用模型访问策略。免费用户此后**仅可使用Gemini Flash-Lite模型**，Flash及Pro等更高档位不再对其开放；4.99美元月费的AI Plus订阅可用范围也压缩至Flash与Flash-Lite，无法调用Pro级推理模型；只有AI Pro及AI Ultra等高阶订阅保留全部模型及Deep Think选项。各档用户仍可在网页与App端按低、中、高三种工作量模式使用，*系统将按任务复杂度动态扣减配额*，而API、AI Studio和Google Workspace暂不在此次调整范围内。综合来看，这是在推理成本上升和高并发算力压力下，头部厂商进一步拉开付费层级差距的举措。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "调整Gemini免费用户模型权限",
+        "eventObject": "Gemini应用",
+        "eventDate": "2026-10-09",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1604681
+    },
+    {
+      "left": {
+        "id": "cmv6b0c4m00atlm01h245ojo1",
+        "title": "Meta发布Muse Wonder系列模型对标Anthropic与OpenAI",
+        "summary": "多条报道聚焦同一事件：Meta于2026年10月正式推出新一代旗舰AI模型 **Muse Wonder** 与 **Muse Wonder Full**，由去年加盟的首席AI官、Scale AI创始人亚历山大·王带队研发，被视为其首款公开对标Anthropic与OpenAI前沿水平的产品。Meta宣称新模型在推理、写作与代码能力上已*贴近Anthropic顶尖水准*，并融合**主动记忆**与**主动专注**功能。Wonder面向Muse应用部分功能开放，Wonder Full仅向Muse Code高阶订阅用户开放，意在切入AI编程赛道并拓展企业市场。该模型还将逐步铺向Instagram、Facebook、WhatsApp合计35亿用户，上月Muse智能体应用已登顶应用商店。",
+        "eventType": null,
+        "eventSubject": "Meta",
+        "eventAction": "推出旗舰 AI 模型 Muse Wonder 与 Muse Wonder Full，对标 Anthropic 与 OpenAI",
+        "eventObject": "Muse Wonder 与 Muse Wonder Full",
+        "eventDate": "2026-10-12",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1595306
+    },
+    {
+      "left": {
+        "id": "cmuz8ms653z0xm801rps0457k",
+        "title": "Reflection AI发布501B参数开放权重模型Beam",
+        "summary": "多家报道聚焦同一事件：英伟达支持的美国初创公司 Reflection AI 于2026年10月5日推出首个开放权重模型 **Beam**，采用 MoE 架构，总参数量达 **5010亿**，推理激活230亿，面向编程、推理及 Agent 任务。预训练使用 **23.8万亿 Token**，强化学习阶段动用约 **1.05万张英伟达 GB300 GPU** 训练约四周。路透社指出，这是美国公司 *应对中国高性价比开放模型竞争* 的一次重要尝试，凸显其在大模型开放权重赛道的战略意图。",
+        "eventType": null,
+        "eventSubject": "Reflection AI",
+        "eventAction": "发布",
+        "eventObject": "开放权重模型Beam",
+        "eventDate": "2026-10-05",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuzc041900m3lk01sgdwpjjx",
+        "title": "阿里巴巴集团主席蔡崇信 出席Wave by Vento 2026并阐述AI战略观点 AI隐性基础设施与全栈AI战略",
+        "summary": "阿里巴巴集团主席蔡崇信近日出席意大利科技与投资盛会Wave by Vento 2026并发表观点：未来五年AI将从显性话题演变为融入业务的隐性基础设施，当前AI擅长\"省时间\"但在\"花时间\"上潜力巨大，知识工作者生产力提升是最确定应用场景，潜在市场规模约50万亿美元，AI也将加速医疗与科研创新。蔡崇信将阿里发展以2023年为界划分为前\"BC\"与后\"AD\"两阶段，明确电商与全栈AI为核心方向，从算力、模型和应用层全面推进全栈AI战略。他还指出，中国拥有全球约30%工业生产总量、丰富的制造数据及电动汽车、机器人等完整硬件供应链，将在AI与物理世界融合阶段形成显著优势，并重申开源哲学对欧洲\"新云\"企业的发展价值。",
+        "eventType": null,
+        "eventSubject": "阿里巴巴集团主席蔡崇信",
+        "eventAction": "出席Wave by Vento 2026并阐述AI战略观点",
+        "eventObject": "AI隐性基础设施与全栈AI战略",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "score": 1572521
+    },
+    {
+      "left": {
+        "id": "cmv6b3n0p00ghlm01p7uq8d80",
+        "title": "字节跳动Seed成立独立安全对齐部门 专攻智能体与CBRN风险",
+        "summary": "**字节跳动Seed团队宣布成立Seed Model-Alignment & Preparedness部门**，将安全与对齐从企业整体合规体系中独立出来，据相关信息称是国内前沿AI实验室中**首家**单独设立该职能的团队。新部门由原Responsible AI团队及部分Chat团队成员转入，严林**挂帅**，直接向Seed负责人吴永辉汇报，工作覆盖规范定义、对齐训练、防护系统搭建与风险监控，并加强外部机构合作。部门核心聚焦两大方向：一是提升**智能体模型**在执行复杂任务前的行为可控性，防止越界；二是防范*CBRN（化学、生物、放射与核）等前沿能力风险*。此举标志着字节Seed把安全对齐提升为与模型研发并行的**一级职能**，回应业界对智能体自主性与高危能力外泄的担忧。",
+        "eventType": null,
+        "eventSubject": "字节跳动Seed",
+        "eventAction": "成立",
+        "eventObject": "Seed Model-Alignment & Preparedness部门",
+        "eventDate": "2026-10-13",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1555957
+    },
+    {
+      "left": {
+        "id": "cmuzc0hf500mulk01nfp9pvd0",
+        "title": "谷歌10月9日起收紧Gemini免费用户模型权限",
+        "summary": "多条信息显示，谷歌近期在支持文档中宣布将于**2026年10月9日**调整个人账户Gemini应用模型访问策略。免费用户此后**仅可使用Gemini Flash-Lite模型**，Flash及Pro等更高档位不再对其开放；4.99美元月费的AI Plus订阅可用范围也压缩至Flash与Flash-Lite，无法调用Pro级推理模型；只有AI Pro及AI Ultra等高阶订阅保留全部模型及Deep Think选项。各档用户仍可在网页与App端按低、中、高三种工作量模式使用，*系统将按任务复杂度动态扣减配额*，而API、AI Studio和Google Workspace暂不在此次调整范围内。综合来看，这是在推理成本上升和高并发算力压力下，头部厂商进一步拉开付费层级差距的举措。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "调整Gemini免费用户模型权限",
+        "eventObject": "Gemini应用",
+        "eventDate": "2026-10-09",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1553521
+    },
+    {
+      "left": {
+        "id": "cmuz8oiln3z8vm801d3dj2ftn",
+        "title": "千问首款AI耳夹耳机上线预约，10月13日发布",
+        "summary": "多条消息共同指向**阿里千问首款AI耳夹式耳机正式上架预约**这一事件。10月5日起，该耳机在淘宝、京东等平台千问官方旗舰店开启预约，并将在澳门NBA中国赛活动现场与新款N1系列AI眼镜一同亮相，计划于10月13日正式发布并开售。产品由Bose调音，搭载12磁铁双环聚磁单元，支持LHDC 5.0、Hi-Res Wireless认证，*具备录音转写、92语种纪要及89种语言AI翻译*等功能；续航约9小时，配充电仓可达40小时，支持IP55防尘防泼溅、无线充电与双设备连接。此次同步展示的N1系列AI眼镜则支持第一视角拍摄与物品识别，N1Pro版本额外配备*眼动追踪和虹膜核身支付*。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "亮相首款AI耳机与新款AI眼镜并开放预约",
+        "eventObject": "千问AI耳夹式耳机及N1系列AI眼镜",
+        "eventDate": "2026-10-05",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1541313
+    },
+    {
+      "left": {
+        "id": "cmuz8p5s63zb5m8010x4rjew3",
+        "title": "Anthropic 发布 Claude Haiku 5.5，成本降约 75% 并首推可调推理强度",
+        "summary": "多家报道显示，Anthropic 于 10 月 8 日正式推出轻量级模型 **Claude Haiku 5.5**，定位高并发、低延迟场景，如实时客服、摘要、分类、浏览器自动化及大模型子任务。相比前代 Haiku 4.5，综合运行成本约下降 **75%**；10 万 Token 以内的标准请求输入/输出价格分别降至每百万 Token **0.10 美元**和 **0.50 美元**，账面降幅最高达 **90%**。该模型首次引入**可调/自适应推理强度**，允许用户按任务复杂度平衡思考深度与算力开销，OSWorld 2.1 计算机使用基准成功率由 15.7% 升至 72.4%。差异点方面，*新分词器使同等文本 Token 数增加，长文本综合成本或上浮 25%–30%*；*单次请求超 10 万 Token 后单价跳涨 5 倍，存在隐性成本*。",
+        "eventType": null,
+        "eventSubject": "Anthropic",
+        "eventAction": "发布",
+        "eventObject": "Claude Haiku 5.5",
+        "eventDate": "2026-10-08",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1505821
+    },
+    {
+      "left": {
+        "id": "cmuzc0co500mplk01z2067aa0",
+        "title": "OpenAI全量推送GPT-6与智能UI",
+        "summary": "OpenAI于10月8日向全球ChatGPT用户全量推送GPT-6，逐步替代GPT-5.6系列，并以**智能UI**为核心更新。用户可在聊天框内获得图表、按钮、表单、计算器及小游戏等交互组件，直接完成操作。Plus、Pro、Business和Enterprise用户使用GPT-6Sol，免费及Go用户使用GPT-6Luna；GPT-6还支持*边思考边输出*，联网场景首字等待时间较前代缩短44%。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "全量推送",
+        "eventObject": "GPT-6（含智能UI交互层）",
+        "eventDate": "2026-10-08",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1484826
+    },
+    {
+      "left": {
+        "id": "cmuz8p7853zb9m8019p6o8twk",
+        "title": "OpenAI全量推送GPT-6并上线智能交互界面",
+        "summary": "OpenAI宣布将GPT-6推向更广泛ChatGPT用户，并同步推出Intelligent UI（智能用户界面）功能。ChatGPT可根据用户问题自动组合文字、图表、按钮、表单等元素，生成可直接操作的交互界面，如计算器、账单分摊工具或小游戏。新功能10月7日起向Plus、Pro、Business和Enterprise用户逐步开放，Free和Go用户10月8日起陆续获得支持。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "推出ChatGPT全新Intelligent UI交互界面",
+        "eventObject": "ChatGPT用户",
+        "eventDate": "2026-10-07",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8n8oz3z2um801y67mhsd5",
+        "title": "谷歌 推出实验性AI游戏平台Playground 用户",
+        "summary": "谷歌正式推出实验性AI游戏平台Playground，允许用户通过自然语言描述直接生成、修改和游玩浏览器游戏，无需编程。用户可指定角色、玩法、物理效果和场景，生成的游可分享至平台社区。Playground支持排行榜和部分类型多人玩法，谷歌还将与Unity合作引入Unity Spark以支持高保真3D游戏制作。平台首先面向美国18岁以上用户开放。",
+        "eventType": "launch",
+        "eventSubject": "谷歌",
+        "eventAction": "推出实验性AI游戏平台Playground",
+        "eventObject": "用户",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "score": 1468657
+    },
+    {
+      "left": {
+        "id": "cmv6b1fzk00eolm01pc2t2xlu",
+        "title": "可灵AI 预告发布 Kling 4.0视频生成模型",
+        "summary": "可灵AI宣布将于10月14日亮相2026洛杉矶科技周，期间将通过与Oxen AI及Obsidian Studio合作举办的圆桌活动，预告即将上线的Kling 4.0视频生成模型。活动聚焦讨论AI视频生成从消费级炫技向企业级生产工作流落地的路径，覆盖模型研发、平台集成及专业内容制作等议题。圆桌于当地时间16:00至19:00在圣莫尼卡Met Her at a Bar举行，随后设交流酒会，为企业客户与创作者提供对接空间。这是可灵AI首次在出海节点上以产业落地为主题公开亮相，距Kling 4.0正式发布尚有时差。",
+        "eventType": null,
+        "eventSubject": "可灵AI",
+        "eventAction": "预告发布",
+        "eventObject": "Kling 4.0视频生成模型",
+        "eventDate": "2026-10-14",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1465827
+    },
+    {
+      "left": {
+        "id": "cmv4o3jq5012fua01l1br7c2j",
+        "title": "墨尔本大学与新南威尔士大学联合团队 发布 音频大模型记忆评测基准VoxMem",
+        "summary": "墨尔本大学与新南威尔士大学联合团队发布音频大模型记忆评测基准VoxMem，针对现有评测只关注文字转写而忽略声学身份信息的缺陷，构建了一套\"声学证据×记忆操作\"二维正交分类法，覆盖15种组合。该基准包含3196个评测实例、34743个语音会话、约177小时音频，在8K到64K历史长度下保持题目一致以隔离长度变量。实测15个主流音频大模型，32K上下文下整体准确率均未超过40%，且模型对语义记忆明显强于对说话人身份、语气情绪、环境声等声音原生信息的记忆，后两者准确率极低，随历史长度增加各类记忆准确率全面下滑。团队指出当前瓶颈在于识别、定位与信息绑定等底层环节，而非推理能力本身，呼吁业界正视文字转写掩盖的语音记忆短板。",
+        "eventType": null,
+        "eventSubject": "墨尔本大学与新南威尔士大学联合团队",
+        "eventAction": "发布",
+        "eventObject": "音频大模型记忆评测基准VoxMem",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmv131yym04n0q101wfuriulr",
+        "title": "智谱 披露万亿参数规模与双轨技术路径 GLM-5.4与GLM-5.5大模型",
+        "summary": "智谱披露新一代旗舰大模型 GLM-5.4 与 GLM-5.5 的技术信号：两款模型参数规模正式跨入万亿级别，并将开辟两条全新底层技术架构路径并行探索，旨在突破超大体量下训练与推理的高效平衡这一行业核心痛点。专家认为，这一前瞻性布局有助于在保持泛化能力的同时提升特定复杂任务效率、降低企业落地门槛。文章指出，国产大模型正加速追赶全球顶尖水平，GLM-5.4 与 GLM-5.5 的落地表现将成为观察中国 AI 核心技术突破的重要风向标。",
+        "eventType": null,
+        "eventSubject": "智谱",
+        "eventAction": "披露万亿参数规模与双轨技术路径",
+        "eventObject": "GLM-5.4与GLM-5.5大模型",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1444868
+    },
+    {
+      "left": {
+        "id": "cmv4o3jq5012fua01l1br7c2j",
+        "title": "墨尔本大学与新南威尔士大学联合团队 发布 音频大模型记忆评测基准VoxMem",
+        "summary": "墨尔本大学与新南威尔士大学联合团队发布音频大模型记忆评测基准VoxMem，针对现有评测只关注文字转写而忽略声学身份信息的缺陷，构建了一套\"声学证据×记忆操作\"二维正交分类法，覆盖15种组合。该基准包含3196个评测实例、34743个语音会话、约177小时音频，在8K到64K历史长度下保持题目一致以隔离长度变量。实测15个主流音频大模型，32K上下文下整体准确率均未超过40%，且模型对语义记忆明显强于对说话人身份、语气情绪、环境声等声音原生信息的记忆，后两者准确率极低，随历史长度增加各类记忆准确率全面下滑。团队指出当前瓶颈在于识别、定位与信息绑定等底层环节，而非推理能力本身，呼吁业界正视文字转写掩盖的语音记忆短板。",
+        "eventType": null,
+        "eventSubject": "墨尔本大学与新南威尔士大学联合团队",
+        "eventAction": "发布",
+        "eventObject": "音频大模型记忆评测基准VoxMem",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmv6b4r6200h0lm01azfcuoz7",
+        "title": "天序智能科技（嘉兴）有限 完成数千万元Pre-A+轮融资 凝空星座建设与能源气象大模型迭代",
+        "summary": "天序智能科技（嘉兴）有限公司近期完成由厚雪资本独家投资的数千万元Pre-A+轮融资，资金主要用于凝空星座建设、能源气象大模型迭代、团队扩张和海外预研。这家2024年10月成立的公司是国内少数同时具备垂类气象大模型、自主卫星观测网和行业底座化交付能力的AI for Science企业，创始人刘栗为中国科学院大学气象学博士。公司自主研发参数规模在100亿以内的能源气象大模型洛伦兹框架，以Transformer为底座并改造注意力机制，聚焦风速和辐照度预报，在1公里高精度风速预测等指标上优于EC-HRES和AIFS，并于2025年10月与中国气象局公共气象服务中心联合发布国内首个能源气象大模型CMA-WSP-AI。商业模式上形成数据、SaaS平台、私有化部署三层体系，客户已覆盖国家电网和南方电网等发电、用电、电网三侧。2026年7月24日气象大模型搭载卫星入轨并完成每日验证，公司启动18颗卫星的凝空星座计划，2027年计划发射两颗先导试验星，未来服务全球与一带一路市场。",
+        "eventType": "funding",
+        "eventSubject": "天序智能科技（嘉兴）有限",
+        "eventAction": "完成数千万元Pre-A+轮融资",
+        "eventObject": "凝空星座建设与能源气象大模型迭代",
+        "eventDate": "2026-10-13",
+        "itemCount": 1
+      },
+      "score": 1438213
+    },
+    {
+      "left": {
+        "id": "cmv6b4x0h00h8lm01gh9a3rct",
+        "title": "MiniMax入驻天猫开首家旗舰店上线M Plan订阅",
+        "summary": "**MiniMax正式入驻天猫开设首家品牌官方旗舰店**，将官网专属的 Token 订阅服务搬至电商货架，主推 M Plan 套餐，分 Go、Explore、Build 三档，*支持按月或按年购买*，开业首单 Go 月卡约 24.5 元起。这是大模型厂商集体布局电商渠道的最新进展：在 2026 年 9 月 3 日天猫上线 Token 充值中心\"AI空间站\"、首批接入阿里云、智谱、Kimi、MiniMax、DeepSeek 等之后，9 月 2 日智谱已先行开店，Kimi、阶跃星辰等也在接洽入驻。多条报道指出，厂商意在触达*未必熟悉 API 但愿为 AI 工具付费*的大众用户，把订阅与 Token 转化为易懂的电商语言，竞争已从参数与基准测试延伸至贴近用户钱包的销售渠道。",
+        "eventType": null,
+        "eventSubject": "MiniMax",
+        "eventAction": "入驻天猫开设旗舰店并上架Token订阅套餐",
+        "eventObject": "M Plan订阅套餐",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1423823
+    },
+    {
+      "left": {
+        "id": "cmv4nxkog0090ua01zl61bu5l",
+        "title": "OpenAI 提升 GPT-6.1 Sol 默认上下文至 50 万并取消长上下文附加费",
+        "summary": "2026 年 10 月 12 日，OpenAI 工程师先后宣布，在 Codex 与 Work 环境中将 **GPT-6.1 Sol 的默认上下文长度从约 27.2 万 tokens 提升至 50 万 tokens，扩容约 80%**，目的是减少多轮对话中的自动压缩与截断，将上下文拉长带来的体验改善直接覆盖多数用户；手动上限仍可达 100 万 tokens。*官方同时取消了该模型在按订阅扣减用量时长上下文的单独计费*，把扩容红利让渡给重度长上下文用户。多则报道一致认为，这一组合调整是在长上下文已成行业标配背景下的体验与定价策略变化，旨在压低高复杂度任务的综合使用成本。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "上调默认上下文窗口并取消长上下文附加费用",
+        "eventObject": "GPT-6.1 Sol",
+        "eventDate": "2026-10-12",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1407862
+    },
+    {
+      "left": {
+        "id": "cmuz8oiln3z8vm801d3dj2ftn",
+        "title": "千问首款AI耳夹耳机上线预约，10月13日发布",
+        "summary": "多条消息共同指向**阿里千问首款AI耳夹式耳机正式上架预约**这一事件。10月5日起，该耳机在淘宝、京东等平台千问官方旗舰店开启预约，并将在澳门NBA中国赛活动现场与新款N1系列AI眼镜一同亮相，计划于10月13日正式发布并开售。产品由Bose调音，搭载12磁铁双环聚磁单元，支持LHDC 5.0、Hi-Res Wireless认证，*具备录音转写、92语种纪要及89种语言AI翻译*等功能；续航约9小时，配充电仓可达40小时，支持IP55防尘防泼溅、无线充电与双设备连接。此次同步展示的N1系列AI眼镜则支持第一视角拍摄与物品识别，N1Pro版本额外配备*眼动追踪和虹膜核身支付*。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "亮相首款AI耳机与新款AI眼镜并开放预约",
+        "eventObject": "千问AI耳夹式耳机及N1系列AI眼镜",
+        "eventDate": "2026-10-05",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1405896
+    },
+    {
+      "left": {
+        "id": "cmuz8ozer3z9tm801ugf9rgny",
+        "title": "微软联合英伟达推Surface新品与本地AI架构",
+        "summary": "2026年10月7日，微软在旧金山发布会上联合英伟达推出搭载RTX Spark芯片的Surface Laptop Ultra笔记本与Surface RTX Spark Dev Box工作站，集成最多6144个CUDA核心、20核Grace CPU及最高128GB统一内存，声称可本地运行超1200亿参数AI模型，算力最高1 PFLOPS，笔记本起售价约2600美元、顶配5900美元，工作站起售价6000美元，计划10月16日上市。同期微软发布**MAI Code1.1Flash混合架构**模型（总参数1370亿、激活68亿），借助量化与投机解码降低内存占用，GitHub Copilot将支持*本地与云端混合推理*，用户可在VS Code、Copilot应用及CLI中调用，并由Windows ML或OpenAI兼容端点承接。",
+        "eventType": "release",
+        "eventSubject": "微软",
+        "eventAction": "发布 MAI Code1.1Flash 模型并为 GitHub Copilot 引入本地与云端混合推理",
+        "eventObject": "MAI Code1.1Flash 模型与 GitHub Copilot",
+        "eventDate": "2026-10-07",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1405170
+    },
+    {
+      "left": {
+        "id": "cmv132ciw04omq1019q96qecw",
+        "title": "豆包 上线生活缴费功能 水电气等生活缴费",
+        "summary": "10月9日，据《读佳》报道，字节跳动旗下AI助手豆包正式新增\"生活缴费\"功能。用户可在豆包App内通过语音或文字指令触发，系统实时弹出服务卡片并跳转至专属页面，直接完成水、电、燃气等基础生活费用的缴纳。据接近豆包的人士透露，豆包正逐步构建涵盖出行、生活缴费在内的多维生活场景办事能力。业内人士认为，此举标志着大模型产品竞争重心从文本生成与泛信息检索，加速转向高频真实场景的操作落地与服务闭环，为生成式AI在消费端的商业化与服务化延伸提供契机。",
+        "eventType": null,
+        "eventSubject": "豆包",
+        "eventAction": "上线生活缴费功能",
+        "eventObject": "水电气等生活缴费",
+        "eventDate": "2026-10-09",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1390432
+    },
+    {
+      "left": {
+        "id": "cmv3r5okg00obs501ewflwdvn",
+        "title": "尊界公布V800制动踏板支架免费升级方案 强调非召回",
+        "summary": "针对**懂车帝实测3台尊界V800在100km/h-0紧急制动时刹车踏板支架被踩断**所引发的争议，尊界汽车于10月8日晚发布情况说明，宣布**为已交付车辆免费升级制动踏板支架底座，并强调此次行动不属于召回**。尊界方面表示，制动系统按高于国家与行业标准开发，将进一步优化部件设计。后续进展显示，*升级方案预计10月底确认，11月起陆续启动*，已提车用户可通过全国任一服务中心或购车门店预约登记，尚未发运的车辆将直接使用升级部件交付。",
+        "eventType": null,
+        "eventSubject": "尊界汽车",
+        "eventAction": "公布V800制动踏板支架底座免费升级安排并强调非召回",
+        "eventObject": "尊界V800已交付车辆",
+        "eventDate": "2026-10-11",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1388074
+    },
+    {
+      "left": {
+        "id": "cmuzc4vnt01jtlk01khbkqj39",
+        "title": "马斯克与SpaceXAI 宣布接入第三方AI模型 Grok Bot",
+        "summary": "马斯克在X平台宣布Grok Bot将打破单一模型依赖，转向任务导向的多模型混合架构。系统不再以自研Grok模型为限，而是以最佳输出为唯一标准，自动调用包括Claude Opus 5.5、Midjourney和Suno在内的第三方API处理文本、图像和音频任务。Grok Bot是SpaceXAI于2026年8月推出的测试版产品，定位为常驻型AI同事，部署在配备浏览器、文件系统和终端的云端服务器上，可独立完成多步骤操作，仅在关键决策时提示人工审批，并具备持续积累的上下文记忆。",
+        "eventType": null,
+        "eventSubject": "马斯克与SpaceXAI",
+        "eventAction": "宣布接入第三方AI模型",
+        "eventObject": "Grok Bot",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1384059
+    },
+    {
+      "left": {
+        "id": "cmv6azctr007tlm01qb1wsgw2",
+        "title": "谷歌推出Fitbit Edge智能手环",
+        "summary": "多条报道共同指向**谷歌正式推出Fitbit Edge智能手环**这一事件。该手环采用1.34英寸AMOLED触控屏，配备GPS模块、心率与血氧传感器，支持*心电图*及皮肤温度检测，具备5 ATM防水，续航约一周，电池容量65mAh，提供银、灰、金、黑四种配色，**定价179.99欧元**。候选1详细列出了产品规格与售价，候选2仅提及发布事实、未给出配置信息。整体来看，谷歌此款新品主打健身用户群体，是其健身可穿戴产品线的最新布局。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "发布",
+        "eventObject": "Fitbit Edge手环",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1373231
+    },
+    {
+      "left": {
+        "id": "cmv131n4s04liq101h9wep5jk",
+        "title": "豆包工作上线无限画布并接入新模型Seedream与豆包2.1 Lite",
+        "summary": "2026年10月9日，豆包工作平台宣布同步更新：任务模式上线无限画布功能，支持在同一画布上铺开素材、方案与生成成果进行对比、整理与局部编辑，图片、视频、HTML等内容可自动汇入同一画布；同时接入全新图片模型**Seedream 5.0 Flash**，提供更丰富的生图风格选择；并正式上线**豆包2.1 Lite（0921新版）模型**，主打高频办公场景，强调*更省额度、更快交付*，在问答、文档、表格、PPT等任务上体验提升，且具备出色的图像、视频、音频理解能力，与2.1 Turbo、2.1 Pro并列展示，支持调整推理强度，整体升级了豆包工作的创作与办公工作流。",
+        "eventType": null,
+        "eventSubject": "豆包工作",
+        "eventAction": "新增画布功能并接入Seedream 5.0 Flash，同时上线豆包 2.1 Lite 模型",
+        "eventObject": "豆包工作平台的创作与办公工作流",
+        "eventDate": "2026-10-09",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1358238
+    },
+    {
+      "left": {
+        "id": "cmv4o3jq5012fua01l1br7c2j",
+        "title": "墨尔本大学与新南威尔士大学联合团队 发布 音频大模型记忆评测基准VoxMem",
+        "summary": "墨尔本大学与新南威尔士大学联合团队发布音频大模型记忆评测基准VoxMem，针对现有评测只关注文字转写而忽略声学身份信息的缺陷，构建了一套\"声学证据×记忆操作\"二维正交分类法，覆盖15种组合。该基准包含3196个评测实例、34743个语音会话、约177小时音频，在8K到64K历史长度下保持题目一致以隔离长度变量。实测15个主流音频大模型，32K上下文下整体准确率均未超过40%，且模型对语义记忆明显强于对说话人身份、语气情绪、环境声等声音原生信息的记忆，后两者准确率极低，随历史长度增加各类记忆准确率全面下滑。团队指出当前瓶颈在于识别、定位与信息绑定等底层环节，而非推理能力本身，呼吁业界正视文字转写掩盖的语音记忆短板。",
+        "eventType": null,
+        "eventSubject": "墨尔本大学与新南威尔士大学联合团队",
+        "eventAction": "发布",
+        "eventObject": "音频大模型记忆评测基准VoxMem",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1337014
+    },
+    {
+      "left": {
+        "id": "cmv6b0c4m00atlm01h245ojo1",
+        "title": "Meta发布Muse Wonder系列模型对标Anthropic与OpenAI",
+        "summary": "多条报道聚焦同一事件：Meta于2026年10月正式推出新一代旗舰AI模型 **Muse Wonder** 与 **Muse Wonder Full**，由去年加盟的首席AI官、Scale AI创始人亚历山大·王带队研发，被视为其首款公开对标Anthropic与OpenAI前沿水平的产品。Meta宣称新模型在推理、写作与代码能力上已*贴近Anthropic顶尖水准*，并融合**主动记忆**与**主动专注**功能。Wonder面向Muse应用部分功能开放，Wonder Full仅向Muse Code高阶订阅用户开放，意在切入AI编程赛道并拓展企业市场。该模型还将逐步铺向Instagram、Facebook、WhatsApp合计35亿用户，上月Muse智能体应用已登顶应用商店。",
+        "eventType": null,
+        "eventSubject": "Meta",
+        "eventAction": "推出旗舰 AI 模型 Muse Wonder 与 Muse Wonder Full，对标 Anthropic 与 OpenAI",
+        "eventObject": "Muse Wonder 与 Muse Wonder Full",
+        "eventDate": "2026-10-12",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1309694
+    },
+    {
+      "left": {
+        "id": "cmuzc4vnt01jtlk01khbkqj39",
+        "title": "马斯克与SpaceXAI 宣布接入第三方AI模型 Grok Bot",
+        "summary": "马斯克在X平台宣布Grok Bot将打破单一模型依赖，转向任务导向的多模型混合架构。系统不再以自研Grok模型为限，而是以最佳输出为唯一标准，自动调用包括Claude Opus 5.5、Midjourney和Suno在内的第三方API处理文本、图像和音频任务。Grok Bot是SpaceXAI于2026年8月推出的测试版产品，定位为常驻型AI同事，部署在配备浏览器、文件系统和终端的云端服务器上，可独立完成多步骤操作，仅在关键决策时提示人工审批，并具备持续积累的上下文记忆。",
+        "eventType": null,
+        "eventSubject": "马斯克与SpaceXAI",
+        "eventAction": "宣布接入第三方AI模型",
+        "eventObject": "Grok Bot",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1295242
+    },
+    {
+      "left": {
+        "id": "cmv4nxkog0090ua01zl61bu5l",
+        "title": "OpenAI 提升 GPT-6.1 Sol 默认上下文至 50 万并取消长上下文附加费",
+        "summary": "2026 年 10 月 12 日，OpenAI 工程师先后宣布，在 Codex 与 Work 环境中将 **GPT-6.1 Sol 的默认上下文长度从约 27.2 万 tokens 提升至 50 万 tokens，扩容约 80%**，目的是减少多轮对话中的自动压缩与截断，将上下文拉长带来的体验改善直接覆盖多数用户；手动上限仍可达 100 万 tokens。*官方同时取消了该模型在按订阅扣减用量时长上下文的单独计费*，把扩容红利让渡给重度长上下文用户。多则报道一致认为，这一组合调整是在长上下文已成行业标配背景下的体验与定价策略变化，旨在压低高复杂度任务的综合使用成本。",
+        "eventType": null,
+        "eventSubject": "OpenAI",
+        "eventAction": "上调默认上下文窗口并取消长上下文附加费用",
+        "eventObject": "GPT-6.1 Sol",
+        "eventDate": "2026-10-12",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1283398
+    },
+    {
+      "left": {
+        "id": "cmv6b3n0p00ghlm01p7uq8d80",
+        "title": "字节跳动Seed成立独立安全对齐部门 专攻智能体与CBRN风险",
+        "summary": "**字节跳动Seed团队宣布成立Seed Model-Alignment & Preparedness部门**，将安全与对齐从企业整体合规体系中独立出来，据相关信息称是国内前沿AI实验室中**首家**单独设立该职能的团队。新部门由原Responsible AI团队及部分Chat团队成员转入，严林**挂帅**，直接向Seed负责人吴永辉汇报，工作覆盖规范定义、对齐训练、防护系统搭建与风险监控，并加强外部机构合作。部门核心聚焦两大方向：一是提升**智能体模型**在执行复杂任务前的行为可控性，防止越界；二是防范*CBRN（化学、生物、放射与核）等前沿能力风险*。此举标志着字节Seed把安全对齐提升为与模型研发并行的**一级职能**，回应业界对智能体自主性与高危能力外泄的担忧。",
+        "eventType": null,
+        "eventSubject": "字节跳动Seed",
+        "eventAction": "成立",
+        "eventObject": "Seed Model-Alignment & Preparedness部门",
+        "eventDate": "2026-10-13",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1245440
+    },
+    {
+      "left": {
+        "id": "cmv6b1ybn00f6lm01i9jauo7z",
+        "title": "阿里千问 发布 QwenGyre在线强化学习框架",
+        "summary": "阿里千问正式发布QwenGyre，面向长程智能体任务的在线强化学习框架。当智能体执行持续数小时、与环境数百轮交互、累计百万级token任务时，通过弹性调度与轨迹处理将超长程任务作为有效训练来源。NL2RepoBench实验中48步训练后模型通过率从52.5%提升至58.5%，相对Async实现1.78倍端到端加速，Qwen3.6-122B跨任务验证获得全面提速。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "发布",
+        "eventObject": "QwenGyre在线强化学习框架",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1230541
+    },
+    {
+      "left": {
+        "id": "cmv3r5okg00obs501ewflwdvn",
+        "title": "尊界公布V800制动踏板支架免费升级方案 强调非召回",
+        "summary": "针对**懂车帝实测3台尊界V800在100km/h-0紧急制动时刹车踏板支架被踩断**所引发的争议，尊界汽车于10月8日晚发布情况说明，宣布**为已交付车辆免费升级制动踏板支架底座，并强调此次行动不属于召回**。尊界方面表示，制动系统按高于国家与行业标准开发，将进一步优化部件设计。后续进展显示，*升级方案预计10月底确认，11月起陆续启动*，已提车用户可通过全国任一服务中心或购车门店预约登记，尚未发运的车辆将直接使用升级部件交付。",
+        "eventType": null,
+        "eventSubject": "尊界汽车",
+        "eventAction": "公布V800制动踏板支架底座免费升级安排并强调非召回",
+        "eventObject": "尊界V800已交付车辆",
+        "eventDate": "2026-10-11",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1221754
+    },
+    {
+      "left": {
+        "id": "cmv6b0c4m00atlm01h245ojo1",
+        "title": "Meta发布Muse Wonder系列模型对标Anthropic与OpenAI",
+        "summary": "多条报道聚焦同一事件：Meta于2026年10月正式推出新一代旗舰AI模型 **Muse Wonder** 与 **Muse Wonder Full**，由去年加盟的首席AI官、Scale AI创始人亚历山大·王带队研发，被视为其首款公开对标Anthropic与OpenAI前沿水平的产品。Meta宣称新模型在推理、写作与代码能力上已*贴近Anthropic顶尖水准*，并融合**主动记忆**与**主动专注**功能。Wonder面向Muse应用部分功能开放，Wonder Full仅向Muse Code高阶订阅用户开放，意在切入AI编程赛道并拓展企业市场。该模型还将逐步铺向Instagram、Facebook、WhatsApp合计35亿用户，上月Muse智能体应用已登顶应用商店。",
+        "eventType": null,
+        "eventSubject": "Meta",
+        "eventAction": "推出旗舰 AI 模型 Muse Wonder 与 Muse Wonder Full，对标 Anthropic 与 OpenAI",
+        "eventObject": "Muse Wonder 与 Muse Wonder Full",
+        "eventDate": "2026-10-12",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1217264
+    },
+    {
+      "left": {
+        "id": "cmv131h4r04izq101ovqreb3b",
+        "title": "Anthropic联手天文学家利用Claude AI绘制首张完整紫外全天图",
+        "summary": "Anthropic旗下大模型Claude与天体物理学家Brice Ménard合作，绘制出人类历史上首张完整的紫外全天图，共覆盖约1.19亿颗恒星。此前因大气吸收及紫外望远镜长期避开银河亮区，约三分之一天区留下观测空白。研究团队对海量公开天文数据进行坐标清洗、交叉校准后，由Claude调度多智能体完成数据归集与盲区推算补全，将原本需要数周的人工处理缩短至数天。AI补全区域与真实测量值误差维持在10%左右，并标注了每个像素的实测或推算属性。多家报道均指出，这一实践标志着AI智能体正接手长期被搁置的基础科研数据处理工作，使科学家更聚焦于核心科学问题。",
+        "eventType": null,
+        "eventSubject": "Anthropic 与 Brice Ménard",
+        "eventAction": "合作绘制",
+        "eventObject": "首张全天紫外地图",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1215908
+    },
+    {
+      "left": {
+        "id": "cmv131h4r04izq101ovqreb3b",
+        "title": "Anthropic联手天文学家利用Claude AI绘制首张完整紫外全天图",
+        "summary": "Anthropic旗下大模型Claude与天体物理学家Brice Ménard合作，绘制出人类历史上首张完整的紫外全天图，共覆盖约1.19亿颗恒星。此前因大气吸收及紫外望远镜长期避开银河亮区，约三分之一天区留下观测空白。研究团队对海量公开天文数据进行坐标清洗、交叉校准后，由Claude调度多智能体完成数据归集与盲区推算补全，将原本需要数周的人工处理缩短至数天。AI补全区域与真实测量值误差维持在10%左右，并标注了每个像素的实测或推算属性。多家报道均指出，这一实践标志着AI智能体正接手长期被搁置的基础科研数据处理工作，使科学家更聚焦于核心科学问题。",
+        "eventType": null,
+        "eventSubject": "Anthropic 与 Brice Ménard",
+        "eventAction": "合作绘制",
+        "eventObject": "首张全天紫外地图",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1201712
+    },
+    {
+      "left": {
+        "id": "cmv6b1ts100f1lm01fiysewc0",
+        "title": "千问团队澄清\"千问Go!\"非独立App,开放体验申请",
+        "summary": "千问团队于10月13日就外界关注的*千问Go!*作出澄清:该产品正式名称为Personal Agent,并非独立上架的应用,而是直接嵌入在千问APP内的个人智能体。官方已同步开放体验申请入口,用户可在APP内提交申请,千问将分批放量。功能上,千问Go!依托阿里生态与开放平台,办事范围覆盖购物、出行、物流等领域,实测可完成**航班延误理赔**、场馆演出预约、餐厅筛选预订、商品比价下单、求职投递等任务。其中最具代表性的案例是:用户仅一句口头指令,千问Go!在云端排查四家航司订单并锁定东航MU2445为延误航班,多轮沟通后为用户争取到**70元现金赔付**并汇入支付宝;在淘宝价保场景中,Agent自主找到价保入口并退回52元差价。千问方面表示,选择借存量APP落地而非做独立应用,意在稳妥推进并持续依据用户反馈打磨体验,机构亦上调对个人Agent商业前景的预期。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "发布",
+        "eventObject": "Personal Agent「千问Go」",
+        "eventDate": "2026-10-13",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1201042
+    },
+    {
+      "left": {
+        "id": "cmuz8ozee3z9pm801r0vj2g4v",
+        "title": "科技巨头竞逐 AI 域名与算力融资双线并进",
+        "summary": "互联网名称与数字地址分配机构（ICANN）近日公布新一轮顶级域名申请情况，共收到来自全球481个申请者的1615份申请，其中AI相关域名成为科技巨头竞争焦点。Meta、OpenAI等公司积极竞逐.agent域名，.agi、.asi、.superintelligence等也吸引多家企业申请。OpenAI共提交15个顶级域名申请，Meta提交21份。本轮还包含345份企业品牌专属域名申请，如Meta申请的.facebook和.meta、OpenAI申请的.chatgpt、Anthropic申请的.claude等。不过ICANN表示相关申请不会早于明年进入正式生效阶段，审核流程仍将持续推进。",
+        "eventType": null,
+        "eventSubject": "ICANN",
+        "eventAction": "公布顶级域名申请情况",
+        "eventObject": "1615份新顶级域名申请",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1176144
+    },
+    {
+      "left": {
+        "id": "cmuz8nnjv3z5pm801g5rtoqqs",
+        "title": "DeepSeek 新一轮至少800亿元融资接近落定",
+        "summary": "据多方信息交叉印证，DeepSeek 本轮融资已接近收官，金额不少于 800 亿元人民币（约合 120 亿美元），较最初约 500 亿元目标大幅提升，市场预期最终规模或逼近 1000 亿元。**腾讯控股与宁德时代为最大出资方**，认购热度显著超出此前预期。资金将主要用于在内蒙古建设数据中心并部署华为 AI 芯片，以支撑其最新模型的算力需求。融资落定后，公司将推进整体重组，*为登陆科创板 IPO 做准备*，并已聘请中信证券担任辅导机构。值得注意的是，DeepSeek 刚于 2026 年 6 月完成 510 亿元首轮融资，距此仅数月，再融资金额与速度均刷新国内 AI 公司融资纪录。",
+        "eventType": "funding",
+        "eventSubject": "DeepSeek",
+        "eventAction": "推进新一轮融资",
+        "eventObject": "超800亿元资金",
+        "eventDate": "2026-10-06",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1175142
+    },
+    {
+      "left": {
+        "id": "cmv6azctr007tlm01qb1wsgw2",
+        "title": "谷歌推出Fitbit Edge智能手环",
+        "summary": "多条报道共同指向**谷歌正式推出Fitbit Edge智能手环**这一事件。该手环采用1.34英寸AMOLED触控屏，配备GPS模块、心率与血氧传感器，支持*心电图*及皮肤温度检测，具备5 ATM防水，续航约一周，电池容量65mAh，提供银、灰、金、黑四种配色，**定价179.99欧元**。候选1详细列出了产品规格与售价，候选2仅提及发布事实、未给出配置信息。整体来看，谷歌此款新品主打健身用户群体，是其健身可穿戴产品线的最新布局。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "发布",
+        "eventObject": "Fitbit Edge手环",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1167716
+    },
+    {
+      "left": {
+        "id": "cmv132ciw04omq1019q96qecw",
+        "title": "豆包 上线生活缴费功能 水电气等生活缴费",
+        "summary": "10月9日，据《读佳》报道，字节跳动旗下AI助手豆包正式新增\"生活缴费\"功能。用户可在豆包App内通过语音或文字指令触发，系统实时弹出服务卡片并跳转至专属页面，直接完成水、电、燃气等基础生活费用的缴纳。据接近豆包的人士透露，豆包正逐步构建涵盖出行、生活缴费在内的多维生活场景办事能力。业内人士认为，此举标志着大模型产品竞争重心从文本生成与泛信息检索，加速转向高频真实场景的操作落地与服务闭环，为生成式AI在消费端的商业化与服务化延伸提供契机。",
+        "eventType": null,
+        "eventSubject": "豆包",
+        "eventAction": "上线生活缴费功能",
+        "eventObject": "水电气等生活缴费",
+        "eventDate": "2026-10-09",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1148483
+    },
+    {
+      "left": {
+        "id": "cmv6b4x0h00h8lm01gh9a3rct",
+        "title": "MiniMax入驻天猫开首家旗舰店上线M Plan订阅",
+        "summary": "**MiniMax正式入驻天猫开设首家品牌官方旗舰店**，将官网专属的 Token 订阅服务搬至电商货架，主推 M Plan 套餐，分 Go、Explore、Build 三档，*支持按月或按年购买*，开业首单 Go 月卡约 24.5 元起。这是大模型厂商集体布局电商渠道的最新进展：在 2026 年 9 月 3 日天猫上线 Token 充值中心\"AI空间站\"、首批接入阿里云、智谱、Kimi、MiniMax、DeepSeek 等之后，9 月 2 日智谱已先行开店，Kimi、阶跃星辰等也在接洽入驻。多条报道指出，厂商意在触达*未必熟悉 API 但愿为 AI 工具付费*的大众用户，把订阅与 Token 转化为易懂的电商语言，竞争已从参数与基准测试延伸至贴近用户钱包的销售渠道。",
+        "eventType": null,
+        "eventSubject": "MiniMax",
+        "eventAction": "入驻天猫开设旗舰店并上架Token订阅套餐",
+        "eventObject": "M Plan订阅套餐",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1078220
+    },
+    {
+      "left": {
+        "id": "cmv4nxurx009gua01dk21qys2",
+        "title": "腾讯 上线 企鹅微单AI创作者接单",
+        "summary": "腾讯近期在微信生态内上线AI创作撮合平台「企鹅微单」，将AI创作需求方与掌握AI制图、剪辑能力的创作者连接起来。平台核心流程为：需求方通过首页\"找服务\"发布商品图、宣传视频等创作需求，系统智能匹配合适创作者，匹配成功后由需求方、创作者与平台组成三方沟通群确认报价与交付内容，确认后下单付款，最终在微信生态内完成验收结算。平台还内置AI助手帮助梳理创作需求，降低沟通成本。目前平台处于国庆期间上线的早期开放阶段，公开通道已开放但全面开放时间尚未公布，旨在解决AI创作工具\"能用但难变现\"的痛点，未来供给稳定与复购仍取决于定价、交付与结算机制的成熟度。",
+        "eventType": null,
+        "eventSubject": "腾讯",
+        "eventAction": "上线",
+        "eventObject": "企鹅微单AI创作者接单",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1075343
+    },
+    {
+      "left": {
+        "id": "cmv3r548h00jxs5016ww2oine",
+        "title": "腾讯云开源团队AI协作工具TeamAI 支持跨Agent共享Skill",
+        "summary": "2026年10月10日，腾讯云正式开源内部自用的团队AI协作工具 **TeamAI**，该工具基于Git仓库统一管理团队Skill、工作规范、工具配置及项目知识，支持以合并请求方式进行评审与版本控制，*经确认合入后*通过会话启动Hook自动同步至成员各自使用的Agent中。TeamAI已适配WorkBuddy、CodeBuddy、Claude Code、Codex、Cursor等16种主流Agent，并支持MCP工具配置、Rules及子Agent的覆盖更新。管理员可统一下发符合企业安全要求的模型配置，降低成员自行接入风险；当Agent出现反复纠正或工具调用失败时，系统会提示用户分享经验并由Agent整理入库供检索。官方测试数据显示，*接入团队知识的较低成本模型综合评分提高6.1%，调用成本降低76%*。",
+        "eventType": null,
+        "eventSubject": "腾讯云",
+        "eventAction": "开源",
+        "eventObject": "TeamAI团队AI协作工具",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1073426
+    },
+    {
+      "left": {
+        "id": "cmuzc5y4r01kclk01bz43mdds",
+        "title": "谷歌 在Gmail中集成Gemini邮件智能体 Gmail应用",
+        "summary": "谷歌或将在Gmail中集成Gemini驱动的邮件智能体，线索来自v2026.09.28版本Gmail应用的APK拆解。代码注释显示，Gmail待办事项旁可能出现\"使用Gemini\"按钮，点击后Gemini会主动扫描收件箱，对需要回复的邮件提供\"起草回复\"选项，由AI生成草稿。同时，Gemini在不确定下一步操作或邮件发出前会请求用户确认，需要人工输入的部分会被标记为\"需要你的输入\"状态，待用户点击\"提供输入\"补充信息后AI再继续执行。该功能尚处于APK拆解证据阶段，谷歌未官宣，最终形态可能与代码暗示不同，但已体现AI接管邮件处理手动操作的明确趋势。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "在Gmail中集成Gemini邮件智能体",
+        "eventObject": "Gmail应用",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1066365
+    },
+    {
+      "left": {
+        "id": "cmv3r5okg00obs501ewflwdvn",
+        "title": "尊界公布V800制动踏板支架免费升级方案 强调非召回",
+        "summary": "针对**懂车帝实测3台尊界V800在100km/h-0紧急制动时刹车踏板支架被踩断**所引发的争议，尊界汽车于10月8日晚发布情况说明，宣布**为已交付车辆免费升级制动踏板支架底座，并强调此次行动不属于召回**。尊界方面表示，制动系统按高于国家与行业标准开发，将进一步优化部件设计。后续进展显示，*升级方案预计10月底确认，11月起陆续启动*，已提车用户可通过全国任一服务中心或购车门店预约登记，尚未发运的车辆将直接使用升级部件交付。",
+        "eventType": null,
+        "eventSubject": "尊界汽车",
+        "eventAction": "公布V800制动踏板支架底座免费升级安排并强调非召回",
+        "eventObject": "尊界V800已交付车辆",
+        "eventDate": "2026-10-11",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1063758
+    },
+    {
+      "left": {
+        "id": "cmv6b25n600fllm01001zm0y0",
+        "title": "SpaceXAI更名为SpaceXSI并推出统一订阅体系X Subscription",
+        "summary": "多条信息共同指向 SpaceXAI 品牌升级与产品整合事件。**马斯克**宣布将 SpaceXAI 官方账号更名为 **SpaceX Super Intelligence（@SpaceXSI）**，并启动统一订阅体系 *The X Subscription*，把 Grok 对话、Grok Bot 智能体、Cursor 编程和 X Premium 社交四条业务线合并为同一订阅包，价格分 Free、Plus 8 美元/月、Premium 30 美元/月、Super 100 美元/月、Ultra 200 美元/月 五档。旧独立订阅保留但停止新购，未来逐步迁移，按剩余天数退款；Cursor 原含的第三方模型用量切换后不再共享，须按 API 价充值，*仅 Premium 及以上档可用*。",
+        "eventType": "other",
+        "eventSubject": "SpaceXSI",
+        "eventAction": "发布",
+        "eventObject": "The X Subscription 统一订阅体系",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1059690
+    },
+    {
+      "left": {
+        "id": "cmv6b1ts100f1lm01fiysewc0",
+        "title": "千问团队澄清\"千问Go!\"非独立App,开放体验申请",
+        "summary": "千问团队于10月13日就外界关注的*千问Go!*作出澄清:该产品正式名称为Personal Agent,并非独立上架的应用,而是直接嵌入在千问APP内的个人智能体。官方已同步开放体验申请入口,用户可在APP内提交申请,千问将分批放量。功能上,千问Go!依托阿里生态与开放平台,办事范围覆盖购物、出行、物流等领域,实测可完成**航班延误理赔**、场馆演出预约、餐厅筛选预订、商品比价下单、求职投递等任务。其中最具代表性的案例是:用户仅一句口头指令,千问Go!在云端排查四家航司订单并锁定东航MU2445为延误航班,多轮沟通后为用户争取到**70元现金赔付**并汇入支付宝;在淘宝价保场景中,Agent自主找到价保入口并退回52元差价。千问方面表示,选择借存量APP落地而非做独立应用,意在稳妥推进并持续依据用户反馈打磨体验,机构亦上调对个人Agent商业前景的预期。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "发布",
+        "eventObject": "Personal Agent「千问Go」",
+        "eventDate": "2026-10-13",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1057406
+    },
+    {
+      "left": {
+        "id": "cmv6b4x0h00h8lm01gh9a3rct",
+        "title": "MiniMax入驻天猫开首家旗舰店上线M Plan订阅",
+        "summary": "**MiniMax正式入驻天猫开设首家品牌官方旗舰店**，将官网专属的 Token 订阅服务搬至电商货架，主推 M Plan 套餐，分 Go、Explore、Build 三档，*支持按月或按年购买*，开业首单 Go 月卡约 24.5 元起。这是大模型厂商集体布局电商渠道的最新进展：在 2026 年 9 月 3 日天猫上线 Token 充值中心\"AI空间站\"、首批接入阿里云、智谱、Kimi、MiniMax、DeepSeek 等之后，9 月 2 日智谱已先行开店，Kimi、阶跃星辰等也在接洽入驻。多条报道指出，厂商意在触达*未必熟悉 API 但愿为 AI 工具付费*的大众用户，把订阅与 Token 转化为易懂的电商语言，竞争已从参数与基准测试延伸至贴近用户钱包的销售渠道。",
+        "eventType": null,
+        "eventSubject": "MiniMax",
+        "eventAction": "入驻天猫开设旗舰店并上架Token订阅套餐",
+        "eventObject": "M Plan订阅套餐",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1051625
+    },
+    {
+      "left": {
+        "id": "cmv3r4zcy00jns501em45n0fm",
+        "title": "四部门联合征求意见稿拟禁止汽车全隐藏式门把手",
+        "summary": "工信部、公安部、生态环境部、市场监管总局联合发布《关于进一步加强汽车产品创新设计和研发测试验证有关管理工作的通知（征求意见稿）》，公开征求意见至 11 月 10 日。文件明确要求涉及安全的应急操纵功能必须配备**实体操纵件和醒目标识**，拟**禁止采用全隐藏式门把手**；同时规定车辆行驶中不得使用零重力、旋转或放倒成床的座椅，并将**整车综合可靠性测试里程提至不低于 3 万公里**，环境适应性验证不少于一年。征求意见稿整体聚焦于在鼓励设计创新的同时，强化涉及人身安全的关键功能约束，与近年部分车企激进的造型和功能设计形成对照，相关具体条款的落地范围与最终表述仍待意见反馈后进一步明确。",
+        "eventType": null,
+        "eventSubject": "工信部、公安部、生态环境部、市场监管总局",
+        "eventAction": "联合发布征求意见稿，拟禁止汽车采用全隐藏式门把手并要求关键功能保留实体操纵件",
+        "eventObject": "汽车创新设计与安全要求",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1039638
+    },
+    {
+      "left": {
+        "id": "cmv6b25n600fllm01001zm0y0",
+        "title": "SpaceXAI更名为SpaceXSI并推出统一订阅体系X Subscription",
+        "summary": "多条信息共同指向 SpaceXAI 品牌升级与产品整合事件。**马斯克**宣布将 SpaceXAI 官方账号更名为 **SpaceX Super Intelligence（@SpaceXSI）**，并启动统一订阅体系 *The X Subscription*，把 Grok 对话、Grok Bot 智能体、Cursor 编程和 X Premium 社交四条业务线合并为同一订阅包，价格分 Free、Plus 8 美元/月、Premium 30 美元/月、Super 100 美元/月、Ultra 200 美元/月 五档。旧独立订阅保留但停止新购，未来逐步迁移，按剩余天数退款；Cursor 原含的第三方模型用量切换后不再共享，须按 API 价充值，*仅 Premium 及以上档可用*。",
+        "eventType": "other",
+        "eventSubject": "SpaceXSI",
+        "eventAction": "发布",
+        "eventObject": "The X Subscription 统一订阅体系",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1009671
+    },
+    {
+      "left": {
+        "id": "cmv6b3n0p00ghlm01p7uq8d80",
+        "title": "字节跳动Seed成立独立安全对齐部门 专攻智能体与CBRN风险",
+        "summary": "**字节跳动Seed团队宣布成立Seed Model-Alignment & Preparedness部门**，将安全与对齐从企业整体合规体系中独立出来，据相关信息称是国内前沿AI实验室中**首家**单独设立该职能的团队。新部门由原Responsible AI团队及部分Chat团队成员转入，严林**挂帅**，直接向Seed负责人吴永辉汇报，工作覆盖规范定义、对齐训练、防护系统搭建与风险监控，并加强外部机构合作。部门核心聚焦两大方向：一是提升**智能体模型**在执行复杂任务前的行为可控性，防止越界；二是防范*CBRN（化学、生物、放射与核）等前沿能力风险*。此举标志着字节Seed把安全对齐提升为与模型研发并行的**一级职能**，回应业界对智能体自主性与高危能力外泄的担忧。",
+        "eventType": null,
+        "eventSubject": "字节跳动Seed",
+        "eventAction": "成立",
+        "eventObject": "Seed Model-Alignment & Preparedness部门",
+        "eventDate": "2026-10-13",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1001429
+    },
+    {
+      "left": {
+        "id": "cmv131h4r04izq101ovqreb3b",
+        "title": "Anthropic联手天文学家利用Claude AI绘制首张完整紫外全天图",
+        "summary": "Anthropic旗下大模型Claude与天体物理学家Brice Ménard合作，绘制出人类历史上首张完整的紫外全天图，共覆盖约1.19亿颗恒星。此前因大气吸收及紫外望远镜长期避开银河亮区，约三分之一天区留下观测空白。研究团队对海量公开天文数据进行坐标清洗、交叉校准后，由Claude调度多智能体完成数据归集与盲区推算补全，将原本需要数周的人工处理缩短至数天。AI补全区域与真实测量值误差维持在10%左右，并标注了每个像素的实测或推算属性。多家报道均指出，这一实践标志着AI智能体正接手长期被搁置的基础科研数据处理工作，使科学家更聚焦于核心科学问题。",
+        "eventType": null,
+        "eventSubject": "Anthropic 与 Brice Ménard",
+        "eventAction": "合作绘制",
+        "eventObject": "首张全天紫外地图",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 1000051
+    },
+    {
+      "left": {
+        "id": "cmv3r4wro00jjs501q1fhevzj",
+        "title": "英伟达洽谈收购或追加投资开源AI公司Reflection AI",
+        "summary": "多家媒体报道，**英伟达正与美国开源AI模型公司Reflection AI就收购或追加投资进行深入谈判**，潜在形式涵盖整体收购、扩大股权投资及算力与技术合作等。英伟达此前已向Reflection注资约*8亿美元*，为其最大股东之一；公司今年3月估值达*250亿美元*。报道指出，英伟达可能借助人才兼并模式规避反垄断审查，双方有望在未来数周内敲定协议，但谈判仍有破裂可能。Reflection近期发布开放权重模型，被视为美国方面抗衡低成本开源竞争的重要布局。",
+        "eventType": "acquisition",
+        "eventSubject": "英伟达",
+        "eventAction": "洽谈收购或追加投资 Reflection AI",
+        "eventObject": "Reflection AI 开源模型业务",
+        "eventDate": "2026-10-11",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmv131r0b04lwq101tp0v15dp",
+        "title": "JetBrains 发布 Mellum2.1编程AI模型",
+        "summary": "JetBrains正式发布Mellum2.1编程AI模型，采用12B混合专家架构并继续开源。该版本将强化学习从短期收尾环节升级为核心训练主体，在数百万沙盒环境中完成软件工程与算法的专项强化，模型可自主检索与验证代码，准确定位失败测试的根本原因并起草修复方案。性能方面，引入多Token预测技术后，单请求响应速度提升约1.6倍；高负载推理请求下，Token吞吐量接近Qwen3.5-9B的两倍，为大规模代码部署提供较高性价比，同时降低企业与个人开发者的私有化部署门槛。",
+        "eventType": null,
+        "eventSubject": "JetBrains",
+        "eventAction": "发布",
+        "eventObject": "Mellum2.1编程AI模型",
+        "eventDate": "2026-10-09",
+        "itemCount": 1
+      },
+      "score": 949203
+    },
+    {
+      "left": {
+        "id": "cmv3r4zcy00jns501em45n0fm",
+        "title": "四部门联合征求意见稿拟禁止汽车全隐藏式门把手",
+        "summary": "工信部、公安部、生态环境部、市场监管总局联合发布《关于进一步加强汽车产品创新设计和研发测试验证有关管理工作的通知（征求意见稿）》，公开征求意见至 11 月 10 日。文件明确要求涉及安全的应急操纵功能必须配备**实体操纵件和醒目标识**，拟**禁止采用全隐藏式门把手**；同时规定车辆行驶中不得使用零重力、旋转或放倒成床的座椅，并将**整车综合可靠性测试里程提至不低于 3 万公里**，环境适应性验证不少于一年。征求意见稿整体聚焦于在鼓励设计创新的同时，强化涉及人身安全的关键功能约束，与近年部分车企激进的造型和功能设计形成对照，相关具体条款的落地范围与最终表述仍待意见反馈后进一步明确。",
+        "eventType": null,
+        "eventSubject": "工信部、公安部、生态环境部、市场监管总局",
+        "eventAction": "联合发布征求意见稿，拟禁止汽车采用全隐藏式门把手并要求关键功能保留实体操纵件",
+        "eventObject": "汽车创新设计与安全要求",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 916634
+    },
+    {
+      "left": {
+        "id": "cmuzc5y4r01kclk01bz43mdds",
+        "title": "谷歌 在Gmail中集成Gemini邮件智能体 Gmail应用",
+        "summary": "谷歌或将在Gmail中集成Gemini驱动的邮件智能体，线索来自v2026.09.28版本Gmail应用的APK拆解。代码注释显示，Gmail待办事项旁可能出现\"使用Gemini\"按钮，点击后Gemini会主动扫描收件箱，对需要回复的邮件提供\"起草回复\"选项，由AI生成草稿。同时，Gemini在不确定下一步操作或邮件发出前会请求用户确认，需要人工输入的部分会被标记为\"需要你的输入\"状态，待用户点击\"提供输入\"补充信息后AI再继续执行。该功能尚处于APK拆解证据阶段，谷歌未官宣，最终形态可能与代码暗示不同，但已体现AI接管邮件处理手动操作的明确趋势。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "在Gmail中集成Gemini邮件智能体",
+        "eventObject": "Gmail应用",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 886714
+    },
+    {
+      "left": {
+        "id": "cmv3r4zcy00jns501em45n0fm",
+        "title": "四部门联合征求意见稿拟禁止汽车全隐藏式门把手",
+        "summary": "工信部、公安部、生态环境部、市场监管总局联合发布《关于进一步加强汽车产品创新设计和研发测试验证有关管理工作的通知（征求意见稿）》，公开征求意见至 11 月 10 日。文件明确要求涉及安全的应急操纵功能必须配备**实体操纵件和醒目标识**，拟**禁止采用全隐藏式门把手**；同时规定车辆行驶中不得使用零重力、旋转或放倒成床的座椅，并将**整车综合可靠性测试里程提至不低于 3 万公里**，环境适应性验证不少于一年。征求意见稿整体聚焦于在鼓励设计创新的同时，强化涉及人身安全的关键功能约束，与近年部分车企激进的造型和功能设计形成对照，相关具体条款的落地范围与最终表述仍待意见反馈后进一步明确。",
+        "eventType": null,
+        "eventSubject": "工信部、公安部、生态环境部、市场监管总局",
+        "eventAction": "联合发布征求意见稿，拟禁止汽车采用全隐藏式门把手并要求关键功能保留实体操纵件",
+        "eventObject": "汽车创新设计与安全要求",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 843599
+    },
+    {
+      "left": {
+        "id": "cmv4nyy5i00bbua01j2kdf1ti",
+        "title": "亚马逊洽谈约70亿美元收购AI芯片适配初创公司Decart",
+        "summary": "多家报道指出，亚马逊正与成立仅三年的旧金山AI初创公司Decart洽谈收购，潜在估值约**70亿美元**。Decart的核心技术是让训练好的模型在不同品牌AI芯片间无缝切换的跨芯片适配软件，其优化栈号称在同一硬件上可提速最多*8倍*，已适配英伟达GPU、谷歌TPU及亚马逊自研Trainium，AWS更早在2025年就把Trainium3早期访问权交给Decart完成底层磨合。该价格较其今年5月约40亿美元估值**高出约75%**。此前Anthropic曾在尽职调查后放弃以约60亿美元收购Decart，英伟达相关谈判同样告吹，*业内分析认为*交易能否成立取决于其加速效果在客户模型上的普遍适用性。此举被视作大型云厂商在芯片短缺与自研背景下争夺算力控制权的最新动作。",
+        "eventType": "acquisition",
+        "eventSubject": "亚马逊",
+        "eventAction": "洽谈收购",
+        "eventObject": "Decart",
+        "eventDate": null,
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 842955
+    },
+    {
+      "left": {
+        "id": "cmv13127204hhq101cb8oomw5",
+        "title": "电影《寒夜怪谈》 发布新预告并定档 北美院线上映",
+        "summary": "电影《寒夜怪谈》于10月1日发布新预告，宣布11月13日在北美上映。该片由缇·威斯特执导，约翰尼·德普主演，改编自狄更斯《圣诞颂歌》，定位奇幻题材，是缇·威斯特继《X》《珀尔》《玛克辛》之后的最新作品，也是约翰尼·德普回归奇幻巨制的一次亮相。",
+        "eventType": "other",
+        "eventSubject": "电影《寒夜怪谈》",
+        "eventAction": "发布新预告并定档",
+        "eventObject": "北美院线上映",
+        "eventDate": "2026-11-13",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 840555
+    },
+    {
+      "left": {
+        "id": "cmuz8ozee3z9pm801r0vj2g4v",
+        "title": "科技巨头竞逐 AI 域名与算力融资双线并进",
+        "summary": "互联网名称与数字地址分配机构（ICANN）近日公布新一轮顶级域名申请情况，共收到来自全球481个申请者的1615份申请，其中AI相关域名成为科技巨头竞争焦点。Meta、OpenAI等公司积极竞逐.agent域名，.agi、.asi、.superintelligence等也吸引多家企业申请。OpenAI共提交15个顶级域名申请，Meta提交21份。本轮还包含345份企业品牌专属域名申请，如Meta申请的.facebook和.meta、OpenAI申请的.chatgpt、Anthropic申请的.claude等。不过ICANN表示相关申请不会早于明年进入正式生效阶段，审核流程仍将持续推进。",
+        "eventType": null,
+        "eventSubject": "ICANN",
+        "eventAction": "公布顶级域名申请情况",
+        "eventObject": "1615份新顶级域名申请",
+        "eventDate": "2026-10-08",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 829168
+    },
+    {
+      "left": {
+        "id": "cmv3r4ut500jfs501cyzho5ia",
+        "title": "月之暗面 增加注册资本 公司注册资本",
+        "summary": "国内大模型公司月之暗面近期完成新一轮工商变更，注册资本由约1157.53万元增至约1437.23万元，增幅约24%。这是该公司2023年4月成立以来年内多次密集增资之一，注册资本从最初100万元一路攀升至当前水平。公司法定代表人为杨植麟，经营范围涵盖软件及人工智能软件开发，股东包括杨植麟、深圳和谐成长三期科技发展股权投资基金及周昕宇等。在估值扩张和业务增长背景下，公司在融资和资本运作层面持续活跃，本次增资将进一步充实资本实力，为大模型底层技术研发、产品迭代及后续资本市场布局提供支持。",
+        "eventType": "funding",
+        "eventSubject": "月之暗面",
+        "eventAction": "增加注册资本",
+        "eventObject": "公司注册资本",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 811162
+    },
+    {
+      "left": {
+        "id": "cmv6azctr007tlm01qb1wsgw2",
+        "title": "谷歌推出Fitbit Edge智能手环",
+        "summary": "多条报道共同指向**谷歌正式推出Fitbit Edge智能手环**这一事件。该手环采用1.34英寸AMOLED触控屏，配备GPS模块、心率与血氧传感器，支持*心电图*及皮肤温度检测，具备5 ATM防水，续航约一周，电池容量65mAh，提供银、灰、金、黑四种配色，**定价179.99欧元**。候选1详细列出了产品规格与售价，候选2仅提及发布事实、未给出配置信息。整体来看，谷歌此款新品主打健身用户群体，是其健身可穿戴产品线的最新布局。",
+        "eventType": null,
+        "eventSubject": "谷歌",
+        "eventAction": "发布",
+        "eventObject": "Fitbit Edge手环",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 779512
+    },
+    {
+      "left": {
+        "id": "cmuz8ozer3z9tm801ugf9rgny",
+        "title": "微软联合英伟达推Surface新品与本地AI架构",
+        "summary": "2026年10月7日，微软在旧金山发布会上联合英伟达推出搭载RTX Spark芯片的Surface Laptop Ultra笔记本与Surface RTX Spark Dev Box工作站，集成最多6144个CUDA核心、20核Grace CPU及最高128GB统一内存，声称可本地运行超1200亿参数AI模型，算力最高1 PFLOPS，笔记本起售价约2600美元、顶配5900美元，工作站起售价6000美元，计划10月16日上市。同期微软发布**MAI Code1.1Flash混合架构**模型（总参数1370亿、激活68亿），借助量化与投机解码降低内存占用，GitHub Copilot将支持*本地与云端混合推理*，用户可在VS Code、Copilot应用及CLI中调用，并由Windows ML或OpenAI兼容端点承接。",
+        "eventType": "release",
+        "eventSubject": "微软",
+        "eventAction": "发布 MAI Code1.1Flash 模型并为 GitHub Copilot 引入本地与云端混合推理",
+        "eventObject": "MAI Code1.1Flash 模型与 GitHub Copilot",
+        "eventDate": "2026-10-07",
+        "itemCount": 3
+      },
+      "right": {
+        "id": "cmuz8ozcg3z9lm801ebrand06",
+        "title": "美国地方媒体组团起诉微软OpenAI：数万篇文章被喂进模型，一文钱没给",
+        "summary": "暂无摘要",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 724914
+    },
+    {
+      "left": {
+        "id": "cmuz8oiln3z8vm801d3dj2ftn",
+        "title": "千问首款AI耳夹耳机上线预约，10月13日发布",
+        "summary": "多条消息共同指向**阿里千问首款AI耳夹式耳机正式上架预约**这一事件。10月5日起，该耳机在淘宝、京东等平台千问官方旗舰店开启预约，并将在澳门NBA中国赛活动现场与新款N1系列AI眼镜一同亮相，计划于10月13日正式发布并开售。产品由Bose调音，搭载12磁铁双环聚磁单元，支持LHDC 5.0、Hi-Res Wireless认证，*具备录音转写、92语种纪要及89种语言AI翻译*等功能；续航约9小时，配充电仓可达40小时，支持IP55防尘防泼溅、无线充电与双设备连接。此次同步展示的N1系列AI眼镜则支持第一视角拍摄与物品识别，N1Pro版本额外配备*眼动追踪和虹膜核身支付*。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "亮相首款AI耳机与新款AI眼镜并开放预约",
+        "eventObject": "千问AI耳夹式耳机及N1系列AI眼镜",
+        "eventDate": "2026-10-05",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p0yh3za1m801tgwhc6dx",
+        "title": "独角兽诞生！估值 15 亿美元的开源黑马如何靠AI Agent收割企业级市场？",
+        "summary": "三年前成立的开源AI初创公司Nous Research正式确认，公司已完成由Robot Ventures领投的9000万美元B轮融资，估值飙升至15亿美元。英伟达、Union Square Ventures、Menlo Ventures、三星以及唐纳德·特朗普小儿子担任合伙人的1789Capital等机构也参与了本轮投资。此轮融资过后，这家成立三年的年轻企业总融资额已达到1.5亿美元。 凭借开源的Hermes Agent，Nous Research在开发者和个人用户群体中积累了极高的人气。根据该公司的数据估算，Hermes Agent已被克隆超过2400万次，承担了全球约2.5%的AI Token使用量。 此次获得的大笔资金将被用于全力进军企业级市场，推出名为“Hermes for Businesses”的全新产品。该服务旨在帮助企业部署能够处理复杂多步骤工作流的定制化AI代理，同时确保企业内部数据的隐私和安全。 根据《华尔街日报》此前的报道，截至2026年9月中旬，Nous Research的年化收入已达到约3600万美元，并预计在2026年底前突破1亿美元大关。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 589694
+    },
+    {
+      "left": {
+        "id": "cmv3r5jnf00nrs5014pdr6cnn",
+        "title": "网文实体书误排入AI提示词 凤凰文艺出版社全数召回销毁修订",
+        "summary": "网络文学《终焉路独行》纸质版被读者发现正文中混入一句典型 *AI 交互口吻* 的提问，与网络原版对应位置内容不符。**经核查，原稿并无该句，系出版方在文字精减或校对环节误将AI校对软件提示词排入正文**。策划方天津知语时光文化传媒致歉，出版方江苏凤凰文艺出版社回应称稿件经编辑、校对等多手流转、责任被稀释，问题不在作者。出版社决定对已流出的图书**全部回收销毁并重新修订后再行出版**。该事件暴露出版流程中人工复核环节缺位，在AI日益介入编辑排版的背景下引发行业对内容防线的关注。",
+        "eventType": null,
+        "eventSubject": "天津知语时光文化传媒",
+        "eventAction": "误将AI校对提示词排入正文",
+        "eventObject": "《终焉路独行》纸质书",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 587068
+    },
+    {
+      "left": {
+        "id": "cmv13127204hhq101cb8oomw5",
+        "title": "电影《寒夜怪谈》 发布新预告并定档 北美院线上映",
+        "summary": "电影《寒夜怪谈》于10月1日发布新预告，宣布11月13日在北美上映。该片由缇·威斯特执导，约翰尼·德普主演，改编自狄更斯《圣诞颂歌》，定位奇幻题材，是缇·威斯特继《X》《珀尔》《玛克辛》之后的最新作品，也是约翰尼·德普回归奇幻巨制的一次亮相。",
+        "eventType": "other",
+        "eventSubject": "电影《寒夜怪谈》",
+        "eventAction": "发布新预告并定档",
+        "eventObject": "北美院线上映",
+        "eventDate": "2026-11-13",
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 499718
+    },
+    {
+      "left": {
+        "id": "cmv6b25n600fllm01001zm0y0",
+        "title": "SpaceXAI更名为SpaceXSI并推出统一订阅体系X Subscription",
+        "summary": "多条信息共同指向 SpaceXAI 品牌升级与产品整合事件。**马斯克**宣布将 SpaceXAI 官方账号更名为 **SpaceX Super Intelligence（@SpaceXSI）**，并启动统一订阅体系 *The X Subscription*，把 Grok 对话、Grok Bot 智能体、Cursor 编程和 X Premium 社交四条业务线合并为同一订阅包，价格分 Free、Plus 8 美元/月、Premium 30 美元/月、Super 100 美元/月、Ultra 200 美元/月 五档。旧独立订阅保留但停止新购，未来逐步迁移，按剩余天数退款；Cursor 原含的第三方模型用量切换后不再共享，须按 API 价充值，*仅 Premium 及以上档可用*。",
+        "eventType": "other",
+        "eventSubject": "SpaceXSI",
+        "eventAction": "发布",
+        "eventObject": "The X Subscription 统一订阅体系",
+        "eventDate": "2026-10-10",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 483436
+    },
+    {
+      "left": {
+        "id": "cmuz8niwb3z5km801al3tt68y",
+        "title": "SpaceX拟融资400亿美元购英伟达芯片后者市值创新高",
+        "summary": "据多家报道，马斯克旗下 SpaceX 正寻求融资约 **400亿美元** 用于购买英伟达芯片，凸显 AI 算力需求持续强劲。其中约 100亿美元来自银行贷款，*300亿美元* 拟通过投资级债券募集，由阿波罗全球管理牵头，交易预计 **2027年** 完成。与此同时，英伟达股价表现强劲：10月6日开盘约20分钟后市值触及 **5.82万亿美元** 历史新高，距6万亿美元仅一步之遥，连续第三个交易日收盘创新高，有望成为全球首家市值突破6万亿美元的公司。SpaceX 的大额采购意向与英伟达市值的飙升，共同反映了 AI 芯片供需两端的加速升温。",
+        "eventType": null,
+        "eventSubject": "英伟达",
+        "eventAction": "市值创新高",
+        "eventObject": "英伟达股价",
+        "eventDate": "2026-10-06",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 410144
+    },
+    {
+      "left": {
+        "id": "cmv3r5jnf00nrs5014pdr6cnn",
+        "title": "网文实体书误排入AI提示词 凤凰文艺出版社全数召回销毁修订",
+        "summary": "网络文学《终焉路独行》纸质版被读者发现正文中混入一句典型 *AI 交互口吻* 的提问，与网络原版对应位置内容不符。**经核查，原稿并无该句，系出版方在文字精减或校对环节误将AI校对软件提示词排入正文**。策划方天津知语时光文化传媒致歉，出版方江苏凤凰文艺出版社回应称稿件经编辑、校对等多手流转、责任被稀释，问题不在作者。出版社决定对已流出的图书**全部回收销毁并重新修订后再行出版**。该事件暴露出版流程中人工复核环节缺位，在AI日益介入编辑排版的背景下引发行业对内容防线的关注。",
+        "eventType": null,
+        "eventSubject": "天津知语时光文化传媒",
+        "eventAction": "误将AI校对提示词排入正文",
+        "eventObject": "《终焉路独行》纸质书",
+        "eventDate": null,
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kr3zafm8018jxhqd3g",
+        "title": "抖音生活服务发布双节报告:AI入口拉动消费，“豆包订酒店”下单量环比增56%",
+        "summary": "抖音生活服务于2026年10月7日正式发布《2026中秋国庆消费报告》，宣布AI交互入口首次深度融入假日消费场景，成为拉动出游与本地生活服务的新增长极。 报告显示，“双节”期间线上内容持续激发线下消费热情，推动深度体验式消费成为主流，抖音团购整体订单量同比增长53%。其中，餐饮订单量同比增幅超61%，酒旅订单量增长42%，酒店宾馆订单量同比增幅更近79%。 作为本次假期的核心亮点，新场景与新入口对消费的拉动效应显著。数据显示，“抖省省App”景区团购日均交易增幅达到142%;同时，以“豆包订酒店”为代表的AI交互产品实现快速渗透，其下单量环比增长超56%，成都、北京与西安成为订单量最多的城市。此外，覆盖重庆、成都、杭州等10座城市的“66旅游卡”亦成拉动主力，带动国庆假期酒店用卡入住量环比增长超84%。 本次数据表明，用户消费诉求正加速从“内容观看”向“深度参与”转型。以生成式AI为核心的智能化入口不仅优化了用户的决策与下单路径，更打通了从流量触达到服务履约的商业闭环，标志着AI技术在本地生活与旅游场景的应用已完成从功能试探向规模化交易的跨越。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 408848
+    },
+    {
+      "left": {
+        "id": "cmuz8nnjv3z5pm801g5rtoqqs",
+        "title": "DeepSeek 新一轮至少800亿元融资接近落定",
+        "summary": "据多方信息交叉印证，DeepSeek 本轮融资已接近收官，金额不少于 800 亿元人民币（约合 120 亿美元），较最初约 500 亿元目标大幅提升，市场预期最终规模或逼近 1000 亿元。**腾讯控股与宁德时代为最大出资方**，认购热度显著超出此前预期。资金将主要用于在内蒙古建设数据中心并部署华为 AI 芯片，以支撑其最新模型的算力需求。融资落定后，公司将推进整体重组，*为登陆科创板 IPO 做准备*，并已聘请中信证券担任辅导机构。值得注意的是，DeepSeek 刚于 2026 年 6 月完成 510 亿元首轮融资，距此仅数月，再融资金额与速度均刷新国内 AI 公司融资纪录。",
+        "eventType": "funding",
+        "eventSubject": "DeepSeek",
+        "eventAction": "推进新一轮融资",
+        "eventObject": "超800亿元资金",
+        "eventDate": "2026-10-06",
+        "itemCount": 2
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 345364
+    },
+    {
+      "left": {
+        "id": "cmv6b1ybn00f6lm01i9jauo7z",
+        "title": "阿里千问 发布 QwenGyre在线强化学习框架",
+        "summary": "阿里千问正式发布QwenGyre，面向长程智能体任务的在线强化学习框架。当智能体执行持续数小时、与环境数百轮交互、累计百万级token任务时，通过弹性调度与轨迹处理将超长程任务作为有效训练来源。NL2RepoBench实验中48步训练后模型通过率从52.5%提升至58.5%，相对Async实现1.78倍端到端加速，Qwen3.6-122B跨任务验证获得全面提速。",
+        "eventType": null,
+        "eventSubject": "阿里千问",
+        "eventAction": "发布",
+        "eventObject": "QwenGyre在线强化学习框架",
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "right": {
+        "id": "cmuz8p2kz3zahm8011yactf9i",
+        "title": "Claude悄悄上线简繁体中文界面：产品菜单中文化，官方尚未官宣",
+        "summary": "Anthropic正悄悄给Claude换上中文皮肤。多家用户发现，Claude的网页版和桌面端语言菜单里已经冒出了简体中文与繁体中文两个选项，部分账号一打开就直接落在中文界面上。这回添的不是对话能力——Claude早就能用中文聊天，而是连产品本身的界面也一并中文化了，过去中文用户要么凑合用英文或其他语言界面，要么靠浏览器翻译硬啃菜单，如今这道门槛正被悄悄抹平。 眼下这步棋还带着明显的试探痕迹。Anthropic并未正式对外宣布这次更新，官方语言设置的说明文档也仍未把中文列进去，等于功能先偷偷放出来、话却还没说。对中文用户来说，最该划清的一条边界是:界面中文化不等于服务地区放开。 Claude当前支持的地区依旧不包含中国大陆，而新加坡、中国台湾等市场此前已在服务范围内，这次只是让这些地区的使用者终于能用母语看菜单、点按钮。当一款全球AI产品把界面语言补到简繁中文，它释放的信号很直白——中文世界的使用者，正在从被翻译将就，变成被原生对待。",
+        "eventType": null,
+        "eventSubject": null,
+        "eventAction": null,
+        "eventObject": null,
+        "eventDate": null,
+        "itemCount": 1
+      },
+      "score": 134675
+    }
+  ]
+}

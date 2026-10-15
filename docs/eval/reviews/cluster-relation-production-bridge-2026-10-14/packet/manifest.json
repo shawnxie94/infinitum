@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-14T14:51:09.670Z",
+  "sourceManifestSha256": "1495ed0fb7576e0304e9045554abb4ad77d18b88be7bf83bf454396146b4fb40",
+  "references": {
+    "scripts/prepare-cluster-relation-production-bridge.ts": "f205e3f25603887078ac010c5fae346cce173b6e5db9e1ad0fcd558fc67e50d5",
+    "scripts/prepare-cluster-relation-source-replay.ts": "0f50d22661760a12e9222575fcdb4baefa5c18414a8ee6a791be74f80b5c2ffa",
+    "scripts/score-cluster-relation-source-replay.ts": "11ab96480762fd55ab21e37533905f1a3baac5025332cace8fa7d9e8e5607e72",
+    "src/config/constants.ts": "53656d45bef68b82f14fa4c7843c086e1d394a792a20e19371e4c72891338a0c",
+    "src/lib/clusters/helpers.ts": "c632f2bbb08d851fe9f53afe72d87572f6845733c1c43421190858e7e9d3fc02",
+    "src/lib/clusters/bm25.ts": "a7a80ce0fb13fb5565505e877bf47b275cec22c2a30a264ac6ecaa938b1ec460",
+    "src/lib/clusters/normalization.ts": "b4d695e3f30d13b6a394513e689bde884253a6f1c2556b41adc7828f3cd1bed5",
+    "src/lib/clusters/service.ts": "2d123b79606b59f51305b53c4c4856c5f4b50702e0dd5d89792ed029f6dffe4b",
+    "src/lib/ai/protocols/cluster.ts": "c5ae0be9cb14ce33a797d4f5753c41948c5f47f7c10e7d90bcb5749279782129",
+    "src/lib/ai/contracts.ts": "e63311db39967289bb995a1112d7da5171c90da269003cb1cf0b27e8a40faa53",
+    "src/lib/ai/provider-next.ts": "8028225fe4007541d86ec880a95e9ad5288cf8fd6cc75402072b5ae369ed6415",
+    "src/lib/entities/mention-resolution.ts": "38dc706414b7788f127c847604e58bfab29784ba64c76c66cd788d83a8498f8c",
+    "src/lib/clusters/constraints.ts": "01fbfcf48b57acf9b6e2c48f49bfa7dc4beb176bde896f045d7bf9ca942e22eb",
+    "src/lib/clusters/decisions.ts": "9d06a408b3993626bbaa65d5962195e25395bc0b9a62c64a574f08e8734e4a81"
+  },
+  "fileHashes": {
+    "snapshot.json": "1b42287dad66539e2f218da0f20bbdca76f0f6062bd603dc52c94482e448e75c",
+    "inventory.json": "34ff1c3a84ca06a1b42cf876cb5f7123094ab8db0a888fe6f3b6572ea6a18f9c",
+    "dto-with-ids.json": "19261e563b76589fde972190e4c0973414eefeac7dac9ed55b50714de86b2d63",
+    "model-batches.json": "ffdfcb15b870ec3fdfb00745ef535307f2df0aea82d188f30fa869a7da5bb75b",
+    "routing.json": "fa1f2f683c704a15a1cb6a84c897928a7b6263db93d398d2ebe188b7f7c8547f",
+    "bridge-report.json": "bccf4399323a01ac22ac8ce0cf80b58490376fc29f61c7d888462657defa2177"
+  },
+  "requestsSent": 0,
+  "credentialsRead": false,
+  "readyForModelReplay": false,
+  "labelTransferAllowed": false,
+  "sourceDatabase": {
+    "context": "desktop-linux",
+    "container": "infinitum",
+    "database": "/app/data/dev.db",
+    "access": "readonly, query_only; one SELECT snapshot"
+  }
+}

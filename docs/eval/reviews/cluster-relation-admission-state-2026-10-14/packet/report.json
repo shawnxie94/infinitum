@@ -1,0 +1,78 @@
+{
+  "capturedAt": "2026-10-14T15:28:57.226Z",
+  "pool": 156,
+  "rawPreblockPairsSameSnapshot": 122,
+  "canonicalPreblockPairs": 108,
+  "canonicalChangedClusters": 22,
+  "rawDirty": 42,
+  "canonicalDirty": 38,
+  "cachedRowsLoaded": 80,
+  "cachedPairsAdded": 20,
+  "cachedAttemptSkipped": 1,
+  "cachedInvalidSkipped": 17,
+  "combinedPairs": 128,
+  "blockedByCannotLink": 0,
+  "blockedByDeclinedDecision": 8,
+  "blockedByReviewDecision": 0,
+  "postStatePairs": 120,
+  "postStateBatches": 40,
+  "allHashesMatch": false,
+  "wouldSkipWithoutLiveEmbedding": false,
+  "removedEdgeCount": 8,
+  "previousBridgeSha256": "8972f3375abc15df9a0e587377ff9c0e9bee15b7def09999e6a90382a739df45",
+  "sourceCases": [
+    {
+      "caseId": "SR-02",
+      "status": "outside_snapshot_scan_pool",
+      "inheritedGold": null
+    },
+    {
+      "caseId": "SR-04",
+      "status": "already_same_cluster",
+      "inheritedGold": null
+    },
+    {
+      "caseId": "SR-05",
+      "status": "already_same_cluster",
+      "inheritedGold": null
+    },
+    {
+      "caseId": "SR-06",
+      "status": "already_same_cluster",
+      "inheritedGold": null
+    },
+    {
+      "caseId": "SR-08",
+      "status": "unresolved_source_mapping",
+      "inheritedGold": null
+    },
+    {
+      "caseId": "FN-01",
+      "status": "unresolved_source_mapping",
+      "inheritedGold": null
+    }
+  ],
+  "scope": {
+    "selectedExistingProductionFunctionsExecuted": true,
+    "adapter": "AST-whitelisted functions + readonly snapshot Prisma facade",
+    "sameSqliteReadTransaction": true,
+    "coldAliasStateApplied": true,
+    "actualProcessAliasCacheVerified": false,
+    "existingPrecomputedCacheApplied": true,
+    "existingCachedVectorSimilarityMayBeUsed": true,
+    "cannotLinkAndHistoryApplied": true,
+    "orphanUncertainStaleSimulatedByQueryExclusion": true,
+    "pendingAndHoldoutFamiliesExcluded": true,
+    "goldTransferred": false,
+    "liveEmbeddingExecuted": false,
+    "liveTriggerIdsProvided": false,
+    "fullProductionAdmissionEquivalent": false,
+    "runtimeImageCodeEqualityVerified": false,
+    "requestsSent": 0,
+    "credentialsRead": false,
+    "productDatabaseWrites": 0,
+    "readyForModelReplay": false,
+    "qualityPassed": false,
+    "releaseEligible": false
+  }
+}

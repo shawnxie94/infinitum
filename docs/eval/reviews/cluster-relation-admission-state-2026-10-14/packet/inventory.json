@@ -1,0 +1,104 @@
+{
+  "cases": [
+    {
+      "caseId": "SR-02",
+      "left": {
+        "id": "cmudvpa01031oo60138xeu7ux",
+        "url": "https://www.aibase.com/zh/news/31308"
+      },
+      "right": {
+        "id": "cmuao3iar00ampf015avv3kch",
+        "url": "https://www.aibase.com/zh/news/31212"
+      }
+    },
+    {
+      "caseId": "SR-04",
+      "left": {
+        "id": "cmv6b4vlr00h3lm01e4krr1aq",
+        "url": "https://www.aibase.com/zh/news/31590"
+      },
+      "right": {
+        "id": "cmv6b5afs00i0lm01i5otsz23",
+        "url": "https://www.aibase.com/zh/news/31589"
+      }
+    },
+    {
+      "caseId": "SR-05",
+      "left": {
+        "id": "cmv3r5i0z00nes50191rr2yok",
+        "url": "https://www.aibase.com/zh/news/31540"
+      },
+      "right": {
+        "id": "cmv4scp7n001pua015kllsxms",
+        "url": "https://www.aibase.com/zh/news/31561"
+      }
+    },
+    {
+      "caseId": "SR-06",
+      "left": {
+        "id": "cmv6b54i600hjlm01wi1rq4pf",
+        "url": "https://www.aibase.com/zh/news/31586"
+      },
+      "right": {
+        "id": "cmv6b29h100fwlm016qsl9qi9",
+        "url": "https://www.aibase.com/zh/news/31594"
+      }
+    },
+    {
+      "caseId": "SR-08",
+      "left": {
+        "id": "cmuao3hnj0099pf019nmug04v",
+        "url": "http://www.geekpark.net/news/370681"
+      },
+      "right": {
+        "id": "cmu9nzcrp00appm01n6fzy7j5",
+        "url": "https://www.aibase.com/zh/news/31206"
+      }
+    },
+    {
+      "caseId": "FN-01",
+      "left": {
+        "id": "anthropics/claude-code@v2.1.295",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.295"
+      },
+      "right": {
+        "id": "anthropics/claude-code@v2.1.296",
+        "url": "https://github.com/anthropics/claude-code/releases/tag/v2.1.296"
+      }
+    }
+  ],
+  "reservedIdentityHashes": [
+    {
+      "idSha256": "9f9f442fb8e0629fc6c1058827521879f12f97da2006aebbf80a22887eb896d7",
+      "urlSha256": "9909c8a61ad61e7a70864a6b735b45305a96df2a74ef36ec259545fdad580cbb"
+    },
+    {
+      "idSha256": "00834d175cc20e32735e398d7e5c933373d91c99fe889af947f32f47ed5bed6d",
+      "urlSha256": "4e0e674c5d522502254a14ae6c3df3bb1f9362645c953db5a13ff98faa500f30"
+    },
+    {
+      "idSha256": "7054e15240b669beae9caf12a5d3a05bbe2a722f1bc0b4a2e9f59d8c1f4d9468",
+      "urlSha256": "6059f6dd992864507c10b01e7ce808134fc4bd90cb8041862abbb13afcd80258"
+    },
+    {
+      "idSha256": "bf4345bbb37181ae588f1a47fae6fc8dd18a3bbf24781d0965b4ea7281c5c371",
+      "urlSha256": "1beca1ca49c129a6a12d88ffc81180c4888c36bb1519d938c35acf1630a75a7b"
+    },
+    {
+      "idSha256": "bb9bdcd6263ed18aee7c8c1183db8b40b567c584c392204cb5201a978f914c96",
+      "urlSha256": "c689682ae5abe9c7c487e8b79b9c8ee1d23a88bc2ad094899acae22fbfec3603"
+    },
+    {
+      "idSha256": "26e2a2f68c5c97681a14d6199090d822ac31e199f5c356b3449ced97005a0a6f",
+      "urlSha256": "f473b9d6cac949a50574f75c54cebb94d93322ebd10371685d17c260a1f43d12"
+    },
+    {
+      "idSha256": "a644bbc46b98e18664fe3ea25817e0a78e8407bc5ab78daecca3aaa0405e9804",
+      "urlSha256": "6d91f7c55a55a1dc15910ac86c04f9e9f5910df1148ac0d3169765d8e1449eaf"
+    },
+    {
+      "idSha256": "25f246b7bc8ed32cb35f88c52a5385335a7a0d6ef06f0dce7d08991bd9b36102",
+      "urlSha256": "396d5f6b9bc0a0f2a27b0ebad0b7c69e9c1259c64213094f60f6a27294b9e9f8"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "capturedAt": "2026-10-14T15:59:42.037Z",
+  "candidateFrameSha256": "04215bfd953cd798ca8e968a199091c91638077a353c10b29d9921e869915f71",
+  "candidateFramePairs": 120,
+  "sourceEligibleOptions": 42,
+  "pairs": 6,
+  "uniqueClusters": 12,
+  "articleCount": 17,
+  "excludedOldSourceIdentities": 20,
+  "rejectedSideReasons": {
+    "membership_changed_or_aggregation_child": 79,
+    "out_of_pool_or_excluded": 8,
+    "insufficient_retained_text": 2
+  },
+  "strata": {
+    "timeSeparated": 3,
+    "nearOrUnknown": 3
+  },
+  "independentLabelsReceived": 0,
+  "independentlyConfirmedFollowUp": 0,
+  "labelState": "awaiting_human_blind_labels",
+  "requestsSent": 0,
+  "credentialsRead": false,
+  "businessWrites": 0,
+  "sourceFamilyDisjointByKnownIdentityAndUrl": true,
+  "semanticTopicDisjointnessVerified": false,
+  "fullTextCompletenessVerified": false,
+  "liveFinalAdmissionRevalidated": false,
+  "qualityPassed": false,
+  "releaseEligible": false
+}
