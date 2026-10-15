@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "authorizationSha256": "b25901ee02731bb8a221500f17a8c1d556a948296d0f4b7ef7948bbaa478debe",
+  "fileHashes": {
+    "authorization.json": "b25901ee02731bb8a221500f17a8c1d556a948296d0f4b7ef7948bbaa478debe",
+    "authorization.used.json": "283404a65832530585c16a06945eb13759f63161c815d238a445a3b4b58cbe4c",
+    "real.report.json": "d08fb862ed9559d1623c040aaf86d208d65e59d9b3e7fb68c870d9f7f35b53c6",
+    "baseline.dispatch-started.json": "06b8a9fc73a6d1090cf3317ddccdc45967ddf0dc5af246e9ce285ac89985c5d6",
+    "baseline.model-receipt.json": "33a74e9324143512b44f98cd2d998d273e82e1284c5347fb291c267d2ecfdd16",
+    "candidate.dispatch-started.json": "278dd58b573d16e1bd2a3878876ef503b369c0ab6689314ac24f60ab2b45fc33",
+    "candidate.model-receipt.json": "30a60cacebf2dcb7364f99396020288fbf5663c8d6357fdd369fcb24be1ab1ac"
+  }
+}

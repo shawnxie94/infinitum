@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "authorizationSha256": "46ff34dde2f13d1acdbf135645c8fc313ae6e2308b49fd8de139311b0ae6ab00",
+  "fileHashes": {
+    "authorization.json": "46ff34dde2f13d1acdbf135645c8fc313ae6e2308b49fd8de139311b0ae6ab00",
+    "authorization.used.json": "1d229ce60a81d616951dd654c791d27ae4a0874045d3ffd2a120a16b3b046680",
+    "baseline.wire.json": "91f1b3784323f1e4b6b7e57ade79fd57cfbad0df6b537725803326ed63e72eb4",
+    "candidate.wire.json": "7646473efcad8b697781a7c5b21c04ab111aab0fe29c5e49b14db06b54dc37ca",
+    "real.report.json": "2414b8079c74cbe4763587fb525066f1ba22ad30fa8a148cd61ad22a63e9ea52",
+    "baseline.dispatch-started.json": "a6ed6800303f7f1b4fb558a3270aa59c37b0bcd09b368814a19a56934bebe5cf",
+    "baseline.model-receipt.json": "7eaa696af509585cd2762af82f3ea8080b1dcd528a35261f030281b99c34edd5",
+    "candidate.dispatch-started.json": "cfc5129481311c509f73f54f3338e124f3901b35d5d8e815a1e7599ce923b2aa",
+    "candidate.model-receipt.json": "02f21fc67d20d3f1987ae08ec09ef1c0a38a314c294e051e1e0750d3635a16e6"
+  }
+}

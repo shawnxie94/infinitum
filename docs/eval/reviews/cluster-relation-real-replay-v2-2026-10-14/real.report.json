@@ -1,0 +1,635 @@
+{
+  "schemaVersion": 2,
+  "kind": "real_source_dev_diagnostic",
+  "status": "scored",
+  "authorizationSha256": "46ff34dde2f13d1acdbf135645c8fc313ae6e2308b49fd8de139311b0ae6ab00",
+  "sourceManifestSha256": "1495ed0fb7576e0304e9045554abb4ad77d18b88be7bf83bf454396146b4fb40",
+  "requestedModel": "MiniMax-M3",
+  "providerBaseUrl": "https://api.minimaxi.com/v1",
+  "attempts": 2,
+  "retries": 0,
+  "providerResponsesReceived": 2,
+  "baseline": {
+    "status": "valid",
+    "metrics": {
+      "pairs": 6,
+      "relationMatches": 4,
+      "relationAccuracy": 0.6666666666666666,
+      "binaryDecisivePairs": 6,
+      "binaryMatchesOnDecisive": 5,
+      "binaryAccuracyOnDecisive": 0.8333333333333334,
+      "decisiveCoverage": 1,
+      "abstentions": 0,
+      "goldUncertain": 0,
+      "goldSame": 3,
+      "goldDifferent": 3,
+      "falseMerge": 0,
+      "falseMergeRate": 0,
+      "missedSame": 1,
+      "missedSameRate": 0.3333333333333333,
+      "explicitRejectedSame": 1,
+      "heldSame": 0,
+      "confusion": {
+        "same_event": {
+          "same_event": 2,
+          "follow_up": 1,
+          "synthesis": 0,
+          "unrelated": 0,
+          "uncertain": 0
+        },
+        "follow_up": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 0,
+          "unrelated": 1,
+          "uncertain": 0
+        },
+        "synthesis": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 1,
+          "unrelated": 0,
+          "uncertain": 0
+        },
+        "unrelated": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 0,
+          "unrelated": 1,
+          "uncertain": 0
+        },
+        "uncertain": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 0,
+          "unrelated": 0,
+          "uncertain": 0
+        }
+      },
+      "cases": [
+        {
+          "pairId": "p1",
+          "caseId": "SR-02",
+          "gold": "unrelated",
+          "predicted": "unrelated",
+          "relationCorrect": true,
+          "action": "do_not_merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p2",
+          "caseId": "SR-04",
+          "gold": "same_event",
+          "predicted": "same_event",
+          "relationCorrect": true,
+          "action": "merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p3",
+          "caseId": "SR-05",
+          "gold": "same_event",
+          "predicted": "same_event",
+          "relationCorrect": true,
+          "action": "merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p4",
+          "caseId": "SR-06",
+          "gold": "same_event",
+          "predicted": "follow_up",
+          "relationCorrect": false,
+          "action": "do_not_merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p5",
+          "caseId": "SR-08",
+          "gold": "synthesis",
+          "predicted": "synthesis",
+          "relationCorrect": true,
+          "action": "do_not_merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p6",
+          "caseId": "FN-01",
+          "gold": "follow_up",
+          "predicted": "unrelated",
+          "relationCorrect": false,
+          "action": "do_not_merge",
+          "labelProvenance": "assisted_human_confirmation"
+        }
+      ]
+    },
+    "byProvenance": {
+      "initial_user_label_with_any_later_rationale_recorded_separately": {
+        "pairs": 5,
+        "relationMatches": 4,
+        "relationAccuracy": 0.8,
+        "binaryDecisivePairs": 5,
+        "binaryMatchesOnDecisive": 4,
+        "binaryAccuracyOnDecisive": 0.8,
+        "decisiveCoverage": 1,
+        "abstentions": 0,
+        "goldUncertain": 0,
+        "goldSame": 3,
+        "goldDifferent": 2,
+        "falseMerge": 0,
+        "falseMergeRate": 0,
+        "missedSame": 1,
+        "missedSameRate": 0.3333333333333333,
+        "explicitRejectedSame": 1,
+        "heldSame": 0,
+        "confusion": {
+          "same_event": {
+            "same_event": 2,
+            "follow_up": 1,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "follow_up": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "synthesis": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 1,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "unrelated": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 1,
+            "uncertain": 0
+          },
+          "uncertain": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          }
+        },
+        "cases": [
+          {
+            "pairId": "p1",
+            "caseId": "SR-02",
+            "gold": "unrelated",
+            "predicted": "unrelated",
+            "relationCorrect": true,
+            "action": "do_not_merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p2",
+            "caseId": "SR-04",
+            "gold": "same_event",
+            "predicted": "same_event",
+            "relationCorrect": true,
+            "action": "merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p3",
+            "caseId": "SR-05",
+            "gold": "same_event",
+            "predicted": "same_event",
+            "relationCorrect": true,
+            "action": "merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p4",
+            "caseId": "SR-06",
+            "gold": "same_event",
+            "predicted": "follow_up",
+            "relationCorrect": false,
+            "action": "do_not_merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p5",
+            "caseId": "SR-08",
+            "gold": "synthesis",
+            "predicted": "synthesis",
+            "relationCorrect": true,
+            "action": "do_not_merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          }
+        ]
+      },
+      "assisted_human_confirmation": {
+        "pairs": 1,
+        "relationMatches": 0,
+        "relationAccuracy": 0,
+        "binaryDecisivePairs": 1,
+        "binaryMatchesOnDecisive": 1,
+        "binaryAccuracyOnDecisive": 1,
+        "decisiveCoverage": 1,
+        "abstentions": 0,
+        "goldUncertain": 0,
+        "goldSame": 0,
+        "goldDifferent": 1,
+        "falseMerge": 0,
+        "falseMergeRate": 0,
+        "missedSame": 0,
+        "missedSameRate": null,
+        "explicitRejectedSame": 0,
+        "heldSame": 0,
+        "confusion": {
+          "same_event": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "follow_up": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 1,
+            "uncertain": 0
+          },
+          "synthesis": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "unrelated": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "uncertain": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          }
+        },
+        "cases": [
+          {
+            "pairId": "p6",
+            "caseId": "FN-01",
+            "gold": "follow_up",
+            "predicted": "unrelated",
+            "relationCorrect": false,
+            "action": "do_not_merge",
+            "labelProvenance": "assisted_human_confirmation"
+          }
+        ]
+      }
+    },
+    "reportedModel": "MiniMax-M3",
+    "usage": {
+      "prompt_tokens": 15754,
+      "completion_tokens": 1126,
+      "total_tokens": 16880
+    },
+    "failure": null
+  },
+  "candidate": {
+    "status": "valid",
+    "metrics": {
+      "pairs": 6,
+      "relationMatches": 5,
+      "relationAccuracy": 0.8333333333333334,
+      "binaryDecisivePairs": 6,
+      "binaryMatchesOnDecisive": 6,
+      "binaryAccuracyOnDecisive": 1,
+      "decisiveCoverage": 1,
+      "abstentions": 0,
+      "goldUncertain": 0,
+      "goldSame": 3,
+      "goldDifferent": 3,
+      "falseMerge": 0,
+      "falseMergeRate": 0,
+      "missedSame": 0,
+      "missedSameRate": 0,
+      "explicitRejectedSame": 0,
+      "heldSame": 0,
+      "confusion": {
+        "same_event": {
+          "same_event": 3,
+          "follow_up": 0,
+          "synthesis": 0,
+          "unrelated": 0,
+          "uncertain": 0
+        },
+        "follow_up": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 0,
+          "unrelated": 1,
+          "uncertain": 0
+        },
+        "synthesis": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 1,
+          "unrelated": 0,
+          "uncertain": 0
+        },
+        "unrelated": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 0,
+          "unrelated": 1,
+          "uncertain": 0
+        },
+        "uncertain": {
+          "same_event": 0,
+          "follow_up": 0,
+          "synthesis": 0,
+          "unrelated": 0,
+          "uncertain": 0
+        }
+      },
+      "cases": [
+        {
+          "pairId": "p1",
+          "caseId": "SR-02",
+          "gold": "unrelated",
+          "predicted": "unrelated",
+          "relationCorrect": true,
+          "action": "do_not_merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p2",
+          "caseId": "SR-04",
+          "gold": "same_event",
+          "predicted": "same_event",
+          "relationCorrect": true,
+          "action": "merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p3",
+          "caseId": "SR-05",
+          "gold": "same_event",
+          "predicted": "same_event",
+          "relationCorrect": true,
+          "action": "merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p4",
+          "caseId": "SR-06",
+          "gold": "same_event",
+          "predicted": "same_event",
+          "relationCorrect": true,
+          "action": "merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p5",
+          "caseId": "SR-08",
+          "gold": "synthesis",
+          "predicted": "synthesis",
+          "relationCorrect": true,
+          "action": "do_not_merge",
+          "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+        },
+        {
+          "pairId": "p6",
+          "caseId": "FN-01",
+          "gold": "follow_up",
+          "predicted": "unrelated",
+          "relationCorrect": false,
+          "action": "do_not_merge",
+          "labelProvenance": "assisted_human_confirmation"
+        }
+      ]
+    },
+    "byProvenance": {
+      "initial_user_label_with_any_later_rationale_recorded_separately": {
+        "pairs": 5,
+        "relationMatches": 5,
+        "relationAccuracy": 1,
+        "binaryDecisivePairs": 5,
+        "binaryMatchesOnDecisive": 5,
+        "binaryAccuracyOnDecisive": 1,
+        "decisiveCoverage": 1,
+        "abstentions": 0,
+        "goldUncertain": 0,
+        "goldSame": 3,
+        "goldDifferent": 2,
+        "falseMerge": 0,
+        "falseMergeRate": 0,
+        "missedSame": 0,
+        "missedSameRate": 0,
+        "explicitRejectedSame": 0,
+        "heldSame": 0,
+        "confusion": {
+          "same_event": {
+            "same_event": 3,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "follow_up": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "synthesis": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 1,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "unrelated": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 1,
+            "uncertain": 0
+          },
+          "uncertain": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          }
+        },
+        "cases": [
+          {
+            "pairId": "p1",
+            "caseId": "SR-02",
+            "gold": "unrelated",
+            "predicted": "unrelated",
+            "relationCorrect": true,
+            "action": "do_not_merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p2",
+            "caseId": "SR-04",
+            "gold": "same_event",
+            "predicted": "same_event",
+            "relationCorrect": true,
+            "action": "merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p3",
+            "caseId": "SR-05",
+            "gold": "same_event",
+            "predicted": "same_event",
+            "relationCorrect": true,
+            "action": "merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p4",
+            "caseId": "SR-06",
+            "gold": "same_event",
+            "predicted": "same_event",
+            "relationCorrect": true,
+            "action": "merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          },
+          {
+            "pairId": "p5",
+            "caseId": "SR-08",
+            "gold": "synthesis",
+            "predicted": "synthesis",
+            "relationCorrect": true,
+            "action": "do_not_merge",
+            "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately"
+          }
+        ]
+      },
+      "assisted_human_confirmation": {
+        "pairs": 1,
+        "relationMatches": 0,
+        "relationAccuracy": 0,
+        "binaryDecisivePairs": 1,
+        "binaryMatchesOnDecisive": 1,
+        "binaryAccuracyOnDecisive": 1,
+        "decisiveCoverage": 1,
+        "abstentions": 0,
+        "goldUncertain": 0,
+        "goldSame": 0,
+        "goldDifferent": 1,
+        "falseMerge": 0,
+        "falseMergeRate": 0,
+        "missedSame": 0,
+        "missedSameRate": null,
+        "explicitRejectedSame": 0,
+        "heldSame": 0,
+        "confusion": {
+          "same_event": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "follow_up": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 1,
+            "uncertain": 0
+          },
+          "synthesis": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "unrelated": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          },
+          "uncertain": {
+            "same_event": 0,
+            "follow_up": 0,
+            "synthesis": 0,
+            "unrelated": 0,
+            "uncertain": 0
+          }
+        },
+        "cases": [
+          {
+            "pairId": "p6",
+            "caseId": "FN-01",
+            "gold": "follow_up",
+            "predicted": "unrelated",
+            "relationCorrect": false,
+            "action": "do_not_merge",
+            "labelProvenance": "assisted_human_confirmation"
+          }
+        ]
+      }
+    },
+    "reportedModel": "MiniMax-M3",
+    "usage": {
+      "prompt_tokens": 15936,
+      "completion_tokens": 1333,
+      "total_tokens": 17269
+    },
+    "failure": null
+  },
+  "paired": {
+    "relationAccuracyDelta": 0.16666666666666674,
+    "falseMergeDelta": 0,
+    "missedSameDelta": -1,
+    "changes": [
+      {
+        "caseId": "SR-06",
+        "pairId": "p4",
+        "gold": "same_event",
+        "baseline": "follow_up",
+        "candidate": "same_event"
+      }
+    ]
+  },
+  "interpretation": {
+    "simulated": false,
+    "modelOutputObserved": true,
+    "transportVersion": "source-dev-wire-v2",
+    "symmetricOverrides": {
+      "max_tokens": 8192,
+      "reasoning_split": true
+    },
+    "thinkingDisabled": false,
+    "jsonModeAdded": false,
+    "v1MetricsRetrofitted": false,
+    "vendorCryptographicAttestation": false,
+    "independentBlindFollowUpPositives": 0,
+    "productionDtoEquivalent": false,
+    "holdoutMeasured": false,
+    "qualityPassed": false,
+    "releaseEligible": false,
+    "devLabelComparisonOnly": true,
+    "providerCostAmount": null,
+    "providerPricingNotAssumed": true
+  }
+}

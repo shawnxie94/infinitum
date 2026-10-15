@@ -1,0 +1,8 @@
+{
+  "arm": "baseline",
+  "authorizationSha256": "46ff34dde2f13d1acdbf135645c8fc313ae6e2308b49fd8de139311b0ae6ab00",
+  "sourceManifestSha256": "1495ed0fb7576e0304e9045554abb4ad77d18b88be7bf83bf454396146b4fb40",
+  "parentRequestSha256": "49e43af0b8b646d766187e34edbbdf6857928f6e392fda6921f214a47bb84c70",
+  "wireBodySha256": "df51458921162e847ec0ce4cb7550b63d78d956bfdca791a8d66dfaf851f177b",
+  "startedAt": "2026-10-14T14:08:42.269Z"
+}

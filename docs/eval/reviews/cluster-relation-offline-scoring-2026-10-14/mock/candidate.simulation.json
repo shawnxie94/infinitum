@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "kind": "simulation",
+  "arm": "candidate",
+  "manifestSha256": "1495ed0fb7576e0304e9045554abb4ad77d18b88be7bf83bf454396146b4fb40",
+  "requestSha256": "235d23a73558542bb22531fad276487fd5764b755502b2066b900af8b95cd68a",
+  "responseSha256": "75cc66be0cba95889324d893d695d1fd84b4bbd73bbabfcb66789392912c5de0",
+  "rawResponse": "{\"decisions\":[{\"pair_id\":\"p1\",\"relation\":\"unrelated\",\"confidence\":90,\"reasonCode\":\"different_event\",\"reasonText\":\"模拟测试结果，仅用于验证离线处理代码，不代表模型判断。\"},{\"pair_id\":\"p2\",\"relation\":\"same_event\",\"confidence\":90,\"reasonCode\":\"same_event\",\"reasonText\":\"模拟测试结果，仅用于验证离线处理代码，不代表模型判断。\"},{\"pair_id\":\"p3\",\"relation\":\"same_event\",\"confidence\":90,\"reasonCode\":\"same_event\",\"reasonText\":\"模拟测试结果，仅用于验证离线处理代码，不代表模型判断。\"},{\"pair_id\":\"p4\",\"relation\":\"same_event\",\"confidence\":90,\"reasonCode\":\"same_event\",\"reasonText\":\"模拟测试结果，仅用于验证离线处理代码，不代表模型判断。\"},{\"pair_id\":\"p5\",\"relation\":\"synthesis\",\"confidence\":90,\"reasonCode\":\"synthesis_article\",\"reasonText\":\"模拟测试结果，仅用于验证离线处理代码，不代表模型判断。\"},{\"pair_id\":\"p6\",\"relation\":\"follow_up\",\"confidence\":90,\"reasonCode\":\"follow_up_event\",\"reasonText\":\"模拟测试结果，仅用于验证离线处理代码，不代表模型判断。\"}]}"
+}

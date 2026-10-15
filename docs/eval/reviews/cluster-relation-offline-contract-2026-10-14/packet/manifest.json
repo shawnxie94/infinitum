@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "inputContract": "source-evidence-dev-v1",
+  "track": "source_augmented_development_diagnostic",
+  "readyForReplay": false,
+  "generatedAt": "2026-10-14T11:44:23.166Z",
+  "caseIds": [
+    "SR-02",
+    "SR-04",
+    "SR-05",
+    "SR-06",
+    "SR-08",
+    "FN-01"
+  ],
+  "pairCount": 6,
+  "excluded": {
+    "pending": [
+      "SR-01"
+    ],
+    "holdout": [
+      "SR-03",
+      "SR-07",
+      "FN-02"
+    ]
+  },
+  "scope": {
+    "productionDtoEquivalent": false,
+    "productionCandidateAdmissionMeasured": false,
+    "sourceRecordPerSide": 1,
+    "extraInputField": "sourceEvidence",
+    "missingStructuredSignaturesAreNull": true,
+    "publicationIsNotEventDate": true,
+    "sameUserInputForBothArms": true,
+    "promptChangeOnly": "append unapplied v2 business-rule fragment to current baseline system prompt"
+  },
+  "outputContract": {
+    "decisions": "one per pair_id",
+    "relationToReason": {
+      "same_event": [
+        "same_event"
+      ],
+      "follow_up": [
+        "follow_up_event"
+      ],
+      "synthesis": [
+        "synthesis_article"
+      ],
+      "uncertain": [
+        "insufficient_evidence"
+      ],
+      "unrelated": [
+        "different_event",
+        "object_conflict",
+        "action_conflict",
+        "date_conflict",
+        "subject_conflict"
+      ]
+    },
+    "confidence": "integer 0..100",
+    "reasonText": "nonempty Chinese text",
+    "mergeOnly": "same_event"
+  },
+  "provenance": {
+    "independentBlindFollowUpPositives": 0,
+    "assistedFollowUpDiagnosticCase": "FN-01",
+    "labelValuesNotIncludedInRequests": true
+  },
+  "authorization": {
+    "sendAllowed": false,
+    "modelProvider": null,
+    "model": null,
+    "requestsSent": 0,
+    "retries": 0,
+    "plannedArms": 2,
+    "paidReplayRequiresNewAuthorization": true,
+    "priorAuthorizationNotReused": true
+  },
+  "ready": {
+    "wireContractPrepared": true,
+    "modelBehaviorValidated": false,
+    "productionReleaseEligible": false,
+    "independentEffectEvidenceReady": false
+  },
+  "version": "v1",
+  "baselineContractHash": "a4903508365fa70890eb88af777553335084ea526f5113b7d2f6da238df24376",
+  "candidateContractHash": "853143ef0e84a74d83f9c78fd864e8c9c707c35eb2addca8ed22deb31d03a857",
+  "references": {
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/cases.json": "152fa18f727f4c86e3333519ae806f5aab913777942d3ced97b2e6104e4d0da7",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/sources.json": "85f7eaaea5b58db1e17d5286c6b2a05f08b9e9d32d9e512eac7f815848a3cbcd",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/reviewed-v1.csv": "f9b188e5bf3defe1ca58610eb41999845d308267974615bf04037373c705c366",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/human-review-v1.json": "2d22a90c6c83b6e606f01e21ae5e0a72679f80207868fe364c15f2c2e47ea54d",
+    "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/frozen-manifest.json": "17c10e5d87601c793ca94a6aa34c5dd37c592c9a6c549b02c76545ce982a6c8e",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/cases.json": "f7633804a2994d25b098cf375f87cae11198e2349c21f4d52a7fde62e3e5b33e",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/sources.json": "15df5bf4eb9676c22a43d4589b126223a7fed19967390766558be6d31a4b6ea4",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/reviewed-v1.csv": "954a1055c820a30cdb3b61405295725fbfc233840baa836c99fab24d1e405fc2",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/human-review-v1.json": "49aff0608a49d4b4d59e6baf51faf9156419c85a7c369bab9ece267e93584282",
+    "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/frozen-manifest.json": "5b4556ff02a859228857771d9d2dab1c303887be512dbde84618f112a8ae1973",
+    "docs/eval/reviews/cluster-relation-dev-boundary-2026-10-14/prompt-candidate-v2.txt": "74fbf5f71dcae71b55673b67d20564bca7b5ab719030b1abfa33587ec449503c",
+    "docs/eval/reviews/cluster-relation-dev-recheck-2026-10-14/dev-recheck.json": "de52a9608940f6bf35fd55bdf6ddbef42dea20bde24a851beb16955c5565f449",
+    "src/config/prompts.ts": "52a4b9f9e500764af06631836e9819a27887b00a033134bd7466b6953249ed53",
+    "src/lib/ai/contracts.ts": "e63311db39967289bb995a1112d7da5171c90da269003cb1cf0b27e8a40faa53",
+    "scripts/prepare-cluster-relation-source-replay.ts": "0f50d22661760a12e9222575fcdb4baefa5c18414a8ee6a791be74f80b5c2ffa"
+  },
+  "fileHashes": {
+    "input.json": "30e3efa3da0139a89759822bdbd5c3bffadffca8b51d16ccb899e6524f4e1e48",
+    "mapping.json": "2671f617f1142870c40f0ba1c314d64f8d5a57dd2d96fcf7aa1ac7fdbf7177cf",
+    "baseline.request.json": "49e43af0b8b646d766187e34edbbdf6857928f6e392fda6921f214a47bb84c70",
+    "candidate.request.json": "235d23a73558542bb22531fad276487fd5764b755502b2066b900af8b95cd68a"
+  },
+  "inputContentSha256": "f4c4acb19e4e1ee512e4c11e6a1df8ac6d02001bd3b502a8ac3685c44d74d5ef",
+  "userMessageSha256": "e936b549d2e1828dcca8b06ce8d8726bb30d4e6eee8034e2411e9310661f5b87"
+}

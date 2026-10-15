@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "real_source_dev_diagnostic",
+  "status": "incomplete_or_protocol_failed",
+  "authorizationSha256": "b25901ee02731bb8a221500f17a8c1d556a948296d0f4b7ef7948bbaa478debe",
+  "sourceManifestSha256": "1495ed0fb7576e0304e9045554abb4ad77d18b88be7bf83bf454396146b4fb40",
+  "requestedModel": "MiniMax-M3",
+  "providerBaseUrl": "https://api.minimaxi.com/v1",
+  "attempts": 2,
+  "providerResponsesReceived": 2,
+  "retries": 0,
+  "maximumPossibleBillableCalls": 2,
+  "baseline": {
+    "status": "protocol_failed",
+    "metrics": null,
+    "byProvenance": null,
+    "reportedModel": "MiniMax-M3",
+    "usage": {
+      "prompt_tokens": 15754,
+      "completion_tokens": 1201,
+      "total_tokens": 16955
+    },
+    "failure": "Strict receipt/output validation failed; not a negative decision"
+  },
+  "candidate": {
+    "status": "protocol_failed",
+    "failure": "Incomplete/non-stop completion",
+    "metrics": null,
+    "byProvenance": null,
+    "reportedModel": "MiniMax-M3",
+    "usage": {
+      "prompt_tokens": 15936,
+      "completion_tokens": 2000,
+      "total_tokens": 17936
+    }
+  },
+  "paired": null,
+  "interpretation": {
+    "simulated": false,
+    "vendorCryptographicAttestation": false,
+    "modelOutputObserved": true,
+    "independentBlindFollowUpPositives": 0,
+    "productionDtoEquivalent": false,
+    "holdoutMeasured": false,
+    "qualityPassed": false,
+    "releaseEligible": false,
+    "labelComparisonsOnly": true,
+    "pairedComparisonRequiresBothCompleteAndSameReportedModel": true,
+    "protocolFailureNotNegativeDecision": true,
+    "providerCostAmount": null,
+    "providerCostCurrency": null,
+    "costNotEstimatedFromUnverifiedPricing": true
+  }
+}

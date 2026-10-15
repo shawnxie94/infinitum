@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "taskRunId": "2026-10-14-cluster-relation-real-replay",
+  "userGrant": "真实回放吧，可以使用本地Docker库里api配置数据",
+  "createdAt": "2026-10-14T13:43:13.723Z",
+  "expiresAt": "2026-10-14T15:43:13.723Z",
+  "manifestSha256": "1495ed0fb7576e0304e9045554abb4ad77d18b88be7bf83bf454396146b4fb40",
+  "dockerContext": "desktop-linux",
+  "container": "infinitum",
+  "databasePath": "/app/data/dev.db",
+  "modelConfigId": "cmqv0x84p0004qn01bnsbii66",
+  "promptConfigId": "cmqq311w50006o101uaje7asd",
+  "providerBaseUrl": "https://api.minimaxi.com/v1",
+  "model": "MiniMax-M3",
+  "maxRequests": 2,
+  "maxRetries": 0,
+  "temperature": 0,
+  "maxTokens": 2000,
+  "timeoutMs": 180000,
+  "senderSha256": "eca3c38f5e27e992282035b57b660d32f0ad56969f10d4f9f6e13eee7339c380",
+  "scorerSha256": "11ab96480762fd55ab21e37533905f1a3baac5025332cace8fa7d9e8e5607e72"
+}

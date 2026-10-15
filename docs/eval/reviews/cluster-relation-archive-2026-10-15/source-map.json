@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "historical_evaluation_source_archive",
+  "sources": {
+    "src/lib/clusters/normalization.ts": {
+      "snapshot": "sources/normalization.ts.snapshot",
+      "sha256": "b4d695e3f30d13b6a394513e689bde884253a6f1c2556b41adc7828f3cd1bed5",
+      "origin": "git:d17f3f9:src/lib/clusters/normalization.ts"
+    },
+    "src/lib/ai/provider-next.ts": {
+      "snapshot": "sources/provider-next.ts.snapshot",
+      "sha256": "8028225fe4007541d86ec880a95e9ad5288cf8fd6cc75402072b5ae369ed6415",
+      "origin": "git:d17f3f9:src/lib/ai/provider-next.ts"
+    },
+    "scripts/replay-cluster-relation-source-v2.ts": {
+      "snapshot": "sources/replay-cluster-relation-source-v2.ts.snapshot",
+      "sha256": "e7a6642c9a86c7411175788b208159076968b3682479ae9602259569ebd7ec42",
+      "origin": "pre-typecheck snapshot, bound to frozen v2 authorization"
+    },
+    "src/lib/ai/protocols/item-understanding.ts": {
+      "snapshot": "sources/item-understanding.ts.snapshot",
+      "sha256": "82c1b7a76852f4ad07e363a3fd95bc7f523943be45893c78c1d0758a3abb06d3",
+      "origin": "git:d17f3f9:src/lib/ai/protocols/item-understanding.ts"
+    }
+  },
+  "sendAllowed": false,
+  "oldAnchorsRewritten": false
+}

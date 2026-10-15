@@ -1,0 +1,56 @@
+[
+  {
+    "pairId": "p1",
+    "caseId": "SR-02",
+    "split": "dev",
+    "labelFile": "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/reviewed-v1.csv",
+    "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately",
+    "leftSourceId": "cmudvpa01031oo60138xeu7ux",
+    "rightSourceId": "cmuao3iar00ampf015avv3kch"
+  },
+  {
+    "pairId": "p2",
+    "caseId": "SR-04",
+    "split": "dev",
+    "labelFile": "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/reviewed-v1.csv",
+    "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately",
+    "leftSourceId": "cmv6b4vlr00h3lm01e4krr1aq",
+    "rightSourceId": "cmv6b5afs00i0lm01i5otsz23"
+  },
+  {
+    "pairId": "p3",
+    "caseId": "SR-05",
+    "split": "dev",
+    "labelFile": "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/reviewed-v1.csv",
+    "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately",
+    "leftSourceId": "cmv3r5i0z00nes50191rr2yok",
+    "rightSourceId": "cmv4scp7n001pua015kllsxms"
+  },
+  {
+    "pairId": "p4",
+    "caseId": "SR-06",
+    "split": "dev",
+    "labelFile": "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/reviewed-v1.csv",
+    "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately",
+    "leftSourceId": "cmv6b54i600hjlm01wi1rq4pf",
+    "rightSourceId": "cmv6b29h100fwlm016qsl9qi9"
+  },
+  {
+    "pairId": "p5",
+    "caseId": "SR-08",
+    "split": "dev",
+    "labelFile": "docs/eval/reviews/cluster-relation-source-verified-2026-10-14/reviewed-v1.csv",
+    "labelProvenance": "initial_user_label_with_any_later_rationale_recorded_separately",
+    "leftSourceId": "cmuao3hnj0099pf019nmug04v",
+    "rightSourceId": "cmu9nzcrp00appm01n6fzy7j5"
+  },
+  {
+    "pairId": "p6",
+    "caseId": "FN-01",
+    "split": "dev",
+    "labelFile": "docs/eval/reviews/cluster-relation-follow-up-2026-10-14/reviewed-v1.csv",
+    "labelProvenance": "assisted_human_confirmation",
+    "leftSourceId": "anthropics/claude-code@v2.1.295",
+    "rightSourceId": "anthropics/claude-code@v2.1.296"
+  }
+]

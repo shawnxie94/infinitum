@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 2,
+  "taskRunId": "2026-10-14-cluster-relation-real-replay-v2",
+  "userGrant": "可以",
+  "grantScope": "two arms once each; zero retries; symmetric 8192 token cap; separate reasoning output; same model/input/prompts",
+  "createdAt": "2026-10-14T14:08:10.478Z",
+  "expiresAt": "2026-10-14T16:08:10.478Z",
+  "manifestSha256": "1495ed0fb7576e0304e9045554abb4ad77d18b88be7bf83bf454396146b4fb40",
+  "dockerContext": "desktop-linux",
+  "container": "infinitum",
+  "databasePath": "/app/data/dev.db",
+  "modelConfigId": "cmqv0x84p0004qn01bnsbii66",
+  "promptConfigId": "cmqq311w50006o101uaje7asd",
+  "providerBaseUrl": "https://api.minimaxi.com/v1",
+  "model": "MiniMax-M3",
+  "maxRequests": 2,
+  "maxRetries": 0,
+  "temperature": 0,
+  "maxTokens": 8192,
+  "reasoningSplit": true,
+  "timeoutMs": 180000,
+  "senderSha256": "e7a6642c9a86c7411175788b208159076968b3682479ae9602259569ebd7ec42",
+  "scorerSha256": "11ab96480762fd55ab21e37533905f1a3baac5025332cace8fa7d9e8e5607e72",
+  "inputPreparerSha256": "0f50d22661760a12e9222575fcdb4baefa5c18414a8ee6a791be74f80b5c2ffa",
+  "v1SenderSha256": "eca3c38f5e27e992282035b57b660d32f0ad56969f10d4f9f6e13eee7339c380",
+  "priorExecutionManifestSha256": "739685c4fad3292fe951bfa04140acd7d6afa018935765a835c86f7146e79021",
+  "wireFileHashes": {
+    "baseline": "91f1b3784323f1e4b6b7e57ade79fd57cfbad0df6b537725803326ed63e72eb4",
+    "candidate": "7646473efcad8b697781a7c5b21c04ab111aab0fe29c5e49b14db06b54dc37ca"
+  },
+  "wireBodyHashes": {
+    "baseline": "df51458921162e847ec0ce4cb7550b63d78d956bfdca791a8d66dfaf851f177b",
+    "candidate": "121498969a2ab1552e2cde51f1b61e6bf0421b1a57390bfbcd416a5d8c687111"
+  }
+}

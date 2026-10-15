@@ -1,0 +1,19 @@
+{
+  "retrievedAt": "2026-10-14T13:55:41+00:00",
+  "title": "OpenAI SDK - MiniMax documentation",
+  "sources": [
+    "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+    "https://platform.minimax.io/docs/api-reference/text-openai-api"
+  ],
+  "verifiedParameter": "reasoning_split=true separates thinking into reasoning_content; max_tokens includes thinking; MiniMax-M3 supports temperature [0,2]",
+  "samePublisher": true,
+  "crossPublisherCorroborationMissing": true,
+  "localProductionSource": "packages/ai/src/provider/transports.ts:177-184 also adds response_format=json_object/thinking disabled; v2 intentionally does NOT add these mode changes",
+  "requestChanges": [
+    "max_tokens 2000→8192",
+    "reasoning_split true"
+  ],
+  "noNewPromptOrGoldHints": true,
+  "docsRecommendMaxCompletionTokensButExistingMaxTokensRemainsSupported": true,
+  "searchLimit": "domain-restricted search returned no results; fetched selected official documentation URLs directly"
+}
