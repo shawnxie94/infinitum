@@ -5,7 +5,6 @@ import { resolveRubricQualityScore, type QualityRubric } from "@/lib/ai/quality-
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
 import { normalizeOptionalText } from "@/lib/utils/text";
 import { isValidCalendarDateParts } from "@/lib/utils/calendar-date";
-import { hasEventFieldEvidence } from "@/lib/ai/protocols/event-field-evidence";
 import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
 import { InvalidJsonModelResponseError } from "@/lib/ai/provider-types";
 import type {
@@ -18,6 +17,8 @@ import type {
 } from "@/lib/ai/provider-types";
 
 const DEFAULT_PARSED_AGGREGATION_MAX_EVENTS = 20;
+// Reject only dates more than 180 days before or after article publication.
+const MAX_EVENT_DATE_DISTANCE_MS = 180 * 24 * 60 * 60 * 1000;
 
 function getFallbackEnrichment(
   metadata: { title: string; translateTitle: boolean },
@@ -82,7 +83,7 @@ export function parseItemUnderstandingOutput(
   translateTitle: boolean,
   maxEvents: number,
   qualityRubric: QualityRubric | null = null,
-  sourceTitle = "",
+  publishedAt?: string | null,
 ): ItemUnderstandingResult {
   const normalized = normalizeModelResponseText(rawContent);
   let parsed: Record<string, unknown>;
@@ -149,11 +150,11 @@ export function parseItemUnderstandingOutput(
   );
   return {
     ...enrichment,
-    eventSignature: sanitizeSignature(enrichment.eventSignature, inputText, sourceTitle),
+    eventSignature: sanitizeSignatureDate(enrichment.eventSignature, publishedAt),
     summary,
     aggregation: aggregationValid
-      ? sanitizeAggregation({ isAggregation, mainEvent, events: isAggregation ? events : [] }, inputText, sourceTitle)
-      : sanitizeAggregation(fallback.aggregation, inputText, sourceTitle),
+      ? sanitizeAggregationDates({ isAggregation, mainEvent, events: isAggregation ? events : [] }, publishedAt)
+      : sanitizeAggregationDates(fallback.aggregation, publishedAt),
     diagnostics: {
       summaryValid,
       analysisValid,
@@ -168,22 +169,29 @@ export function normalizeAggregationSplitMaxEvents(value: number | null | undefi
     : DEFAULT_PARSED_AGGREGATION_MAX_EVENTS;
 }
 
-function sanitizeSignature<T extends AiEventSignature | ParsedEventSignature>(signature: T, text: string, title: string): T {
-  const result = { ...signature };
-  if (!hasEventFieldEvidence(text, title, result, "eventObject")) result.eventObject = null;
-  if (!hasEventFieldEvidence(text, title, result, "eventDate")) result.eventDate = null;
-  return result;
+function sanitizeSignatureDate<T extends AiEventSignature | ParsedEventSignature>(
+  signature: T,
+  publishedAt?: string | null,
+): T {
+  let eventDate = normalizeEventDate(signature.eventDate);
+  const publicationDate = normalizeEventDate(publishedAt);
+  if (eventDate && publicationDate) {
+    const distanceMs = Math.abs(
+      Date.parse(`${eventDate}T00:00:00Z`) - Date.parse(`${publicationDate}T00:00:00Z`),
+    );
+    if (distanceMs > MAX_EVENT_DATE_DISTANCE_MS) eventDate = null;
+  }
+  return { ...signature, eventDate };
 }
 
-function sanitizeAggregation(
+function sanitizeAggregationDates(
   aggregation: ItemUnderstandingResult["aggregation"],
-  text: string,
-  title: string,
+  publishedAt?: string | null,
 ): ItemUnderstandingResult["aggregation"] {
   return {
     ...aggregation,
-    mainEvent: aggregation.mainEvent ? sanitizeSignature(aggregation.mainEvent, text, title) : null,
-    events: aggregation.events.map((event) => sanitizeSignature(event, text, title)),
+    mainEvent: aggregation.mainEvent ? sanitizeSignatureDate(aggregation.mainEvent, publishedAt) : null,
+    events: aggregation.events.map((event) => sanitizeSignatureDate(event, publishedAt)),
   };
 }
 

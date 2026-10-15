@@ -76,12 +76,30 @@ describe("ai provider", () => {
     expect(create.mock.calls[0]?.[0]?.messages?.[0]?.content).toContain("页面附加内容不代表正文主体");
   });
 
-  it("passes original title evidence without another completion", async () => {
-    const create = vi.fn().mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ summary: "Supported summary", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "ok", eventSignature: { eventType: "release", eventSubject: "Alpha", eventAction: "发布", eventObject: "Nova", eventDate: "2026-07-11" }, aggregation: { isAggregation: false, events: [] } }) } }] });
-    const provider = createAiProvider({ apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" }, undefined, { chat: { completions: { create } } });
-    const result = await provider.understandItem("正文无日期。", { title: "Alpha于2026年7月11日发布Nova", translateTitle: false });
-    expect(result.eventSignature.eventDate).toBe("2026-07-11"); expect(result.summary).toBe("Supported summary");
-    expect(result.diagnostics.analysisValid).toBe(true); expect(create).toHaveBeenCalledTimes(1);
+  it.each([
+    ["2026-07-11", "2026-07-11"],
+    ["2025-07-11", null],
+    ["2027-07-11", null],
+    ["2026-02-30", null],
+  ])("validates date %s against publication without another completion", async (eventDate, expected) => {
+    const create = vi.fn().mockResolvedValue({ choices: [{ message: { content: JSON.stringify({
+      summary: "Supported summary", moderationStatus: "allowed", qualityScore: 80, qualityRationale: "ok",
+      eventSignature: { eventType: "release", eventSubject: "Alpha", eventAction: "正式推出", eventObject: "Nova", eventDate },
+      aggregation: { isAggregation: false, events: [] },
+    }) } }] });
+    const provider = createAiProvider(
+      { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" }, undefined,
+      { chat: { completions: { create } } },
+    );
+    const result = await provider.understandItem("正文无完整日期或逐字动作证据。", {
+      title: "Alpha更新Nova", publishedAt: "2026-07-11", translateTitle: false,
+    });
+    expect(result.eventSignature).toEqual({
+      eventType: "release", eventSubject: "Alpha", eventAction: "正式推出", eventObject: "Nova", eventDate: expected,
+    });
+    expect(result.summary).toBe("Supported summary");
+    expect(result.diagnostics.analysisValid).toBe(true);
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the item protocol fixed while sending custom instructions separately", async () => {
