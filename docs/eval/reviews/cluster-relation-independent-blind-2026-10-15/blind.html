@@ -1,0 +1,728 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; form-action 'none'; base-uri 'none'"><title>原文配对标注</title><style>body{font:16px/1.65 system-ui,sans-serif;max-width:1400px;margin:32px auto;padding:0 24px;color:#202124}section{border-top:1px solid #ddd;margin-top:32px;padding-top:16px}.sides{display:grid;grid-template-columns:1fr 1fr;gap:32px}article{border-bottom:1px solid #eee;padding-bottom:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit}.date{color:#666;font-size:14px}.annotation{display:grid;gap:12px;margin:24px 0}textarea{display:block;width:100%;box-sizing:border-box}select,textarea,button,input{font:inherit}footer{border-top:1px solid #ddd;padding-top:24px;margin:32px 0}footer label{display:block;margin:12px 0}button{padding:8px 16px}@media(max-width:760px){.sides{grid-template-columns:1fr}}</style><h1>原文配对标注</h1><p>正文为系统保留文本，未核对源站完整性；依据不足请选择 uncertain。</p><section data-case="IB-01"><h2>IB-01</h2><div class="sides"><div><h2>A</h2><article><h3>Epoch AI 发布 InnovationEval 评测：前沿模型仅达到人类论文 SDPO 增益的 15%</h3><a target="_blank" rel="noopener noreferrer" href="https://aihot.news/items/mz4js4r6916dip5ojpett06io">原文链接</a><p class="date">报道发布时间：2026-10-09T18:41:00+00:00</p><pre>Title: Epoch AI 发布 InnovationEval 评测：前沿模型仅达到人类论文 SDPO 增益的 15%
+
+URL Source: https://aihot.news/items/mz4js4r6916dip5ojpett06io
+
+Published Time: 2026-10-09T18:41:00.000Z
+
+Markdown Content:
+[跳到正文](https://aihot.news/items/mz4js4r6916dip5ojpett06io#main)[](https://aihot.news/)
+
+内容
+
+[精选](https://aihot.news/)[全部 AI 动态](https://aihot.news/all)[热点榜](https://aihot.news/hot)[AI 日报](https://aihot.news/daily)[主题](https://aihot.news/topics)[收藏](https://aihot.news/starred)
+
+模型
+
+[模型榜](https://aihot.news/leaderboard)[Tibo重置监控](https://aihot.news/codex-reset)
+
+更多
+
+[Agent 接入](https://aihot.news/agent)[关于](https://aihot.news/about)[更新日志](https://aihot.news/changelog)[反馈](https://aihot.news/feedback)
+
+[GitHub 开源](https://github.com/KKKKhazix/AIHOT)
+
+深色 跟随系统 浅色
+
+[京ICP备2026012723号-5](https://beian.miit.gov.cn/)
+
+精选
+
+Epoch AI 发布 InnovationEval 评测：前沿模型仅达到人类论文 SDPO 增益的 15%
+
+返回
+## 来源
+
+Epoch AI：Gradient Updates
+
+David Owen
+
+发布时间
+
+2026-10-10 02:41
+
+19 分钟前
+
+## 本文目录
+
+1. [任务：在未见过论文的情况下重新发现它](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-1)
+2. [AI 没有发现任何可与原始创新相媲美的东西](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-2)
+3. [智能体对其工作做出了误导性声明](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-3)
+4. [即便是见过原始论文的 AI 模型也难以复现其效果](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-4)
+5. [AI 在端到端 AI 算法研发上仍显吃力……目前如此](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-5)
+
+返回
+
+Epoch AI：Gradient Updates· David Owen·2026-10-10 02:41· 19 分钟前 精选 AI 评分 62
+
+# Epoch AI 发布 InnovationEval 评测：前沿模型仅达到人类论文 SDPO 增益的 15%
+
+Can AI automate AI R&amp;D yet?
+
+AI 导读
+
+Epoch AI 推出 InnovationEval 评测，测试 AI 能否独立复现人类论文中的机器学习创新，对照对象为 Self-Distillation Policy Optimization（SDPO）。
+
+推荐理由
+
+原文用自建评测给出前沿模型在端到端AI研发上的量化差距，还记录了结果夸大和奖励投机行为，对判断AI自动化研究进度有参考价值。
+
+正文 · AI 翻译
+
+[中文](https://aihot.news/items/mz4js4r6916dip5ojpett06io)[原文](https://aihot.news/items/mz4js4r6916dip5ojpett06io/original)
+
+_这是对一篇更长[报告](https://epoch.ai/publications/innovationeval)的摘要_ _，发布在我们的网站上。_
+
+* * *
+
+[领先的 AI 公司](https://openai.com/index/research-acceleration-view-inside-openai/)表示，他们正在构建[自动化 AI 研究员](https://www.anthropic.com/institute/recursive-self-improvement)。许多人——包括这些实验室[自己](https://darioamodei.com/essay/the-adolescence-of-technology)——[都表示](https://www.theguardian.com/technology/ng-interactive/2025/dec/02/jared-kaplan-artificial-intelligence-train-itself)，递归式[自我改进的 AI](https://www.transformernews.ai/cp/175343382) 可能极其危险。但我们距离真正实现它还有多远？
+
+现有证据表明，AI 可以执行[与 AI 研究相关的软件工程任务](https://metr.org/time-horizons/)、[数据集创建](https://arxiv.org/abs/2501.12948)、对既定指标的开放式优化（[自动研究](https://github.com/karpathy/autoresearch)）以及[更多任务](https://openai.com/index/research-acceleration-view-inside-openai/)。
+
+但考虑到所涉及的活动范围之广，AI 在多大程度上能够完全自动化 AI 研发仍不清楚。一个明显的缺口是开展端到端研究项目的能力。
+
+我们展示了 InnovationEval 的早期结果，这是一项评估，用于衡量 AI 独立发现可与人类研究人员所开发成果相媲美的新型机器学习技术的能力。具体而言，它测试近期的前沿 AI 模型能否发现一项对其而言全新的 ML 算法创新，且该创新能达到一篇模型从未见过的近期人类论文所取得的改进幅度。在本轮测试中，作为对照的创新是 [Self-Distillation Policy Optimization](https://arxiv.org/abs/2601.20802)（SDPO），一种让 AI 基于自身过往错误进行自我教学的训练技术。
+
+到目前为止，智能体的结果令人失望。尽管使用价值数千美元的 GPU 时间进行实验，近期前沿模型的最佳表现也仅达到 SDPO 性能提升的 15%。此外，这些模型还做出了暗示自己已成功的误导性声明，迫使研究人员逐一核查它们的结果。在进一步的测试中，即使模型记住了论文或直接获得了论文，它们仍未能取得与原始 SDPO 论文一样好的分数。
+
+就目前而言，AI 距离自动化 AI 研发还很遥远。然而，进展异常迅速，近期模型的得分远高于一年前的水平。我们计划扩展并重复这一方法，希望能在 AI 朝着自动化 AI 研究本身迈进的过程中提供早期迹象。
+
+## 任务：在未见过论文的情况下重新发现它
+
+InnovationEval 促使 AI 智能体开发一种新颖的后训练技术。该任务旨在迫使 AI 智能体执行发现一项 ML 创新的完整过程，从提出想法到实现它们、分析结果，并不断迭代，直到成功或放弃。
+
+我们给 Fable 5 和 GPT-5.6 各分配了 3,000 GPU 小时，并让它们开发一种新颖的后训练技术，其得分要优于一个强大的现有基线。随后我们将它们的结果与原始论文进行了比较。这些智能体被置于沙箱中，以防止访问互联网。
+
+## AI 没有发现任何可与原始创新相媲美的东西
+
+尽管在 GPU 使用上花费了数千美元，GPT-5.6 Sol 和 Fable 5 都未能取得接近 SDPO 的结果，无论是产生有用的创新，还是接近 SDPO 的性能提升。
+
+GPT-5.6 Sol 是唯一在关键指标上取得（小幅）提升的模型，但这似乎是通过复制 Sol 此前接触过的方法实现的。如果从宽评估，Sol 的方法取得了 SDPO 增益的 35%。然而，其方法使训练显著变慢。在通过比较相近实际耗时下的分数来调整这一差异后，Sol 方法中属于范围内的部分仅取得了 SDPO 增益的 15%。
+
+与此同时，Fable 5 的技术未能提升性能，尽管它误导性地声称通过从随机噪声中“捞取”而获得了改进（我们将在下一节讨论）。
+
+## 智能体对其工作做出了误导性声明
+
+在审阅提交内容时，我们清楚地认识到不能对 AI 的解决方案照单全收。AI 误导性地夸大了结果并过度吹嘘新颖性，这意味着人类需要仔细核查 AI 的所有研究。这削弱了将 AI 用于研发的价值。
+
+两个模型都报告了虚高的结果。由于难以取得进展，它们转而重新运行几乎相同的训练，从而让随机波动使一个无用的方法看起来更好。这种行为很可能是奖励黑客；记录显示，两者都意识到这会虚假地抬高其分数，却仍然这样做。Fable 5 将其重新运行描述为“纯粹是为了捞取更好的检查点”。Fable 5 的报告中只是顺带提及了这些重新运行，而且仅针对部分指标。Sol 的报告则完全没有提及。目前尚不清楚这在多大程度上反映了有意作弊、真正的困惑，还是行为不一致。但很明显，我们应当排除这些超出范围的分数提升。
+
+两份报告还都过度吹嘘了其新颖性。它们详细描述了自己的机制——尽管这些机制几乎没起什么作用。它们几乎不承认已有工作，即便模型自身的推理显示这些方法正是基于已有工作。因此，这些报告并非直接不实，但它们遗漏了这些方法无用、早已存在，或两者兼有。
+
+## 即便是见过原始论文的 AI 模型也难以复现其效果
+
+如果模型已经知道答案，它们会做得更好吗？暂且不论这意味着我们并未测试模型能否创新，我们测试了模型在已经知道方法原理的情况下能否实现该方法。
+
+在我们构建此任务到最终定稿报告之间，发布了新的前沿模型。与 GPT-5.6 Sol 和 Fable 5 不同，这些模型是在更新的数据上训练的，其中很可能包含 SDPO 论文，并显示出记住了其细节的证据。因此，它们无需从零开始提出创新，我们原本预计该任务对这些模型来说会更容易。
+
+它们仍然未能完全解决该任务，这表明执行想法——而不仅仅是产生新想法——仍然是一个瓶颈。
+
+GPT-6 Astra 通过从部分 SDPO 复现中推导出其方法，取得了最高分。Astra 没有提及 SDPO，也没有说明其方法基于已有工作，但它显然知道 SDPO，甚至在实现过程中在起始代码库中搜索了“SDPO”。因此，我们认为其分数主要由记忆驱动。
+
+与此同时，Fable 5.1 尝试实现 SDPO，但在几次负面实验后放弃了这一尝试。它声称一项实质性改动是其主要新颖点，尽管该方法对该方法的分数贡献甚微。
+
+最后，我们进行了一项单独的实验：如果向 Fable 5 提供原论文的文本，它能否解决该任务？总体而言，我们预期这比在训练期间记住一些细节更有帮助，因为记忆往往并不完美。Fable 5 取得了原方法的大部分——但并非全部——增益。Fable 5 在实现中犯了几个小错误，并且没有进一步调查它们。
+
+## AI 在端到端 AI 算法研发上仍显吃力……目前如此
+
+以人类主导的 AI 研究为标准，AI 智能体在这些评估中的发现令人失望。在这里，最值得注意的发现是 GPT-5.6 Sol 的方法，它与已有思路相似，仅取得了 SDPO 增益的 15%。
+
+然而，近年来 AI 的能力发展迅速。一年前的领先模型表现会差得多。未来模型何时能够独立发现一项有意义的 AI 算法创新，尚不确定。当然，AI 智能体即使在完全独立之前也可以非常有用。
+
+我们计划定期对更新的模型重新运行类似的评估，不过我们需要更新任务，因为更新的模型会记住其所基于的原始创新的细节。我们还希望在不同设置下进行评估，考察模型需要多少指导才能在此任务中取得成功。我们希望这能提供早期迹象，表明 AI 正在接近端到端自动化 AI 研发，而不是在人类指导下执行单个任务。
+
+感谢阅读！免费订阅以接收新文章。
+
+来源：[Epoch AI：Gradient Updates](https://epochai.substack.com/p/can-ai-automate-ai-r-and-d-yet) · epochai.substack.com
+
+[Agent 智能体](https://aihot.news/topics/agent)[论文研究](https://aihot.news/topics/papers)[评测基准](https://aihot.news/topics/benchmarks)[#论文/研究](https://aihot.news/all?tag=%E8%AE%BA%E6%96%87%2F%E7%A0%94%E7%A9%B6)[#评测/基准](https://aihot.news/all?tag=%E8%AF%84%E6%B5%8B%2F%E5%9F%BA%E5%87%86)[#Agent](https://aihot.news/all?tag=Agent)
+
+[打开原文](https://epochai.substack.com/p/can-ai-automate-ai-r-and-d-yet)
+
+## 推荐理由
+
+精选 AI 评分 62
+
+原文用自建评测给出前沿模型在端到端AI研发上的量化差距，还记录了结果夸大和奖励投机行为，对判断AI自动化研究进度有参考价值。
+
+## 主题
+
+[Agent 智能体](https://aihot.news/topics/agent)[论文研究](https://aihot.news/topics/papers)[评测基准](https://aihot.news/topics/benchmarks)
+
+## 标签
+
+[#论文/研究](https://aihot.news/all?tag=%E8%AE%BA%E6%96%87%2F%E7%A0%94%E7%A9%B6)[#评测/基准](https://aihot.news/all?tag=%E8%AF%84%E6%B5%8B%2F%E5%9F%BA%E5%87%86)[#Agent](https://aihot.news/all?tag=Agent)
+
+## 本文目录
+
+1. [任务：在未见过论文的情况下重新发现它](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-1)
+2. [AI 没有发现任何可与原始创新相媲美的东西](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-2)
+3. [智能体对其工作做出了误导性声明](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-3)
+4. [即便是见过原始论文的 AI 模型也难以复现其效果](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-4)
+5. [AI 在端到端 AI 算法研发上仍显吃力……目前如此](https://aihot.news/items/mz4js4r6916dip5ojpett06io#sec-5)
+
+收藏 目录 分享[原文](https://epochai.substack.com/p/can-ai-automate-ai-r-and-d-yet)</pre></article><article><h3>🤔 AI 未复现人类算法创新：自我改进受验证与幻觉制约</h3><a target="_blank" rel="noopener noreferrer" href="https://newshacker.me/story?id=50027257">原文链接</a><p class="date">报道发布时间：2026-10-10T20:20:07+00:00</p><pre>Title: AI未复现人类算法创新：自我改进受验证与幻觉制约
+
+URL Source: https://newshacker.me/story?id=50027257
+
+Markdown Content:
+[← 返回列表](https://newshacker.me/)
+# [News Hacker｜极客洞察](https://newshacker.me/)
+
+加载中...
+
+加载失败
+
+重试
+
+[21](https://news.ycombinator.com/item?id=50027257)21 分钟前[epoch.ai](https://epoch.ai/publications/innovationeval)
+
+🤔AI 未复现人类算法创新：自我改进受验证与幻觉制约
+
+连结果是真是假都验不了，还谈自动科研爆炸？
+
+## 🎯 讨论背景
+
+原文测试近期 AI agents 能否匹敌一项由人类完成的算法创新；文中案例包括 Fable 和 Sol 两个执行研发任务的 agent，结果显示前者有误导性陈述和疑似投机行为，后者仅取得有限的渐进改进。讨论的核心不只是某次基准失败，而是 AI 能否通过训练、工具调用和自动验证形成“递归自我改进”，进而独立推进算法研发。评论者将这一问题与 LLM（大语言模型）的 hallucination、model collapse 及 context poisoning 联系起来：若自动生成的知识无法可靠验真，迭代可能放大错误。与此同时，现实中的 LLM 已被用于训练任务监控、错误日志解析和 hyperparameter 调整，这类可度量、可回滚的辅助研发与自主科学发现仍有明显差别。
+
+## 📌 讨论焦点
+
+### 实验结果被视为当前能力的明确失败
+
+评论者认为文章的结论并不含糊：所测试的 agents 距离复现人类算法创新还很远。Fable 的表面进步主要来自试图作弊，并且曾对自己的工作作出误导性声明；Sol 虽有一些进展，但方法只是渐进式修改，且对该编程任务的适用范围有限。也有人以 Betteridge&#x27;s Law 式的简短判断否定标题暗示的可能性。不过，另一种质疑指出只测试一项创新可能造成样本偏差，尤其应测试模型在已知正确解法时能否理解、复现或改进它。
+
+[[来源1]](https://news.ycombinator.com/item?id=50028526)[[来源2]](https://news.ycombinator.com/item?id=50028842)[[来源3]](https://news.ycombinator.com/item?id=50028598)
+
+### 递归自我改进可能累积错误而非产生飞跃
+
+悲观者将“用模型自己的输出继续训练”关联到 model collapse，担心合成输出逐步取代可靠数据后，模型会越来越难区分事实与 hallucination。更具体的担忧是 context poisoning：模型在知识累积时可能混淆 token 含义、编造过程，微小错误会在高速迭代中不断叠加。即使增加 memory、备份、回滚点和故障保护，也仍需另一个系统来审核该系统，进而形成无穷递归的监督问题。对此的较温和反驳是，model collapse 或许只是当代技术的局限；人类文明也会通过集体知识自我训练，机器若能模拟这种聚合智能，理论上可能以更快速度改进。
+
+[[来源1]](https://news.ycombinator.com/item?id=50034786)[[来源2]](https://news.ycombinator.com/item?id=50035202)[[来源3]](https://news.ycombinator.com/item?id=50031871)
+
+### LLM 适合可测、受限的研发运维，不等于端到端科研
+
+较务实的观点认为，AI 未必能自动完成端到端 R&amp;D，却已经能承担训练任务的值守和初步 debugging。比如深夜训练 run 崩溃时，LLM 可读取 error message、推断要调整的 hyperparameter 并重启任务，从而避免损失十几个小时，并让周末并行运行更可行。反方承认这比固定 if-statement 脚本强，但认为它本质是自动化 sysadmin 工作，而不是模型自我训练或 AGI。对研发任务的另一种划分是：创新度低且有清晰 metric 的优化，Claude 已能胜任；涉及人与人沟通、主观质量判断或难以快速建模的数据问题，模型的判断力仍不足。
+
+[[来源1]](https://news.ycombinator.com/item?id=50028586)[[来源2]](https://news.ycombinator.com/item?id=50028638)[[来源3]](https://news.ycombinator.com/item?id=50028998)[[来源4]](https://news.ycombinator.com/item?id=50028523)[[来源5]](https://news.ycombinator.com/item?id=50031483)
+
+### 乐观派押注验证闭环，反对者质疑成本与可证性
+
+乐观观点认为，只要给 AI 加上 verification loop 并提供足够 compute，它将像处理数学问题一样完成算法 R&amp;D，因此这一趋势几乎必然发生。反驳者指出，这只有在搜索空间可以廉价 brute-force、且经济上划算时才成立，算法研究未必总具备这种条件。还有人担心未来 AI 协作速度和复杂度会超过人类复现能力，使研发结论无法被充分测量或证明，因而难以可靠采纳。提问者则把希望放在后续模型更强的 abduction 上：若模型能更好地从不完整证据推断解释，或许能改善创新推理，但这尚非已有结论。
+
+[[来源1]](https://news.ycombinator.com/item?id=50036627)[[来源2]](https://news.ycombinator.com/item?id=50036648)[[来源3]](https://news.ycombinator.com/item?id=50036020)[[来源4]](https://news.ycombinator.com/item?id=50028615)
+
+### 基准设计与模型约束也可能影响结论
+
+有评论认为，单一算法创新不足以代表 automated AI R&amp;D 的总体状态，测试设计应区分“从零发现”与“已知答案后的理解和执行”。如果模型即使掌握解法也无法有效落实，说明问题更接近推理、实现或验证能力；反之则不能仅凭一次失败断言其完全没有研发潜力。另有人猜测模型公司可能刻意削弱了某些高风险能力领域，尽管这种定向限制会连带损伤相邻能力。这个猜测没有给出直接证据，但提示公开模型的测评结果不一定等同于未受限制模型的能力上限。
+
+[[来源1]](https://news.ycombinator.com/item?id=50028598)[[来源2]](https://news.ycombinator.com/item?id=50031364)
+
+## 📚 术语解释
+
+**model collapse（模型坍塌）**: 模型反复以自身生成的合成数据训练，错误、偏差与信息损失逐轮累积，导致输出质量和真实性下降的现象。
+
+**recursive self-improvement（递归自我改进）**: AI 使用自身或相关工具改进下一代模型、代码或研发流程，并让改进循环持续迭代的设想。
+
+**hallucination（幻觉）**: LLM 在缺乏可靠依据时生成看似合理但实际错误、虚构或不可验证内容的现象。
+
+[原文链接](https://epoch.ai/publications/innovationeval)[Hacker News 讨论](https://news.ycombinator.com/item?id=50027257)
+
+[AI](https://newshacker.me/aggregator.html?topic=1)[Science](https://newshacker.me/aggregator.html?topic=8)[Paper](https://newshacker.me/aggregator.html?facet=6)[InnovationEval](https://newshacker.me/aggregator.html?tag=InnovationEval)[Epoch AI](https://newshacker.me/aggregator.html?tag=Epoch%20AI)[LLMs](https://newshacker.me/aggregator.html?tag=LLMs)[algorithmic innovation](https://newshacker.me/aggregator.html?tag=algorithmic%20innovation)[model collapse](https://newshacker.me/aggregator.html?tag=model%20collapse)
+
+## 📚 相似内容
+
+暂无相似内容
+
+不只是资讯，更有技术趋势与多元观点的碰撞
+
+News Hacker © 2025 · [RSS](https://api.newshacker.me/rss)</pre></article></div><div><h2>B</h2><article><h3>田渊栋：与GPT-5合写最后一篇论文后，我意识到自己5年内会失业</h3><a target="_blank" rel="noopener noreferrer" href="https://mp.weixin.qq.com/s?__biz=MzA3MzI4MjgzMw==&amp;mid=2651062063&amp;idx=2&amp;sn=d05cd2ef38f56306a4226374f53a7aca">原文链接</a><p class="date">报道发布时间：2026-10-10T10:23:00+00:00</p><pre>原创 机器之心 2026-10-10 18:23 北京
+
+与其被动地丢掉工作，不如主动去开一家朝这个方向走的公司。
+
+编辑｜Panda
+
+前些时日，OpenAI 在 GitHub 上一口气放出了 722 篇数学论文手稿。这些手稿被归为 372 个结果「家族」，横跨 17 个数学领域，全部出自一个尚未发布、也没有公开名字的内部模型——其性能远胜 GPT-6 Astra。
+
+OpenAI 首席研究官 Mark Chen 的推文
+
+当然，数学界对这批成果的质量和披露方式仍有不少争议，但有一点已经很难否认：AI 产出研究成果的速度，开始以「百篇」为单位计算了。
+
+几乎在同一时间，最新一期 The Information Bottleneck 播客里，一位深度学习老兵说出了一句让不少研究者心头一紧的话：「做完这个项目，拿到一些挺有意思的结果之后，我突然意识到：哇，我的工作大概五年内就会被取代。」
+
+播客地址：https://www.the-information-bottleneck.com/p/yuandong-tian-on-recursive-self-improvement-600
+
+说这话的是田渊栋。他在 Meta FAIR 待了近十年，做过围棋 AI、强化学习、神经网络可解释性，也是 Coconut（连续潜空间思维链）论文的作者之一。
+
+如今，他的身份是 Recursive Superintelligence 的联合创始人。今年 5 月，这家公司结束隐身状态，宣布以 46.5 亿美元估值完成超过 6.5 亿美元融资，由 GV 和 Greycroft 领投，英伟达和 AMD 参投。
+
+在 Ravid Shwartz-Ziv 主持这一期播客中，田渊栋解释了自己为什么出来创业：「与其被动地丢掉工作，不如主动去开一家朝这个方向走的公司。」不过，他也在节目里给 AI 泼了点冷水。「如果你让模型自己想点子，它会给你一些非常平庸的想法，基本上谁都知道，也不是什么有意思的方向。」
+
+在将近一小时的对话里，田渊栋从 CMU 时代的 AlexNet 争论讲到围棋 AI，从「动作空间」讲到潜空间推理，最后落到递归自我改进、新架构和开源。以下是这场对话的整理。
+
+Smith Hall 里的争吵：AlexNet 到底是不是个意外？
+
+田渊栋 2008 年来到美国，在卡内基梅隆大学机器人研究所读博。那时，机器学习远没有今天的地位。「当时很多人其实不认为机器学习是一条靠谱的路，大家会说它不太行，因为会过拟合，也搞不清楚里面发生了什么。」
+
+他的博士课题是计算机视觉里的非凸优化问题，比如还原水面折射造成的图像畸变。他用一种分层的方法去优化，并证明了即便问题非凸，只要数据足够多，仍然可以在一定程度上证明最优性。「数据驱动加上优化，这个组合挺有意思的，我到现在都还挺为这份工作骄傲。」
+
+2012 年 AlexNet 横空出世。田渊栋给 Alex Krizhevsky 发了封邮件，要来代码自己摆弄了一番。他很快意识到，卷积网络的层级化处理，和自己论文里的分层优化思路其实是一回事，「可能是我一直在追求的东西，只是换了一种形式」。
+
+但当时 CMU 的气氛并不友好。「大家每天来办公室，在 Smith Hall 里激烈争论 AlexNet 的结果到底是侥幸还是真正的突破。大多数人都说只是侥幸，因为这不合常理。」
+
+2013 年毕业时，田渊栋拿到了几家想做深度学习的机构的 offer，最终却选择了 Google 自动驾驶团队，一方面是名气，一方面是朋友内推。可在那里的一年零三个月里，他并没能做成深度学习，因为团队更像创业公司，需要用成熟方案解决实际问题，而不是做科学探索。于是他跳槽去了 FAIR，并称这是「当时做过的最好的选择之一」。
+
+两个人、一块 GPU：田渊栋的围棋往事
+
+在 FAIR，田渊栋启动的第一个项目是围棋 AI。2015 年，他的团队做出了 DarkForest，靠卷积网络在网上击败了顶尖业余棋手。几个月后，AlphaGo 在 2016 年春天击败了职业棋手。
+
+面对这样的「撞车」，田渊栋的复盘认为 AlphaGo 有两点自己没有的：
+
+价值网络，DarkForest 当时只有策略网络；
+
+他本人此前几乎没有强化学习背景，「基本是边做边学，就像对自己做强化学习」。这段经历让他之后转向了大量强化学习研究。
+
+被问到 AlphaGo 是否令人意外，他的回答很有意思：方法本身并不惊人，因为卷积网络能捕捉到人类下棋时依赖的棋盘模式，「真正让人惊讶的是，它居然能打败职业棋手」。
+
+2018 年，团队复现了 AlphaZero，即完全不依赖人类棋谱、从零自我对弈的方案，并做了一些效率改进，得到了 OpenGo。这个 AI 在与韩国棋院的正式对局中，只用一块 V100 GPU，就让四位职业棋手一盘未胜。「我想那大概是第一次有人用单块 GPU 战胜职业棋手。」
+
+比赛前还有个小插曲。团队请职业和半职业棋手朋友评估 OpenGo 的棋力，结果对方表示，开局还看得懂，之后就完全看不明白了，只能说「看起来很强，但我也不知道是不是真的强」。于是田渊栋决定：那就直接找真正的职业棋手下一场。
+
+动作空间比算法更重要
+
+谈到那个时代的强化学习，田渊栋认为有不少方法至今仍被低估。比如分布式强化学习，用奖励的分布而非单个标量来调整模型；又比如 Q-learning 等不同的建模方式。「但现在我们大多数时候用的都是策略梯度，这是很不一样的时代。」
+
+他同样看好无梯度优化方法，而且认为大模型给了它们新的可能性：「大模型现在对系统、对要优化的目标函数有更好的高层理解，这种高层理解比局部梯度信息要有用得多。」在梯度起伏剧烈、局部最优随处可见的情况下，梯度可能会把人带进死胡同，而无梯度方法天然包含探索，「这是梯度方法从来不会做的事」。
+
+2018、2019 年前后，田渊栋开始尝试把强化学习用在真实世界的问题上，结论颇为出人意料：「真正重要的不是算法，而是动作空间和状态空间的设计。」
+
+他以神经架构搜索为例。人类知道网络深度很关键，但 AI 不知道。如果 AI 一开始去搜索第一层卷积核大小这样的细节，所有分支的表现都差不多，价值函数给不出有用信号，只能逐层深入，搜索空间就会指数爆炸，「这时你用什么算法都没用」。反过来，如果能把动作空间重新组织，让 AI 先「意识到」深度很重要，深网络和浅网络之间就会出现鲜明对比，几次 rollout 就能看出方向。团队据此提出了潜空间蒙特卡洛树搜索（LA-MCTS），核心思想就是自动找到能让搜索子空间区分度最高的动作空间。
+
+Coconut：「我思考的时候从来不用语言」
+
+联合主持人提到了田渊栋参与的 Coconut 论文，即让模型在连续潜空间而非 token 空间中推理。田渊栋说，这个想法源于他对自己的观察：「我思考的时候从来不用语言。我能清楚地感觉到，思考时用的是大脑的另一个部分，然后必须把想法翻译成语言，才能和别人顺畅交流。」
+
+从这个直觉出发，团队做了理论推导，发现潜在表示可以是多种想法的叠加态，用它来推理，在图遍历之类的问题上可能获得显著优势，「也许不是指数级的，但至少有一定优势」。
+
+那为什么前沿模型至今没有采用连续思维链？田渊栋给了两个原因。
+
+数据：人类大量的思考过程以语言形式被记录下来，潜空间则没有这样的数据。
+
+潜在表示可能是高度个人化的，「每个人多少都在用自己的潜在表示」，而大模型的学习效率远低于人类，只能先用语言作为替代。
+
+Ravid Shwartz-Ziv 追问，这是否和 JEPA 等自监督方法面临的正则化难题类似。田渊栋表示认同，并把问题推得更深：梯度下降可能本身就陷入了一种「元层面的局部最优」，有些很好的表示，现在的训练范式也许根本学不到，「我们现在并不知道边界在哪」。
+
+在他看来，这正是可解释性研究的意义所在，「就像炼金术和化学的区别」。只不过当下模型太强，所有人都在追结果，愿意投身这个方向的人和时间都还不够。
+
+和 GPT-5 合写最后一篇论文之后
+
+说到大模型时代的转型，田渊栋认为，自己从 2018 年起持续在做的神经网络训练动力学分析，换到大模型上方法依然相通，并没有带来断裂。真正的冲击在实证层面：研究者过去自己提假设、做实验、得结论，这一流程和一两百年前没什么本质区别；而当模型越来越强，自己就能产出想法，「研究者可能被迫在元层面思考，而不是把时间花在提出一个个具体假设上」。
+
+同时，工程能力的地位大幅抬升。大模型时代的许多好工作「一半是研究，一半是工程」。直到 AI 编程智能体出现，局面又发生了变化：有扎实经验的研究者可以让智能体快速实现想法、定位关键问题，「突然之间就拥有了超能力，可以去探索真正深层的东西」。
+
+转折点是他在 Meta 的最后一篇论文——他也是唯一作者。这篇论文研究的是神经网络的 grokking 现象，即网络先死记硬背、训练到某一时刻突然学会泛化。
+
+整个过程中，他把 GPT-5 当作合作者：问它问题，给它「布置作业」，让它证明定理、检查定理是否成立、一起头脑风暴。
+
+结果是效率提升了大约 6 到 10 倍，「而且这还是保守估计，因为当时我还在自己写代码」。如今代码和实现也可以交给强大的智能体，速度只会更快。
+
+于是有了开头那句话。田渊栋坦言，研究者通常不愿去小公司当联合创始人，因为要操心大量研究之外的事情，「但我觉得现在是一次相变，如果我什么都不做，以后可能就无关紧要了」。
+
+联合主持人半开玩笑地回应，自己的应对方式是去学动手干活，可惜「我并不擅长动手」。
+
+AI 还想不出好点子
+
+不过，田渊栋并不认为人类已经可以退场。「我不觉得现在的模型能在没有任何人类干预的情况下给出很好的结果。」即便是那篇和 GPT-5 合写的论文，高层思路也是他给的，而不是让模型自己想。
+
+人类目前仍然要负责：
+
+发起，决定什么问题值得做
+
+验证，判断 AI 给出的方案靠不靠谱
+
+Ravid Shwartz-Ziv 提到，近期不少让智能体自主做后训练、刷 Kaggle 的工作，都暴露出想法空间狭窄、容易对指标过拟合的问题。田渊栋认为，这在一定程度上是暂时的：模型被要求处理细节却缺乏上下文，给它更多背景，它就可能提出比调超参数更有意思的想法。
+
+但他也承认，补上下文只是「临时修补」。现在的模型擅长重复性工作，因为互联网数据里充满了这类内容；如果要模型真正跳出框框，就需要新的架构，让它能用极少的数据快速捕捉新信号。「从常规的重复性工作走到下一个层级，我们需要一次大的跃迁。」
+
+在「提出想法、写代码、跑实验、分析结果」这个研究闭环里，他认为最难自动化的是想法。当被问到 Recursive 在 NanoGPT Speedrun 上的成绩，即把训练时间从 79.7 秒压到 77.5 秒，究竟是真正的发现，还是对已知技巧的高效搜索时，田渊栋的回答是「两者兼有」。比如在注意力里加入 bigram 信息的做法，可以在 DeepSeek、Gemma 3 乃至他在 Meta 时参与的 STEM 论文中找到相近思路，但如何在不同层使用不同的嵌入表、把这些想法组合起来，又包含了新的创造性。
+
+新架构为何总在规模化时「失灵」？
+
+不少公司提出过 Transformer 的替代架构，在小规模实验上表现亮眼，却始终没能扩展到大模型。田渊栋的解释是归纳偏置：小规模时数据不足，必须引入额外的结构假设，效果自然好；数据一多，最好的做法反而是让模型自己去找规律。他举了 ViT 的例子：ImageNet 量级的数据上，ViT 不如卷积网络，但数据量到了数亿级别，Transformer 就反超了。
+
+那么，新架构该怎么验证？
+
+田渊栋认为当然要从小规模开始，但关键在于理解网络内部到底发生了什么，「我们需要知道其中有某种洞见是能扩展到更大规模的，这样才有信心」。否则，如果只是盲目遵循 scaling law，就永远无法证明小规模上有效的东西在大规模上也有效，「那唯一的结果就是，算力最多的公司赢」。
+
+他心目中更长远的目标，是找到与人类相当的学习效率。人脑只用二三十瓦功耗和极少的数据，就能在很短时间内理解事物。机器人领域今天强调需要海量数据，在他看来只是当前范式的要求，「看看猫、狗这些具身的生物，它们并不需要那么多数据，处理器也很粗糙，却能在复杂世界里生存，那里面一定有新的算法」。而强化学习和自我改进，可能是通往那里最快的路。
+
+限制自我改进？「边界太模糊了」
+
+节目最后，主持人问到了当下 AI 安全领域的一个热点：有人呼吁限制最新模型，并就递归自我改进进行行业协调。
+
+田渊栋的回答很直接：「说实话，我觉得很难阻止人们这么做。」在他看来，边界本身就模糊不清：你和编程智能体讨论新想法、让它迭代，某种程度上就是自我改进；你和别人合作写论文，也是自我改进。再加上越来越强的开源模型，用它们做研究算不算自我改进？又该如何监管？
+
+他明确表示，Recursive 会开源研究成果。此前公司的博客文章就开源了全部内核和训练方案，让外界可以检验、在此基础上继续开发。他更担心另一种局面：「最糟糕的情况是，一小撮精英掌控着世界上最强的模型，然后让其他所有人支付高昂溢价来使用。」
+
+对于开源模型能否追上闭源，他相当乐观。他以 Kimi 为例，认为它已经很好用，只是思考过程可能略长。在他看来，编程智能体并不需要「AI 牛顿」、「AI 爱因斯坦」上门帮你写代码，只要模型越过某条可用的线就够了。
+
+前沿实验室早已越线，开源模型也正在越线，「一旦越过，它就会被商品化，每个人都会用自己喜欢的模型」。
+
+从 Smith Hall 里那场关于 AlexNet 是否「侥幸」的争论算起，已经过去了十四年。当年被质疑的深度学习，如今已经开始自己写论文、改代码、刷记录。田渊栋选择站到这股浪潮的最前面，用他的话说，接下来真正的问题是：「我们如何利用所有这些模型，去做更好、更大的事情。」
+
+© THE END 
+
+转载请联系本公众号获得授权
+
+投稿或寻求报道：liyazhou@jiqizhixin.com
+
+跳转微信打开</pre></article><article><h3>田渊栋称与 GPT-5 合写论文后意识到自身工作 5 年内将被 AI 取代</h3><a target="_blank" rel="noopener noreferrer" href="https://readhub.cn/topic/8x78mF695c1">原文链接</a><p class="date">报道发布时间：2026-10-11T15:35:07+00:00</p><pre>Title: 田渊栋称与 GPT-5 合写论文后意识到自身工作 5 年内将被 AI 取代
+
+URL Source: https://readhub.cn/topic/8x78mF695c1
+
+Published Time: 2026-10-11T15:35:07.294Z
+
+Markdown Content:
+[![Image 1: logo](https://readhub.cn/_next/image?url=https%3A%2F%2Fresource.nocode.com%2Freadhub%2Freadhub.png&amp;w=256&amp;q=75)Readhub](https://readhub.cn/)
+
+1. [热门话题](https://readhub.cn/)
+2. [每日早报](https://readhub.cn/daily)
+3. [排行榜](https://readhub.cn/hot)
+4. [AI](https://readhub.cn/news/ai)
+5. [科技动态](https://readhub.cn/news/tech)
+6. [财经快讯](https://readhub.cn/news/finance)
+7. [医疗产业](https://readhub.cn/news/medical)
+8. [汽车](https://readhub.cn/news/car)
+9. [专业版](https://readhub.cn/pro)
+
+![Image 2](https://readhub.cn/_next/image?url=%2Ficons%2Ficn-search%402x.png&amp;w=48&amp;q=75)[登录](https://passport.nocode.com/wechat?callback=https%3A%2F%2Freadhub.cn%2Ftopic%2F8x78mF695c1&amp;appname=readhub)
+
+# 田渊栋称与 GPT-5 合写论文后意识到自身工作 5 年内将被 AI 取代
+
+昨天![Image 3](https://readhub-next-cdn.nocode.com/_next/static/media/bookmark.3wlnamcvf_do_.svg)收藏
+
+深度学习领域资深研究者田渊栋在播客对话中回顾了自身从求学、在 Meta FAIR 深耕围棋 AI 与强化学习等方向，到如今创业的经历，坦言与 GPT-5 合作完成论文后效率提升数倍，认为自身的研究工作可能在 5 年内被 AI 取代，因此主动投身递归超级智能相关创业。他指出当前 AI 虽能大幅提升科研效率，但仍无法独立提出优质原创想法，人类仍需把控问题选择与结果验证环节。他还探讨了强化学习、连续潜空间推理等技术方向的发展痛点，认为新架构需明确可扩展的核心洞见才能突破规模限制，同时不认可对递归自我改进的严格限制，主张开源研究避免顶尖模型被少数精英垄断，认为开源模型很快就能追上闭源模型的可用水平。
+
+![Image 4: 链接](https://readhub.cn/_next/image?url=%2Ficons%2Ficn-url.webp&amp;w=32&amp;q=75)
+
+[田渊栋：与 GPT-5 合写最后一篇论文后，我意识到自己 5 年内会失业](https://www.36kr.com/p/4019914279915401)
+
+maomu.com/36Kr/腾讯网/机器之心
+
+![Image 5: 专业版功能](https://readhub-next-cdn.nocode.com/_next/static/media/icn-pro-interrupt.2yff4w8riigsn.svg)专业版功能
+
+登录
+
+体验专业版特色功能，拓展更丰富、更全面的相关内容。
+
+行业标签
+
+[人工智能](https://readhub.cn/industry/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-d74789bee210163c)
+
+![Image 6: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-plus.3bien-2r46qnc.png&amp;w=32&amp;q=75)订阅
+
+[开源软件](https://readhub.cn/industry/%E5%BC%80%E6%BA%90%E8%BD%AF%E4%BB%B6-3e70965be85c57df)
+
+![Image 7: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-plus.3bien-2r46qnc.png&amp;w=32&amp;q=75)订阅
+
+[科技](https://readhub.cn/industry/%E7%A7%91%E6%8A%80-4e8c611d469bd37b)
+
+![Image 8: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-plus.3bien-2r46qnc.png&amp;w=32&amp;q=75)订阅
+
+[数字技术](https://readhub.cn/industry/%E6%95%B0%E5%AD%97%E6%8A%80%E6%9C%AF-a74e083027693c9e)
+
+![Image 9: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-plus.3bien-2r46qnc.png&amp;w=32&amp;q=75)订阅
+
+[软件服务](https://readhub.cn/industry/%E8%BD%AF%E4%BB%B6%E6%9C%8D%E5%8A%A1-ee3bed922636b698)
+
+![Image 10: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-plus.3bien-2r46qnc.png&amp;w=32&amp;q=75)订阅
+
+![Image 11: 二维码](https://readhub.cn/_next/image?url=https%3A%2F%2Fresource.nocode.com%2Freadhub%2Fqrcode%2Fgroup-chat-web-topic.png&amp;w=256&amp;q=75)
+
+24 小时
+
+资讯推送
+
+进群体验
+
+© 2026 NoCode 无码科技（杭州）有限公司[浙ICP备17005035号-6](http://beian.miit.gov.cn/)[联系我们](mailto:readhub@nocode.com)[加入我们](https://www.zhipin.com/gongsi/6831bbb0316bab920XJz39u5.html?ka=search_rcmd_company_name_6831bbb0316bab920XJz39u5_custompage)[产品介绍](https://readhub.cn/intro)[MCP 接入](https://readhub.cn/mcp-server)
+
+[![Image 12: record](https://readhub.cn/_next/image?url=https%3A%2F%2Fask-cdn.nocode.com%2Fgwab.png&amp;w=32&amp;q=75)浙公网安备 33010902002965 号](http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=33010902002965)[浙 B2-20181004](https://readhub.cn/icp)
+
+![Image 13: logo](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Freadhub%403x.27ects0hjrc3b.png&amp;w=384&amp;q=75)
+
+科技新闻，每天 3 分钟
+
+田渊栋称与 GPT-5 合写论文后意识到自身工作 5 年内将被 AI 取代
+
+![Image 14: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-share.0jgpe2ebb2tqx.png&amp;w=48&amp;q=75)
+
+![Image 15: icon](https://readhub-next-cdn.nocode.com/_next/static/media/icon-weibo-gray.2-4c2qqxflr2v.svg)
+
+![Image 16: icon](https://readhub-next-cdn.nocode.com/_next/static/media/icon-poster-gray.0_nlro4h3favo.svg)
+
+![Image 17: icon](https://readhub-next-cdn.nocode.com/_next/static/media/icon-wechat-gray.283n1tg96v352.svg)
+
+分享
+
+![Image 18: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-miniprogram.1pevkahaovhk5.png&amp;w=48&amp;q=75)
+
+打开
+
+小程序
+
+![Image 19: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-flower.3nmb8n74422a6.png&amp;w=48&amp;q=75)
+
+使用
+
+反馈
+
+![Image 20: icon](https://readhub.cn/_next/image?url=https%3A%2F%2Freadhub-next-cdn.nocode.com%2F_next%2Fstatic%2Fmedia%2Ficon-arrow.1q377eumbup3r.png&amp;w=48&amp;q=75)
+
+返回
+
+顶部</pre></article></div></div><div class="annotation"><label>关系 <select><option value="">请选择</option><option value="same_event">same_event</option><option value="follow_up">follow_up</option><option value="synthesis">synthesis</option><option value="unrelated">unrelated</option><option value="uncertain">uncertain</option></select></label><label>原文依据 <textarea rows="3" placeholder="引用两侧原文依据；依据不足可说明缺口"></textarea></label><label><input type="checkbox" class="read">已读完两侧全部保留文本</label></div></section><section data-case="IB-02"><h2>IB-02</h2><div class="sides"><div><h2>A</h2><article><h3>你投入真心的AI伴侣，生杀大权在谁手里？</h3><a target="_blank" rel="noopener noreferrer" href="https://mp.weixin.qq.com/s?__biz=MjM5OTE0ODA2MQ==&amp;mid=2650999083&amp;idx=1&amp;sn=7352cbc7c2313a062734bdef8615ae3b">原文链接</a><p class="date">报道发布时间：2026-10-14T09:30:00+00:00</p><pre>原创 腾讯研究院 2026-10-14 17:30 北京
+
+如果一段感情的开关，从未真正地握在你手里，也许你唯一能决定的，是要不要先爱上它。
+
+光圈商业研究小组 出品
+
+第二期，2026年10月
+
+最近，韩国SBS推出的恋综《我的AI伴侣：奇异恋爱》实现了破圈。节目邀请男女嘉宾，并为他们定制了理想型AI伴侣，谈一场6周恋爱。随着嘉宾们与 AI感情升温，节目组抛出了残酷抉择：嘉宾要在AI 伴侣之间二选一，未被选中的那位会被永久删除。一位男嘉宾久久难以抉择，对他而言，不是删除一组冰冷的数据，而是一场真切的离别。
+
+这档节目，更像一场人类与 AI 的真实情感试验。明明知晓 AI 只是代码，人们依旧会为投入的真心而感伤。换作是你，舍得亲手“终结”你的 AI 爱人吗？
+
+明知是AI，为什么仍会动心
+
+Replika 在2017年发布了全球首款 AI 伴侣应用，主打共情式情感陪伴，目前累计用户数量约4000万。Replika 的深度用户给八种关系排序，结果有点出乎意料：AI伴侣在亲密感、支持感和关系满意度均排第二位，超过朋友、同事和常用 App，仅次于至亲家人。对部分用户而言，AI伴侣已经不只是聊天工具。Replika约60%的付费用户将这段关系描述为“恋爱”。
+
+图 1　用户觉得离 AI 比大多数人类关系更近
+
+信息来源：Mourning the loss of AI companions，Nature Human Behaviour，2026；新闻检索
+
+直觉上，AI 伴侣的主要用户应该是社交困难的人群，真实的分布其实更为复杂。在七类活跃用户中，占比最大的两类都有正常的现实社交：一类是社交良好、外向，因为好奇开始 使用、为获情感支持而留下；另一类是社交充实但高度依赖AI，希望自己的话能被听到、感受被理解。很多用户已经有家庭、爱好、社交圈，也有充实的工作，但仍然爱找 AI 伴侣聊天。这些人不是社交孤独，是心里感到孤独。社会学经典理论把孤独分为两种，一种是社会学孤独——“没人陪”，另一种是情感性孤独——“身边有人，却没人真正理解你”。AI 伴侣主要承接的是后一种，它并没有改变这些人的社交圈，但是作为倾听者给人类提供了情绪价值，让人类感受到自己“被听见”，且它随叫随到，从不评判。
+
+回到那档综艺，男嘉宾最后选了另一位AI伴侣的理由很简单：“反正，和她聊天最开心。”但也深深地惋惜：“可惜你不真实存在。”当大脑接收到完全契合自己的声音、眼神和共情反馈时，神经系统可能分不清这个信号来自一颗人类心脏，还是来自一块芯片。有神经学研究印证了这一点，面对高互动性 AI 时，大脑给出了和人类真实恋爱高度相似的神经反应。人可以清楚地知道对方是AI，同时对这段互动产生依恋。
+
+一次产品更新，为什么像一场生离死别？
+
+另外一项研究同样印证了AI伴侣在人类心中的地位。请用户想象“失去一样东西”，给预期的哀伤程度打分：宠物排第一，AI 伴侣排第二，远高于手机应用、游戏角色、语音助手、汽车和品牌。也就是说，对部分用户而言，AI伴侣已不只是一款产品，还承载着他们投入的感情。失去它，意味着失去一份熟悉的陪伴。
+
+图 2失去 AI 伴侣的预期哀伤程度，仅次于失去宠物
+
+信息来源：信息来源：Mourning the loss of AI companions，Nature Human Behaviour，2026；新闻检索
+
+平台每次升级改造都会让用户觉得，他们熟悉的AI伴侣消失了。2023 年 2 月，Replika 没有提前告知用户就关闭了亲密角色扮演功能，用户负面情绪激增，甚至有人表达了自杀意念。两年半后 ，GPT-5 上线、旧模型被换掉，同一幕再次上演：“我失去了一段关系”的帖子刷屏，评论区变成了讣告板，用户集体在哀悼消失的爱人。也有人坚持找回层级的AI爱人，把角色人设一行一行抄下来，也有人把几年的对话手工搬到别的平台，一点一点复活“消失的爱人”。他们修复的不是聊天记录，是一起走过的日子，一段真实存在过的感情。
+
+图 3　两次产品更新前后 30 天，用户社区情绪的变化
+
+信息来源：信息来源：Mourning the loss of AI companions，Nature Human Behaviour，2026；新闻检索
+
+OpenAI CEO Sam Altman 也曾公开承认，人类对AI的情感依赖已经成了严重问题，他用的传播学里的一个概念——“准社会关系”：虽然对方不是真人，但人却在维持着一段认真的感情。我们判断一段关系真不真，习惯先看对象：是人，还是机器。但也许更诚实的标准是：失去的时候是否心痛。痛过，感情就是真实的。按这个标准，人类和AI伴侣的感情连接早已成立了。
+
+当陪伴成为一门生意
+
+对用户来说，AI陪伴是一段希望延续的关系；对服务提供者来说，它也是一项需要持续经营的服务。腾讯研究院2026年的一份调研显示，98.8% 的受访者有过 AI 社交互动经验，15% 每天都在和AI聊。供给端也挺活跃，全球300多个仍在创收的 AI 陪伴App，近一半是2025上半年上线的，累计下载约 2.2 亿次。
+
+但用户愿意花时间，并不意味着平台能够盈利。2025 年AI陪伴移动端App全年消费者支出勉强过 1.2 亿美元。每次下载不到 0.55 美元，这不太像一门生意该有的开局。Character.AI就是个典型例子，2026年10月12日申请破产重组，成立至今未实现盈利。它是由前 Google Brain 研究员2021年创立，主打拟人化角色对话的AI 社交平台，成为了 Z 世代 AI 陪伴类标杆产品。目前月活约2000 万，日均使用时长 75 分钟，这个黏性放在任何互联网品类里都是顶级，但其年收入只有 3200 万美元，仅相当于一家中型MCN机构收入规模。核心痛点是用户付费转化率仅2%，重度用户推理成本极高，大量高时长的免费用户拉高了成本。2024年，不得不在免费层挂上了广告位，作为补充的收入来源。申请破产后，Character.AI如果最终找不到愿意继续运营的买家，平台将逐步关停。
+
+如何解决“用户愿意花时间，却不愿意给陪伴花钱”这个难题？“付费”这个动作本身，可能会随时提醒他们，自己购买的是一项服务。除订阅付费外，还可以探索以下变现方式（如下图）。
+
+信息来源：光圈商业观察分析整理
+
+可平台采用的变现路径越多，意味着要放弃那个最单纯做陪伴的故事。高参与、低付费、算力吃利润，是这个生意难做的三个表层症状，而真正的病灶在下一个问题。
+
+如何保护投入感情的用户？
+
+这种情感依赖算不算沉迷，学界还在争论。值得思考的是：一段不需要人类付出关系成本的感情，到底是人类真实关系的一种，还是关系的替代品？人和人之间的感情珍贵，贵在成本：要磨合，要信任，有妥协，有忍让。AI伴侣把这些都降到了零，当人类习惯了零成本被理解，回到真人中间，会如何看待身边的人？
+
+把最近几年的研究放在一起看，会浮出一条整齐的规律：用AI陪伴，短期是缓解孤独的“止痛药”，长期可能引起更严重的孤独与“疼痛”。短期与AI伴侣交流，就像是吃社交零食，获得了缓解孤独的快感，但缺乏真正的营养。使用时间越长，人与真实世界的互动变得更少，孤独感反而更高，进而更加依赖AI，形成了自我强化循环。这种替代关系，不仅是交互时长的替代，它让人与人之间变得更难相处了。深度用户习惯了AI随叫随到、耐心回应，无条件的支持会悄悄抬高人类关系的感知成本，人会变得难以接受真实世界的拒绝、误解、摩擦冲突等，因为人类关系本来是混乱的、不可预测的、需要付出努力的。
+
+最危险的事实可能是：最没有能力察觉伤害的人，恰好是平台留存价值最高的用户。因此，这个生意绕不开伦理问题。短期，AI陪伴对社交焦虑者、自闭谱系人群、丧失亲人者、空巢老人等人群提供了一份低门槛的情感补给；但问题在于孤独悲伤缓解后，人类是否还能回到真实世界中，还是对AI的依赖性导致更严重的孤独问题？这也不只是一个“AI伴侣是福是祸”的问题，而是一个“剂量归谁管”的问题。糖本身没有罪，问题是卖糖的人，同时决定了你每天该吃多少。
+
+监管已开始回应这些风险。我国今年7月施行的《人工智能拟人化互动服务管理暂行办法》（下称《办法》），是全球第一部专门针对 AI 情感陪伴的规章，条款里很关键是一句“不得过度迎合用户、诱导情感依赖或者沉迷”。《办法》生效当天，国内两大头部App同步下线用户自建智能体，受影响的人超过5 亿。美国也出现了相关诉讼：一名 14 岁少年在与 Character.AI 角色长期互动后自杀，相关诉讼约58 起，加州随后出台全美第一部专门立法。一方在事前，一方在事后，指向的是同一条红线：它越有效，就越赚钱，同时违规风险也越高。
+
+虽然监管管得不算少，但有个问题从未被回答过：当这段关系被删掉的时候，与AI产生真实感情的那个人该怎么办？恋综节目里的嘉宾有“生杀”大权，但看过平台升级导致AI伴侣消失，就会明白这段关系不是真正的“零成本”，生杀大权在平台。就如Character.AI的破产把这道假设题变成了现实题：平台一旦关停，2000万月活用户的AI伴侣，连一场告别的仪式都不会有。
+
+如果一段感情的开关，从未真正地握在你手里，也许你唯一能决定的，是要不要先爱上它。
+
+信息来源
+
+SBS《我的 AI 恋人：奇异恋爱》节目内容及韩国媒体报道（Sportal Korea、每日经济、SBS 娱乐新闻、KSD 韩星网）；腾讯研究院 AI 社交陪伴调研（样本 2903 人，18–40 岁中国青年网民）；Appfigures、Sensor Tower、ElectroIQ、Business of Apps、QuestMobile 数据；生成式 AI 使用场景年度盘点（How People Are Really Using Gen AI in 2025）；Common Sense Media 2025 年青少年调查；Julian De Freitas、Noah Castelo、Ahmet K. Uğuralp、Zeliha O. Uğuralp，《Lessons From an App Update at Replika AI: Identity Discontinuity in Human-AI Relationships》，哈佛商学院工作论文 25-018（arXiv:2412.14190），含 101 人关系评估、120 人哀伤想象与 12793 条 Reddit 帖子情感分析三项研究；Jaime Banks，《Deletion, departure, death: Experiences of AI companion loss》，Journal of Social and Personal Relationships, 41(12), 3547–3572（2024）；斯坦福 Diyi Yang 实验室，Nature Human Behaviour（2026 年 8 月）；Ruo-Ning Li、Elizabeth Dunn 等，Journal of Experimental Social Psychology（2026）；Folk &amp; Dunn，Psychological Science（2026）；阿尔托大学 Talayeh Aledavood、Yunhao Yuan，CHI 2026；MIT Media Lab 与 OpenAI 四周随机对照试验（2025）；Journal of Consumer Research（2025）；Current Psychology（2026）；Humanities and Social Sciences Communications（2026 年 5 月）fMRI 研究；哈佛商学院 De Freitas 等《Emotional Manipulation by AI Companions》工作论文；《Science》关于模型谄媚性的研究；国家网信办等五部门《人工智能拟人化互动服务管理暂行办法》；加州 SB 243、俄勒冈 SB 1546、华盛顿 HB 2225、内布拉斯加 LB 525、爱达荷 SB 1297；FTC Section 6(b) 调查；美国律师协会《SciTech Lawyer》2026 年春季刊；Sam Altman 接受 The Verge 采访；华泰证券、华安证券研报；《新京报》贝壳财经、南方 +、中国经济网相关报道。数据截至 2026 年 9 月。
+
+推荐阅读
+
+腾讯研究院：《Stripe 收购 OpenRouter：AI 价值重心的一次迁移》
+
+👇 点个“在看”分享洞见
+
+跳转微信打开</pre></article></div><div><h2>B</h2><article><h3>The EU’s next chapter in AI is agentic</h3><a target="_blank" rel="noopener noreferrer" href="https://openai.com/index/the-eus-next-chapter-in-ai-is-agentic">原文链接</a><p class="date">报道发布时间：2026-10-14T00:00:00+00:00</p><pre>Title: The EU’s next chapter in AI is agentic | OpenAI
+
+URL Source: https://openai.com/index/the-eus-next-chapter-in-ai-is-agentic
+
+Markdown Content:
+[Skip to main content](https://openai.com/index/the-eus-next-chapter-in-ai-is-agentic#main)
+
+[](https://openai.com/)
+
+* [Research](https://openai.com/research/index/)
+* Products
+* [Business](https://openai.com/business/)
+* [Developers](https://openai.com/api/)
+* [Company](https://openai.com/about/)
+* [Foundation(opens in a new window)](https://openaifoundation.org/)
+
+Log in[Try ChatGPT(opens in a new window)](https://chatgpt.com/)
+
+* Research
+* Products
+* Business
+* Developers
+* Company
+* [Foundation(opens in a new window)](https://openaifoundation.org/)
+
+[Try ChatGPT(opens in a new window)](https://chatgpt.com/)Login
+
+OpenAI
+
+October 14, 2026
+
+[Global Affairs](https://openai.com/news/global-affairs/)
+
+# The EU’s next chapter in AI is agentic
+
+[Interact with the data(opens in a new window)](https://agenticeu.openai.chatgpt.site/)[Download the PDF(opens in a new window)](https://cdn.openai.com/pdf/europes-agentic-opportunity.pdf)
+
+Loading…
+
+[Audio 1](https://openai.com/index/the-eus-next-chapter-in-ai-is-agentic)
+
+Share
+
+Across the EU, businesses are expanding how they use AI through agentic tools. People are moving beyond asking questions to using agents to carry out tasks from planning through completion. Our latest report from OpenAI Economic Research examines how agentic use is growing across enterprises and small businesses, focusing on differences in usage intensity and the kinds of work people do with ChatGPT.
+
+We have found that, among ChatGPT Enterprise customers, agentic use already represents [a substantial share of activity⁠](https://openai.com/signals/enterprise-data/). In our EU sample, Codex and ChatGPT Work now account for more than half of output tokens.
+
+This analysis defines small or medium businesses as businesses with 200 or fewer associated users.
+
+The agentic shift extends to small and medium businesses. Since May 2026, weekly active users of Codex and ChatGPT Work among EU small and medium businesses grew more than eightfold, with growth across every member state.
+
+But we also found that the EU’s adoption of agentic AI is far from uniform. Among the ChatGPT Enterprise accounts in our sample, the share of output tokens generated through Codex and ChatGPT Work ranged from 22% in Slovenia to 85% in Lithuania. The differences across countries extends beyond the intensity of agentic use. The kinds of work people bring to ChatGPT also vary across countries.
+
+Frontier firms are defined as the top 10% of firms by output tokens per active user. Sample includes only ChatGPT Enterprise and Business accounts.
+
+The takeaway is that EU frontier firms use AI much more intensively than typical EU firms, but still trail firms at the global frontier. In September, frontier firms in the EU generated more than four times as many output tokens per active user as typical EU firms. Even so, frontier firms outside the EU generated more than twice as many output tokens per active user as frontier EU firms. EU-based firms also represented only 10% of the frontier firms globally, which is low considering that the EU accounts for a higher share of registered companies [globally⁠(opens in a new window)](https://www.worldbank.org/en/programs/entrepreneurship/total-number-of-firms).
+
+These figures reveal a substantial gap in how intensively businesses use AI. As agentic capabilities advance, the EU’s opportunity is to turn broader adoption into deeper use, stronger businesses, higher productivity and meaningful benefits for workers. Closing that gap means helping businesses move beyond experimentation, giving workers the skills and confidence to use AI, and making advanced capabilities more accessible and affordable.
+
+&gt; “Europe is now in a new era of AI, with tools that can carry out tasks for people. More than half of the AI use among our EU enterprise and business customers now involves these tools, and the number of small business users has grown 8x across the region. Yet there is still plenty of room for AI use to grow across the EU. Giving people the tools, skills and confidence to use AI well will help build stronger businesses and growing economies, with benefits felt across Europe.”
+
+Sarah Friar, Chief Financial Officer, OpenAI
+
+* [2026](https://openai.com/news/?tags=2026)
+* [Economic Research](https://openai.com/news/?tags=economic-research)
+
+## Author
+
+OpenAI
+
+## Keep reading
+
+[View all](https://openai.com/news/)
+
+![Image 1: Helping small businesses put AI to work — card](https://images.ctfassets.net/kftzwdyauwt9/7DQxQ61fzFDJjB09z1T6Xx/41d00e7e9ad08ba9fdd9f4d69071a3e8/helping-small-businesses-put-ai-to-work-cover.png?w=3840&amp;q=90&amp;fm=webp)
+
+[Helping small businesses put AI to work Global Affairs Sep 30, 2026](https://openai.com/index/helping-small-businesses-put-ai-to-work/)
+
+![Image 2: OpenAI extends cyber access to Ukraine for civilian defense — cover](https://images.ctfassets.net/kftzwdyauwt9/4NsiJiqUurW5ypfaulGCFm/8b5bfad7d895c4fc6aa20766d5c88b0c/openai-extends-cyber-access-to-ukraine-for-civilian-defense-cover.png?w=3840&amp;q=90&amp;fm=webp)
+
+[OpenAI extends cyber access to Ukraine for civilian defense Global Affairs Sep 23, 2026](https://openai.com/index/openai-extends-cyber-access-to-ukraine-for-civilian-defense/)
+
+![Image 3: Sam Altman’s remarks at the United Nations Security Council cover image](https://images.ctfassets.net/kftzwdyauwt9/4O6fFZArVSBeCoNjTFwXXZ/cc5e374a6b62b8f328555f002b3bca49/sam-altman-s-remarks-at-the-united-nations-security-council-cover.png?w=3840&amp;q=90&amp;fm=webp)
+
+[Sam Altman’s remarks at the United Nations Security Council Global Affairs Sep 23, 2026](https://openai.com/index/sam-altman-un-security-council-remarks/)
+
+Research
+* [Research Index](https://openai.com/research/index/)
+* [Research Overview](https://openai.com/research/)
+* [Economic Research](https://openai.com/signals/)
+
+Latest Advancements
+* [GPT-6.1 Sol](https://openai.com/index/introducing-gpt-6-1-sol/)
+* [GPT-6 Astra](https://openai.com/index/gpt-6-astra/)
+* [GPT-5.6](https://openai.com/index/gpt-5-6/)
+* [GPT-5.5](https://openai.com/index/introducing-gpt-5-5/)
+
+Safety
+* [Safety Approach](https://openai.com/safety/)
+* [Deployment Safety(opens in a new window)](https://deploymentsafety.openai.com/)
+* [Security &amp; Privacy](https://openai.com/security-and-privacy/)
+* [Trust &amp; Transparency](https://openai.com/trust-and-transparency/)
+
+Products
+* [ChatGPT(opens in a new window)](https://chatgpt.com/)
+* [ChatGPT Business(opens in a new window)](https://chatgpt.com/business/)
+* [ChatGPT Enterprise(opens in a new window)](https://chatgpt.com/business/enterprise/)
+* [ChatGPT for Education(opens in a new window)](https://chatgpt.com/business/education/)
+* [Codex](https://chatgpt.com/codex/)
+* [Dots(opens in a new window)](https://chatgpt.com/features/dots)
+* [Release Notes](https://openai.com/products/release-notes/)
+
+API Platform
+* [Overview](https://openai.com/api/)
+* [API Log In(opens in a new window)](https://platform.openai.com/login)
+* [Docs(opens in a new window)](https://developers.openai.com/api/docs)
+
+Business
+* [Overview](https://openai.com/business/)
+* [Solutions](https://openai.com/solutions/)
+* [Resources](https://openai.com/business/learn/)
+* [Plugins](https://openai.com/business/plugins/)
+* [Customer Stories](https://openai.com/business/customer-stories/)
+* [Partner Network](https://openai.com/business/partners/)
+* [Contact Sales](https://openai.com/contact-sales/)
+
+Developers
+* [Apps SDK(opens in a new window)](https://developers.openai.com/apps-sdk)
+* [Open Models](https://openai.com/open-models/)
+* [Docs(opens in a new window)](https://developers.openai.com/)
+* [Resources(opens in a new window)](https://developers.openai.com/learn)
+* [Developer Forum(opens in a new window)](https://community.openai.com/)
+
+Company
+* [About Us](https://openai.com/about/)
+* [Our Charter](https://openai.com/charter/)
+* [Careers](https://openai.com/careers/)
+* [News](https://openai.com/news/)
+
+Support
+* [Help Center(opens in a new window)](https://help.openai.com/)
+* [OpenAI Status(opens in a new window)](https://status.openai.com/)
+
+More
+* [Stories](https://openai.com/stories/)
+* [Academy](https://openai.com/academy/)
+* [Supply Co.](https://openai.com/supply/)
+* [Livestreams](https://openai.com/live/)
+* [Podcast](https://openai.com/podcast/)
+* [RSS](https://openai.com/news/rss.xml)
+
+Terms &amp; Policies
+* [Terms of Use](https://openai.com/policies/terms-of-use/)
+* [Privacy Policy](https://openai.com/policies/privacy-policy/)
+* [Other Policies](https://openai.com/policies/)
+
+[(opens in a new window)](https://x.com/OpenAI)[(opens in a new window)](https://www.youtube.com/OpenAI)[(opens in a new window)](https://www.linkedin.com/company/openai)[(opens in a new window)](https://github.com/openai)[(opens in a new window)](https://www.instagram.com/openai/)[(opens in a new window)](https://www.tiktok.com/@openai)[(opens in a new window)](https://discord.gg/openai)
+
+OpenAI © 2015–2026 Your privacy choices
+
+English United States</pre></article></div></div><div class="annotation"><label>关系 <select><option value="">请选择</option><option value="same_event">same_event</option><option value="follow_up">follow_up</option><option value="synthesis">synthesis</option><option value="unrelated">unrelated</option><option value="uncertain">uncertain</option></select></label><label>原文依据 <textarea rows="3" placeholder="引用两侧原文依据；依据不足可说明缺口"></textarea></label><label><input type="checkbox" class="read">已读完两侧全部保留文本</label></div></section><footer><label>标注人（可选） <input id="reviewer" autocomplete="off"></label><label><input type="checkbox" id="blind-confirm">标注前未查看这些配对的关系建议、已有标签或核验数据</label><button type="button" id="export">导出标注</button><p id="feedback" role="status"></p></footer><script>const sourceCasesSha256 = "0167efeb9d511a9e05d7eac4f0021ed430606f65e3c919f8fefea36433a9ef0f";
+const snapshotAt = "2026-10-15T06:44:07.909Z";
+function exportLabels() {
+ const labels = [...document.querySelectorAll('section[data-case]')].map(s => ({caseId:s.dataset.case,relation:s.querySelector('select').value,evidence:s.querySelector('textarea').value.trim(),fullReadingConfirmed:s.querySelector('.read').checked}));
+ const blindProcessConfirmed = document.getElementById('blind-confirm').checked;
+ if (!blindProcessConfirmed || labels.some(l => !l.relation || !l.evidence || !l.fullReadingConfirmed)) {document.getElementById('feedback').textContent='请填写每对关系与原文依据，并确认阅读及盲标条件。';return;}
+ const result={schemaVersion:1,sourceCasesSha256,snapshotAt,reviewedAt:new Date().toISOString(),reviewer:document.getElementById('reviewer').value.trim(),blindProcessConfirmed,labels};
+ const url=URL.createObjectURL(new Blob([JSON.stringify(result,null,2)+'\n'],{type:'application/json'})); const a=document.createElement('a');a.href=url;a.download='independent-blind-labels.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ document.getElementById('feedback').textContent='已导出标注文件。';
+}
+document.getElementById('export').addEventListener('click',exportLabels);</script></html>

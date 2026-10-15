@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "status": "awaiting_human_blind_labels",
+  "snapshotAt": "2026-10-15T13:45:45.444Z",
+  "sourceEnvironment": "production_readonly",
+  "caseCount": 2,
+  "articleCount": 4,
+  "sourceCasesSha256": "dc2e9ec1173073871c4135d2c85b1d4c2a6ae160153fdf8cd817d0389c8f4a32",
+  "files": {
+    "README.md": "a86a0893a4b71265e7d1363c8602f9a3f8de94c57fb762700a41556b19ba7ed8",
+    "labels.blank.csv": "2675c99e05ae38c30ed7178f4afea9b5441db24609b0bb85a8f98990a1858d6c",
+    "blind-cases.json": "dc2e9ec1173073871c4135d2c85b1d4c2a6ae160153fdf8cd817d0389c8f4a32",
+    "blind.html": "ed3b0a2963e8c7e8639e7dc7d77fc6f724622b67f8d086cfbd7db78be92a2a12"
+  },
+  "controlArtifact": "sqlite://artifact/research/source-directed-blind-candidates-2026-10-15",
+  "producerCodeSha256": "334600b06572aef476141c8224c675ca506019fffdad0a771dabba43dc7ec122",
+  "samplingFrame": "Original-title product/version-anchor discovery over real source clusters; complete approved original membership, no relation inference, historical/labelled source-family exclusion, disjoint matching limited to two cases; current shadow admission audited separately without requiring or asserting admission.",
+  "samplingLimit": "Biased candidate sample, not a representative population sample; no class balance presumed; source identity separation is not proof of semantic-topic independence.",
+  "independentHumanLabelsReceived": 0,
+  "blindProcessConfirmed": null,
+  "semanticTopicIndependenceProven": false,
+  "modelRequests": 0,
+  "embeddingRequests": 0,
+  "businessWrites": 0,
+  "credentialsRead": false,
+  "productionE2EVerified": false,
+  "qualityPassed": false,
+  "releaseEligible": false
+}
