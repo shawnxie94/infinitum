@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "dist/**",
     "graphify-out/**",
     "coverage/**",
+    ".agent/**",
     "next-env.d.ts",
   ]),
 ]);
