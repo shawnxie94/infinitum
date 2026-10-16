@@ -68,7 +68,7 @@ export function createTaskAiUsageTracker(
     },
     recordAttempt(event: {
       usageKey?: string;
-      attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair";
+      attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair" | "model_fallback";
     }) {
       ledger.recordAttempt(event);
     },

@@ -22,6 +22,19 @@ export { createAiOperationRegistry, createAiOperationRunner } from "./provider/o
 export { createAiModelRuntime } from "./provider/runtime";
 export type { AiOperationDefinition, AiOperationRegistry } from "./provider/operations";
 export type { AiModelRuntime } from "./provider/runtime";
+export {
+  InvalidJsonModelResponse,
+  UnknownTransportOutcomeError,
+  TransportAdmissionError,
+  classifyTransportOutcome,
+  isTerminalTransportError,
+} from "./provider/transports";
+export type { TransportAdmissionReason } from "./provider/transports";
+export type {
+  TransportAttemptContext,
+  TransportAttemptOutcome,
+  TransportAuditHooks,
+} from "./provider/types";
 export { classifyTaskError, isCancellationError, TaskCancellationError, TaskExecutionError, toTaskExecutionError } from "./orchestration/errors";
 export { runTaskWithLifecycle } from "./orchestration/lifecycle";
 export type {

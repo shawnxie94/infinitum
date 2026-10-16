@@ -5,6 +5,8 @@ const mockState = vi.hoisted(() => ({
   rssItems: [] as unknown[],
   dailyReportOutcome: null as "partial" | "rejected" | "unavailable" | null,
   aliasPairCalls: 0,
+  understandingOverride: null as Record<string, unknown> | null,
+  understandingCalls: 0,
 }));
 
 vi.mock("@/lib/daily-report/generation", async (importOriginal) => {
@@ -74,6 +76,7 @@ vi.mock("@/lib/items/service", async (importOriginal) => ({
     }, usageKey?: string) => void;
   }) => ({
     understandItem: vi.fn(async () => {
+      mockState.understandingCalls += 1;
       options?.onUsage?.({
         promptTokens: 310,
         completionTokens: 70,
@@ -82,7 +85,7 @@ vi.mock("@/lib/items/service", async (importOriginal) => ({
         cachedTokensReported: true,
         tokenUsageSource: "provider",
       }, "item_understanding");
-      return {
+      const validResult = {
         summary: "测试摘要",
         translatedTitle: "测试中文标题",
         moderationStatus: "allowed",
@@ -94,6 +97,9 @@ vi.mock("@/lib/items/service", async (importOriginal) => ({
         aggregation: { isAggregation: false, mainEvent: null, events: [] },
         diagnostics: { summaryValid: true, analysisValid: true, aggregationValid: true },
       };
+      return mockState.understandingOverride
+        ? { ...validResult, ...mockState.understandingOverride }
+        : validResult;
     }),
   })),
   generateItemReanalysisUnderstanding: vi.fn(async (_itemId: string, options: { aiProvider: { understandItem: () => Promise<unknown> } }) =>
@@ -174,6 +180,8 @@ describe("Mastra staged task workflows", () => {
     mockState.rssItems = [];
     mockState.dailyReportOutcome = null;
     mockState.aliasPairCalls = 0;
+    mockState.understandingOverride = null;
+    mockState.understandingCalls = 0;
     await prisma.item.deleteMany();
     await prisma.fetchRun.deleteMany();
     await prisma.backgroundTaskRun.deleteMany();
@@ -977,5 +985,129 @@ describe("Mastra staged task workflows", () => {
       completionTokens: 180,
       totalTokens: 1460,
     });
+  });
+
+  async function createReanalyzeFixture(aggregationDetectionEnabled: boolean) {
+    const source = await prisma.source.create({
+      data: {
+        id: "staged-reanalyze-source",
+        name: "staged-reanalyze",
+        rssUrl: "https://staged.example.com/reanalyze/rss",
+        siteUrl: "https://staged.example.com/reanalyze",
+        enabled: true,
+        aiParsingEnabled: true,
+        aggregationEnabled: aggregationDetectionEnabled,
+        aggregationDetectionEnabled,
+      },
+    });
+    return prisma.item.create({
+      data: {
+        id: "staged-reanalyze-item",
+        sourceId: source.id,
+        originalUrl: "https://staged.example.com/reanalyze/item-1",
+        canonicalUrl: "https://staged.example.com/reanalyze/item-1",
+        urlHash: "staged-reanalyze-item-1-hash",
+        originalTitle: "staged 重判定条目",
+        // 旧值必须不把本次失败 attempt 洗成成功
+        summaryText: "旧摘要保留",
+        status: "processed",
+        moderationStatus: "allowed",
+        publishedAt: new Date("2026-06-30T00:00:00.000Z"),
+      },
+    });
+  }
+
+  it.each([
+    {
+      name: "聚合关闭且摘要分析双失败 => failed",
+      aggregationDetectionEnabled: false,
+      override: { diagnostics: { summaryValid: false, analysisValid: false, aggregationValid: false } },
+      expectedStatus: "failed",
+      expectedError: ["摘要", "分析"],
+    },
+    {
+      name: "仅摘要失败 => partial",
+      aggregationDetectionEnabled: false,
+      override: { diagnostics: { summaryValid: false, analysisValid: true, aggregationValid: true } },
+      expectedStatus: "partial",
+      expectedError: ["摘要"],
+    },
+    {
+      name: "全部成功 => succeeded",
+      aggregationDetectionEnabled: false,
+      override: null,
+      expectedStatus: "succeeded",
+      expectedError: null,
+    },
+    {
+      name: "诊断有效但被过滤 => 仍 succeeded",
+      aggregationDetectionEnabled: false,
+      override: { moderationStatus: "filtered", moderationReason: "stale_content", moderationDetail: "时效过时" },
+      expectedStatus: "succeeded",
+      expectedError: null,
+    },
+    {
+      name: "聚合关闭时 aggregation 失败被忽略 => succeeded",
+      aggregationDetectionEnabled: false,
+      override: { diagnostics: { summaryValid: true, analysisValid: true, aggregationValid: false } },
+      expectedStatus: "succeeded",
+      expectedError: null,
+    },
+    {
+      name: "聚合开启且仅聚合失败 => partial",
+      aggregationDetectionEnabled: true,
+      override: { diagnostics: { summaryValid: true, analysisValid: true, aggregationValid: false } },
+      expectedStatus: "partial",
+      expectedError: ["聚合"],
+    },
+    {
+      name: "聚合开启且三字段全失败 => failed",
+      aggregationDetectionEnabled: true,
+      override: { diagnostics: { summaryValid: false, analysisValid: false, aggregationValid: false } },
+      expectedStatus: "failed",
+      expectedError: ["摘要", "分析", "聚合"],
+    },
+    {
+      name: "聚合开启且聚合成功但摘要分析失败 => partial",
+      aggregationDetectionEnabled: true,
+      override: { diagnostics: { summaryValid: false, analysisValid: false, aggregationValid: true } },
+      expectedStatus: "partial",
+      expectedError: ["摘要", "分析"],
+    },
+  ])("item_reanalyze 终态如实反映字段结果：$name", async ({ aggregationDetectionEnabled, override, expectedStatus, expectedError }) => {
+    mockState.understandingOverride = override;
+    const item = await createReanalyzeFixture(aggregationDetectionEnabled);
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "item_reanalyze",
+        triggerType: "manual",
+        status: "queued",
+        label: "重新分析条目",
+        entityId: item.id,
+      },
+    });
+
+    const result = await triggerTaskWorkflow("item_reanalyze", taskRun.id);
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    const storedItem = await prisma.item.findUniqueOrThrow({ where: { id: item.id } });
+
+    expect(result.status).toBe(expectedStatus);
+    expect(stored.status).toBe(expectedStatus);
+    if (expectedError) {
+      expect(stored.errorSummary).not.toBeNull();
+      for (const fragment of expectedError) {
+        expect(stored.errorSummary).toContain(fragment);
+      }
+      // 写回/清理先于终态失败完成：条目级字段状态必须已落库，
+      // 且 service 保留的旧摘要不得把本次失败洗成成功。
+      expect(storedItem.summaryStatus).toBe(override?.diagnostics && !(override.diagnostics as { summaryValid: boolean }).summaryValid ? "failed" : storedItem.summaryStatus);
+      if (expectedStatus === "failed") {
+        expect(storedItem.summaryText).toBe("旧摘要保留");
+      }
+    } else {
+      expect(stored.errorSummary).toBeNull();
+    }
+    // precomputed understanding 直传 writeback，全程不得有第二次 AI 调用
+    expect(mockState.understandingCalls).toBe(1);
   });
 });

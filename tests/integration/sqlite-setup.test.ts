@@ -927,4 +927,56 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "item_entities" WHERE "itemId" = 'item-entity-backfill-later'`)).toBe("0");
   }, 30_000);
 
+  it("adds AI request audit tables to an existing volume without dropping rows, idempotently", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-ai-audit-upgrade-"));
+    const dbPath = path.join(tempDir, "ai-audit-upgrade.db");
+
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    runSqlite(
+      dbPath,
+      `
+      PRAGMA trusted_schema = ON;
+      DROP TABLE "ai_request_receipts";
+      DROP TABLE "ai_request_budget_days";
+      DROP TABLE "ai_requests_configs";
+      INSERT INTO "sources" (
+        "id", "name", "rssUrl", "siteUrl", "updatedAt"
+      ) VALUES (
+        'source-ai-audit-upgrade', 'Upgrade Source', 'https://upgrade.example.com/ai-audit.xml',
+        'https://upgrade.example.com', CURRENT_TIMESTAMP
+      );
+      INSERT INTO "items" (
+        "id", "sourceId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle", "publishedAt",
+        "status", "moderationStatus", "qualityScore", "qualityRationale", "language", "createdAt", "updatedAt"
+      ) VALUES (
+        'item-ai-audit-upgrade', 'source-ai-audit-upgrade', 'https://upgrade.example.com/ai-audit',
+        'https://upgrade.example.com/ai-audit', 'ai-audit-hash', 'Existing item', CURRENT_TIMESTAMP,
+        'processed', 'allowed', 50, 'existing', 'en', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      );
+      `,
+    );
+
+    // 首次升级：新表补齐，存量行保留。
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('ai_requests_configs','ai_request_budget_days','ai_request_receipts')`)).toBe("3");
+    expect(runSqlite(dbPath, `SELECT "originalTitle" FROM "items" WHERE "id" = 'item-ai-audit-upgrade'`)).toBe("Existing item");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('ai_request_receipts') WHERE "name" = 'parseDiagnosticJson'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('ai_requests_configs') WHERE "name" = 'dailyChatRequestLimit'`)).toBe("1");
+
+    // 幂等回放：再次执行不破坏数据。
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+    });
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "items" WHERE "id" = 'item-ai-audit-upgrade'`)).toBe("1");
+  }, 30_000);
+
 });

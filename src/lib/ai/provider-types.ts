@@ -307,11 +307,13 @@ export type AiProviderOptions = {
   /** 通用编排层 attempt 分类；不替代业务调用计数。 */
   onAttempt?: (event: {
     usageKey?: string;
-    attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair";
+    attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair" | "model_fallback";
     step?: { stepId: string; workflowId?: string; workflowRunId?: string; taskRunId?: string };
   }) => void;
   /** Embedding 召回配置；缺省或未启用时 provider 不具备 embedTexts 能力。 */
   embedding?: RuntimeConfig["embedding"] | null;
+  /** 请求审计（回执 + UTC 日硬上限）。缺省时使用默认 DB 审计；显式传 null 关闭（仅测试）。 */
+  requestAudit?: import("@/lib/ai/request-audit").RequestAudit | null;
 };
 
 export type CompletionResponseFormat = {
@@ -326,7 +328,7 @@ export type AiCallUsage = {
   cachedTokensReported?: boolean;
   tokenUsageSource?: "provider" | "estimated" | "mixed";
   model?: string;
-  attemptType?: "initial" | "transient_retry" | "json_retry";
+  attemptType?: "initial" | "transient_retry" | "json_retry" | "model_fallback";
   step?: StepExecutionIdentity;
 };
 

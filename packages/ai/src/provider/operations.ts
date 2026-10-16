@@ -59,7 +59,10 @@ export function createAiOperationRunner(input: {
   registry: AiOperationRegistry;
 }) {
   return {
-    completeJson<T>(request: JsonCompleteRequest, parse: (output: string) => T): Promise<T | null> {
+    completeJson<T>(
+      request: JsonCompleteRequest,
+      parse: (output: string, meta: { requestId?: string }) => T | Promise<T>,
+    ): Promise<Awaited<T> | null> {
       const key = request.usageKey ?? request.taskType;
       const operation = input.registry.get(key);
       if (request.taskType !== operation.key || request.usageKey !== operation.key) {

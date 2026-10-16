@@ -39,9 +39,46 @@ export type CompletionRequest = {
   /** 结构化输出（可选）：提供时走模型侧 JSON Schema 约束解码（generateObject），
    * 语法错误在模型侧消除；端点不支持时传输层自动回退 json_object 模式。 */
   schema?: ZodType;
+  /** 网关在派发传输前标注的本次逻辑 attempt 分类；审计层据此区分
+   * structured_fallback 等真实传输调用。 */
+  attemptType?: UsageAttemptType | "structured_fallback";
 };
 
-export type UsageAttemptType = "initial" | "json_retry" | "transient_retry" | "stage_context";
+/** 一次真实传输调用（已过审计准入）的可观测上下文。 */
+export type TransportAttemptContext = {
+  /** 每次真实传输调用唯一的请求 ID（回执主键）。 */
+  requestId: string;
+  /** 同一逻辑补全内的第几次真实调用（0 起，受控重试/回退时递增）。 */
+  attemptIndex: number;
+  attemptType: UsageAttemptType | "structured_fallback";
+  model: string;
+  baseURL?: string | null;
+  usageKey?: string;
+  step?: StepExecutionIdentity;
+  /** system+user 内容的 SHA-256 指纹；不落明文。 */
+  promptFingerprint: string;
+  /** user 内容字节长度（仅规模观测，不含内容）。 */
+  promptBytes: number;
+};
+
+export type TransportAttemptOutcome = {
+  status: "succeeded" | "failed" | "unknown";
+  /** 提供方原始输出文本（业务解析前）；由审计层脱敏并限界。 */
+  rawText?: string;
+  finishReason?: string | null;
+  errorName?: string;
+  errorMessage?: string;
+  usage?: UsageSnapshot;
+};
+
+/** 审计钩子：每次真实传输调用前准入、结算时持久化原始响应回执。
+ * 抛错即阻断派发/上报（预算拒绝、未决结果阻断、审计存储失败）。 */
+export type TransportAuditHooks = {
+  beforeDispatch(context: TransportAttemptContext): Promise<void>;
+  settle(context: TransportAttemptContext, outcome: TransportAttemptOutcome): Promise<void>;
+};
+
+export type UsageAttemptType = "initial" | "json_retry" | "transient_retry" | "stage_context" | "model_fallback";
 
 export type UsageSnapshot = {
   promptTokens: number;
@@ -60,6 +97,8 @@ export type CompletionResult = {
   finishReason: string | null;
   reasoningLength: number;
   usage: UsageSnapshot;
+  /** 本次真实传输调用的请求 ID（审计回执关联）。 */
+  requestId?: string;
 };
 
 /** 传输：把补全请求送到具体模型 API。生产 = @ai-sdk/openai-compatible；测试 = 兼容 client 注入。 */
@@ -83,8 +122,10 @@ export type ModelGatewayOptions = {
   jsonParseRetryCount?: number;
   /** usage 上报（逐次调用）。 */
   onUsage?: (usage: UsageSnapshot, usageKey?: string) => void;
+  /** 审计钩子：真实传输调用粒度的准入与原始响应回执。 */
+  auditHooks?: TransportAuditHooks;
   /** 通用 attempt 分类；不携带 token，供产品层审计 retry/fallback 次数。 */
-  onAttempt?: (event: { usageKey?: string; attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair"; step?: StepExecutionIdentity }) => void;
+  onAttempt?: (event: { usageKey?: string; attemptType: "initial" | "json_retry" | "transient_retry" | "structured_fallback" | "business_repair" | "model_fallback"; step?: StepExecutionIdentity }) => void;
 };
 
 type JsonParseRetryPromptBuilder = (userContent: string, error: Error) => string;

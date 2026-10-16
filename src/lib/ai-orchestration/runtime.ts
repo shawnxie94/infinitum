@@ -6,6 +6,7 @@ import { WORKFLOW_TASK_DEFINITIONS } from "@/lib/workflows/catalog";
 import { createAiRuntime, restartActiveWorkflowRuns, type AiRuntime } from "@infinitum/ai/orchestration/runtime";
 import type { WorkflowTaskSink } from "@infinitum/ai/orchestration/types";
 import { createDomainTaskRunWorkflow } from "@infinitum/ai/orchestration/task-definition";
+import { runWithRequestAuditContext } from "@/lib/ai/request-audit";
 import type { TaskLifecycleEvent } from "@infinitum/ai/orchestration/lifecycle";
 import type { TaskStepIdentity, TaskStepLifecycleEvent } from "@infinitum/ai/orchestration/types";
 import type { TaskAiCallBreakdownSnapshot, TaskStageTimingSnapshot } from "@/lib/tasks/types";
@@ -491,7 +492,11 @@ export async function triggerTaskWorkflow(
   const runtime = getAiRuntime();
   const workflow = runtime.mastra.getWorkflow(kind);
   const run = await workflow.createRun();
-  const result = (await run.start({ inputData: { taskRunId } })) as {
+  // 审计执行上下文：任务触发边界注入 taskRunId，复用 provider 在调用时解析归属
+  // （同任务恢复阻断与回执归因的真实执行身份）。
+  const result = (await runWithRequestAuditContext({ taskRunId, workflowRunId: run.runId }, () =>
+    run.start({ inputData: { taskRunId } }),
+  )) as {
     status?: string;
     result?: { status: string };
   };

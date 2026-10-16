@@ -477,6 +477,70 @@ model ContentExtractionConfig {
   @@map("content_extraction_configs")
 }
 
+/// AI 业务聊天请求审计：UTC 日准入计数 + 每次真实调用的回执。
+model AiRequestsConfig {
+  id                   String   @id @default(cuid())
+  /// 每日（UTC）业务聊天请求硬上限；NULL=不限，0=全部拒绝，正整数=上限。
+  dailyChatRequestLimit Int?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("ai_requests_configs")
+}
+
+model AiRequestBudgetDay {
+  /// UTC 日，格式 YYYY-MM-DD。
+  day       String   @id
+  admitted  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_request_budget_days")
+}
+
+model AiRequestReceipt {
+  id                String    @id @default(cuid())
+  /// 每次真实传输调用唯一。
+  requestId         String    @unique
+  operation         String
+  attemptType       String
+  model             String
+  /// 模型配置指纹（baseURL+model 的 SHA-256），不含 apiKey。
+  configFingerprint String
+  /// system+user 内容指纹（SHA-256），不落明文。
+  promptFingerprint String
+  promptBytes       Int?
+  /// in_flight | succeeded | failed | unknown | denied_budget | blocked_unresolved
+  status            String    @default("in_flight")
+  finishReason      String?
+  errorKind         String?
+  errorMessage      String?
+  /// 脱敏且 ≤32KiB UTF-8 的原始响应；7 天后由保留策略清空（行保留）。
+  responseRaw       String?
+  responseTruncated Boolean   @default(false)
+  responseExpiresAt DateTime?
+  /// 解析层非抛出诊断（invalid summary/analysis 等），不改变业务语义。
+  parseDiagnosticJson String?
+  taskRunId         String?
+  /// 执行归属（进程 boot + taskRunId）；用于 SIGKILL 孤儿 in_flight 的立即封存与竞争恢复阻断。
+  ownerId           String?
+  stepId            String?
+  workflowId        String?
+  workflowRunId     String?
+  promptTokens      Int?
+  completionTokens  Int?
+  totalTokens       Int?
+  /// provider | estimated | mixed；缺失用量保持 NULL，绝不记为 0 实际用量。
+  tokenUsageSource  String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([taskRunId, operation, createdAt])
+  @@index([taskRunId, status])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@map("ai_request_receipts")
+}
+
 model EventBriefingConfig {
   id                   String   @id @default(cuid())
   minRankScore         Int      @default(0)

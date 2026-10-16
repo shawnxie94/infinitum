@@ -8,6 +8,7 @@ import {
   serializeAdminContentExtractionConfig,
   serializeRuntimeContentExtractionConfig,
 } from "@/lib/settings/content-extraction-service";
+import { getAiRequestsSettings } from "@/lib/settings/ai-requests-service";
 import {
   ensureEventBriefingConfig,
   serializeAdminEventBriefingConfig,
@@ -219,6 +220,7 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
       config: serializeAdminEventBriefingConfig(eventBriefingConfig),
     },
     contentExtraction: serializeAdminContentExtractionConfig(contentExtractionConfig),
+    aiRequests: await getAiRequestsSettings(),
     blacklistKeywords: blacklist.map((entry) => entry.keyword),
     taskSchedule: toTaskScheduleSnapshot(taskSchedule) as AdminSettingsSnapshot["taskSchedule"],
     dailyReportSchedule: toTaskScheduleSnapshot(dailyReportSchedule) as AdminSettingsSnapshot["dailyReportSchedule"],

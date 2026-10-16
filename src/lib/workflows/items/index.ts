@@ -100,6 +100,22 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
             precomputedUnderstanding: payload.understanding,
           });
           await context.projectAiUsage?.(aiUsage.snapshot());
+          // 写回与清理已在 reanalyzeItem 内完成；此处只依据诊断结果收敛任务终态，
+          // service 保留的旧摘要/签名不代表本次重判定成功。
+          const failedFields = result.failedFields;
+          if (failedFields.length > 0) {
+            const fieldLabels = { summary: "摘要", analysis: "分析", aggregation: "聚合判定" } as const;
+            const failedNames = failedFields.map((field) => fieldLabels[field]).join("、");
+            // ItemReanalyzeOutcome 的 source 类型只声明 name，但 reanalyzeItem 各返回
+            // 路径实际 include 完整 source，可据此判定聚合是否属于本次请求字段。
+            const aggregationDetectionEnabled =
+              (result.item.source as { aggregationDetectionEnabled?: boolean | null }).aggregationDetectionEnabled === true;
+            const requestedCount = aggregationDetectionEnabled ? 3 : 2;
+            if (failedFields.length >= requestedCount) {
+              throw new Error(`统一条目理解全部请求字段失败：${failedNames}`);
+            }
+            await context.markPartial?.(`统一条目理解部分字段失败：${failedNames}`);
+          }
           const aggregation = payload.understanding.aggregation;
           const verdict = aggregation.isAggregation
             ? `聚合 · 拆分 ${aggregation.events.length} 个子事件`

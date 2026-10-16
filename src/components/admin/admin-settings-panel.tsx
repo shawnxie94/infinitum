@@ -162,6 +162,19 @@ export function AdminSettingsPanel({
   const [contentExtractionSnapshot, setContentExtractionSnapshot] = useState(
     initialSettings.contentExtraction,
   );
+  // AI 请求预算（每日 UTC 业务聊天请求硬上限）：初值取自服务端快照，
+  // 保存失败时保留当前输入，不回写也不覆盖已配置值。
+  const [aiChatRequestLimitSaved, setAiChatRequestLimitSaved] = useState<number | null>(
+    initialSettings.aiRequests?.dailyChatRequestLimit ?? null,
+  );
+  const [aiChatRequestLimitInput, setAiChatRequestLimitInput] = useState(
+    initialSettings.aiRequests?.dailyChatRequestLimit == null
+      ? ""
+      : String(initialSettings.aiRequests.dailyChatRequestLimit),
+  );
+  const aiChatRequestLimitDirty = aiChatRequestLimitInput !== (
+    aiChatRequestLimitSaved == null ? "" : String(aiChatRequestLimitSaved)
+  );
   const [contentExtractionProvider, setContentExtractionProvider] = useState<"local" | "jina">(
     initialSettings.contentExtraction.jinaEnabled ? "jina" : "local",
   );
@@ -374,6 +387,32 @@ export function AdminSettingsPanel({
     }
 
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const saveAiChatRequestLimit = () => {
+    const trimmed = aiChatRequestLimitInput.trim();
+    let nextLimit: number | null;
+    if (trimmed === "") {
+      nextLimit = null;
+    } else {
+      const parsed = Number.parseInt(trimmed, 10);
+      if (!Number.isInteger(parsed) || parsed < 0 || String(parsed) !== trimmed) {
+        showToast("每日业务聊天请求上限需为非负整数；留空表示不限。", "error");
+        return;
+      }
+      nextLimit = parsed;
+    }
+    startTransition(async () => {
+      try {
+        await submitAdminSettingsAction("/api/admin/settings/ai-requests", "PUT", {
+          dailyChatRequestLimit: nextLimit,
+        });
+        setAiChatRequestLimitSaved(nextLimit);
+        showToast(nextLimit === null ? "已保存：不限" : nextLimit === 0 ? "已保存：已暂停" : `已保存：每日上限 ${nextLimit}`, "success");
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "保存失败", "error");
+      }
+    });
   };
 
   const submitJson = (
@@ -1238,7 +1277,63 @@ export function AdminSettingsPanel({
         role="tabpanel"
       >
         {activeSection === "ai-model-api" ? (
-          <AiSettingsPanel initialSettings={initialSettings} mode="model-api" />
+          <>
+            <AiSettingsPanel initialSettings={initialSettings} mode="model-api" />
+            <div
+              aria-labelledby="settings-ai-requests"
+              className={cx(
+                "w-full min-w-0 space-y-4",
+                embedMode
+                  ? ""
+                  : "rounded-sm border border-[color:var(--line)] bg-[var(--surface)] p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+              )}
+            >
+              <div className="flex flex-col gap-3 border-b border-[color:var(--line)] pb-5 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0 space-y-1">
+                  <h2
+                    className="text-lg font-semibold text-[var(--text-1)]"
+                    id="settings-ai-requests"
+                  >
+                    AI 请求预算
+                  </h2>
+                  <p className="text-sm text-[var(--text-3)]">
+                    限制每日业务聊天请求数
+                  </p>
+                </div>
+                <Button
+                  variant="primary"
+                  size="md"
+                  className="w-full sm:w-auto"
+                  onClick={saveAiChatRequestLimit}
+                  disabled={isPending || !aiChatRequestLimitDirty}
+                >
+                  保存预算
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="space-y-1.5">
+                  <label htmlFor="ai-chat-daily-limit" className="block text-sm text-[var(--muted)]">
+                    每日业务聊天请求上限（UTC 日）
+                  </label>
+                  <TextInput
+                    id="ai-chat-daily-limit"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1}
+                    value={aiChatRequestLimitInput}
+                    onChange={(event) => setAiChatRequestLimitInput(event.target.value)}
+                    placeholder="不限"
+                  />
+                </div>
+                <div className="flex items-end pb-1.5 text-sm text-[var(--text-3)]">
+                  {aiChatRequestLimitSaved === 0
+                    ? "当前已暂停（上限 0）"
+                    : "留空表示不限；0 表示暂停全部业务聊天请求"}
+                </div>
+              </div>
+            </div>
+          </>
         ) : null}
 
         {activeSection === "ai-prompt" ? (

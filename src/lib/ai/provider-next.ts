@@ -20,7 +20,8 @@ import { createEmbedTexts } from "@/lib/ai/embeddings";
 import { AI_OPERATION_REGISTRY, assertAiOperation } from "@/lib/ai/operations";
 import { isDailyReportNotesRepairableViolation } from "@/lib/daily-report/types";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
-import { InvalidJsonModelResponseError, isInvalidJsonModelResponseError } from "@/lib/ai/provider-types";
+import { InvalidJsonModelResponseError, isInvalidJsonModelResponseError, getJsonParseErrorMessage } from "@/lib/ai/provider-types";
+import { createRequestAudit, getRequestAuditContext, type RequestAudit } from "@/lib/ai/request-audit";
 import { createAiModelRuntime } from "@infinitum/ai/provider/runtime";
 import { createAiOperationRunner } from "@infinitum/ai/provider/operations";
 import { createAiSdkTransport, createCompatClientTransport } from "@infinitum/ai/provider/transports";
@@ -151,11 +152,33 @@ export function createAiProvider(
   clientOverrideArg?: unknown | null,
   options?: AiProviderOptions,
 ): AiProvider {
+  // 请求审计（回执 + UTC 日硬上限）：身份在调用时解析——任务路径经 options.step
+  // 归因；任务触发边界经审计 ALS 上下文（triggerTaskWorkflow）注入 taskRunId，
+  // 复用的 provider 实例同样按调用时刻解析；admin 同步路径无任务身份时同样
+  // 插桩（taskRunId 为空，不做同任务阻断）。
+  const knownSecrets = [
+    config.apiKey,
+    ...Object.values(promptOverrides ?? {}).map((override) => override?.modelApi?.apiKey),
+  ];
+  const requestAudit: RequestAudit | null = options?.requestAudit !== undefined
+    ? options.requestAudit
+    : createRequestAudit(
+      () => options?.step
+        ? {
+          taskRunId: options.step.taskRunId ?? null,
+          stepId: options.step.stepId ?? null,
+          workflowId: options.step.workflowId ?? null,
+          workflowRunId: options.step.workflowRunId ?? null,
+        }
+        : getRequestAuditContext(),
+      { knownSecrets },
+    );
+  const auditHooks = requestAudit ?? undefined;
   const gateway = createAiModelRuntime({
     defaultModelApi: config,
     transport: clientOverrideArg
-      ? createCompatClientTransport(clientOverrideArg, { maxRetries: 1 })
-      : createAiSdkTransport({ maxRetries: 1, supportsStructuredOutputs: true }),
+      ? createCompatClientTransport(clientOverrideArg, { maxRetries: 1, auditHooks })
+      : createAiSdkTransport({ maxRetries: 1, supportsStructuredOutputs: true, auditHooks }),
     normalizeText: normalizeModelResponseText,
     temperatureLockedTaskTypes: TEMPERATURE_LOCKED_PROMPT_TYPES,
     circuitBreaker: {
@@ -235,6 +258,54 @@ export function createAiProvider(
     ),
   );
 
+  /**
+   * 解析层审计包装：InvalidJson 解析失败与 understandItem 的非抛出诊断
+   * （summary/analysis/aggregation 校验不过）记录到对应回执；
+   * 只记录，不引入额外修复调用、不改变既有解析/回退/summary 协议。
+   */
+  const auditedParse = <T>(operation: string, parse: (output: string) => T) =>
+    async (output: string, meta: { requestId?: string }): Promise<T> => {
+      try {
+        const result = parse(output);
+        if (operation === "item_understanding") {
+          const diagnostics = (result as {
+            diagnostics?: { summaryValid?: boolean; analysisValid?: boolean; aggregationValid?: boolean };
+          } | null)?.diagnostics;
+          if (diagnostics?.summaryValid === false) {
+            await requestAudit?.recordParseDiagnostic({
+              requestId: meta.requestId,
+              kind: "invalid_summary",
+              detail: "understanding 输出 summary 未通过校验（非抛出协议，按 fallback 语义处理）",
+            });
+          }
+          if (diagnostics?.analysisValid === false) {
+            await requestAudit?.recordParseDiagnostic({
+              requestId: meta.requestId,
+              kind: "invalid_analysis",
+              detail: "understanding 输出 analysis 未通过校验（非抛出协议）",
+            });
+          }
+          if (diagnostics?.aggregationValid === false) {
+            await requestAudit?.recordParseDiagnostic({
+              requestId: meta.requestId,
+              kind: "invalid_aggregation",
+              detail: "understanding 输出 aggregation 未通过校验（非抛出协议）",
+            });
+          }
+        }
+        return result;
+      } catch (error) {
+        if (isInvalidJsonModelResponseError(error)) {
+          await requestAudit?.recordParseDiagnostic({
+            requestId: meta.requestId,
+            kind: "parse_failed",
+            detail: getJsonParseErrorMessage(error),
+          });
+        }
+        throw error;
+      }
+    };
+
   function buildJsonRequest(
     promptConfig: PromptRuntimeConfig,
     taskType: string,
@@ -283,7 +354,7 @@ export function createAiProvider(
       });
       const result = await operations.completeJson(
         buildJsonRequest(itemUnderstandingConfig, "item_understanding", userContent),
-        (output) => parseItemUnderstandingOutput(
+        auditedParse("item_understanding", (output) => parseItemUnderstandingOutput(
           output,
           inputText,
           fallback,
@@ -291,7 +362,7 @@ export function createAiProvider(
           aggregationSplitMaxEvents,
           itemUnderstandingQualityRubric,
           metadata.publishedAt,
-        ),
+        )),
       );
 
       if (result == null) {
@@ -307,7 +378,7 @@ export function createAiProvider(
       });
       const output = await operations.completeJson(
         buildJsonRequest(clusterSummaryConfig, "cluster_summary", userContent),
-        parseClusterSummaryOutput,
+        auditedParse("cluster_summary", parseClusterSummaryOutput),
       );
 
       return output ?? "";
@@ -325,10 +396,10 @@ export function createAiProvider(
 
       return operations.completeJson(
         buildJsonRequest(clusterMatchConfig, "cluster_match", userContent, "cluster_match", CLUSTER_MATCH_SCHEMA),
-        (output) => parseClusterMatchCandidateId(
+        auditedParse("cluster_match", (output) => parseClusterMatchCandidateId(
           output,
           metadata.candidates.map((candidate) => candidate.id),
-        ),
+        )),
       ).catch((error) => {
         if (isInvalidJsonModelResponseError(error)) {
           return null;
@@ -348,7 +419,7 @@ export function createAiProvider(
       return (
         (await operations.completeJson(
           buildJsonRequest(entityAliasCheckConfig, "entity_alias_check", userContent, "entity_alias_check", ENTITY_ALIAS_DECISIONS_SCHEMA),
-          (output) => parseEntityAliasDecisions(output, input.pairs),
+          auditedParse("entity_alias_check", (output) => parseEntityAliasDecisions(output, input.pairs)),
         )) ?? []
       );
     },
@@ -370,7 +441,7 @@ export function createAiProvider(
           "cluster_merge",
           CLUSTER_MERGE_DECISIONS_SCHEMA,
         ),
-        (output) => parseClusterMergeDecisions(output, metadata),
+        auditedParse("cluster_merge", (output) => parseClusterMergeDecisions(output, metadata)),
       );
 
       return decisions ?? [];
@@ -395,9 +466,9 @@ export function createAiProvider(
       const output = input.stageContext
         ? await operations.completeJson(
             { ...buildJsonRequest(promptConfig, "daily_report_assess", userContent, "daily_report_assess"), stageContext: toGatewayStageContext(input.stageContext), validationFeedback: toGatewayValidationFeedback(input.validationFeedback) },
-            parseAssessmentOutput,
+            auditedParse("daily_report_assess", parseAssessmentOutput),
           )
-        : await operations.completeJson(buildJsonRequest(promptConfig, "daily_report_assess", userContent, "daily_report_assess"), parseAssessmentOutput);
+        : await operations.completeJson(buildJsonRequest(promptConfig, "daily_report_assess", userContent, "daily_report_assess"), auditedParse("daily_report_assess", parseAssessmentOutput));
       return output ?? [];
     },
     async planDailyReport(input) {
@@ -421,7 +492,7 @@ export function createAiProvider(
       const output = input.stageContext
         ? await operations.completeJson(
             { ...buildJsonRequest(promptConfig, "daily_report_plan", userContent, "daily_report_plan"), stageContext: toGatewayStageContext(input.stageContext), validationFeedback: toGatewayValidationFeedback(input.validationFeedback) },
-            parsePlanOutput,
+            auditedParse("daily_report_plan", parsePlanOutput),
           )
         : await operations.completeJson(buildJsonRequest(promptConfig, "daily_report_plan", userContent, "daily_report_plan"), parsePlanOutput);
       if (!output) throw new Error("PLAN 阶段没有返回结果。");
@@ -450,7 +521,7 @@ export function createAiProvider(
       const output = input.stageContext
         ? await operations.completeJson(
             { ...buildJsonRequest(promptConfig, "daily_report_write", userContent, "daily_report_write"), stageContext: toGatewayStageContext(input.stageContext), validationFeedback: toGatewayValidationFeedback(input.validationFeedback) },
-            parseDraftOutput,
+            auditedParse("daily_report_write", parseDraftOutput),
           )
         : await operations.completeJson(buildJsonRequest(promptConfig, "daily_report_write", userContent, "daily_report_write"), parseDraftOutput);
       if (!output) throw new Error("WRITE 阶段没有返回结果。");
@@ -512,7 +583,7 @@ export function createAiProvider(
             DAILY_REPORT_REPAIR_FIELD_GUIDE,
           ),
         ),
-        parseRepairPatchOutput,
+        auditedParse("daily_report_repair", parseRepairPatchOutput),
       );
       if (!output) throw new Error("REPAIR 阶段没有返回补丁。");
       return output;
@@ -537,7 +608,7 @@ export function createAiProvider(
             userContent,
           ),
         },
-        parseReviewOutput,
+        auditedParse("daily_report_review", parseReviewOutput),
       );
       if (!output) throw new Error("REVIEW 阶段没有返回结果。");
       const knownTopicIds = new Set(input.selectedTopics.map((topic) => topic.topicId));

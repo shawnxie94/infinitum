@@ -126,6 +126,11 @@ export type AdminSettingsSnapshot = {
     createdAt: string;
     updatedAt: string;
   };
+  aiRequests?: {
+    /** 每日（UTC）业务聊天请求硬上限；null=不限，0=暂停。 */
+    dailyChatRequestLimit: number | null;
+    updatedAt: string;
+  };
   blacklistKeywords: string[];
   taskSchedule: {
     key: "ingestion_default";

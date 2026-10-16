@@ -3,7 +3,7 @@
  * 语义对齐原 provider-client/provider：瞬时重试、按配置熔断（域级回退）、
  * JSON 解析重试、阶段上下文多轮、采样温度契约、用量归一与上报。
  */
-import { InvalidJsonModelResponse } from "./transports";
+import { InvalidJsonModelResponse, isTerminalTransportError } from "./transports";
 import type {
   ChatMessage,
   CompletionRequest,
@@ -56,8 +56,11 @@ export type ModelGateway = {
     request: CompletionRequest,
     execution: { config: ModelApiConfig; attemptType?: UsageSnapshot["attemptType"]; step?: StepExecutionIdentity },
   ): Promise<{ text: string; usage: UsageSnapshot } | null>;
-  /** JSON 任务：解析重试（无 stageContext）或阶段上下文多轮（有 stageContext）。parse 抛 InvalidJsonModelResponse 触发重试。 */
-  completeJson<T>(request: JsonCompleteRequest, parse: (output: string) => T): Promise<T | null>;
+  /** JSON 任务：解析重试（无 stageContext）或阶段上下文多轮（有 stageContext）。parse 抛 InvalidJsonModelResponse 触发重试。meta 携带本次真实调用的 requestId。 */
+  completeJson<T>(
+    request: JsonCompleteRequest,
+    parse: (output: string, meta: { requestId?: string }) => T | Promise<T>,
+  ): Promise<Awaited<T> | null>;
   isCircuitOpen(config: ModelApiConfig, now?: number): boolean;
 };
 
@@ -100,14 +103,15 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     request: CompletionRequest,
     attemptType: UsageSnapshot["attemptType"],
     step?: StepExecutionIdentity,
-  ): Promise<{ text: string; usage: UsageSnapshot } | null> {
+  ): Promise<{ text: string; usage: UsageSnapshot; requestId?: string } | null> {
     if (!config.apiKey) return null;
     options.onAttempt?.({
       usageKey: request.usageKey,
       attemptType: !attemptType || attemptType === "stage_context" ? "initial" : attemptType,
       step,
     });
-    const result = await transport(request, config);
+    // attemptType 随请求下发：传输层据此给每次真实调用（含结构化回退）打标。
+    const result = await transport({ ...request, attemptType }, config);
     const usage: UsageSnapshot = { ...result.usage, attemptType, step };
     options.onUsage?.(usage, request.usageKey);
     if (request.requireCompleteJson && result.finishReason === "length") {
@@ -116,7 +120,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       );
     }
     const text = result.text ? (options.normalizeText ? options.normalizeText(result.text) : result.text) : "";
-    return { text, usage };
+    return { text, usage, requestId: result.requestId };
   }
 
   async function completeTextWithCircuitBreaker(
@@ -124,18 +128,26 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
     config: ModelApiConfig,
     attemptType: UsageSnapshot["attemptType"],
     step?: StepExecutionIdentity,
-  ): Promise<{ text: string; usage: UsageSnapshot } | null> {
+  ): Promise<{ text: string; usage: UsageSnapshot; requestId?: string } | null> {
     const isDefaultModel = isSameModelApiConfig(config, options.defaultModelApi);
-    const selectedConfig = !isDefaultModel && circuitStateFor(config).openUntil > Date.now() ? options.defaultModelApi : config;
+    const circuitFallback = !isDefaultModel && circuitStateFor(config).openUntil > Date.now();
+    const selectedConfig = circuitFallback ? options.defaultModelApi : config;
+    // 熔断开启触发的域级回退是一次独立真实调用，标注 model_fallback 以便审计区分。
+    const effectiveAttemptType = circuitFallback && (attemptType === "initial" || !attemptType)
+      ? "model_fallback"
+      : attemptType;
 
     try {
-      const result = await completeTextOnce(selectedConfig, request, attemptType, step);
+      const result = await completeTextOnce(selectedConfig, request, effectiveAttemptType, step);
       if (!isDefaultModel && isSameModelApiConfig(selectedConfig, config)) {
         recordSuccess(config);
       }
       return result;
     } catch (error) {
       if (isInvalidJsonModelResponse(error)) throw error;
+      // 准入拒绝（预算/未决/审计存储）与 unknown 结局一律终态上抛：
+      // 不计熔断、不做域级模型回退、不做任何自动重试。
+      if (isTerminalTransportError(error)) throw error;
       console.error("[ModelGateway] completeText failed:", error);
       if (isDefaultModel || !isSameModelApiConfig(selectedConfig, config)) {
         throw error;
@@ -185,7 +197,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
       return completeTextWithCircuitBreaker(request, execution.config, execution.attemptType ?? "initial", execution.step ?? request.step);
     },
 
-    async completeJson<T>(rawRequest: JsonCompleteRequest, parse: (output: string) => T): Promise<T | null> {
+    async completeJson<T>(rawRequest: JsonCompleteRequest, parse: (output: string, meta: { requestId?: string }) => T | Promise<T>): Promise<Awaited<T> | null> {
       const request = applySamplingLock(rawRequest);
       const config = request.modelApi ?? options.defaultModelApi;
 
@@ -214,7 +226,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         if (!normalized) {
           throw new InvalidJsonModelResponse(`阶段 ${context.stage} 未返回 JSON 内容。`);
         }
-        return parse(normalized);
+        return await parse(normalized, { requestId: result?.requestId });
       }
 
       // 普通 JSON 模式：解析失败换修复提示重试。
@@ -224,7 +236,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         const userContent = attempt === 0 || !lastParseError
           ? request.userContent
           : buildRetryPrompt(request.userContent, lastParseError);
-        let result: { text: string; usage: UsageSnapshot } | null;
+        let result: { text: string; usage: UsageSnapshot; requestId?: string } | null;
         try {
           result = await completeTextWithCircuitBreaker(
             {
@@ -251,7 +263,7 @@ export function createModelGateway(options: ModelGatewayOptions): ModelGateway {
         }
         if (result == null) return null;
         try {
-          return parse(result.text);
+          return await parse(result.text, { requestId: result.requestId });
         } catch (error) {
           if (!isInvalidJsonModelResponse(error) || attempt >= parseRetryCount) throw error;
           lastParseError = error;
