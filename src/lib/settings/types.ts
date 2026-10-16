@@ -127,9 +127,15 @@ export type AdminSettingsSnapshot = {
     updatedAt: string;
   };
   aiRequests?: {
-    /** 每日（UTC）业务聊天请求硬上限；null=不限，0=暂停。 */
+    /**
+     * 每日（UTC）业务聊天请求硬上限数值；null 表示没有已配置的有效数字
+     * （unlimited 或 invalid，以 state 区分）。来源是环境变量。
+     */
     dailyChatRequestLimit: number | null;
-    updatedAt: string;
+    /** 生效状态：unlimited | paused | limited | invalid。 */
+    state: "unlimited" | "paused" | "limited" | "invalid";
+    /** 预算来源环境变量名。 */
+    sourceEnv: string;
   };
   blacklistKeywords: string[];
   taskSchedule: {

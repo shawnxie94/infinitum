@@ -302,6 +302,20 @@ describe("AdminSettingsPanel", () => {
     expect(screen.getByText("抓取并发：")).toBeInTheDocument();
   });
 
+  it("不再渲染 AI 请求预算卡片，其余模型设置保持完整", () => {
+    renderWithProviders(<AdminSettingsPanel initialSettings={buildInitialSettings()} />);
+
+    // 预算只通过环境变量 AI_DAILY_CHAT_REQUEST_LIMIT 配置，界面不再提供编辑入口。
+    expect(screen.queryByText("AI 请求预算")).not.toBeInTheDocument();
+    expect(screen.queryByText("每日业务聊天请求上限（UTC 日）")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "保存预算" })).not.toBeInTheDocument();
+
+    // 既有设置未受影响。
+    expect(screen.getByText("模型API配置")).toBeInTheDocument();
+    expect(screen.getAllByText("默认模型配置").length).toBeGreaterThan(0);
+    expect(screen.getByText("User-Agent: ••••••••")).toBeInTheDocument();
+  });
+
   it("creates a configured header link from the navigation settings section", async () => {
     const user = userEvent.setup();
     const fetchMock = createSourceSettingsFetchMock(buildInitialSettings().sources, (url, init) => {

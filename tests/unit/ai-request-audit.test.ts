@@ -13,9 +13,12 @@ import type { TransportAuditHooks } from "@infinitum/ai/provider/types";
 import {
   normalizeDailyChatRequestLimit,
   sanitizeAuditText,
-  validateDailyChatRequestLimit,
   AI_RAW_MAX_BYTES,
 } from "@/lib/ai/request-audit";
+import {
+  AI_DAILY_CHAT_REQUEST_LIMIT_ENV,
+  resolveEnvDailyChatRequestLimit,
+} from "@/lib/ai/request-budget-env";
 
 function createCompatClient(behavior: () => Promise<unknown>) {
   return { chat: { completions: { create: vi.fn(behavior) } } };
@@ -83,7 +86,7 @@ describe("AI 请求审计（单元）", () => {
     expect(bounded.text).not.toContain("sk-secret12345678");
   });
 
-  it("每日上限口径：null=不限，0=暂停，正整数保留；非法写入值被拒绝", () => {
+  it("每日上限展示口径：null=不限，0=暂停，正整数保留，非法宽松为不限", () => {
     expect(normalizeDailyChatRequestLimit(null)).toBeNull();
     expect(normalizeDailyChatRequestLimit(undefined)).toBeNull();
     expect(normalizeDailyChatRequestLimit(0)).toBe(0);
@@ -91,11 +94,29 @@ describe("AI 请求审计（单元）", () => {
     expect(normalizeDailyChatRequestLimit(-1)).toBeNull();
     expect(normalizeDailyChatRequestLimit(1.5)).toBeNull();
     expect(normalizeDailyChatRequestLimit(Number.NaN)).toBeNull();
+  });
 
-    expect(validateDailyChatRequestLimit(null)).toBeNull();
-    expect(validateDailyChatRequestLimit(0)).toBe(0);
-    expect(() => validateDailyChatRequestLimit(-1)).toThrow();
-    expect(() => validateDailyChatRequestLimit(2.5)).toThrow();
+  it("环境变量预算：未设置/空串/纯空白=不限，0=暂停，非负十进制整数=上限（state 显式区分）", () => {
+    const resolve = (value: string | undefined) =>
+      resolveEnvDailyChatRequestLimit({ [AI_DAILY_CHAT_REQUEST_LIMIT_ENV]: value });
+
+    expect(resolve(undefined)).toEqual({ kind: "unlimited", state: "unlimited" });
+    expect(resolve("")).toEqual({ kind: "unlimited", state: "unlimited" });
+    expect(resolve("   ")).toEqual({ kind: "unlimited", state: "unlimited" });
+    expect(resolve("0")).toEqual({ kind: "limit", value: 0, state: "paused" });
+    expect(resolve("42")).toEqual({ kind: "limit", value: 42, state: "limited" });
+    expect(resolve("007")).toEqual({ kind: "limit", value: 7, state: "limited" });
+  });
+
+  it("环境变量预算：非法值 fail-closed 且不回显原始内容（可能是误放的密钥）", () => {
+    const resolve = (value: string) =>
+      resolveEnvDailyChatRequestLimit({ [AI_DAILY_CHAT_REQUEST_LIMIT_ENV]: value });
+
+    for (const raw of ["-1", "1.5", "1e3", " 5", "5 ", "abc", "+5", "99999999999999999999"]) {
+      const parsed = resolve(raw);
+      expect(parsed).toEqual({ kind: "invalid", state: "invalid" });
+      expect(JSON.stringify(parsed)).not.toContain(raw);
+    }
   });
 
   it("每次真实传输调用都先过准入；unknown 结局不重试", async () => {

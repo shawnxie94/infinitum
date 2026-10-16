@@ -75,29 +75,25 @@ function createContext(overrides: Partial<TransportAttemptContext> = {}): Transp
   };
 }
 
-async function setDailyLimit(value: number | null) {
-  const existing = await prisma.aiRequestsConfig.findFirst({ orderBy: { createdAt: "asc" } });
-  if (existing) {
-    await prisma.aiRequestsConfig.update({ where: { id: existing.id }, data: { dailyChatRequestLimit: value } });
-    return existing.id;
-  }
-  const created = await prisma.aiRequestsConfig.create({ data: { dailyChatRequestLimit: value } });
-  return created.id;
-}
-
 beforeEach(async () => {
   await prisma.aiRequestReceipt.deleteMany();
   await prisma.aiRequestBudgetDay.deleteMany();
-  await setDailyLimit(null);
+  vi.unstubAllEnvs();
 });
 
-afterEach(async () => {
+afterEach(() => {
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
+/** 预算唯一来源是环境变量：每次调用时读取，测试用 stubEnv 隔离、unstubAllEnvs 恢复。 */
+function setDailyLimit(value: string) {
+  vi.stubEnv("AI_DAILY_CHAT_REQUEST_LIMIT", value);
+}
+
 describe("AI 请求审计（集成）", () => {
   it("多连接并发准入满足原子硬上限：恰好放行 cap 个", async () => {
-    await setDailyLimit(5);
+    await setDailyLimit("5");
     const audit = createRequestAudit();
     const results = await Promise.allSettled(
       Array.from({ length: 20 }, () => audit.beforeDispatch(createContext())),
@@ -127,21 +123,40 @@ describe("AI 请求审计（集成）", () => {
     expect(budget.admitted).toBe(7);
   });
 
-  it("上限 0 = 全部拒绝；非法存储值 fail-closed（拒绝派发而非放宽为不限）", async () => {
-    await setDailyLimit(0);
+  it("上限 0 = 全部拒绝；非法环境值 fail-closed（拒绝派发而非放宽为不限）", async () => {
+    await setDailyLimit("0");
     const audit = createRequestAudit();
     await expect(audit.beforeDispatch(createContext())).rejects.toBeInstanceOf(RequestBudgetExceededError);
     expect(await getDailyBudgetSnapshot()).toMatchObject({ admitted: 0, limit: 0 });
 
-    // F4：非空非法值（负数）→ 拒绝派发；展示侧快照仍显示不限（宽松口径）。
-    await prisma.aiRequestsConfig.updateMany({ data: { dailyChatRequestLimit: -3 } });
+    // F4：非空非法环境值（负数）→ 拒绝派发；展示侧快照仍显示不限（宽松口径）。
+    await setDailyLimit("-3");
     await expect(audit.beforeDispatch(createContext())).rejects.toBeInstanceOf(RequestBudgetExceededError);
     expect(await prisma.aiRequestReceipt.count({ where: { status: "in_flight" } })).toBe(0);
+    // invalid 显式区分，绝不伪装为 unlimited；快照不回显原始非法值。
+    const invalidSnapshot = await getDailyBudgetSnapshot();
+    expect(invalidSnapshot).toMatchObject({ limit: null, state: "invalid" });
+    expect(JSON.stringify(invalidSnapshot)).not.toContain("-3");
+  });
+
+  it("存量 DB 预算配置被忽略：env 未设置即不限，即使 DB 存了 0", async () => {
+    const existing = await prisma.aiRequestsConfig.findFirst({ orderBy: { createdAt: "asc" } });
+    if (existing) {
+      await prisma.aiRequestsConfig.update({ where: { id: existing.id }, data: { dailyChatRequestLimit: 0 } });
+    } else {
+      await prisma.aiRequestsConfig.create({ data: { dailyChatRequestLimit: 0 } });
+    }
+    const audit = createRequestAudit();
+    // DB 上限为 0，但 env 未设置 = 不限：连续派发全部放行。
+    await audit.beforeDispatch(createContext());
+    await audit.beforeDispatch(createContext());
     expect((await getDailyBudgetSnapshot()).limit).toBeNull();
+    expect((await getDailyBudgetSnapshot()).state).toBe("unlimited");
+    expect((await getDailyBudgetSnapshot()).admitted).toBe(2);
   });
 
   it("UTC 日翻滚：昨日计数不影响今天；昨天行原样保留", async () => {
-    await setDailyLimit(2);
+    await setDailyLimit("2");
     const yesterday = new Date(Date.now() - 86_400_000);
     const yesterdayKey = yesterday.toISOString().slice(0, 10);
     await prisma.aiRequestBudgetDay.create({
@@ -157,7 +172,7 @@ describe("AI 请求审计（集成）", () => {
   });
 
   it("预算计数跨进程/重启持久（新实例读取同一 SQLite 计数）", async () => {
-    await setDailyLimit(1);
+    await setDailyLimit("1");
     const first = createRequestAudit();
     await first.beforeDispatch(createContext());
     const second = createRequestAudit();
@@ -383,7 +398,7 @@ describe("AI 请求审计（集成）", () => {
   });
 
   it("预算 0 时 provider 不发生任何真实调用", async () => {
-    await setDailyLimit(0);
+    await setDailyLimit("0");
     const create = vi.fn();
     const provider = createAiProvider(
       { apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" },

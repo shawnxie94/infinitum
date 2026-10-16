@@ -15,6 +15,9 @@ services:
       ADMIN_PASSWORD: change-me
       ADMIN_SESSION_SECRET: replace-with-a-long-random-secret
       ADMIN_SESSION_COOKIE_SECURE: "true"
+      # 每日（UTC）业务聊天请求硬上限；空=不限（默认），0=暂停，非法值=暂停全部派发。
+      # 修改后需重建 app 与 worker 容器（docker compose up -d --force-recreate）才生效。
+      AI_DAILY_CHAT_REQUEST_LIMIT: "${AI_DAILY_CHAT_REQUEST_LIMIT:-}"
     ports:
       - "3001:3000"
     healthcheck:
@@ -41,6 +44,8 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/app/data/dev.db
+      # 与 app 保持同一预算口径；为空表示不限。
+      AI_DAILY_CHAT_REQUEST_LIMIT: "${AI_DAILY_CHAT_REQUEST_LIMIT:-}"
     healthcheck:
       test:
         - CMD

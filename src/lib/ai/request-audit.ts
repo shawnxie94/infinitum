@@ -9,6 +9,12 @@ import {
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import {
+  AI_DAILY_CHAT_REQUEST_LIMIT_ENV,
+  resolveEnvDailyChatRequestLimit,
+  type AiRequestBudgetState,
+  type EnvDailyChatRequestLimit,
+} from "@/lib/ai/request-budget-env";
 
 /**
  * AI 业务聊天请求审计（失败回执 + UTC 日硬上限）：
@@ -126,25 +132,6 @@ export function normalizeDailyChatRequestLimit(value: number | null | undefined)
   return value;
 }
 
-type StoredDailyLimit =
-  | { kind: "unlimited" }
-  | { kind: "limit"; value: number }
-  | { kind: "invalid" };
-
-function parseStoredDailyLimit(value: number | null | undefined): StoredDailyLimit {
-  if (value === null || value === undefined) return { kind: "unlimited" };
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) return { kind: "invalid" };
-  return { kind: "limit", value };
-}
-
-export function validateDailyChatRequestLimit(value: number | null): number | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new Error("每日业务聊天请求上限需为非负整数；留空表示不限。");
-  }
-  return value;
-}
-
 function utcDay(date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
@@ -155,10 +142,12 @@ function configFingerprint(baseURL: string | null | undefined, model: string): s
 
 type TransactionClient = Prisma.TransactionClient;
 
-/** 读取侧 fail-closed（F4）：null/缺省=不限；非法非空值=拒绝派发，绝不放宽为不限。 */
-async function readDailyChatRequestLimitStrict(client: TransactionClient): Promise<StoredDailyLimit> {
-  const row = await client.aiRequestsConfig.findFirst({ orderBy: { createdAt: "asc" } });
-  return parseStoredDailyLimit(row?.dailyChatRequestLimit);
+/**
+ * 预算唯一生效来源是环境变量 AI_DAILY_CHAT_REQUEST_LIMIT（每次调用时读取，
+ * 不读 DB 配置、不做模块级缓存）；非法非空值 = 拒绝派发，绝不放宽为不限。
+ */
+function readDailyChatRequestLimitStrict(): ReturnType<typeof resolveEnvDailyChatRequestLimit> {
+  return resolveEnvDailyChatRequestLimit();
 }
 
 let lastRetentionSweepAt = 0;
@@ -173,10 +162,10 @@ async function sweepExpiredRawPayloads(client: TransactionClient, now: Date) {
 }
 
 /** 原子准入：单条 upsert 在 SQLite 写串行下跨进程安全；0 变更 = 预算拒绝。 */
-async function admitRequest(client: TransactionClient, limit: StoredDailyLimit, now: Date): Promise<void> {
+async function admitRequest(client: TransactionClient, limit: EnvDailyChatRequestLimit, now: Date): Promise<void> {
   if (limit.kind === "invalid") {
     throw new RequestBudgetExceededError(
-      "每日业务聊天请求上限配置非法，已 fail-closed 暂停全部派发；请修正为非负整数或清空。",
+      `环境变量 ${AI_DAILY_CHAT_REQUEST_LIMIT_ENV} 取值非法，已 fail-closed 暂停全部业务聊天派发；请修正为非负整数或清空。`,
     );
   }
   if (limit.kind === "limit" && limit.value === 0) {
@@ -322,7 +311,7 @@ export function createRequestAudit(
       // 准入 + 回执创建同一事务：竞争恢复不能同时派发，被阻断尝试不消耗预算。
       try {
         await prisma.$transaction(async (tx) => {
-          const limit = await readDailyChatRequestLimitStrict(tx);
+          const limit = readDailyChatRequestLimitStrict();
           await admitRequest(tx, limit, now);
           await sweepExpiredRawPayloads(tx, now);
           await tx.aiRequestReceipt.create({
@@ -428,19 +417,29 @@ export function createRequestAudit(
 export type DailyBudgetSnapshot = {
   day: string;
   admitted: number;
+  /**
+   * 生效上限数值：null 表示没有已配置的有效数字（unlimited 或 invalid），
+   * 二者必须通过 state 区分，invalid 绝不伪装为 unlimited。
+   */
   limit: number | null;
+  /** 生效状态：unlimited | paused | limited | invalid；来源是环境变量而非 DB 配置。 */
+  state: AiRequestBudgetState;
+  /** 预算来源环境变量名；便于诊断确认当前生效口径。 */
+  sourceEnv: string;
 };
 
 export async function getDailyBudgetSnapshot(now = new Date()): Promise<DailyBudgetSnapshot> {
   const day = utcDay(now);
-  const [row, configRow] = await Promise.all([
+  const [row, limit] = await Promise.all([
     prisma.aiRequestBudgetDay.findUnique({ where: { day } }),
-    prisma.aiRequestsConfig.findFirst({ orderBy: { createdAt: "asc" } }),
+    Promise.resolve(readDailyChatRequestLimitStrict()),
   ]);
   return {
     day,
     admitted: row?.admitted ?? 0,
-    limit: normalizeDailyChatRequestLimit(configRow?.dailyChatRequestLimit),
+    limit: limit.kind === "limit" ? limit.value : null,
+    state: limit.state,
+    sourceEnv: AI_DAILY_CHAT_REQUEST_LIMIT_ENV,
   };
 }
 

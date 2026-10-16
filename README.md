@@ -99,6 +99,20 @@ WORKER_CPUS=0.75
 SITE_HOME_TITLE=我的资讯平台
 ```
 
+AI 每日聊天请求预算由环境变量 `AI_DAILY_CHAT_REQUEST_LIMIT` 控制，默认空 = 不限；仅统计业务聊天请求（向量嵌入与手动连通性测试不计入）。`0` 表示暂停全部业务聊天请求；非负整数表示每日（UTC）硬请求上限；非法值（负数、小数等）会 fail-closed，暂停全部业务聊天派发。
+
+在 compose 同目录的 `.env` 文件中设置（保持默认空值即可不限）：
+
+```bash
+AI_DAILY_CHAT_REQUEST_LIMIT=
+```
+
+修改后重建 app 与 worker 容器使其生效（无需重新构建镜像）：
+
+```bash
+docker compose up -d --force-recreate app worker
+```
+
 启动后访问：
 
 - Web：<http://localhost:3001>
