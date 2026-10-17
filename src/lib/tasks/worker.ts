@@ -53,10 +53,10 @@ async function enqueueScheduledIngestionIfDue(now: Date) {
   return enqueueScheduledTaskRunIfDue({
     scheduleId: schedule.id,
     expectedNextRunAt: schedule.nextRunAt,
+    // RSS 读取当前源状态，漏调度只补抓一次，不逐个重放历史时点。
     nextRunAt: computeNextRunAt({
       cronExpression: schedule.cronExpression,
       now,
-      anchor: schedule.nextRunAt,
       timezone: schedule.timezone,
     }),
     kind: "ingestion",
