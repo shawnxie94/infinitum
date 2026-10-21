@@ -1220,6 +1220,26 @@ function buildFeedEntryCandidatesCte(
   `;
 }
 
+/**
+ * 真实可见成员守卫：与单条公开预览的可见性口径一致
+ * （processed + allowed/restored + 非聚合 + 源启用）。
+ * 聚合入口（列表 / 计数 / 分组 / 精确查询）都必须先通过它，
+ * 避免缓存 displayItemCount > 1 但实际无可见成员时输出空壳聚合。
+ */
+function buildVisibleClusterMemberExistsClause() {
+  // 别名是固定的内部标识（不可来自用户输入），必须原样进 SQL，不能作为参数插值。
+  return Prisma.sql`EXISTS (
+    SELECT 1
+    FROM "items" vm
+    INNER JOIN "sources" vs ON vs.id = vm."sourceId"
+    WHERE vm."clusterId" = cc.id
+      AND vm.status = ${"processed"}
+      AND vm."moderationStatus" IN (${Prisma.join([...DISPLAYABLE_MODERATION_STATUSES])})
+      AND vm."isAggregation" = ${false}
+      AND vs.enabled = ${true}
+  )`;
+}
+
 function buildEntryCandidateWhereClause(filters: Pick<FeedFilters, "groupId" | "entryId" | "entryType" | "entryKeys">) {
   const clauses: Prisma.Sql[] = [];
 
@@ -1446,6 +1466,9 @@ function buildEntityFeedEntryCandidatesCte(
       ? Prisma.sql`(cc."displayItemCount" > 1 OR cc.id IN (${Prisma.join(explicitClusterEntryIds)}))`
       : Prisma.sql`cc."displayItemCount" > 1`,
     Prisma.sql`cc."latestCreatedAt" IS NOT NULL`,
+    // displayItemCount 是缓存计数，可能与「当前真实可见成员」不一致（成员被过滤/下线/隐藏）。
+    // 公开信息流必须先确认真实可见成员存在，否则会出现空预览/空展开的空壳聚合。
+    buildVisibleClusterMemberExistsClause(),
   ];
   const singleWhereClauses: Prisma.Sql[] = [
     Prisma.sql`i.status = ${"processed"}`,

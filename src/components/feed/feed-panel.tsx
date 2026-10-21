@@ -7,7 +7,7 @@ import { ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS, STATUS_POLL_INTERVAL_MS } from "@/con
 import { deleteItem, filterItem, joinCluster, mergeSelectedItems, queueIngestionRun, regenerateClusterSummary, requestClusterItems, requestClusterOptions, requestFeed, requestIngestionStatus, requestReanalysis, requestRegeneration } from "@/components/feed/feed-panel.api";
 import { GroupFilterSidebar } from "@/components/feed/feed-panel-sidebar";
 import type { AssignClusterDialogState, BatchActionDialogState, DateRangeValue, DeleteItemDialogState, FeedFeedback, FeedPanelProps, FeedQueryState, ManualFilterDialogState, RegenerateDialogState, RegenerateMode } from "@/components/feed/feed-panel.types";
-import { buildFeedSearch, buildFallbackPagination, formatClusterAuthorLabel, formatClusterSourceLabel, formatDate, formatMetaLabel, formatRangeLabel, formatRunSummary, formatRunTime, formatScore, formatGroupOptionLabel, getAllSelectableItemIds, normalizeDateRange, normalizeOptionalId, normalizeSearchText, toDayjsRange } from "@/components/feed/feed-panel.utils";
+import { buildFeedSearch, buildFallbackPagination, formatClusterAuthorLabel, formatClusterSourceLabel, formatDate, formatMetaLabel, formatRangeLabel, formatRunSummary, formatRunTime, formatScore, formatGroupOptionLabel, getAllSelectableItemIds, getClusterSelectableItemIds, isClusterEntryFullySelected, normalizeDateRange, normalizeOptionalId, normalizeSearchText, toDayjsRange } from "@/components/feed/feed-panel.utils";
 import { PageShell } from "@/components/ui/page-shell";
 import { BackToTopButton } from "@/components/ui/back-to-top-button";
 import { ChevronIcon } from "@/components/ui/chevron-icon";
@@ -1796,10 +1796,10 @@ export function FeedPanel({
                       <div className="flex flex-col gap-1 pt-1">
                         <input
                           type="checkbox"
-                          checked={entry.itemsPreview.every((item) => selectedItems.has(item.id))}
+                          checked={isClusterEntryFullySelected(entry, selectedItems, expandedClusters[entry.id])}
                           onChange={() => {
-                            const ids = entry.itemsPreview.map((item) => item.id);
-                            const allSelected = ids.every((id) => selectedItems.has(id));
+                            const ids = getClusterSelectableItemIds(entry, expandedClusters[entry.id]);
+                            const allSelected = ids.length > 0 && ids.every((id) => selectedItems.has(id));
                             setSelectedItems((prev) => {
                               const next = new Set(prev);
                               if (allSelected) {

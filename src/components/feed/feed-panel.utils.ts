@@ -224,6 +224,31 @@ export function getAllSelectableItemIds(items: FeedEntryDTO[]): string[] {
   return items.flatMap(extractItemIdsFromEntry);
 }
 
+/**
+ * 聚合条目的可勾选成员：优先使用已展开加载的真实成员，
+ * 未加载时退回预览成员。空集合永不代表「全选」。
+ */
+export function getClusterSelectableItemIds(
+  entry: FeedEntryDTO,
+  expandedMembers?: { id: string }[],
+): string[] {
+  if (entry.type !== "cluster") {
+    return [entry.id];
+  }
+
+  const members = expandedMembers && expandedMembers.length > 0 ? expandedMembers : entry.itemsPreview;
+  return members.map((item) => item.id);
+}
+
+export function isClusterEntryFullySelected(
+  entry: FeedEntryDTO,
+  selectedItems: Set<string>,
+  expandedMembers?: { id: string }[],
+): boolean {
+  const ids = getClusterSelectableItemIds(entry, expandedMembers);
+  return ids.length > 0 && ids.every((id) => selectedItems.has(id));
+}
+
 export function normalizeDateRange(nextRange: DateRangeValue): {
   startDate: string | null;
   endDate: string | null;
