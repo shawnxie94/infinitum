@@ -27,6 +27,25 @@ function makeLegacyVerdictDecision(pairRef: string, verdict: "approved" | "decli
   };
 }
 
+describe("maxEvents actual request body", () => {
+  it("sends each configured limit in its own understanding input JSON", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    for (const maxEvents of [1, 4]) {
+      const create = vi.fn().mockImplementation(async (body: Record<string, unknown>) => {
+        bodies.push(body);
+        return { choices: [{ message: { content: JSON.stringify({ summary: "可靠摘要内容。", qualityScore: 80, qualityRationale: "事实明确", eventSignature: {}, aggregation: { isAggregation: false, mainEvent: null, events: [] } }) } }] };
+      });
+      const provider = createAiProvider({ apiKey: "sk-test", baseURL: "https://example.com/v1", model: "test-model" }, undefined,
+        { chat: { completions: { create } } }, { aggregationSplitMaxEvents: maxEvents });
+      await provider.understandItem("正文", { title: "标题", translateTitle: false });
+    }
+    const userContents = bodies.map((body) => (body.messages as Array<{ content: string }>)[1]!.content);
+    expect(userContents[0]).toContain('"maxEvents":1');
+    expect(userContents[1]).toContain('"maxEvents":4');
+    expect(userContents[0]).not.toEqual(userContents[1]);
+  });
+});
+
 describe("ai provider", () => {
   it("understands a regular item in one structured call", async () => {
     const create = vi.fn().mockResolvedValue({
@@ -145,7 +164,7 @@ describe("ai provider", () => {
     expect(userPrompt).toContain("这是管理员自定义的条目理解提示词。");
     expect(userPrompt).toContain("正文内容");
     expect(userPrompt).not.toContain("{{inputText}}");
-    expect(userPrompt).not.toContain('"maxEvents"');
+    expect(userPrompt).toContain('"maxEvents":20');
   });
 
   it("repairs a syntactically invalid item understanding response before retrying the model", async () => {
