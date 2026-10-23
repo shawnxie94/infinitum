@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/db";
 import {
@@ -15,7 +15,13 @@ import {
   updateTaskRun,
   updateDefaultIngestionSchedule,
 } from "@/lib/tasks/service";
-import { recoverStaleTaskRuns, recoverWorkerStartupTasks, runWorkerCycle } from "@/lib/tasks/worker";
+import {
+  dispatchWithDeadline,
+  recoverStaleTaskRuns,
+  recoverWorkerStartupTasks,
+  runWorkerCycle,
+  runWorkerWatchdogTick,
+} from "@/lib/tasks/worker";
 
 describe("background task persistence", () => {
   beforeEach(async () => {
@@ -247,6 +253,38 @@ describe("background task persistence", () => {
     expect(updatedFetchRun.status).toBe("failed");
     expect(updatedFetchRun.errorSummary).toContain("Worker exited");
     expect(updatedFetchRun.finishedAt).not.toBeNull();
+  });
+
+  it("skips this process's active task runs when reclaiming stale runs", async () => {
+    const activeTaskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "ingestion",
+        triggerType: "manual",
+        status: "running",
+        label: "本进程执行中的抓取任务",
+        startedAt: new Date("2026-04-12T00:00:00.000Z"),
+      },
+    });
+    const orphanTaskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "ingestion",
+        triggerType: "manual",
+        status: "running",
+        label: "崩溃残留的抓取任务",
+        startedAt: new Date("2026-04-12T00:00:00.000Z"),
+      },
+    });
+
+    const recovered = await recoverStaleTaskRuns(new Date("2026-04-12T00:20:00.000Z"), {
+      excludeIds: [activeTaskRun.id],
+    });
+
+    expect(recovered).toBe(1);
+    const stillRunning = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: activeTaskRun.id } });
+    expect(stillRunning.status).toBe("running");
+    const reclaimed = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: orphanTaskRun.id } });
+    expect(reclaimed.status).toBe("failed");
+    expect(reclaimed.errorSummary).toContain("Worker exited");
   });
 
   it("marks interrupted running tasks as failed during worker startup recovery", async () => {
@@ -1166,5 +1204,71 @@ describe("background task persistence", () => {
     expect(updatedIngestionSchedule.lastHeartbeatAt?.getTime()).toBe(
       ingestionSchedule.lastHeartbeatAt?.getTime(),
     );
+  });
+
+  it("requests cancellation when a task exceeds its deadline and waits for the workflow to settle", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "ingestion",
+        triggerType: "manual",
+        status: "running",
+        label: "默认抓取任务",
+        startedAt: new Date("2026-04-12T00:00:00.000Z"),
+      },
+    });
+
+    let releaseWorkflow: (() => void) | undefined;
+    const workflowBlocked = new Promise<void>((resolve) => {
+      releaseWorkflow = resolve;
+    });
+    // deadline 触发后（20ms），workflow 在 50ms 时自行退出：
+    // dispatchWithDeadline 会先写入取消标记，再等待 workflow settle 后才返回。
+    setTimeout(() => releaseWorkflow?.(), 50);
+    const execute = vi.fn().mockImplementation(() => workflowBlocked);
+
+    await dispatchWithDeadline(taskRun, execute, 20);
+
+    expect(execute).toHaveBeenCalledWith(taskRun);
+    const updated = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(updated.cancelRequestedAt).not.toBeNull();
+    expect(updated.errorSummary).toContain("轮级时限");
+  });
+
+  it("does not touch cancellation when the workflow settles before the deadline", async () => {
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "precompute",
+        triggerType: "manual",
+        status: "running",
+        label: "预计算",
+        startedAt: new Date("2026-04-12T00:00:00.000Z"),
+      },
+    });
+
+    await dispatchWithDeadline(taskRun, async () => undefined, 60_000);
+
+    const updated = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(updated.cancelRequestedAt).toBeNull();
+  });
+
+  it("reclaims crash leftovers and refreshes heartbeat during watchdog tick", async () => {
+    const orphanTaskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "ingestion",
+        triggerType: "manual",
+        status: "running",
+        label: "崩溃残留的抓取任务",
+        startedAt: new Date("2026-04-12T00:00:00.000Z"),
+      },
+    });
+    await ensureDefaultIngestionSchedule();
+
+    const recovered = await runWorkerWatchdogTick(new Date("2026-04-12T00:20:00.000Z"));
+
+    expect(recovered).toBe(1);
+    const reclaimed = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: orphanTaskRun.id } });
+    expect(reclaimed.status).toBe("failed");
+    const schedule = await prisma.taskSchedule.findFirstOrThrow({ where: { key: "ingestion_default" } });
+    expect(schedule.lastHeartbeatAt?.getTime()).toBe(new Date("2026-04-12T00:20:00.000Z").getTime());
   });
 });
