@@ -299,6 +299,11 @@ describe("ingestion workflow stages", () => {
     await prisma.backgroundTaskRun.deleteMany();
     await prisma.promptConfig.deleteMany();
     await prisma.modelApiConfig.deleteMany();
+    // 聚类合并决策/约束/预计算对按 pairKey+inputHash 跨测试存活，
+    // 残留的 unrelated/declined 决策会在冷却期内 block 后续测试的候选对，必须一并清理。
+    await prisma.clusterDecision.deleteMany();
+    await prisma.clusterConstraint.deleteMany();
+    await prisma.clusterMergeCleanPairCandidate.deleteMany();
     await prisma.contentCluster.deleteMany();
     await prisma.source.deleteMany();
     await prisma.sourceGroup.deleteMany();

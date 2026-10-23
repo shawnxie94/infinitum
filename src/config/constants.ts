@@ -131,15 +131,6 @@ export const CLUSTER_MERGE_CANDIDATE_LIMIT = 80;
 /** 任务过期时间: 15 分钟 */
 export const DEFAULT_TASK_STALE_MS = 15 * MINUTE_MS;
 
-/** 任务执行期间并行看护循环的周期：覆盖 stale 回收、调度心跳与到期入队。 */
-export const WORKER_WATCHDOG_INTERVAL_MS = 15 * 1000;
-
-/** 单个任务执行的轮级软超时：到点请求取消（复用 workflow 取消检查点），不让 worker 永久卡死。 */
-export const DEFAULT_TASK_DEADLINE_MS = 30 * MINUTE_MS;
-
-/** 启动恢复（Mastra active workflow resume）的最长等待；超时后放行主循环，恢复在后台自行收尾。 */
-export const WORKER_STARTUP_RECOVERY_GRACE_MS = 120 * 1000;
-
 /** 任务轮询间隔: 2 秒 */
 export const DEFAULT_POLL_INTERVAL_MS = 2 * 1000;
 

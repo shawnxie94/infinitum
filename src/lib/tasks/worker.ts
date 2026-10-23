@@ -1,13 +1,6 @@
 import type { BackgroundTaskRun } from "@prisma/client";
 
-import {
-  DEFAULT_POLL_INTERVAL_MS,
-  DEFAULT_TASK_DEADLINE_MS,
-  DEFAULT_TASK_STALE_MS,
-  MINUTE_MS,
-  WORKER_STARTUP_RECOVERY_GRACE_MS,
-  WORKER_WATCHDOG_INTERVAL_MS,
-} from "@/config/constants";
+import { DEFAULT_POLL_INTERVAL_MS, DEFAULT_TASK_STALE_MS, MINUTE_MS } from "@/config/constants";
 import { prisma } from "@/lib/db";
 import { restartActiveAiWorkflowRuns } from "@/lib/ai-orchestration/runtime";
 import { enqueueItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
@@ -29,9 +22,27 @@ import {
   TASK_RUN_CANCELLED_MESSAGE,
 } from "@/lib/tasks/service";
 
+// worker 循环护栏常量放在本模块：src/config/constants.ts 是 relation 生产桥接的
+// 冻结参考文件，往里加常量会让受控快照哈希漂移（cluster-relation 桥接守卫会拒收）。
+/** 任务执行期间并行看护循环的周期：覆盖 stale 回收、调度心跳与到期入队。 */
+export const WORKER_WATCHDOG_INTERVAL_MS = 15 * 1000;
+
+/** 单个任务执行的轮级软超时：到点请求取消（复用 workflow 取消检查点），不让 worker 永久卡死。 */
+export const DEFAULT_TASK_DEADLINE_MS = 30 * MINUTE_MS;
+
+/** 启动恢复（Mastra active workflow resume）的最长等待；超时后放行主循环，恢复在后台自行收尾。 */
+export const WORKER_STARTUP_RECOVERY_GRACE_MS = 120 * 1000;
+
 function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
+  });
+}
+
+/** 仅用于一次性护栏等待：unref 让短命进程（crash-recovery fixture 等）在 race 胜出后能自然退出。 */
+function sleepUnrefed(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms).unref?.();
   });
 }
 
@@ -373,7 +384,9 @@ export async function recoverWorkerStartupTasks(
   // 启动恢复限时：resume 卡在慢 workflow（如上游超时风暴）时不能拖死主循环启动；
   // 超时后 resume 在后台自行收尾（lifecycle sink 投影终态），主循环立即接管调度。
   const resumePromise = restartActiveRuns();
-  await Promise.race([resumePromise, sleep(WORKER_STARTUP_RECOVERY_GRACE_MS)]);
+  // grace 计时器必须 unref：race 胜出后（resume 快速完成），残留 timer 会阻塞
+  // 短命进程（如 crash-recovery fixture 子进程）的事件循环直至超时。
+  await Promise.race([resumePromise, sleepUnrefed(WORKER_STARTUP_RECOVERY_GRACE_MS)]);
   resumePromise.catch((error) => {
     console.error("[Worker] startup workflow resume failed:", error);
   });
