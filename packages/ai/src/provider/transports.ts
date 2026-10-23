@@ -119,6 +119,11 @@ function isMiniMax(config: ModelApiConfig) {
   return base.includes("minimax") || model.includes("minimax");
 }
 
+/** M3.1 起 adaptive thinking 模型：显式 disabled 会被 API 拒收（400），只能保持省略按自适应运行。 */
+function isMiniMaxAdaptiveModel(config: ModelApiConfig) {
+  return /m3\.1|adaptive/i.test(config.model);
+}
+
 function getErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== "object") return null;
   const maybe = error as { status?: unknown; statusCode?: unknown; code?: unknown };
@@ -339,7 +344,8 @@ export function createAiSdkTransport(options?: {
           // 本仓全部补全都以 JSON 模式工作（解析层消费 JSON 输出）。
           next.response_format = { type: "json_object" };
           // MiniMax 私有 thinking 开关；OpenAI 兼容端点省略该字段即等价关闭。
-          if (isMiniMax(config)) {
+          // M3.1 起 adaptive 模型不接受显式 disabled（API 400），这类模型保持省略、按自适应运行。
+          if (isMiniMax(config) && !isMiniMaxAdaptiveModel(config)) {
             next.thinking = { type: "disabled" };
           }
           return next;
@@ -477,7 +483,7 @@ export function createCompatClientTransport(
       top_p: request.topP ?? undefined,
       response_format: request.requireCompleteJson ? { type: "json_object" } : undefined,
     };
-    if (isMiniMax(config)) {
+    if (isMiniMax(config) && !isMiniMaxAdaptiveModel(config)) {
       wire.thinking = { type: "disabled" };
     }
     return typed.chat.completions.create(wire) as Promise<WireCompletionResponse>;
