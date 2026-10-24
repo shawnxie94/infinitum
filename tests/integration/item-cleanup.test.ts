@@ -99,6 +99,24 @@ describe("item cleanup workflow", () => {
     expect(preservedItem).not.toBeNull();
   });
 
+  it("prunes expired Mastra workflow snapshots while keeping recent ones", async () => {
+    const now = new Date();
+    const oldIso = new Date(now.getTime() - 30 * ONE_DAY_MS).toISOString();
+    const recentIso = now.toISOString();
+
+    await prisma.$executeRaw`DELETE FROM mastra_workflow_snapshot WHERE run_id IN ('run-expired', 'run-recent')`;
+    await prisma.$executeRaw`INSERT INTO mastra_workflow_snapshot (workflow_name, run_id, resourceId, snapshot, createdAt, updatedAt) VALUES ('ingestion', 'run-expired', 'item_cleanup', '{}', ${oldIso}, ${oldIso})`;
+    await prisma.$executeRaw`INSERT INTO mastra_workflow_snapshot (workflow_name, run_id, resourceId, snapshot, createdAt, updatedAt) VALUES ('ingestion', 'run-recent', 'item_cleanup', '{}', ${recentIso}, ${recentIso})`;
+
+    const taskRun = await createTaskRun();
+    await triggerTaskWorkflow("item_cleanup", taskRun.id);
+
+    const expired = await prisma.$queryRaw<{ run_id: string }[]>`SELECT run_id FROM mastra_workflow_snapshot WHERE run_id = 'run-expired'`;
+    const recent = await prisma.$queryRaw<{ run_id: string }[]>`SELECT run_id FROM mastra_workflow_snapshot WHERE run_id = 'run-recent'`;
+    expect(expired).toHaveLength(0);
+    expect(recent).toHaveLength(1);
+  });
+
   it("archives deleted item dedupe keys so ingestion can skip them later", async () => {
     const source = await createSource("测试源");
     const now = new Date();

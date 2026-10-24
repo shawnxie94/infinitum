@@ -15,6 +15,7 @@ import {
   resolveAiProvider,
   type ItemRegenerationInput,
   type RegenerationTarget,
+  pruneExpiredWorkflowSnapshots,
 } from "@/lib/items/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 
@@ -31,6 +32,7 @@ type ItemRegenerationStagePayload = {
 type ItemCleanupStagePayload = {
   plan: { cutoff: string; estimatedTotal: number; affectedClusterIds: string[] };
   totalDeleted?: number;
+  prunedSnapshots?: number;
   result?: { totalDeleted: number; affectedClusterCount: number };
 };
 
@@ -152,6 +154,15 @@ export function createItemCleanupWorkflowDefinition(): DomainTaskDefinition {
             { checkCancellation: context.checkCancellation },
           );
           return { ...payload, totalDeleted };
+        },
+      },
+      {
+        id: "mastra_snapshot_retention",
+        replayPolicy: "at_least_once",
+        execute: async (input) => {
+          const payload = input as ItemCleanupStagePayload;
+          const prunedSnapshots = await pruneExpiredWorkflowSnapshots();
+          return { ...payload, prunedSnapshots };
         },
       },
       {

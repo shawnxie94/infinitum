@@ -926,6 +926,30 @@ export async function deleteExpiredItems(
   return totalDeleted;
 }
 
+/**
+ * Mastra workflow 运行快照的保留期（天）。
+ * 快照只服务于运行中任务的崩溃恢复，已终态运行的快照没有恢复价值；
+ * 不清理会以每小时一轮 ingestion 的速度无限膨胀（生产曾达 6.4G）。
+ * 表由 Mastra LibSQLStore 管理（不在 prisma schema），仅 raw SQL 访问。
+ */
+export const WORKFLOW_SNAPSHOT_RETENTION_DAYS = 7;
+
+/**
+ * 删除超过保留期的 Mastra workflow 运行快照。
+ * 快照表可能尚未创建（如未跑过 Mastra runtime 的环境），此时静默返回 0。
+ */
+export async function pruneExpiredWorkflowSnapshots(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - WORKFLOW_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  try {
+    return await prisma.$executeRaw`DELETE FROM mastra_workflow_snapshot WHERE updatedAt < ${cutoff.toISOString()}`;
+  } catch (error) {
+    if (error instanceof Error && /no such table/i.test(error.message)) {
+      return 0;
+    }
+    throw error;
+  }
+}
+
 export async function finalizeItemCleanup(plan: ItemCleanupPlan, totalDeleted: number) {
   for (const clusterId of plan.affectedClusterIds) {
     await recomputeCluster(clusterId);
