@@ -109,6 +109,7 @@ export type SaveModelApiConfigInput = {
   modelName: string;
   ingestionItemConcurrency: number;
   customHeaders?: Record<string, string>;
+  customRequestParams?: Record<string, unknown> | null;
   dimensions: number | null;
   batchSize: number | null;
   timeoutMs: number | null;
@@ -263,6 +264,19 @@ export function parseCustomHeaders(raw?: string | null): Record<string, string> 
   return {};
 }
 
+/** 解析自定义请求参数 JSON；非法/空输入返回 null（比 headers 宽松：由 transport 层 canonicalize 校验）。 */
+export function parseCustomRequestParams(raw?: string | null): Record<string, unknown> | null {
+  try {
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
 export function serializeAdminModelApiConfig(config: {
   id: string;
   type: string;
@@ -271,6 +285,7 @@ export function serializeAdminModelApiConfig(config: {
   modelName: string;
   ingestionItemConcurrency: number;
   customHeaders: string;
+  customRequestParams?: string | null;
   apiKey: string;
   dimensions: number | null;
   batchSize: number | null;
@@ -288,6 +303,7 @@ export function serializeAdminModelApiConfig(config: {
     modelName: config.modelName,
     ingestionItemConcurrency: config.ingestionItemConcurrency,
     customHeaders: parseCustomHeaders(config.customHeaders),
+    customRequestParams: parseCustomRequestParams(config.customRequestParams) ?? undefined,
     apiKeyMasked: maskApiKey(config.apiKey),
     hasApiKey: Boolean(config.apiKey),
     dimensions: config.dimensions,
@@ -305,12 +321,15 @@ export function serializeRuntimeModelApi(config: {
   baseUrl: string;
   modelName: string;
   customHeaders?: string;
+  customRequestParams?: string | null;
 }): RuntimeConfig["modelApi"] {
+  const customRequestParams = parseCustomRequestParams(config.customRequestParams ?? "");
   return {
     apiKey: config.apiKey,
     baseURL: config.baseUrl,
     model: config.modelName,
     customHeaders: parseCustomHeaders(config.customHeaders ?? ""),
+    ...(customRequestParams ? { customRequestParams } : {}),
   };
 }
 

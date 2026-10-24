@@ -31,6 +31,7 @@ export type ModelApiConfigRow = {
   timeoutMs: number | null;
   isEnabled: boolean;
   isDefault: boolean;
+  customRequestParams?: string | null;
 };
 
 export type AdminModelApiConfig = {
@@ -41,6 +42,7 @@ export type AdminModelApiConfig = {
   modelName: string;
   ingestionItemConcurrency: number;
   customHeaders?: Record<string, string>;
+  customRequestParams?: Record<string, unknown>;
   apiKeyMasked: string;
   hasApiKey: boolean;
   dimensions: number | null;

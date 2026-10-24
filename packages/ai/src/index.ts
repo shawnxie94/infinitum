@@ -18,6 +18,7 @@ export type {
   EmbeddingVectorStore,
   EmbedTextsFn,
 } from "./provider/embeddings";
+export { canonicalizeCustomRequestParams } from "./provider/custom-request-params";
 export { createAiOperationRegistry, createAiOperationRunner } from "./provider/operations";
 export { createAiModelRuntime } from "./provider/runtime";
 export type { AiOperationDefinition, AiOperationRegistry } from "./provider/operations";

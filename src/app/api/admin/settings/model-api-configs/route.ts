@@ -16,6 +16,7 @@ const modelApiConfigSchema = z.object({
   modelName: z.string().min(1),
   ingestionItemConcurrency: z.number().int().min(1).max(10),
   customHeaders: z.record(z.string(), z.string()).default({}),
+  customRequestParams: z.record(z.string(), z.unknown()).nullable().default({}),
   dimensions: z.number().int().min(16).max(4096).nullable().default(null),
   batchSize: z.number().int().min(1).max(128).nullable().default(null),
   timeoutMs: z.number().int().min(3000).max(60000).nullable().default(null),

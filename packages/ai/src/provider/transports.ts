@@ -11,6 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { createHash } from "node:crypto";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { canonicalizeCustomRequestParams } from "./custom-request-params";
 import { generateObject, generateText } from "ai";
 
 import type {
@@ -119,9 +120,55 @@ function isMiniMax(config: ModelApiConfig) {
   return base.includes("minimax") || model.includes("minimax");
 }
 
-/** M3.1 起 adaptive thinking 模型：显式 disabled 会被 API 拒收（400），只能保持省略按自适应运行。 */
-function isMiniMaxAdaptiveModel(config: ModelApiConfig) {
-  return /m3\.1|adaptive/i.test(config.model);
+/**
+ * 模型能力策略：thinking 开关（集中一处，SDK 与兼容路径共用同一份判定）。
+ *
+ * 官方协议（MiniMax OpenAI 兼容接口，2026-10-20 核对）：
+ * https://platform.minimax.io/docs/api-reference/text-openai-api.md
+ *  - `thinking.type` 可取 `disabled` / `adaptive`；省略即默认开启思考。
+ *  - `MiniMax-M3.1-Flash` 恒思考：显式 `disabled`（含 reasoning_effort=none）
+ *    直接返回 400，错误码 2013：
+ *    `model "MiniMax-M3.1-Flash" requires adaptive thinking;
+ *     thinking.type="disabled" (including reasoning.effort=none) is not allowed (2013)`
+ *  - `MiniMax-M3` 接受 `disabled`（跳过思考直接作答）；M2.x 接受但忽略。
+ *  - `reasoning_split=true` 把思考内容分离到 `reasoning_content`，
+ *    `false` 会把思考包在 content 的 think 标签里；M3.1-Flash 不支持 false。
+ */
+export type ThinkingPolicy = {
+  /** 请求体应写入的 thinking 字段；undefined = 不写（端点默认行为）。 */
+  thinking?: { type: "disabled" | "adaptive" };
+  /** 是否要求把思考内容分离到 reasoning_content（保护 JSON 正文不被 think 标签污染）。 */
+  reasoningSplit?: boolean;
+  /** 该模型是否强制要求 adaptive thinking（禁用 thinking 即 400/2013）。 */
+  requiresAdaptiveThinking: boolean;
+};
+
+/** 强制 adaptive thinking 的模型（官方点名 MiniMax-M3.1-Flash 恒思考）。 */
+const MINIMAX_REQUIRED_ADAPTIVE_PATTERN = /m3[._-]?1[._-]?flash/;
+
+/**
+ * 解析 thinking 策略。
+ *
+ * - 非 MiniMax：不写任何 thinking 字段（沿用 OpenAI 兼容端点默认）。
+ * - MiniMax-M3.1-Flash：必须 adaptive，并把思考分离到 reasoning_content，
+ *   否则思考文本会混进 content，JSON 正文不再可解析。
+ * - 其余 MiniMax 模型（M3 / M2.x）：保持既有 `disabled` 行为不变。
+ */
+export function resolveThinkingPolicy(config: ModelApiConfig): ThinkingPolicy {
+  if (!isMiniMax(config)) {
+    return { requiresAdaptiveThinking: false };
+  }
+  if (MINIMAX_REQUIRED_ADAPTIVE_PATTERN.test(config.model.toLowerCase())) {
+    return {
+      thinking: { type: "adaptive" },
+      reasoningSplit: true,
+      requiresAdaptiveThinking: true,
+    };
+  }
+  return {
+    thinking: { type: "disabled" },
+    requiresAdaptiveThinking: false,
+  };
 }
 
 function getErrorStatus(error: unknown): number | null {
@@ -329,7 +376,8 @@ export function createAiSdkTransport(options?: {
   });
 
   return async (request, config) => {
-    const cacheKey = [config.apiKey ?? "", config.baseURL ?? "", config.model].join("|");
+    const customParams = canonicalizeCustomRequestParams(config.customRequestParams);
+    const cacheKey = [config.apiKey ?? "", config.baseURL ?? "", config.model, JSON.stringify(config.customHeaders ?? {}), JSON.stringify(customParams)].join("|");
     let provider = providerCache.get(cacheKey);
     if (!provider) {
       provider = createOpenAICompatible({
@@ -340,15 +388,19 @@ export function createAiSdkTransport(options?: {
         fetch: options?.fetch,
         supportsStructuredOutputs: !!options?.supportsStructuredOutputs,
         transformRequestBody: (body) => {
-          const next: Record<string, unknown> = { ...body };
+          const next: Record<string, unknown> = { ...body, ...customParams };
           // 本仓全部补全都以 JSON 模式工作（解析层消费 JSON 输出）。
           next.response_format = { type: "json_object" };
-          // MiniMax 私有 thinking 开关；OpenAI 兼容端点省略该字段即等价关闭。
-          // M3.1 起 adaptive 模型不接受显式 disabled（API 400），这类模型保持省略、按自适应运行。
-          if (isMiniMax(config) && !isMiniMaxAdaptiveModel(config)) {
-            next.thinking = { type: "disabled" };
+          // MiniMax 私有 thinking 开关（SDK 与兼容路径共用同一份能力策略）。
+          const thinkingPolicy = resolveThinkingPolicy(config);
+          if (thinkingPolicy.thinking) {
+            next.thinking = thinkingPolicy.thinking;
           }
-          return next;
+          // 强制思考的模型必须把思考分离出去，否则 think 标签会污染 JSON 正文。
+          if (thinkingPolicy.reasoningSplit) {
+            next.reasoning_split = true;
+          }
+          return { ...next, ...customParams };
         },
       });
       providerCache.set(cacheKey, provider);
@@ -476,6 +528,7 @@ export function createCompatClientTransport(
 
   const callOnce = (request: CompletionRequest, config: ModelApiConfig) => {
     const wire: Record<string, unknown> = {
+      ...canonicalizeCustomRequestParams(config.customRequestParams),
       model: config.model,
       messages: request.messages,
       max_tokens: request.maxTokens ?? undefined,
@@ -483,9 +536,16 @@ export function createCompatClientTransport(
       top_p: request.topP ?? undefined,
       response_format: request.requireCompleteJson ? { type: "json_object" } : undefined,
     };
-    if (isMiniMax(config) && !isMiniMaxAdaptiveModel(config)) {
-      wire.thinking = { type: "disabled" };
+    // MiniMax 私有 thinking 开关（与 SDK 路径共用同一份能力策略）。
+    const thinkingPolicy = resolveThinkingPolicy(config);
+    if (thinkingPolicy.thinking) {
+      wire.thinking = thinkingPolicy.thinking;
     }
+    // 强制思考的模型必须把思考分离出去，否则 think 标签会污染 JSON 正文。
+    if (thinkingPolicy.reasoningSplit) {
+      wire.reasoning_split = true;
+    }
+    Object.assign(wire, canonicalizeCustomRequestParams(config.customRequestParams));
     return typed.chat.completions.create(wire) as Promise<WireCompletionResponse>;
   };
 

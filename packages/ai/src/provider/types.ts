@@ -21,6 +21,8 @@ export type ModelApiConfig = {
   baseURL?: string | null;
   model: string;
   customHeaders?: Record<string, string> | null;
+  /** 自定义请求参数：canonicalize 后合并进请求体，覆盖同名内置字段。 */
+  customRequestParams?: Record<string, unknown> | null;
 };
 
 /** 一次补全请求（业务语义层）。 */

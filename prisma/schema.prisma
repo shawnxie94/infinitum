@@ -849,6 +849,8 @@ model ModelApiConfig {
   modelName                String
   ingestionItemConcurrency Int            @default(3)
   customHeaders            String         @default("")
+  // 自定义请求参数 JSON（MiniMax thinking 等）；transport 层 canonicalize 校验后合并进请求体
+  customRequestParams      String         @default("")
   // 以下三项仅 type = "embedding" 时有意义，NULL 表示使用默认值
   dimensions               Int?
   batchSize                Int?

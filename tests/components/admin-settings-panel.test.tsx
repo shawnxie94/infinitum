@@ -422,6 +422,9 @@ describe("AdminSettingsPanel", () => {
 
     expect(screen.getByText("提示词配置")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "条目理解" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "条目理解" }));
+
     expect(screen.getByText("默认条目理解提示词")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "预览" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
@@ -436,6 +439,7 @@ describe("AdminSettingsPanel", () => {
     expect(modelDeleteButton).toBeDisabled();
 
     await user.click(screen.getByRole("tab", { name: "提示词" }));
+    await user.click(screen.getByRole("button", { name: "条目理解" }));
 
     const promptDeleteButton = screen.getByRole("button", { name: "默认配置不可删除" });
     expect(promptDeleteButton).toBeDisabled();
@@ -496,6 +500,7 @@ describe("AdminSettingsPanel", () => {
           customHeaders: {
             "User-Agent": "KimiCLI/1.44",
           },
+          customRequestParams: {},
           dimensions: null,
           batchSize: 32,
           timeoutMs: 15000,
@@ -559,6 +564,7 @@ describe("AdminSettingsPanel", () => {
           modelName: "orcarouter/auto",
           ingestionItemConcurrency: 3,
           customHeaders: {},
+          customRequestParams: {},
           dimensions: null,
           batchSize: 32,
           timeoutMs: 15000,
@@ -639,6 +645,7 @@ describe("AdminSettingsPanel", () => {
           modelName: "gpt-4.1-mini",
           ingestionItemConcurrency: 3,
           customHeaders: {},
+          customRequestParams: {},
           dimensions: null,
           batchSize: 64,
           timeoutMs: 15000,
@@ -743,6 +750,7 @@ describe("AdminSettingsPanel", () => {
           customHeaders: {
             "User-Agent": "KimiCLI/1.44",
           },
+          customRequestParams: {},
           dimensions: null,
           batchSize: null,
           timeoutMs: null,

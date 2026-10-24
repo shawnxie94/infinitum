@@ -15,6 +15,7 @@ export type ModelApiConfigPayload = {
   modelName: string;
   ingestionItemConcurrency: number;
   customHeaders: Record<string, string>;
+  customRequestParams?: Record<string, unknown>;
   dimensions: number | null;
   batchSize: number | null;
   timeoutMs: number | null;

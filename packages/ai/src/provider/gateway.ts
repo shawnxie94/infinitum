@@ -4,6 +4,7 @@
  * JSON 解析重试、阶段上下文多轮、采样温度契约、用量归一与上报。
  */
 import { InvalidJsonModelResponse, isTerminalTransportError } from "./transports";
+import { canonicalizeCustomRequestParams } from "./custom-request-params";
 import type {
   ChatMessage,
   CompletionRequest,
@@ -43,11 +44,11 @@ function defaultBuildJsonParseRetryPrompt(userContent: string, error: Error) {
 type CircuitState = { failures: number[]; openUntil: number };
 
 function modelApiCircuitKey(config: ModelApiConfig) {
-  return [config.apiKey ?? "", config.baseURL ?? "", config.model].join("|");
+  return [config.apiKey ?? "", config.baseURL ?? "", config.model, JSON.stringify(canonicalizeCustomRequestParams(config.customRequestParams))].join("|");
 }
 
 function isSameModelApiConfig(left: ModelApiConfig, right: ModelApiConfig) {
-  return left.apiKey === right.apiKey && left.baseURL === right.baseURL && left.model === right.model;
+  return left.apiKey === right.apiKey && left.baseURL === right.baseURL && left.model === right.model && JSON.stringify(canonicalizeCustomRequestParams(left.customRequestParams)) === JSON.stringify(canonicalizeCustomRequestParams(right.customRequestParams));
 }
 
 export type ModelGateway = {

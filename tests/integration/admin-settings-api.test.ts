@@ -197,6 +197,7 @@ describe("/api/admin/settings", () => {
       modelName: "gpt-4.1-mini",
       ingestionItemConcurrency: 4,
       customHeaders: {},
+      customRequestParams: {},
       dimensions: null,
       batchSize: null,
       timeoutMs: null,

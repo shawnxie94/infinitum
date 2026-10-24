@@ -51,6 +51,8 @@ export type RuntimeConfig = {
     baseURL: string;
     model: string;
     customHeaders?: Record<string, string>;
+    /** 自定义请求参数：canonicalize 后合并进模型请求体（MiniMax thinking 等）。 */
+    customRequestParams?: Record<string, unknown>;
   };
   prompts: {
     itemUnderstanding: string;
