@@ -228,7 +228,7 @@ describe("framework capability evolution", () => {
       "read", "ai_call", "validate", "writeback",
     ]);
     expect(WORKFLOW_TASK_DEFINITIONS.item_cleanup!.stages.map((stage) => stage.id)).toEqual([
-      "read", "delete", "cluster_finalize",
+      "read", "delete", "mastra_snapshot_retention", "cluster_finalize",
     ]);
     expect(WORKFLOW_TASK_DEFINITIONS.cluster_regenerate_summary!.stages.map((stage) => stage.id)).toEqual([
       "read", "ai_call", "writeback",

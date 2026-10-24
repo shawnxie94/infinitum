@@ -212,7 +212,7 @@ describe("Mastra staged task workflows", () => {
     expect(checkpoint.__mastra.lifecycle.event).toBe("finish");
     expect(stored.progressLabel).toBe("编排运行中");
     const stageTimings = JSON.parse(stored.stageTimingsJson ?? "[]") as Array<{ key: string; status?: string }>;
-    expect(stageTimings).toHaveLength(3);
+    expect(stageTimings).toHaveLength(4);
     expect(stageTimings.every((timing) => timing.status === "succeeded")).toBe(true);
   });
 
