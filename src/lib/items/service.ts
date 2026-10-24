@@ -950,12 +950,16 @@ export async function pruneExpiredWorkflowSnapshots(now: Date = new Date()): Pro
   }
 }
 
-export async function finalizeItemCleanup(plan: ItemCleanupPlan, totalDeleted: number) {
+export async function finalizeItemCleanup(
+  plan: ItemCleanupPlan,
+  totalDeleted: number,
+  prunedSnapshots = 0,
+) {
   for (const clusterId of plan.affectedClusterIds) {
     await recomputeCluster(clusterId);
   }
   invalidateFeedCache();
-  return { totalDeleted, affectedClusterCount: plan.affectedClusterIds.length };
+  return { totalDeleted, affectedClusterCount: plan.affectedClusterIds.length, prunedSnapshots };
 }
 
 

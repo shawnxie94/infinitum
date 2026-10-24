@@ -74,6 +74,7 @@ const WORKFLOW_STAGE_LABELS: Record<string, string> = {
   recovery_batch: "补偿处理",
   recovery_persist: "补偿写回",
   delete: "删除过期内容",
+  mastra_snapshot_retention: "运行快照清理",
   compute: "计算候选",
   entity_alias_check: "实体别名判定",
   entity_suggestion_candidates: "实体候选生成",

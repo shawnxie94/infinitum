@@ -210,7 +210,7 @@ describe("Mastra staged task workflows", () => {
     expect(stored.status).toBe("succeeded");
     expect(checkpoint.__mastra.step.stepId).toBe("item_cleanup-cluster_finalize");
     expect(checkpoint.__mastra.lifecycle.event).toBe("finish");
-    expect(stored.progressLabel).toBe("编排运行中");
+    expect(stored.progressLabel).toContain("清理完成：");
     const stageTimings = JSON.parse(stored.stageTimingsJson ?? "[]") as Array<{ key: string; status?: string }>;
     expect(stageTimings).toHaveLength(4);
     expect(stageTimings.every((timing) => timing.status === "succeeded")).toBe(true);

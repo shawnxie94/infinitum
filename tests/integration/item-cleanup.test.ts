@@ -115,6 +115,10 @@ describe("item cleanup workflow", () => {
     const recent = await prisma.$queryRaw<{ run_id: string }[]>`SELECT run_id FROM mastra_workflow_snapshot WHERE run_id = 'run-recent'`;
     expect(expired).toHaveLength(0);
     expect(recent).toHaveLength(1);
+
+    const stored = await prisma.backgroundTaskRun.findUniqueOrThrow({ where: { id: taskRun.id } });
+    expect(stored.progressLabel).toContain("清理完成：");
+    expect(stored.progressLabel).toContain("运行快照 1");
   });
 
   it("archives deleted item dedupe keys so ingestion can skip them later", async () => {
