@@ -284,9 +284,29 @@ function failedAuditDetails(error: unknown) {
   const number = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0
     ? value
     : undefined;
-  const usageObjects = chain.map((item) => (item as { usage?: unknown }).usage)
-    .filter((value): value is Record<string, unknown> => !!value && typeof value === "object");
-  const findUsage = (...keys: string[]) => {
+  const rawUsageObjects: Record<string, unknown>[] = [];
+  const normalizedUsageObjects: Record<string, unknown>[] = [];
+  for (const item of chain) {
+    const usage = (item as { usage?: unknown }).usage;
+    if (usage && typeof usage === "object") {
+      const usageRecord = usage as Record<string, unknown>;
+      if (usageRecord.tokenUsageSource !== "estimated" && usageRecord.tokenUsageSource !== "mixed") {
+        const raw = usageRecord.raw;
+        if (raw && typeof raw === "object") rawUsageObjects.push(raw as Record<string, unknown>);
+        else normalizedUsageObjects.push(usageRecord);
+      }
+    }
+    const responseBody = (item as { response?: { body?: unknown } }).response?.body;
+    if (responseBody && typeof responseBody === "object") {
+      const responseUsage = (responseBody as { usage?: unknown }).usage;
+      if (responseUsage && typeof responseUsage === "object") rawUsageObjects.push(responseUsage as Record<string, unknown>);
+    }
+  }
+  // AI SDK usage.totalTokens is normalized by summing input/output tokens. Prefer
+  // provider raw fields when present; without raw usage, retain only the SDK's
+  // direct input/output values and leave total unknown.
+  const usageObjects = rawUsageObjects.length > 0 ? rawUsageObjects : normalizedUsageObjects;
+  const findUsage = (keys: string[]) => {
     for (const usage of usageObjects) {
       if (usage.tokenUsageSource === "estimated" || usage.tokenUsageSource === "mixed") continue;
       for (const key of keys) {
@@ -296,9 +316,15 @@ function failedAuditDetails(error: unknown) {
     }
     return undefined;
   };
-  const promptTokens = findUsage("inputTokens", "promptTokens");
-  const completionTokens = findUsage("outputTokens", "completionTokens");
-  const totalTokens = findUsage("totalTokens");
+  const promptTokens = findUsage(rawUsageObjects.length > 0
+    ? ["prompt_tokens", "input_tokens", "inputTokens", "promptTokens"]
+    : ["inputTokens", "promptTokens"]);
+  const completionTokens = findUsage(rawUsageObjects.length > 0
+    ? ["completion_tokens", "output_tokens", "outputTokens", "completionTokens"]
+    : ["outputTokens", "completionTokens"]);
+  const totalTokens = rawUsageObjects.length > 0
+    ? findUsage(["total_tokens", "totalTokens"])
+    : undefined;
   const partialUsage = promptTokens !== undefined || completionTokens !== undefined || totalTokens !== undefined
     ? {
         ...(promptTokens !== undefined ? { promptTokens } : {}),

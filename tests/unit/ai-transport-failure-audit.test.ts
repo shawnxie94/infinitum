@@ -70,9 +70,38 @@ describe("AI SDK failed request audit", () => {
     expect(settled[0].rawText).toBeUndefined();
   });
 
+  it("uses raw provider usage for a partial NoObjectGeneratedError without SDK-derived total", async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({
+      id: "chatcmpl-partial",
+      choices: [{ index: 0, finish_reason: "length", message: { role: "assistant", content: "not-json" } }],
+      usage: { prompt_tokens: 8, completion_tokens: 0 },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const { auditHooks, settled } = hooks();
+    const transport = createAiSdkTransport({
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      maxRetries: 0,
+      supportsStructuredOutputs: true,
+      auditHooks,
+    });
+
+    await expect(transport({
+      messages: [{ role: "user", content: "request" }],
+      schema: z.object({ answer: z.string() }),
+    }, config)).rejects.toMatchObject({ name: "AI_NoObjectGeneratedError" });
+    expect(settled[0]).toMatchObject({
+      status: "failed",
+      errorName: "AI_NoObjectGeneratedError",
+      finishReason: "length",
+      usage: { promptTokens: 8, completionTokens: 0, tokenUsageSource: "provider" },
+    });
+    expect(settled[0].usage).not.toHaveProperty("totalTokens");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("extracts nested partial provider usage without estimating missing values, preserving zero and rejecting invalid counts", async () => {
     const partial = Object.assign(new Error("nested provider diagnostics"), {
-      usage: { inputTokens: 0, outputTokens: 7, totalTokens: undefined },
+      // Without raw provider usage, totalTokens may already be SDK-derived.
+      usage: { inputTokens: 0, outputTokens: 7, totalTokens: 7 },
     });
     const { auditHooks, settled } = hooks();
     const client = { chat: { completions: { create: vi.fn(async () => { throw new NoOutputGeneratedError({ cause: partial }); }) } } };
