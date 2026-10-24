@@ -1218,6 +1218,16 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
             </div>
           )}
 
+          {modelForm.modelType === "chat" ? (
+            <FormBlock label="自定义请求参数 JSON">
+              <textarea
+                aria-label="自定义请求参数 JSON"
+                value={modelForm.customRequestParams}
+                onChange={(event) => setModelForm(current => ({ ...current, customRequestParams: event.target.value }))}
+                className="min-h-28 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 font-mono text-sm"
+              />
+            </FormBlock>
+          ) : null}
           <div className="space-y-2">
             <span className={labelClassName}>自定义请求头</span>
             <div className="space-y-2">
@@ -1294,19 +1304,6 @@ export function AiSettingsPanel({ initialSettings, mode, initialPromptType = "it
               />
               <span className="text-sm text-[var(--text-2)]">启用此配置</span>
             </label>
-            {modelForm.modelType === "chat" ? (
-              <label className="flex flex-col gap-1">
-                <span className="text-sm text-[var(--text-2)]">自定义请求参数 JSON（如 MiniMax thinking）</span>
-                <textarea
-                  aria-label="自定义请求参数 JSON"
-                  value={modelForm.customRequestParams}
-                  onChange={(event) =>
-                    setModelForm((current) => ({ ...current, customRequestParams: event.target.value }))
-                  }
-                  className="min-h-28 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 font-mono text-sm"
-                />
-              </label>
-            ) : null}
             {modelForm.modelType === "chat" ? (
               <label className="flex flex-wrap items-center gap-2">
                 <input
