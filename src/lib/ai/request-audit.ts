@@ -378,10 +378,10 @@ export function createRequestAudit(
             responseExpiresAt: text !== null ? new Date(now.getTime() + AI_RAW_RETENTION_DAYS * 86_400_000) : null,
             ...(outcome.usage
               ? {
-                  promptTokens: outcome.usage.promptTokens,
-                  completionTokens: outcome.usage.completionTokens,
-                  totalTokens: outcome.usage.totalTokens,
-                  tokenUsageSource: outcome.usage.tokenUsageSource,
+                  ...(outcome.usage.promptTokens !== undefined ? { promptTokens: outcome.usage.promptTokens } : {}),
+                  ...(outcome.usage.completionTokens !== undefined ? { completionTokens: outcome.usage.completionTokens } : {}),
+                  ...(outcome.usage.totalTokens !== undefined ? { totalTokens: outcome.usage.totalTokens } : {}),
+                  ...(outcome.usage.tokenUsageSource ? { tokenUsageSource: outcome.usage.tokenUsageSource } : {}),
                 }
               : {}),
             updatedAt: now,

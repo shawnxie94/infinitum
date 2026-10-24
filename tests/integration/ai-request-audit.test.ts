@@ -355,6 +355,33 @@ describe("AI 请求审计（集成）", () => {
     expect(succeeded?.responseExpiresAt).not.toBeNull();
   });
 
+  it("失败回执保留真实零和部分 provider 用量，缺失字段仍为 NULL，且脱敏错误正文", async () => {
+    const audit = createRequestAudit({}, { knownSecrets: ["sk-secret-abcdefghijklmnop"] });
+    const context = createContext({ attemptIndex: 0 });
+    await audit.beforeDispatch(context);
+    await audit.settle(context, {
+      status: "failed",
+      errorName: "AI_NoObjectGeneratedError",
+      errorMessage: "invalid output sk-secret-abcdefghijklmnop",
+      rawText: "response sk-secret-abcdefghijklmnop",
+      finishReason: "length",
+      usage: { promptTokens: 0, tokenUsageSource: "provider" },
+    });
+
+    const row = await prisma.aiRequestReceipt.findUnique({ where: { requestId: context.requestId } });
+    expect(row).toMatchObject({
+      status: "failed",
+      errorKind: "AI_NoObjectGeneratedError",
+      errorMessage: expect.not.stringContaining("sk-secret-abcdefghijklmnop"),
+      responseRaw: expect.not.stringContaining("sk-secret-abcdefghijklmnop"),
+      finishReason: "length",
+      promptTokens: 0,
+      tokenUsageSource: "provider",
+    });
+    expect(row?.completionTokens).toBeNull();
+    expect(row?.totalTokens).toBeNull();
+  });
+
   it("非抛出 summary 无效诊断记录到对应回执，且不引入额外模型调用", async () => {
     const inputText = "正文内容足够长，描述了一个明确的事件事实。".repeat(10);
     const create = vi.fn().mockResolvedValue({

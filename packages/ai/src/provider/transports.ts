@@ -265,6 +265,57 @@ type AuditedDispatchOutcome = {
   usage: UsageSnapshot;
 };
 
+function failedAuditDetails(error: unknown) {
+  const chain: object[] = [];
+  const seen = new Set<object>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 6 && current && typeof current === "object" && !seen.has(current); depth += 1) {
+    seen.add(current);
+    chain.push(current);
+    current = (current as { cause?: unknown }).cause;
+  }
+  const firstString = (key: string) => {
+    for (const item of chain) {
+      const value = (item as Record<string, unknown>)[key];
+      if (typeof value === "string" && value.length > 0) return value;
+    }
+    return undefined;
+  };
+  const number = (value: unknown) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+  const usageObjects = chain.map((item) => (item as { usage?: unknown }).usage)
+    .filter((value): value is Record<string, unknown> => !!value && typeof value === "object");
+  const findUsage = (...keys: string[]) => {
+    for (const usage of usageObjects) {
+      if (usage.tokenUsageSource === "estimated" || usage.tokenUsageSource === "mixed") continue;
+      for (const key of keys) {
+        const value = number(usage[key]);
+        if (value !== undefined) return value;
+      }
+    }
+    return undefined;
+  };
+  const promptTokens = findUsage("inputTokens", "promptTokens");
+  const completionTokens = findUsage("outputTokens", "completionTokens");
+  const totalTokens = findUsage("totalTokens");
+  const partialUsage = promptTokens !== undefined || completionTokens !== undefined || totalTokens !== undefined
+    ? {
+        ...(promptTokens !== undefined ? { promptTokens } : {}),
+        ...(completionTokens !== undefined ? { completionTokens } : {}),
+        ...(totalTokens !== undefined ? { totalTokens } : {}),
+        tokenUsageSource: "provider" as const,
+      }
+    : undefined;
+  return {
+    errorName: firstString("name"),
+    errorMessage: error instanceof Error ? error.message : String(error),
+    finishReason: firstString("finishReason"),
+    rawText: firstString("text") ?? firstString("responseBody"),
+    usage: partialUsage,
+  };
+}
+
 /**
  * 受控插桩派发：每次真实调用先准入后结算；瞬时已知失败可在额度内受控重试；
  * unknown 结局（未拿到响应）或准入拒绝直接抛终态错误，绝不自动重试。
@@ -304,12 +355,10 @@ async function dispatchWithAudit<T>(
     } catch (error) {
       const status = classifyTransportOutcome(error);
       if (hooks) {
+        const details = failedAuditDetails(error);
         await hooks.settle(context, {
           status,
-          errorName: typeof (error as { name?: unknown } | null)?.name === "string"
-            ? (error as { name: string }).name
-            : undefined,
-          errorMessage: error instanceof Error ? error.message : String(error),
+          ...details,
         }).catch((settleError) => {
           throw wrapAdmissionError(settleError);
         });

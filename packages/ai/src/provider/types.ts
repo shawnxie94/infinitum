@@ -70,7 +70,9 @@ export type TransportAttemptOutcome = {
   finishReason?: string | null;
   errorName?: string;
   errorMessage?: string;
-  usage?: UsageSnapshot;
+  usage?: UsageSnapshot | Partial<Pick<UsageSnapshot, "promptTokens" | "completionTokens" | "totalTokens">> & {
+    tokenUsageSource?: UsageSnapshot["tokenUsageSource"];
+  };
 };
 
 /** 审计钩子：每次真实传输调用前准入、结算时持久化原始响应回执。
