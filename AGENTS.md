@@ -106,3 +106,5 @@ tests/{unit,integration}/
 - Monitor: `http://localhost:3000/admin/monitor`
 
 Session：HTTP-only cookie，由 `ADMIN_SESSION_SECRET` 签名。
+
+Avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
