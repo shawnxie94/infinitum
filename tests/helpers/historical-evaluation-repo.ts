@@ -26,7 +26,7 @@ export function createHistoricalEvaluationRepo(repo: string, parent: string): st
   const map = JSON.parse(readFileSync(join(archive, "source-map.json"), "utf8")) as {
     sources: Record<string, { snapshot: string; sha256: string }>;
   };
-  const paths = ["src/lib/clusters/normalization.ts", "src/lib/ai/provider-next.ts", "scripts/replay-cluster-relation-source-v2.ts", "src/lib/ai/protocols/item-understanding.ts"];
+  const paths = ["src/lib/clusters/normalization.ts", "src/lib/clusters/service.ts", "src/lib/ai/provider-next.ts", "scripts/replay-cluster-relation-source-v2.ts", "src/lib/ai/protocols/item-understanding.ts"];
   assert.deepEqual(Object.keys(map.sources), paths);
   for (const path of paths) {
     const entry = map.sources[path];

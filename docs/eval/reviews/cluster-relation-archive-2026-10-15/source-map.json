@@ -7,6 +7,11 @@
       "sha256": "b4d695e3f30d13b6a394513e689bde884253a6f1c2556b41adc7828f3cd1bed5",
       "origin": "git:d17f3f9:src/lib/clusters/normalization.ts"
     },
+    "src/lib/clusters/service.ts": {
+      "snapshot": "sources/service.ts.snapshot",
+      "sha256": "2d123b79606b59f51305b53c4c4856c5f4b50702e0dd5d89792ed029f6dffe4b",
+      "origin": "git:d17f3f9:src/lib/clusters/service.ts"
+    },
     "src/lib/ai/provider-next.ts": {
       "snapshot": "sources/provider-next.ts.snapshot",
       "sha256": "8028225fe4007541d86ec880a95e9ad5288cf8fd6cc75402072b5ae369ed6415",
