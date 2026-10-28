@@ -9,6 +9,7 @@ import { deriveSourceConcurrency, type PreparedFeedItemLookup } from "@/lib/inge
 import { createRssParser } from "@/lib/ingestion/parser";
 import { createIngestionTimelineModelNames, type IngestionTimelineModelNames } from "@/lib/ingestion/task-timeline";
 import type { ProcessedItemRecord, RunIngestionOptions } from "@/lib/ingestion/types";
+import { getEventTypeRegistrySnapshot } from "@/lib/event-types/registry";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { DEFAULT_FULL_TEXT_FETCH_THRESHOLD } from "@/lib/tasks/scheduler";
 import { DEFAULT_INGESTION_TASK_LABEL } from "@/lib/tasks/types";
@@ -77,6 +78,7 @@ export async function resolveRunOptions(options?: Partial<RunIngestionOptions>):
         {
           aggregationSplitMaxEvents: runtimeConfig?.ingestion.aggregationSplitMaxEvents,
           embedding: runtimeConfig?.embedding ?? null,
+          eventTypeRegistry: runtimeConfig ? await getEventTypeRegistrySnapshot() : null,
           onUsage: (usage, usageKey) => aiUsage.addUsageByKey(usageKey, usage),
         },
       ),

@@ -724,6 +724,8 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("cluster_merge_clean_pair_candidates", "recallSource", "TEXT");
   addColumnIfMissing("cluster_merge_clean_pair_candidates", "bm25Score", "INTEGER");
   addColumnIfMissing("cluster_merge_clean_pair_candidates", "vectorSimilarity", "REAL");
+  // 可配置事件类型：模型原始 eventType 输出留存（未命中启用注册表映射为 other 时）。
+  addColumnIfMissing("items", "eventTypeRaw", "TEXT");
   runSqlite([dbPath], {
     input: 'CREATE INDEX IF NOT EXISTS "daily_reports_currentRevisionId_idx" ON "daily_reports"("currentRevisionId");\n',
   });

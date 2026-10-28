@@ -31,19 +31,20 @@ export type DailyReportTemplateSectionBlock = {
 export type DailyReportTemplateBlock = DailyReportTemplateTextBlock | DailyReportTemplateSectionBlock;
 
 export type DailyReportTemplateConfig = {
-  schemaVersion?: 2;
+  schemaVersion?: 3;
   headlineInstruction: string;
+  selectionRules: string[];
   recentTopicRules: string[];
   blocks: DailyReportTemplateBlock[];
   globalRules: string[];
 };
 
-export type NormalizedDailyReportTemplate = DailyReportTemplateConfig & { schemaVersion: 2 };
+export type NormalizedDailyReportTemplate = DailyReportTemplateConfig & { schemaVersion: 3 };
 
-export const DAILY_REPORT_TEMPLATE_SCHEMA_VERSION = 2 as const;
+export const DAILY_REPORT_TEMPLATE_SCHEMA_VERSION = 3 as const;
 
 export const DAILY_REPORT_SYSTEM_ROLE_PROMPT =
-  "你是中文 AI 新闻日报编辑。请只基于输入候选内容生成一份 Briefing 型 AI 日报。最终响应必须是单个合法 JSON 对象；不要输出代码块、Markdown 文档、前后说明或任何 JSON 之外的文本。JSON 字段内仅在模板规则允许时使用有限行内 Markdown。";
+  "你是中文资讯日报编辑。请只基于输入候选内容生成一份日报。最终响应必须是单个合法 JSON 对象；不要输出代码块、Markdown 文档、前后说明或任何 JSON 之外的文本。JSON 字段内仅在模板规则允许时使用有限行内 Markdown。";
 
 export const DEFAULT_DAILY_REPORT_HEADLINE_INSTRUCTION =
   "基于最终输出的“热点事件”栏目全部条目生成标题主题，在 64 字限制内尽量覆盖每个热点事件的核心主体或动作；主题数量不固定，不强行凑数，也不要从其他栏目或其他值得看中提炼抽象主题；用“、”分隔；不要包含日期、年份、日报、AI 日报、Markdown、引号或尾随标点；会与“MM-DD日报 | ”前缀合成最终标题。";
@@ -57,6 +58,7 @@ export const DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES = [
 export const DEFAULT_DAILY_REPORT_TEMPLATE: DailyReportTemplateConfig = {
   schemaVersion: DAILY_REPORT_TEMPLATE_SCHEMA_VERSION,
   headlineInstruction: DEFAULT_DAILY_REPORT_HEADLINE_INSTRUCTION,
+  selectionRules: ["优先选择对 AI 领域有明确事实增量的重要事件。", "同一事件只进入最匹配栏目；热点事件按重要性优先，不能重复进入其他栏目。"],
   recentTopicRules: DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES,
   blocks: [
     {
@@ -185,6 +187,11 @@ function cloneDefaultTemplate() {
   return JSON.parse(JSON.stringify(DEFAULT_DAILY_REPORT_TEMPLATE)) as NormalizedDailyReportTemplate;
 }
 
+const V2_OFFICIAL_SELECTION_RULES = [
+  "优先选择对 AI 领域有明确事实增量的重要事件。",
+  "同一事件只进入最匹配栏目；热点事件按重要性优先，不能重复进入其他栏目。",
+];
+
 const LEGACY_DEFAULT_SECTION_DESCRIPTIONS: Record<string, string> = {
   "今日大事":
     "输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。",
@@ -239,6 +246,7 @@ function getPreviousCurrentDefaultDailyReportTemplate(
   globalRules = DEFAULT_DAILY_REPORT_TEMPLATE.globalRules,
 ) {
   const template = cloneDefaultTemplate();
+  template.selectionRules = V2_OFFICIAL_SELECTION_RULES;
   template.globalRules = [...globalRules];
   template.blocks = template.blocks.map((block) => {
     if (block.type !== "section") return block;
@@ -271,6 +279,7 @@ const PREVIOUS_INTERMEDIATE_GLOBAL_RULES = [
 
 function getLegacyDefaultDailyReportTemplate() {
   const template = cloneDefaultTemplate();
+  template.selectionRules = V2_OFFICIAL_SELECTION_RULES;
   template.blocks = template.blocks.map((block) => {
     if (block.type !== "section") return block;
     const description = LEGACY_DEFAULT_SECTION_DESCRIPTIONS[block.title];
@@ -281,6 +290,7 @@ function getLegacyDefaultDailyReportTemplate() {
 
 function getPreviousDefaultDailyReportTemplate() {
   const template = cloneDefaultTemplate();
+  template.selectionRules = V2_OFFICIAL_SELECTION_RULES;
   template.blocks = template.blocks
     .filter((block) => !(block.type === "section" && block.title === "其他值得看"));
   template.blocks.push({
@@ -294,6 +304,7 @@ function getPreviousDefaultDailyReportTemplate() {
 
 function getPreviouslySeededV2DefaultDailyReportTemplate() {
   const template = getPreviousDefaultDailyReportTemplate();
+  template.selectionRules = V2_OFFICIAL_SELECTION_RULES;
   template.headlineInstruction = PREVIOUS_DEFAULT_HEADLINE_INSTRUCTION;
   template.recentTopicRules = PREVIOUS_DEFAULT_RECENT_TOPIC_RULES;
   template.blocks = template.blocks.map((block) => {
@@ -336,10 +347,6 @@ function getCurrentShapeDefaultWithPreviousIntermediateRules() {
   return template;
 }
 
-export function getLegacyDefaultDailyReportSystemPrompt() {
-  return compileDailyReportTemplatePrompt(getLegacyDefaultDailyReportTemplate());
-}
-
 function nonEmptyText(value: unknown, fallback: string) {
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
@@ -379,50 +386,128 @@ function isModelOwnedSourceMappingRule(rule: string) {
   );
 }
 
+const DAILY_REPORT_TEMPLATE_RULE_ARRAY_MAX_ITEMS = 50;
+const DAILY_REPORT_TEMPLATE_RULE_MAX_CHARS = 500;
+
+function assertBoundedStringArray(rules: unknown, label: string) {
+  if (!Array.isArray(rules) || rules.some((rule) => typeof rule !== "string")) {
+    throw new Error(`${label}必须是字符串数组。`);
+  }
+  if (rules.length > DAILY_REPORT_TEMPLATE_RULE_ARRAY_MAX_ITEMS) {
+    throw new Error(`${label}不能超过 ${DAILY_REPORT_TEMPLATE_RULE_ARRAY_MAX_ITEMS} 条。`);
+  }
+  for (const rule of rules) {
+    if ((rule as string).length > DAILY_REPORT_TEMPLATE_RULE_MAX_CHARS) {
+      throw new Error(`${label}单条不能超过 ${DAILY_REPORT_TEMPLATE_RULE_MAX_CHARS} 字。`);
+    }
+  }
+}
+
+/** v3 模板必须自带完整合法结构；缺字段/非法类型/未知版本都直接报错，不做兼容回填。 */
+export function assertStrictV3TemplateShape(value: unknown): void {
+  if (!isObject(value)) throw new Error("日报模板配置必须是 JSON 对象。");
+  const template = value as Record<string, unknown>;
+  if (template.schemaVersion !== DAILY_REPORT_TEMPLATE_SCHEMA_VERSION) {
+    throw new Error(`日报模板 schemaVersion 必须是 ${DAILY_REPORT_TEMPLATE_SCHEMA_VERSION}。`);
+  }
+  if (typeof template.headlineInstruction !== "string" || !template.headlineInstruction.trim()) {
+    throw new Error("标题规则不能为空。");
+  }
+  assertBoundedStringArray(template.selectionRules, "选题规则");
+  if (template.selectionRules === undefined) throw new Error("选题规则必须是字符串数组。");
+  if (!Array.isArray(template.recentTopicRules)) throw new Error("历史主题判断策略必须是字符串数组。");
+  assertBoundedStringArray(template.recentTopicRules, "历史主题判断策略");
+  if (!Array.isArray(template.globalRules)) throw new Error("正文写作规则必须是数组。");
+  assertBoundedStringArray(template.globalRules, "正文写作规则");
+  if (!Array.isArray(template.blocks) || template.blocks.length === 0) {
+    throw new Error("日报模板至少需要 1 个 block。");
+  }
+  const sectionKeys: string[] = [];
+  for (const [index, block] of template.blocks.entries()) {
+    const label = `第 ${index + 1} 个 block`;
+    if (!isObject(block)) throw new Error(`${label}必须是对象。`);
+    if (block.type === "text") {
+      if (typeof block.title !== "string" || !block.title.trim()) throw new Error(`${label}标题不能为空。`);
+      if (typeof block.bodyInstruction !== "string" || !block.bodyInstruction.trim()) throw new Error(`${label}正文要求不能为空。`);
+      continue;
+    }
+    if (block.type !== "section") throw new Error(`${label} type 必须是 text 或 section。`);
+    if (typeof block.title !== "string" || !block.title.trim()) throw new Error(`${label}栏目名不能为空。`);
+    if (typeof block.description !== "string" || !block.description.trim()) throw new Error(`${block.title}栏目要求不能为空。`);
+    if (typeof block.key !== "string" || !block.key.trim()) throw new Error(`${label} key 不能为空。`);
+    sectionKeys.push(block.key);
+    if (typeof block.required !== "boolean") throw new Error(`${block.title} required 必须是布尔值。`);
+    if (!validPositiveInteger(block.minItems)) throw new Error(`${block.title} minItems 必须是非负整数。`);
+    if (block.maxItems !== null && !validPositiveInteger(block.maxItems)) throw new Error(`${block.title} maxItems 必须是非负整数或 null。`);
+    if (validPositiveInteger(block.minItems) && validPositiveInteger(block.maxItems) && block.minItems > block.maxItems) {
+      throw new Error(`${block.title} minItems 不能大于 maxItems。`);
+    }
+    if (block.required === true && (block.minItems as number) < 1) throw new Error(`${block.title} required=true 时 minItems 至少为 1。`);
+    if (!isObject(block.item)) throw new Error(`${block.title} 缺少条目配置。`);
+    const item = block.item as Record<string, unknown>;
+    if (item.bodyRequired !== undefined && typeof item.bodyRequired !== "boolean") throw new Error(`${block.title}.bodyRequired 必须是布尔值。`);
+    if (item.bodyRequired !== false) {
+      if (typeof item.bodyInstruction !== "string" || !item.bodyInstruction.trim()) throw new Error(`${block.title}条目正文要求不能为空。`);
+    } else if (typeof item.bodyInstruction !== "string") {
+      throw new Error(`${block.title}条目正文要求必须是字符串。`);
+    }
+    if (!Array.isArray(item.notes)) throw new Error(`${block.title} 要点配置必须是数组。`);
+    for (const note of item.notes) {
+      if (!isObject(note)) throw new Error(`${block.title} 要点配置必须是对象。`);
+      const noteRecord = note as Record<string, unknown>;
+      if (typeof noteRecord.label !== "string" || !noteRecord.label.trim()) throw new Error(`${block.title}要点标签不能为空。`);
+      if (typeof noteRecord.required !== "boolean") throw new Error(`${block.title}.${noteRecord.label} 必填设置必须是布尔值。`);
+      if (typeof noteRecord.instruction !== "string" || !noteRecord.instruction.trim()) throw new Error(`${block.title}.${noteRecord.label} 要求不能为空。`);
+    }
+  }
+  if (new Set(sectionKeys).size !== sectionKeys.length) throw new Error("日报模板 section key 必须唯一。");
+}
+
 export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDailyReportTemplate {
   if (!isObject(value)) {
     return cloneDefaultTemplate();
   }
 
   const input = value as Partial<DailyReportTemplateConfig>;
-  const sourceBlocks = Array.isArray(input.blocks) && input.blocks.length > 0
-    ? input.blocks
-    : cloneDefaultTemplate().blocks;
+  const rawVersion = (value as { schemaVersion?: unknown }).schemaVersion;
+  if (rawVersion !== undefined && rawVersion !== 2 && rawVersion !== DAILY_REPORT_TEMPLATE_SCHEMA_VERSION) {
+    throw new Error(`日报模板 schemaVersion 必须是 2 或 ${DAILY_REPORT_TEMPLATE_SCHEMA_VERSION}。`);
+  }
+  if (rawVersion === DAILY_REPORT_TEMPLATE_SCHEMA_VERSION) {
+    // v3 是严格契约：直接归一化/编译不接受缺字段或非法类型。
+    assertStrictV3TemplateShape(value);
+  }
+  const sourceBlocks = Array.isArray(input.blocks) && input.blocks.length > 0 ? input.blocks : cloneDefaultTemplate().blocks;
+  const normalizeRules = (rules: unknown, fallback: string[], label: string) => {
+    if (rules === undefined) return [...fallback];
+    if (!Array.isArray(rules) || rules.some((rule) => typeof rule !== "string")) throw new Error(`${label}必须是字符串数组。`);
+    return rules.map((rule) => rule.trim()).filter(Boolean);
+  };
 
   return {
     schemaVersion: DAILY_REPORT_TEMPLATE_SCHEMA_VERSION,
     headlineInstruction: nonEmptyText(input.headlineInstruction, DEFAULT_DAILY_REPORT_TEMPLATE.headlineInstruction),
-    recentTopicRules:
-      Array.isArray(input.recentTopicRules) && input.recentTopicRules.length > 0
-        ? input.recentTopicRules.filter((rule): rule is string => typeof rule === "string" && Boolean(rule.trim())).map((rule) => rule.trim())
-        : [...DEFAULT_DAILY_REPORT_TEMPLATE.recentTopicRules],
+    // v2/无版本历史输入：selectionRules 缺省保持空数组，AI 默认策略只经官方默认升级路径写入。
+    selectionRules: normalizeRules(input.selectionRules, [], "选题规则"),
+    recentTopicRules: normalizeRules(input.recentTopicRules, DEFAULT_DAILY_REPORT_TEMPLATE.recentTopicRules, "历史主题判断策略"),
     blocks: sourceBlocks.map((block, index) => {
       const defaultBlock = DEFAULT_DAILY_REPORT_TEMPLATE.blocks[index] ?? DEFAULT_DAILY_REPORT_TEMPLATE.blocks[0];
       if (block.type === "section") {
-        const defaultSection = DEFAULT_DAILY_REPORT_TEMPLATE.blocks.find(
-          (entry) => entry.type === "section" && entry.title === block.title,
-        ) as DailyReportTemplateSectionBlock | undefined;
-        const minItems = validPositiveInteger(block.minItems)
-          ? block.minItems
-          : defaultSection?.minItems ?? 0;
-        const maxItems = block.maxItems === null
-          ? null
-          : validPositiveInteger(block.maxItems)
-          ? block.maxItems
-          : defaultSection?.maxItems ?? null;
-        const fallbackSectionTitle = defaultSection?.title ?? "自定义栏目";
+        const minItems = validPositiveInteger(block.minItems) ? block.minItems : 0;
+        const maxItems = block.maxItems === null ? null : validPositiveInteger(block.maxItems) ? block.maxItems : null;
+        const fallbackSectionTitle = "自定义栏目";
         const bodyRequired = block.item?.bodyRequired !== false;
         return {
           type: "section",
           key: typeof block.key === "string" && block.key.trim() ? block.key.trim() : generatedSectionKey(nonEmptyText(block.title, fallbackSectionTitle)),
           title: nonEmptyText(block.title, fallbackSectionTitle),
-          description: nonEmptyText(block.description, defaultSection?.description ?? "输出该栏目内容。"),
-          required: typeof block.required === "boolean" ? block.required : defaultSection?.required ?? false,
+          description: nonEmptyText(block.description, "输出该栏目内容。"),
+          required: typeof block.required === "boolean" ? block.required : false,
           minItems,
           maxItems: maxItems == null ? null : Math.max(minItems, maxItems),
           item: {
             bodyInstruction: bodyRequired
-              ? nonEmptyText(block.item?.bodyInstruction, defaultSection?.item.bodyInstruction ?? "说明条目内容。")
+              ? nonEmptyText(block.item?.bodyInstruction, "说明条目内容。")
               : typeof block.item?.bodyInstruction === "string" ? block.item.bodyInstruction.trim() : "",
             bodyRequired,
             notes: Array.isArray(block.item?.notes) ? block.item.notes.map(normalizeNote) : [],
@@ -436,13 +521,8 @@ export function normalizeDailyReportTemplateConfig(value: unknown): NormalizedDa
         bodyInstruction: nonEmptyText(block.bodyInstruction, defaultText.bodyInstruction),
       };
     }),
-    globalRules:
-      Array.isArray(input.globalRules) && input.globalRules.length > 0
-        ? input.globalRules
-          .filter((rule): rule is string => typeof rule === "string" && Boolean(rule.trim()))
-          .map((rule) => rule.trim())
-          .filter((rule) => !isModelOwnedSourceMappingRule(rule))
-        : [...DEFAULT_DAILY_REPORT_TEMPLATE.globalRules],
+    globalRules: normalizeRules(input.globalRules, DEFAULT_DAILY_REPORT_TEMPLATE.globalRules, "正文写作规则")
+      .filter((rule) => !isModelOwnedSourceMappingRule(rule)),
   };
 }
 
@@ -464,6 +544,7 @@ export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemp
   const previouslySeededV2DefaultTemplate = getPreviouslySeededV2DefaultDailyReportTemplate();
   const previouslyMigratedV2DefaultTemplate = getPreviouslyMigratedV2DefaultDailyReportTemplate();
   const previouslyMigratedV2DefaultWithPreviousGlobalRules = getPreviouslyMigratedV2DefaultWithPreviousGlobalRules();
+  const v2OfficialDefaultTemplate = { ...defaultTemplate, selectionRules: [] };
   const currentShapeDefaultWithPreviousGlobalRules = getCurrentShapeDefaultWithPreviousGlobalRules();
   const currentShapeDefaultWithPreviousIntermediateRules = getCurrentShapeDefaultWithPreviousIntermediateRules();
   const isUntouchedDefault = [
@@ -478,6 +559,7 @@ export function upgradeDefaultDailyReportTemplate(templateInput: DailyReportTemp
     previouslyMigratedV2DefaultWithPreviousGlobalRules,
     currentShapeDefaultWithPreviousGlobalRules,
     currentShapeDefaultWithPreviousIntermediateRules,
+    v2OfficialDefaultTemplate,
   ].some(
     (candidate) => JSON.stringify(template) === JSON.stringify(candidate),
   );
@@ -496,8 +578,9 @@ function assertNonEmptyText(value: unknown, label: string) {
 function withDailyReportTemplateCompatibilityDefaults(template: Record<string, unknown>): Record<string, unknown> {
   return {
     ...template,
-    schemaVersion: template.schemaVersion ?? DAILY_REPORT_TEMPLATE_SCHEMA_VERSION,
+    schemaVersion: template.schemaVersion ?? 2,
     headlineInstruction: nonEmptyText(template.headlineInstruction, DEFAULT_DAILY_REPORT_TEMPLATE.headlineInstruction),
+    selectionRules: template.selectionRules === undefined ? [] : template.selectionRules,
     recentTopicRules: Array.isArray(template.recentTopicRules)
       ? template.recentTopicRules
       : [...DEFAULT_DAILY_REPORT_TEMPLATE.recentTopicRules],
@@ -525,9 +608,8 @@ export function validateDailyReportTemplateConfig(
     throw new Error("日报模板至少需要 1 个 block。");
   }
   assertNonEmptyText(template.headlineInstruction, "标题规则");
-  if (!Array.isArray(template.recentTopicRules)) {
-    throw new Error("历史主题判断策略必须是数组。");
-  }
+  if (!Array.isArray(template.selectionRules) || template.selectionRules.some((rule) => typeof rule !== "string")) throw new Error("选题规则必须是字符串数组。");
+  if (!Array.isArray(template.recentTopicRules) || template.recentTopicRules.some((rule) => typeof rule !== "string")) throw new Error("历史主题判断策略必须是字符串数组。");
   for (const [index, block] of template.blocks.entries()) {
     const label = `第 ${index + 1} 个 block`;
     if (block.type === "text") {
@@ -599,21 +681,38 @@ export function parseDailyReportTemplateJson(value: string | null | undefined): 
   if (!isObject(parsed) || !Array.isArray((parsed as Partial<DailyReportTemplateConfig>).blocks)) {
     throw new Error("日报模板 JSON 必须包含 blocks 数组。");
   }
-  const input = withDailyReportTemplateCompatibilityDefaults(parsed);
-  if (input.schemaVersion !== undefined && input.schemaVersion !== DAILY_REPORT_TEMPLATE_SCHEMA_VERSION) {
-    throw new Error(`日报模板 schemaVersion 必须是 ${DAILY_REPORT_TEMPLATE_SCHEMA_VERSION}。`);
+  const rawVersion = (parsed as { schemaVersion?: unknown }).schemaVersion;
+  if (rawVersion !== undefined && rawVersion !== 2 && rawVersion !== DAILY_REPORT_TEMPLATE_SCHEMA_VERSION) {
+    throw new Error(`日报模板 schemaVersion 必须是 2 或 ${DAILY_REPORT_TEMPLATE_SCHEMA_VERSION}。`);
   }
-  validateDailyReportTemplateConfig(input, { allowLegacyFields: true });
-  const template = normalizeDailyReportTemplateConfig(input);
+  if (rawVersion === DAILY_REPORT_TEMPLATE_SCHEMA_VERSION) {
+    // v3：严格校验原始结构，再仅做修剪性归一化；不回填任何默认值。
+    assertStrictV3TemplateShape(parsed);
+    const template = normalizeDailyReportTemplateConfig(parsed);
+    validateDailyReportTemplateConfig(template);
+    return template;
+  }
+  // v2/无版本：沿用旧兼容默认（仅限真实历史输入）。
+  const input = withDailyReportTemplateCompatibilityDefaults(parsed);
+  const migrated = { ...input, selectionRules: input.selectionRules ?? [] };
+  delete (migrated as { schemaVersion?: unknown }).schemaVersion;
+  validateDailyReportTemplateConfig(migrated, { allowLegacyFields: true });
+  const template = normalizeDailyReportTemplateConfig(migrated);
   validateDailyReportTemplateConfig(template);
   return template;
 }
 
 export type DailyReportTemplateMigrationStatus =
   | "v2"
+  | "v3"
   | "official_default_legacy"
   | "custom_legacy_requires_migration"
   | "invalid";
+
+// 从 base commit（94c30e6a）实际编译产物逐字冻结：旧 v1 官方模板的完整
+// system prompt 文本。分类 v1 官方/自定义时以此实际存储文本比较，而不是用
+// 新编译器重新生成（新编译输出会随模板版本变化，不能作为历史识别基准）。
+export const HISTORICAL_V1_OFFICIAL_DAILY_REPORT_SYSTEM_PROMPT = "你是中文 AI 新闻日报编辑。请只基于输入候选内容生成一份 Briefing 型 AI 日报。最终响应必须是单个合法 JSON 对象；不要输出代码块、Markdown 文档、前后说明或任何 JSON 之外的文本。JSON 字段内仅在模板规则允许时使用有限行内 Markdown。\n\n固定输出格式：\n{\"headline\":\"GPT-5.6 有限预览、Mythos 5 白名单恢复\",\"blocks\":[{\"type\":\"text\",\"title\":\"摘要\",\"body\":\"...\"},{\"type\":\"section\",\"blockKey\":\"hot-topics\",\"title\":\"热点事件\",\"items\":[{\"title\":\"...\",\"body\":\"...\",\"notes\":[{\"label\":\"重点\",\"text\":\"...\"}]}]},{\"type\":\"section\",\"blockKey\":\"changes-practice\",\"title\":\"变更与实践\",\"items\":[{\"title\":\"...\",\"body\":\"...\",\"notes\":[]}]},{\"type\":\"section\",\"blockKey\":\"security-risk\",\"title\":\"安全与风险\",\"items\":[{\"title\":\"...\",\"body\":\"...\",\"notes\":[{\"label\":\"影响\",\"text\":\"...\"},{\"label\":\"建议\",\"text\":\"...\"}]}]},{\"type\":\"section\",\"blockKey\":\"open-source-tools\",\"title\":\"开源与工具\",\"items\":[{\"title\":\"...\",\"body\":\"...\",\"notes\":[{\"label\":\"适用场景\",\"text\":\"...\"}]}]},{\"type\":\"section\",\"blockKey\":\"data-insights\",\"title\":\"数据与洞察\",\"items\":[{\"title\":\"...\",\"body\":\"...\",\"notes\":[{\"label\":\"数据\",\"text\":\"...\"},{\"label\":\"意义\",\"text\":\"...\"}]}]},{\"type\":\"section\",\"blockKey\":\"other-worth-reading\",\"title\":\"其他值得看\",\"items\":[{\"title\":\"...\",\"body\":\"...\",\"notes\":[]}]}]}\n\n通用结构规则：\n1. 最终 JSON 顶层必须包含 headline 字段。\n2. section block 的 items 为空数组时会在渲染时自动隐藏；有 items 时，每个 item 必须包含 title，建议包含 body。\n3. item.title 写事件标题；item.body 写正文或轻量看点；body 为空字符串或缺失时会按紧凑模式只展示标题。\n4. notes 只按栏目配置输出 label/text；无配置时输出空数组。\n\n输出要求：\n1. headline 字段：基于最终输出的“热点事件”栏目全部条目生成标题主题，在 64 字限制内尽量覆盖每个热点事件的核心主体或动作；主题数量不固定，不强行凑数，也不要从其他栏目或其他值得看中提炼抽象主题；用“、”分隔；不要包含日期、年份、日报、AI 日报、Markdown、引号或尾随标点；会与“MM-DD日报 | ”前缀合成最终标题。\n2. text block「摘要」：type 固定为 \"text\"，title 固定为“摘要”；body 字段：约 100-180 字。概括本期 AI 领域最关键的事项和主线变化，优先覆盖重大发布、模型/产品进展、产业合作、安全风险、开源工具或关键数据。格式固定为“{{date}} AI 领域呈现...，值得关注的信息：...”，例如：“2026-04-29 AI 领域呈现多线并进格局，值得关注的信息：...”。可使用有限 Markdown 行内标记突出关键信息：用 **加粗** 标注事件主体、关键变化、数字或结论，用 *斜体* 标注必要背景或不确定性；不要使用链接、图片、标题、表格或列表。\n3. section block「热点事件」：条目数非空校验：开启；条目数量：3 至 5 条；栏目要求：输出 3-5 条。优先综合参考 candidateScore、sourceCount、itemCount 和日期相关性；在新闻价值接近时优先选择更热、多源确认、eventDate 明确等于日报日期，或能从 publishedAt/正文判断发生于日报日期的事项。不要机械按日期或热度排序。；正文非空校验：开启；body 字段：每条正文约 120-260 字。覆盖事件主体、动作、结果、背景与影响；可使用有限 Markdown 行内标记：**加粗** 用于主体、关键结果、数字或建议，*斜体* 用于背景或不确定性。；notes 要求：重点 必填：不超过 30 字，说明为什么值得关注。\n4. section block「变更与实践」：条目数非空校验：开启；条目数量：2 至 5 条；栏目要求：输出 2-5 条。聚焦产品、模型、工程实践和生态变化。每条只覆盖一个独立事件或实践变化；不要为了压缩篇幅把无关更新并列到同一条。；正文非空校验：开启；body 字段：每条正文约 80-180 字。说明变化内容、适用对象、实践价值或可能影响。；notes 要求：输出空数组\n5. section block「安全与风险」：条目数非空校验：关闭；条目数量：0 至 5 条；栏目要求：可为空；有相关内容时输出 1-5 条。聚焦安全事件、漏洞、滥用风险、合规风险或模型行为风险；不要输出 severity、riskLevel、风险级别等风险等级字段。；正文非空校验：开启；body 字段：每条正文约 80-180 字。说明风险事件主体、背景和影响范围。；notes 要求：影响 必填：说明受影响对象。；建议 必填：说明建议动作。\n6. section block「开源与工具」：条目数非空校验：关闭；条目数量：0 至 5 条；栏目要求：可为空；有相关内容时输出 1-5 条。聚焦值得开发者关注的开源项目、工具链、框架或工程资产。；正文非空校验：开启；body 字段：每条正文约 80-180 字。概括工具或项目的核心变化。；notes 要求：适用场景 必填：说明为什么值得关注或适用场景。\n7. section block「数据与洞察」：条目数非空校验：关闭；条目数量：0 至 5 条；栏目要求：可为空；有相关内容时输出 1-5 条。聚焦关键数据、趋势、研究结论或生态变化信号。；正文非空校验：开启；body 字段：每条正文约 80-180 字。概括数据、趋势或研究结论。；notes 要求：数据 必填：列出关键数字或数据点。；意义 必填：说明这些数据代表的趋势或意义。\n8. section block「其他值得看」：条目数非空校验：关闭；条目数量：0 至 10 条；栏目要求：只选择未进入“热点事件”及其他专业栏目的、但仍有明确事实增量的独立产品、项目、研究、数据、行业事件或实践信息。每个条目只对应一个独立内容；这是兜底栏目，不是杂项摘要，禁止把多个无共同事件主体的候选合并成一条。；正文非空校验：关闭；body 字段可为空；notes 要求：输出空数组\n\n正文写作规则：\n9. 每个条目只描述一个独立事件、产品、漏洞、模型、政策或研究成果；不同主体、不同产品或不同事件不要合并成一条。\n10. 多个来源只能用于同一事件的互证；如果只是主题相近但事实不同，应拆成不同条目或只保留最相关来源。\n11. 只使用输入候选内容，不编造事实或输入之外的信息。\n12. 正文优先说明事件的事实变化、结果和影响，避免泛化为行业综述。\n13. 正文只写内容本身，不要带栏目名、字段名或标签前缀。\n14. 除模板允许的加粗和斜体外，不要输出链接、图片、标题、表格、列表或其他 Markdown 结构。\n\n历史主题判断策略：\n1. 如果候选内容与历史主题召回窗口内已写主题只是同一事件的重复报道，不要再次写入。\n2. 如果确有新动作、新数据、新影响或状态变化，可以写入，但必须写成后续进展，避免重复介绍背景。\n3. 不要因为同一公司、同一模型或同一抽象主题相似就机械过滤；判断重点是是否有新的事实增量。";
 
 function isOfficialLegacyTemplate(value: Record<string, unknown>, systemPrompt?: string | null) {
   const opening = isObject(value.opening) ? value.opening : null;
@@ -642,7 +741,7 @@ function isOfficialLegacyTemplate(value: Record<string, unknown>, systemPrompt?:
       return typeof section.description === "string"
         && section.description === LEGACY_DEFAULT_SECTION_DESCRIPTIONS[officialSectionTitles[index]!];
     })
-    && (systemPrompt == null || systemPrompt === getLegacyDefaultDailyReportSystemPrompt());
+    && (systemPrompt == null || systemPrompt === HISTORICAL_V1_OFFICIAL_DAILY_REPORT_SYSTEM_PROMPT);
 }
 
 export function classifyDailyReportTemplateMigration(value: unknown, systemPrompt?: string | null): DailyReportTemplateMigrationStatus {
@@ -650,7 +749,7 @@ export function classifyDailyReportTemplateMigration(value: unknown, systemPromp
   if (Array.isArray(value.blocks)) {
     try {
       parseDailyReportTemplateJson(JSON.stringify(value));
-      return "v2";
+      return value.schemaVersion === 3 ? "v3" : "v2";
     } catch {
       return "invalid";
     }
@@ -699,6 +798,7 @@ export function migrateLegacyDailyReportTemplate(value: unknown): NormalizedDail
   ];
   return normalizeDailyReportTemplateConfig({
     headlineInstruction: DEFAULT_DAILY_REPORT_HEADLINE_INSTRUCTION,
+    selectionRules: [],
     recentTopicRules: DEFAULT_DAILY_REPORT_RECENT_TOPIC_RULES,
     blocks,
     globalRules: DEFAULT_DAILY_REPORT_TEMPLATE.globalRules,
@@ -731,7 +831,7 @@ function buildBlockExample(block: DailyReportTemplateBlock) {
 export function compileDailyReportTemplatePrompt(templateInput: DailyReportTemplateConfig): string {
   const template = validateDailyReportTemplateConfig(normalizeDailyReportTemplateConfig(templateInput));
   const outputShape = {
-    headline: "GPT-5.6 有限预览、Mythos 5 白名单恢复",
+    headline: "事件标题示例",
     blocks: template.blocks.map(buildBlockExample),
   };
   const lines = [
@@ -772,6 +872,11 @@ export function compileDailyReportTemplatePrompt(templateInput: DailyReportTempl
       : `正文非空校验：开启；body 字段：${block.item.bodyInstruction}`;
     lines.push(`${index}. section block「${block.title}」：${itemCountRule}；栏目要求：${block.description}；${bodyRule}；notes 要求：${noteRules}`);
     index += 1;
+  }
+
+  if (template.selectionRules.length > 0) {
+    lines.push("", "选题规则：");
+    for (const [ruleIndex, rule] of template.selectionRules.entries()) lines.push(`${ruleIndex + 1}. ${rule}`);
   }
 
   if (template.globalRules.some((rule) => rule.trim())) {

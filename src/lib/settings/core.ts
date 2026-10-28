@@ -26,6 +26,7 @@ import {
   isLegacyDefaultAiUserInstruction,
   normalizeAiUserInstruction,
 } from "@/lib/ai/contracts";
+import { ensureEventTypesRegistrySeeded } from "@/lib/event-types/registry";
 import { prisma } from "@/lib/db";
 import {
   compileDailyReportTemplatePrompt,
@@ -933,7 +934,7 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
     if (!auditJson) return false;
     try {
       const audit = JSON.parse(auditJson) as Record<string, unknown>;
-      return audit.from === expected.from && audit.to === 2 && audit.mode === expected.mode;
+      return audit.from === expected.from && audit.mode === expected.mode && (audit.to === 2 || audit.to === 3);
     } catch {
       return false;
     }
@@ -982,7 +983,7 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
               systemPrompt: compileDailyReportTemplatePrompt(normalizedTemplate),
               templateMigrationAuditJson: JSON.stringify({
                 from: "v2-default-wording",
-                to: 2,
+                to: 3,
                 mode: "silent",
                 migratedAt: new Date().toISOString(),
               }),
@@ -1002,7 +1003,7 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
             templateJson: DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
             templateMigrationAuditJson: JSON.stringify({
               from: "legacy-opening-sections-closing",
-              to: 2,
+              to: 3,
               mode: "silent",
               migratedAt: new Date().toISOString(),
             }),
@@ -1022,7 +1023,7 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
         data: {
           templateMigrationAuditJson: JSON.stringify({
             from: "legacy-opening-sections-closing",
-            to: 2,
+            to: 3,
             mode: "admin_required",
             migratedAt: new Date().toISOString(),
           }),
@@ -1038,7 +1039,7 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
         data: {
           templateMigrationAuditJson: JSON.stringify({
             from: "unknown",
-            to: 2,
+            to: 3,
             mode: "invalid_requires_admin",
             migratedAt: new Date().toISOString(),
           }),
@@ -1061,7 +1062,7 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
       templateJson: DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
       templateMigrationAuditJson: JSON.stringify({
         from: "legacy-daily-report-prompt-marker",
-        to: 2,
+        to: 3,
         mode: "silent",
         migratedAt: new Date().toISOString(),
       }),
@@ -1071,6 +1072,8 @@ async function upgradeLegacyDailyReportPrompt(fileConfig: RuntimeConfig) {
 
 export async function ensureRuntimeConfigSeeded(options: RuntimeConfigSeedOptions = {}) {
   await ensureModelAndPromptConfigsSeeded(options);
+  // 事件类型注册表与运行时配置同批播种：空表时用引导配置或内置默认。
+  await ensureEventTypesRegistrySeeded();
 }
 
 export function serializeSelectedPromptConfig(

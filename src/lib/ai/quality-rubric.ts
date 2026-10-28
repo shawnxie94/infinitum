@@ -41,7 +41,7 @@ export const QUALITY_RUBRIC_LIMITS = {
 } as const;
 
 /** 渲染模板末尾的固定护栏句：质量语义边界，不随配置变化。 */
-export const QUALITY_RUBRIC_FIXED_NOTE = "只评文章本身质量，题材是否属于 AI 领域不影响分数。";
+export const QUALITY_RUBRIC_FIXED_NOTE = "只评文章本身质量，不以题材是否符合日报选题范围加减分。";
 
 export const DEFAULT_QUALITY_RUBRIC: QualityRubric = {
   kind: QUALITY_RUBRIC_KIND,

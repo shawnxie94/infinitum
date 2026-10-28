@@ -113,6 +113,7 @@ import {
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import { getDisplayTitle } from "@/lib/feed/presentation";
+import { getEventTypeRegistrySnapshot } from "@/lib/event-types/registry";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { enqueueTaskRun } from "@/lib/tasks/service";
 const clusterAssignmentQueues = new Map<string, Promise<void>>();
@@ -1110,6 +1111,7 @@ export async function resolveClusterSummaryProvider(options?: {
   }, undefined, {
     aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents,
     embedding: runtimeConfig.embedding,
+    eventTypeRegistry: await getEventTypeRegistrySnapshot(),
     ...(options?.onUsage ? { onUsage: options.onUsage } : {}),
   });
 }

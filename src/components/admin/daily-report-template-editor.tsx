@@ -81,7 +81,7 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
   } catch {
     template = cloneDailyReportTemplate(DEFAULT_DAILY_REPORT_TEMPLATE);
   }
-  let migrationStatus: ReturnType<typeof classifyDailyReportTemplateMigration> = "v2";
+  let migrationStatus: ReturnType<typeof classifyDailyReportTemplateMigration> = "v3";
   try {
     migrationStatus = classifyDailyReportTemplateMigration(
       value.trim() ? JSON.parse(value) : DEFAULT_DAILY_REPORT_TEMPLATE,
@@ -172,7 +172,7 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
     <div className="space-y-4 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] p-4">
       {needsMigration ? (
         <div className="flex flex-col gap-3 rounded-sm border border-[color:var(--warning-border,var(--line))] bg-[var(--bg-muted)] px-3 py-3 text-sm text-[var(--text-2)] sm:flex-row sm:items-center sm:justify-between">
-          <span>{migrationStatus === "official_default_legacy" ? "检测到旧版官方日报模板，将按默认规则静默迁移为模板 v2。" : "检测到自定义旧版 opening/sections/closing 模板，请确认映射后迁移为模板 v2。"}</span>
+          <span>{migrationStatus === "official_default_legacy" ? "检测到旧版官方日报模板，将按默认规则静默迁移为模板 v3。" : "检测到自定义旧版 opening/sections/closing 模板，请确认映射后迁移为模板 v3。"}</span>
           <Button
             size="sm"
             variant="secondary"
@@ -185,7 +185,7 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
               }
             }}
           >
-            迁移为模板 v2
+            迁移为模板 v3
           </Button>
         </div>
       ) : null}
@@ -201,6 +201,10 @@ export function DailyReportTemplateEditor({ value, systemPrompt, onChange, onErr
             })
           }
         />
+      </FormBlock>
+
+      <FormBlock label="选题规则">
+        <TextArea rows={4} value={formatDailyReportGlobalRulesForEditor(template.selectionRules)} onChange={(event) => updateTemplate((draft) => { draft.selectionRules = parseDailyReportGlobalRulesFromEditor(event.target.value); })} />
       </FormBlock>
 
       <FormBlock label="正文通用规则">

@@ -4,6 +4,7 @@ import { AGGREGATION_PARSE_STATUS, RETRIABLE_AGGREGATION_PARSE_STATUSES } from "
 import { persistAggregationChildItems } from "@/lib/aggregation/persist";
 import { filterStaleAggregationChildren } from "@/lib/aggregation/staleness";
 import { normalizeStoredSummary } from "@/lib/ai/summary-quality";
+import { normalizeStoredEventType as normalizeStoredEventTypeShared } from "@/lib/clusters/normalization";
 import type { AiEventSignature } from "@/lib/ai/provider-types";
 import type { ClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
@@ -62,18 +63,6 @@ export type PreparedFeedItemLookup = {
   };
 };
 
-const EVENT_TYPES = new Set<NonNullable<AiEventSignature["eventType"]>>([
-  "release",
-  "launch",
-  "update",
-  "funding",
-  "acquisition",
-  "partnership",
-  "policy",
-  "research",
-  "security",
-  "other",
-]);
 function getBestContent(item: ParsedFeedItem): string {
   return item["content:encoded"] || item.content || item.contentSnippet || "";
 }
@@ -206,11 +195,8 @@ function hasSucceededAnalysis(existing?: {
   return existing?.analysisStatus === "succeeded";
 }
 
-function normalizeStoredEventType(value: string | null | undefined): AiEventSignature["eventType"] {
-  return value && EVENT_TYPES.has(value as NonNullable<AiEventSignature["eventType"]>)
-    ? (value as NonNullable<AiEventSignature["eventType"]>)
-    : null;
-}
+// 存量读取与 clusters/normalization 保持一致：不用封闭枚举抹掉历史/自定义 key。
+const normalizeStoredEventType = normalizeStoredEventTypeShared;
 
 function readStoredEventSignature(item?: {
   eventType?: string | null;
@@ -504,6 +490,7 @@ export async function processFeedItem({
         qualityScore,
         qualityRationale,
         eventType: eventSignature?.eventType ?? null,
+        eventTypeRaw: eventSignature?.eventTypeRaw ?? null,
         eventSubject: eventSignature?.eventSubject ?? null,
         eventAction: eventSignature?.eventAction ?? null,
         eventObject: eventSignature?.eventObject ?? null,
@@ -730,6 +717,7 @@ export async function processFeedItem({
             qualityScore,
             qualityRationale,
             eventType: eventSignature?.eventType ?? null,
+            eventTypeRaw: eventSignature?.eventTypeRaw ?? null,
             eventSubject: eventSignature?.eventSubject ?? null,
             eventAction: eventSignature?.eventAction ?? null,
             eventObject: eventSignature?.eventObject ?? null,
@@ -857,6 +845,7 @@ export async function processFeedItem({
       qualityScore,
       qualityRationale,
       eventType: eventSignature?.eventType ?? null,
+      eventTypeRaw: eventSignature?.eventTypeRaw ?? null,
       eventSubject: eventSignature?.eventSubject ?? null,
       eventAction: eventSignature?.eventAction ?? null,
       eventObject: eventSignature?.eventObject ?? null,

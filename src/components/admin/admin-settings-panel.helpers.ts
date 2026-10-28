@@ -44,18 +44,6 @@ export const headerLinkRelOptions = [
   { value: HEADER_LINK_REL_DEFAULT, label: "普通链接" },
   { value: HEADER_LINK_REL_SPONSORED, label: "AFF/赞助链接" },
 ];
-export const eventTypeOptions = [
-  { value: "release", label: "版本发布" },
-  { value: "launch", label: "产品上线" },
-  { value: "update", label: "进展更新" },
-  { value: "funding", label: "融资" },
-  { value: "acquisition", label: "收购" },
-  { value: "partnership", label: "合作" },
-  { value: "policy", label: "政策" },
-  { value: "research", label: "研究" },
-  { value: "security", label: "安全" },
-  { value: "other", label: "其他" },
-];
 export function normalizeHeaderLinkRelOption(rel: string) {
   return rel.split(/\s+/).includes("sponsored") ? HEADER_LINK_REL_SPONSORED : HEADER_LINK_REL_DEFAULT;
 }

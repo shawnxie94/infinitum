@@ -7,6 +7,7 @@ import { GlobalHeader } from "@/components/ui/global-header";
 import { AppFooter } from "@/components/ui/app-footer";
 import { ContentReviewPanel } from "@/components/admin/content-review-panel";
 import { AdminSettingsPanel } from "@/components/admin/admin-settings-panel";
+import { EventTypeSettingsPanel } from "@/components/admin/event-type-settings-panel";
 import { TaskMonitorPanel } from "@/components/admin/task-monitor-panel";
 import { IngestionDashboard } from "@/components/admin/ingestion-dashboard";
 import { ActionItemsPanel } from "@/components/admin/action-items-panel";
@@ -36,7 +37,7 @@ type MonitorSubSection = "action-items" | "dashboard" | "content" | "tasks";
 type ContentSubSection = "filtered" | "clusters" | "splits" | "entities";
 type SettingsSection = "groups" | "sources" | "navigation" | "ai" | "content" | "tasks";
 type AISubSection = "model-api" | "prompt";
-type ContentSettingsSubSection = "blacklist" | "event-briefing" | "content-extraction";
+type ContentSettingsSubSection = "blacklist" | "event-briefing" | "content-extraction" | "event-types";
 type TaskSettingsSubSection = "ingestion" | "daily-report" | "cleanup";
 
 type AdminRouteState = {
@@ -103,6 +104,10 @@ function normalizeContentSettingsSubSection(value: string | null): ContentSettin
 
   if (value === "content-extraction") {
     return "content-extraction";
+  }
+
+  if (value === "event-types") {
+    return "event-types";
   }
 
   return "blacklist";
@@ -653,6 +658,10 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
       return <AdminSettingsPanel initialSettings={settings!} activeSection="content-extraction" embedMode />;
     }
 
+    if (primaryTab === "settings" && settingsSection === "content" && contentSettingsSubSection === "event-types") {
+      return <EventTypeSettingsPanel />;
+    }
+
     if (primaryTab === "settings" && settingsSection === "tasks") {
       if (taskSettingsSubSection === "daily-report") {
         return <AdminSettingsPanel initialSettings={settings!} activeSection="task-daily-report" embedMode />;
@@ -1115,6 +1124,31 @@ export function AdminPageClient({ headerLinks = [] }: { headerLinks?: AdminHeade
                             <span className="inline-flex items-center gap-2">
                               <IconList className="h-4 w-4" />
                               <span>速览配置</span>
+                            </span>
+                          </SelectableButton>
+                          <SelectableButton
+                            onClick={() => {
+                              setCollapsedSections((prev) => ({
+                                ...prev,
+                                ai: true,
+                                content: false,
+                                tasks: true,
+                              }));
+                              navigateAdmin({
+                                primaryTab: "settings",
+                                settingsSection: "content",
+                                contentSettingsSubSection: "event-types",
+                              });
+                            }}
+                            active={
+                              settingsSection === "content" &&
+                              contentSettingsSubSection === "event-types"
+                            }
+                            variant="submenu"
+                          >
+                            <span className="inline-flex items-center gap-2">
+                              <IconTag className="h-4 w-4" />
+                              <span>事件类型</span>
                             </span>
                           </SelectableButton>
                         </>

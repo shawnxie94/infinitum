@@ -103,6 +103,10 @@ export function DailyReportTemplatePreview({ templateJson }: DailyReportTemplate
 
       <div className="space-y-3">
         <section className="rounded-lg border border-[color:var(--line)] bg-[var(--surface)] p-4">
+          <div className="mb-3 text-sm font-medium text-[var(--text-1)]">选题规则</div>
+          <RuleList rules={template.selectionRules} />
+        </section>
+        <section className="rounded-lg border border-[color:var(--line)] bg-[var(--surface)] p-4">
           <div className="mb-3 text-sm font-medium text-[var(--text-1)]">正文通用规则</div>
           <RuleList rules={template.globalRules} />
         </section>

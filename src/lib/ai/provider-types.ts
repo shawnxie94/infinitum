@@ -17,18 +17,11 @@ import type {
 import type { NormalizedDailyReportTemplate } from "@/lib/daily-report/template";
 
 export type AiEventSignature = {
-  eventType:
-    | "release"
-    | "launch"
-    | "update"
-    | "funding"
-    | "acquisition"
-    | "partnership"
-    | "policy"
-    | "research"
-    | "security"
-    | "other"
-    | null;
+  // 可配置事件类型注册表后的规范 key（含历史存量 key 与 other）；
+  // null 表示确实无事件类型证据，不得用 other 冒充。
+  eventType: string | null;
+  // 仅当模型输出未命中启用注册表被映射为 other 时保留原始输出，供诊断。
+  eventTypeRaw?: string | null;
   eventSubject: string | null;
   eventAction: string | null;
   eventObject: string | null;
@@ -47,6 +40,8 @@ export type AiEnrichment = {
 
 export type ParsedEventSignature = {
   eventType: string | null;
+  /** 模型原始 eventType 输出：仅当未命中启用注册表被映射为 other 时非空。 */
+  eventTypeRaw?: string | null;
   eventSubject: string | null;
   eventAction: string | null;
   eventObject: string | null;
@@ -314,6 +309,11 @@ export type AiProviderOptions = {
   embedding?: RuntimeConfig["embedding"] | null;
   /** 请求审计（回执 + UTC 日硬上限）。缺省时使用默认 DB 审计；显式传 null 关闭（仅测试）。 */
   requestAudit?: import("@/lib/ai/request-audit").RequestAudit | null;
+  /**
+   * 可配置事件类型注册表快照：参与 item_understanding 系统提示（含 fingerprint，
+   * 进入回执/缓存身份）与输出解析；缺省时按降级语义只认 other。
+   */
+  eventTypeRegistry?: import("@/lib/event-types/types").EventTypeRegistrySnapshot | null;
 };
 
 export type CompletionResponseFormat = {

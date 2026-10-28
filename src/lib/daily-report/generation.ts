@@ -31,8 +31,9 @@ import { createTaskAiUsageTracker, type TaskAiUsageSnapshot } from "@/lib/tasks/
 import { type DailyReportPipelineStage } from "@/lib/daily-report/timeline";
 import { DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS } from "@/lib/tasks/scheduler";
 import { buildDailyReportSourceKey, deduplicateDailyReportContentByCandidate } from "@/lib/daily-report/candidates";
+import { getEventTypeRegistrySnapshot } from "@/lib/event-types/registry";
 import { toCandidateSnapshotEntry } from "@/lib/daily-report/recovery-snapshot";
-import { buildDailyReportGenerationSignature, buildDailyReportTitle, buildInputHash, getSectionSourceIds, DAILY_REPORT_PIPELINE_VERSION, MIN_CANDIDATE_COUNT } from "@/lib/daily-report/report-input";
+import { buildDailyReportGenerationSignature, buildDailyReportTitle, buildInputHash, getSectionSourceIds, getDailyReportEffectivePipelineVersion, MIN_CANDIDATE_COUNT } from "@/lib/daily-report/report-input";
 import { buildDailyReportCandidateCoverage, buildDailyReportReviewContext, deduplicateDailyReportCandidates, listDailyReportGenerationCandidates } from "@/lib/daily-report/candidates";
 import { filterRecentDailyReportDuplicates } from "@/lib/daily-report/recent-duplicates";
 import { buildDailyReportExcludedAssessDuplicateSnapshots, buildDailyReportExcludedRecentDuplicateSnapshots, buildDailyReportRecoveryCandidates, buildDailyReportRecoveryPlan, buildRecentDailyReportTopics, parseDailyReportCandidateSnapshot } from "@/lib/daily-report/recovery-snapshot";
@@ -100,6 +101,7 @@ export async function generateDailyReportInternal(input: {
     templateSignature,
     planningBatchSize: schedule.dailyReportPlanningBatchSize ?? null,
     recentTopicLookbackDays,
+    eventTypeRegistryFingerprint: (await getEventTypeRegistrySnapshot()).fingerprint,
   });
   const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics, generationSignature);
   const existing = await prisma.dailyReport.findUnique({
@@ -471,11 +473,11 @@ export async function generateDailyReportInternal(input: {
           checkpoint.resumeFrom === "review"
           && reviewRecoveryContextReady
           && checkpoint.templateSignature === templateSignature
-          && checkpoint.pipelineVersion === DAILY_REPORT_PIPELINE_VERSION
+          && checkpoint.pipelineVersion === getDailyReportEffectivePipelineVersion()
         )
       ) &&
       checkpoint.templateSignature === templateSignature &&
-      checkpoint.pipelineVersion === DAILY_REPORT_PIPELINE_VERSION,
+      checkpoint.pipelineVersion === getDailyReportEffectivePipelineVersion(),
     );
     if (checkpoint && !canResume) {
       throw new DailyReportGenerationError(
@@ -492,7 +494,7 @@ export async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
+      pipelineVersion: getDailyReportEffectivePipelineVersion(),
       stage: "prepare",
       completedStages: canResume ? checkpoint?.completedStages ?? ["prepare"] : ["prepare"],
       lastCompletedStage: "prepare",
@@ -561,7 +563,7 @@ export async function generateDailyReportInternal(input: {
       historyFilteredCount = getHistoryFilteredCount();
       await saveCheckpoint({
         version: 1,
-        pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
+        pipelineVersion: getDailyReportEffectivePipelineVersion(),
         stage: "assess",
         completedStages: ["prepare", "assess"],
         lastCompletedStage: "assess",
@@ -619,7 +621,7 @@ export async function generateDailyReportInternal(input: {
     planningCandidateCount = candidateBriefs.length;
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
+      pipelineVersion: getDailyReportEffectivePipelineVersion(),
       stage: "merge",
       completedStages: ["prepare", "assess", "merge"],
       lastCompletedStage: "merge",
@@ -713,7 +715,7 @@ export async function generateDailyReportInternal(input: {
     }
     await saveCheckpoint({
       version: 1,
-      pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
+      pipelineVersion: getDailyReportEffectivePipelineVersion(),
       stage: input.stopAfterStage === "plan_validate" ? "plan_validate" : "plan",
       completedStages: ["prepare", "assess", "merge", "plan", "plan_validate"],
       lastCompletedStage: input.stopAfterStage === "plan_validate" ? "plan_validate" : "plan",

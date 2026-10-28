@@ -21,6 +21,7 @@ import {
   type RequiredActionField,
 } from "@/components/admin/content-review-panel.api";
 import { ADMIN_BATCH_MAX_ITEMS, type BatchActionDescriptor } from "@/components/admin/batch-action-bar";
+import { useEventTypeLabels } from "@/components/admin/event-type-labels";
 import { ADMIN_CLUSTER_SEARCH_DEBOUNCE_MS } from "@/config/constants";
 import { ContentReviewMergeModal } from "@/components/admin/content-review-merge-modal";
 import { PageShell } from "@/components/ui/page-shell";
@@ -271,15 +272,18 @@ function getSplitStatusTone(status: string | null) {
   return status ? splitStatusTone[status] ?? "neutral" : "neutral";
 }
 
-function formatEventAnchor(input: {
-  eventType?: string | null;
-  eventSubject?: string | null;
-  eventAction?: string | null;
-  eventObject?: string | null;
-  eventDate?: string | null;
-}) {
+function formatEventAnchor(
+  input: {
+    eventType?: string | null;
+    eventSubject?: string | null;
+    eventAction?: string | null;
+    eventObject?: string | null;
+    eventDate?: string | null;
+  },
+  resolveEventTypeLabel: (key: string | null | undefined) => string | null,
+) {
   const parts = [
-    input.eventType,
+    resolveEventTypeLabel(input.eventType),
     input.eventSubject,
     input.eventAction,
     input.eventObject,
@@ -475,6 +479,7 @@ function ClusterDetailModal({
   isTogglingStatus,
   isSplitting,
 }: ClusterDetailModalProps) {
+  const resolveEventTypeLabel = useEventTypeLabels();
   if (!cluster) return null;
 
   const isHidden = cluster.status === "hidden";
@@ -616,7 +621,7 @@ function ClusterDetailModal({
                     <span>{formatDate(item.publishedAt)}</span>
                   </div>
                   <div className="text-xs text-[var(--text-3)]">
-                    {formatEventAnchor(item)}
+                    {formatEventAnchor(item, resolveEventTypeLabel)}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

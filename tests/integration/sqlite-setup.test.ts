@@ -107,6 +107,45 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT "processingWindowDays" || '|' || "processingStartAt" FROM "task_schedules" WHERE "id"='window-iso'`)).toBe(`30|${isoPast}`);
   }, 30_000);
 
+  it("upgrades an old volume without event_types twice, preserving records and the registry", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-event-types-"));
+    const dbPath = path.join(tempDir, "event-types.db");
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    // 模拟升级前旧卷：无 event_types 表、items 无 eventTypeRaw，且含存量数据。
+    runSqlite(dbPath, `
+      DROP TABLE "event_types";
+      DROP TRIGGER IF EXISTS items_fts_ai;
+      DROP TRIGGER IF EXISTS items_fts_au;
+      DROP TRIGGER IF EXISTS items_fts_ad;
+      ALTER TABLE "items" DROP COLUMN "eventTypeRaw";
+      INSERT INTO "sources" ("id", "name", "rssUrl", "siteUrl", "enabled", "createdAt", "updatedAt")
+        VALUES ('source-et', '源', 'https://et.example.com/feed.xml', 'https://et.example.com', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+    runSqlite(dbPath, `
+      INSERT INTO "items" ("id", "sourceId", "originalUrl", "canonicalUrl", "urlHash", "originalTitle", "publishedAt", "eventType", "createdAt", "updatedAt")
+        VALUES ('item-et', 'source-et', 'https://et.example.com/a', 'https://et.example.com/a', 'hash-et', '标题', CURRENT_TIMESTAMP, 'economic_data', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+
+    // 第一次升级：重建缺失结构。
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, "SELECT COUNT(*) FROM pragma_table_info('items') WHERE name = 'eventTypeRaw'")).toBe("1");
+    expect(runSqlite(dbPath, "SELECT \"eventType\" FROM \"items\" WHERE \"id\"='item-et'")).toBe("economic_data");
+
+    // 管理员自定义编辑注册表（运行期 DB 为真源）。
+    runSqlite(dbPath, `
+      INSERT INTO "event_types" ("id", "key", "label", "aliasesJson", "enabled", "sortOrder", "createdAt", "updatedAt")
+        VALUES ('et-custom', 'economic_data', '经济数据', '["经济数据"]', 0, 99, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+
+    // 第二次升级：幂等，保留数据与自定义注册表。
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, "SELECT \"originalTitle\" || '|' || \"eventType\" FROM \"items\" WHERE \"id\"='item-et'")).toBe("标题|economic_data");
+    expect(runSqlite(dbPath, "SELECT \"label\" || '|' || \"enabled\" FROM \"event_types\" WHERE \"key\"='economic_data'")).toBe("经济数据|0");
+    // setup 只负责结构：表重建后不再自动播种默认（默认播种发生在运行期空表初始化）。
+  }, 30_000);
+
   it("renames cluster decision verdicts to relations and maps legacy values", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-verdict-relation-"));
     const dbPath = path.join(tempDir, "verdict-relation.db");

@@ -1,5 +1,5 @@
 import { PromptConfigType } from "@prisma/client";
-import { DEFAULT_DAILY_REPORT_REVIEW_PROMPT } from "@/config/prompts";
+import { DAILY_REPORT_NEUTRAL_REVIEW_PROMPT } from "@/lib/daily-report/protocol-prompts";
 
 import type { RuntimeConfig } from "@/config/runtime";
 import { prisma } from "@/lib/db";
@@ -132,7 +132,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
       clusterMerge: resolvePromptSystemPrompt(clusterMergeConfig),
       dailyReport: resolvePromptSystemPrompt(dailyReportConfig),
     dailyReportReview: dailyReportReviewConfig
-        ? DEFAULT_DAILY_REPORT_REVIEW_PROMPT
+        ? DAILY_REPORT_NEUTRAL_REVIEW_PROMPT
         : "",
     },
     selectedPromptConfigs: {
@@ -144,7 +144,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
       dailyReportReview: dailyReportReviewConfig
         ? {
             ...serializeSelectedPromptConfig(dailyReportReviewConfig),
-            systemPrompt: DEFAULT_DAILY_REPORT_REVIEW_PROMPT,
+            systemPrompt: DAILY_REPORT_NEUTRAL_REVIEW_PROMPT,
           }
         : null,
     },
@@ -152,7 +152,10 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
 }
 
 export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
-  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: true });
+  // SPEC compatibility_lifecycle：浏览/预览不得改写存储配置。模板迁移只在
+  // 显式保存与运行时激活路径（getIngestionRuntimeConfig）持久化；admin 读
+  // 路径保持原样，v2 模板由编辑器在内存中做迁移预览，不经此处写库。
+  await ensureRuntimeConfigSeeded({ migrateDailyReportTemplates: false });
 
   const [
     modelApiConfigs,

@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 3,
+  "headlineInstruction": "基于最终输出的“宏观与政策”栏目全部条目生成标题主题，在 64 字限制内尽量覆盖每个条目的核心主体或动作；用“、”分隔；不要包含日期、年份、日报、Markdown、引号或尾随标点。",
+  "selectionRules": [
+    "优先选择有新事实的宏观政策、经济数据、公司公告和重大风险事件。",
+    "同一事件只进入最匹配栏目；宏观与政策优先于市场动态，已选重大事件不在其他栏目重复。",
+    "评论与预测不得当作已发生事实；普通观点不因措辞强烈而优先入选。"
+  ],
+  "recentTopicRules": [
+    "如果候选内容与历史主题召回窗口内已写主题只是同一事件的重复报道，不要再次写入。",
+    "如果确有新动作、新数据或状态变化，可以写成后续进展，避免重复介绍背景。",
+    "财报数字只在统计期间、金额或口径有新增量时才再次入选。"
+  ],
+  "blocks": [
+    {
+      "type": "text",
+      "title": "市场综述",
+      "bodyInstruction": "约 100-180 字。概括本期最重要的宏观、市场与公司主线变化，保留金额、币种、统计期间及同比/环比口径；原文未给出的数值不补造。"
+    },
+    {
+      "type": "section",
+      "key": "macro-policy",
+      "title": "宏观与政策",
+      "description": "只收宏观政策、经济数据发布和监管动作；一个条目对应一项政策、一份数据或一个监管决定，保留发布主体、生效时间和统计期间。",
+      "required": true,
+      "minItems": 2,
+      "maxItems": 5,
+      "item": {
+        "bodyInstruction": "每条正文约 100-220 字。说明政策或数据内容、口径、发布主体和预期影响。",
+        "bodyRequired": true,
+        "notes": [
+          { "label": "关键数据", "required": true, "instruction": "列出金额、百分比及同比/环比口径。" }
+        ]
+      }
+    },
+    {
+      "type": "section",
+      "key": "market-move",
+      "title": "市场动态",
+      "description": "只收市场层面的已发生事实：价格、利率、汇率、资金流的实际变化；评论与预测不归入本栏。",
+      "required": false,
+      "minItems": 0,
+      "maxItems": 5,
+      "item": {
+        "bodyInstruction": "每条正文约 80-160 字。说明变化幅度、时间和直接原因。",
+        "bodyRequired": true,
+        "notes": []
+      }
+    },
+    {
+      "type": "section",
+      "key": "company-industry",
+      "title": "公司与产业",
+      "description": "只收公司公告、财报数字、并购和产业事件；一个条目对应一家公司的一次公告或一个产业事件。",
+      "required": false,
+      "minItems": 0,
+      "maxItems": 5,
+      "item": {
+        "bodyInstruction": "每条正文约 80-180 字。说明事件主体、金额、报告期和影响。",
+        "bodyRequired": true,
+        "notes": [
+          { "label": "报告期", "required": true, "instruction": "注明财报或数据对应的统计期间。" }
+        ]
+      }
+    },
+    {
+      "type": "section",
+      "key": "risk-event",
+      "title": "风险事件",
+      "description": "只收有明确主体和后果的金融风险事件：违约、监管处罚、重大亏损或流动性事件。",
+      "required": false,
+      "minItems": 0,
+      "maxItems": 3,
+      "item": {
+        "bodyInstruction": "每条正文约 80-160 字。说明事件主体、金额和影响范围。",
+        "bodyRequired": true,
+        "notes": []
+      }
+    }
+  ],
+  "globalRules": [
+    "每个条目只描述一个独立事件；不同主体、不同政策或不同公告不要合并成一条。",
+    "保留金额、币种、统计期间及同比/环比口径；原文未给出的数值不补造。",
+    "评论与预测只能标注为观点，不得写成已发生事实。",
+    "只使用输入候选内容，不编造事实或输入之外的信息。"
+  ]
+}

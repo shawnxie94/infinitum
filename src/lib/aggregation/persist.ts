@@ -15,6 +15,8 @@ export type AggregationChildEventInput = {
   oneLiner: string;
   qualityScore: number;
   eventType: string | null;
+  /** 未命中启用注册表时的原始输出（已映射 other 时保留）。 */
+  eventTypeRaw?: string | null;
   eventSubject: string | null;
   eventAction: string | null;
   eventObject: string | null;
@@ -123,6 +125,7 @@ function buildAggregationChildItemInput({
     qualityScore: event.qualityScore,
     qualityRationale: "由聚合内容拆出",
     eventType: event.eventType,
+    eventTypeRaw: event.eventTypeRaw ?? null,
     eventSubject: event.eventSubject,
     eventAction: event.eventAction,
     eventObject: event.eventObject,

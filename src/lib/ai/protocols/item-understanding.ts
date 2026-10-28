@@ -3,6 +3,8 @@ import { jsonrepair } from "jsonrepair";
 import { normalizeModelResponseText } from "@/lib/ai/response-format";
 import { resolveRubricQualityScore, type QualityRubric } from "@/lib/ai/quality-rubric";
 import { requireUsableGeneratedSummary } from "@/lib/ai/summary-quality";
+import { resolveEventTypeOutput } from "@/lib/event-types/resolve";
+import type { EnabledEventTypeResolver } from "@/lib/event-types/types";
 import { normalizeOptionalText } from "@/lib/utils/text";
 import { isValidCalendarDateParts } from "@/lib/utils/calendar-date";
 import { getJsonParseErrorMessage } from "@/lib/ai/provider-types";
@@ -84,6 +86,7 @@ export function parseItemUnderstandingOutput(
   maxEvents: number,
   qualityRubric: QualityRubric | null = null,
   publishedAt?: string | null,
+  eventTypeResolver?: EnabledEventTypeResolver | null,
 ): ItemUnderstandingResult {
   const normalized = normalizeModelResponseText(rawContent);
   let parsed: Record<string, unknown>;
@@ -128,6 +131,7 @@ export function parseItemUnderstandingOutput(
     fallback,
     translateTitle,
     qualityRubric,
+    eventTypeResolver,
   );
   const rawAggregation = parsed.aggregation && typeof parsed.aggregation === "object"
     ? parsed.aggregation as Record<string, unknown>
@@ -135,13 +139,14 @@ export function parseItemUnderstandingOutput(
   const isAggregation = rawAggregation?.isAggregation === true;
   const events = Array.isArray(rawAggregation?.events)
     ? rawAggregation.events
-        .map((event) => normalizeParsedEvent(event as Partial<ParsedEvent>, qualityRubric))
+        .map((event) => normalizeParsedEvent(event as Partial<ParsedEvent>, qualityRubric, eventTypeResolver))
         .filter((event): event is ParsedEvent => event !== null)
         .filter(hasCompleteParsedEvent)
         .slice(0, maxEvents)
     : [];
   const mainEvent = normalizeParsedEventSignature(
     rawAggregation?.mainEvent as Partial<ParsedEventSignature> | null | undefined,
+    eventTypeResolver,
   );
   const aggregationValid = Boolean(
     rawAggregation &&
@@ -197,13 +202,17 @@ function sanitizeAggregationDates(
 
 function normalizeParsedEventSignature(
   raw: Partial<ParsedEventSignature> | null | undefined,
+  eventTypeResolver?: EnabledEventTypeResolver | null,
 ): ParsedEventSignature | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
 
+  const resolution = resolveEventTypeOutput(raw.eventType ?? null, eventTypeResolver ?? null);
+
   return {
-    eventType: normalizeEventType(raw.eventType ?? null),
+    eventType: resolution?.key ?? null,
+    ...(resolution?.rawValue ? { eventTypeRaw: resolution.rawValue } : {}),
     eventSubject: typeof raw.eventSubject === "string" ? raw.eventSubject.trim() || null : null,
     eventAction: typeof raw.eventAction === "string" ? raw.eventAction.trim() || null : null,
     eventObject: typeof raw.eventObject === "string" ? raw.eventObject.trim() || null : null,
@@ -245,12 +254,13 @@ function normalizeQualityBreakdown(value: unknown): QualityBreakdownEntry[] {
 function normalizeParsedEvent(
   raw: Partial<ParsedEvent>,
   qualityRubric: QualityRubric | null,
+  eventTypeResolver?: EnabledEventTypeResolver | null,
 ): ParsedEvent | null {
   if (!raw || typeof raw !== "object") {
     return null;
   }
 
-  const signature = normalizeParsedEventSignature(raw);
+  const signature = normalizeParsedEventSignature(raw, eventTypeResolver);
   const title = typeof raw.title === "string" ? raw.title.trim().slice(0, 120) || null : null;
   const oneLiner = typeof raw.oneLiner === "string" ? raw.oneLiner.trim() : "";
   const qualityBreakdown = normalizeQualityBreakdown(raw.qualityBreakdown);
@@ -266,6 +276,7 @@ function normalizeParsedEvent(
 
   return {
     eventType: signature?.eventType ?? null,
+    ...(signature?.eventTypeRaw ? { eventTypeRaw: signature.eventTypeRaw } : {}),
     eventSubject: signature?.eventSubject ?? null,
     eventAction: signature?.eventAction ?? null,
     eventObject: signature?.eventObject ?? null,
@@ -303,20 +314,10 @@ function normalizeScore(value: number | string | null | undefined, fallback: num
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }
 
-function normalizeEventType(value: string | null | undefined): AiEventSignature["eventType"] {
-  return value === "release" ||
-    value === "launch" ||
-    value === "update" ||
-    value === "funding" ||
-    value === "acquisition" ||
-    value === "partnership" ||
-    value === "policy" ||
-    value === "research" ||
-    value === "security" ||
-    value === "other"
-    ? value
-    : null;
-}
+/**
+ * 旧版封闭枚举校验已由注册表解析（resolveEventTypeOutput）取代，见
+ * normalizeParsedEventSignature / buildEventSignatureFromParsed。
+ */
 
 function normalizeEventDate(value: unknown): string | null {
   const trimmed = typeof value === "string" ? value.trim() : "";
@@ -362,6 +363,7 @@ function buildEventSignatureFromParsed(
     } | null;
   },
   fallback: AiEventSignature,
+  eventTypeResolver?: EnabledEventTypeResolver | null,
 ): AiEventSignature {
   const parsedSignature = parsed.eventSignature ?? {};
   const explicit = (key: "eventDate" | "eventObject") => {
@@ -370,9 +372,15 @@ function buildEventSignatureFromParsed(
   };
   const dateValue = explicit("eventDate");
   const objectValue = explicit("eventObject");
+  const resolution = resolveEventTypeOutput(parsed.eventType ?? parsedSignature.eventType, eventTypeResolver ?? null);
 
   return {
-    eventType: normalizeEventType(parsed.eventType ?? parsedSignature.eventType) ?? fallback.eventType,
+    eventType: resolution?.key ?? fallback.eventType,
+    ...(resolution?.rawValue
+      ? { eventTypeRaw: resolution.rawValue }
+      : fallback.eventTypeRaw
+        ? { eventTypeRaw: fallback.eventTypeRaw }
+        : {}),
     eventSubject: normalizeOptionalText(parsed.eventSubject ?? parsedSignature.eventSubject, fallback.eventSubject),
     eventAction: normalizeOptionalText(parsed.eventAction ?? parsedSignature.eventAction, fallback.eventAction),
     eventObject: objectValue === undefined
@@ -407,6 +415,7 @@ function buildEnrichmentFromParsed(
   fallback: AiEnrichment,
   translateTitle: boolean,
   qualityRubric: QualityRubric | null = null,
+  eventTypeResolver?: EnabledEventTypeResolver | null,
 ): AiEnrichment {
   // 总分以代码计算为准：qualityBreakdown 逐维度校验通过时做档位吸附求和；
   // 子分缺失或非法时回退到模型输出的单字段 qualityScore（兼容旧提示词与
@@ -421,6 +430,6 @@ function buildEnrichmentFromParsed(
       ? rubricScore.score
       : normalizeScore(parsed.qualityScore, fallback.qualityScore),
     qualityRationale: parsed.qualityRationale?.trim() || fallback.qualityRationale,
-    eventSignature: buildEventSignatureFromParsed(parsed, fallback.eventSignature),
+    eventSignature: buildEventSignatureFromParsed(parsed, fallback.eventSignature, eventTypeResolver),
   };
 }

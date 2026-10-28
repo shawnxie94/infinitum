@@ -20,6 +20,7 @@ import {
   VERDICTS_ARRAY_PROTOCOL_CLUSTER_MERGE_PROMPT,
   VERDICT_PROTOCOL_CLUSTER_MERGE_PROMPT,
 } from "@/config/prompts";
+import { DAILY_REPORT_NEUTRAL_REVIEW_PROMPT } from "@/lib/daily-report/protocol-prompts";
 import {
   DEFAULT_QUALITY_RUBRIC,
   stringifyQualityRubric,
@@ -29,7 +30,7 @@ import {
   DEFAULT_DAILY_REPORT_TEMPLATE,
   DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
   compileDailyReportTemplatePrompt,
-  getLegacyDefaultDailyReportSystemPrompt,
+  HISTORICAL_V1_OFFICIAL_DAILY_REPORT_SYSTEM_PROMPT,
   parseDailyReportTemplateJson,
   stringifyDailyReportTemplate,
 } from "@/lib/daily-report/template";
@@ -91,9 +92,9 @@ describe("admin settings service", () => {
       DEFAULT_DAILY_REPORT_REVIEW_USER_PROMPT_TEMPLATE,
     );
    expect(runtimeConfig.selectedPromptConfigs?.dailyReportReview?.enabled).toBe(false);
-    expect(runtimeConfig.prompts.dailyReportReview).toBe(DEFAULT_DAILY_REPORT_REVIEW_PROMPT);
-    expect(runtimeConfig.selectedPromptConfigs?.dailyReportReview?.systemPrompt).toBe(DEFAULT_DAILY_REPORT_REVIEW_PROMPT);
-   expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toContain("AI 新闻日报");
+    expect(runtimeConfig.prompts.dailyReportReview).toBe(DAILY_REPORT_NEUTRAL_REVIEW_PROMPT);
+    expect(runtimeConfig.selectedPromptConfigs?.dailyReportReview?.systemPrompt).toBe(DAILY_REPORT_NEUTRAL_REVIEW_PROMPT);
+   expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.systemPrompt).toContain("资讯日报");
     expect(settings.promptConfigs.find((config) => config.type === "daily_report")?.templateJson).toBe(
       DEFAULT_DAILY_REPORT_TEMPLATE_JSON,
     );
@@ -1021,7 +1022,7 @@ describe("admin settings service", () => {
     await prisma.promptConfig.updateMany({
       where: { type: "daily_report", isDefault: true },
       data: {
-        systemPrompt: getLegacyDefaultDailyReportSystemPrompt(),
+        systemPrompt: HISTORICAL_V1_OFFICIAL_DAILY_REPORT_SYSTEM_PROMPT,
         templateJson: legacyTemplateJson,
         maxTokens: 40960,
       },
@@ -1083,6 +1084,107 @@ describe("admin settings service", () => {
     });
 
     expect(second.templateMigrationAuditJson).toBe(first.templateMigrationAuditJson);
+  });
+
+  it("migrates untouched official v2 template to v3 with AI selectionRules and stays idempotent (R5)", async () => {
+    await getIngestionRuntimeConfig();
+    const officialV2Template = {
+      schemaVersion: 2,
+      headlineInstruction: DEFAULT_DAILY_REPORT_TEMPLATE.headlineInstruction,
+      recentTopicRules: DEFAULT_DAILY_REPORT_TEMPLATE.recentTopicRules,
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks,
+      globalRules: DEFAULT_DAILY_REPORT_TEMPLATE.globalRules,
+    };
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report", isDefault: true },
+      data: { templateJson: JSON.stringify(officialV2Template), systemPrompt: "旧 v2 提示词" },
+    });
+
+    await ensureRuntimeConfigSeeded();
+    const first = await prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } });
+    const firstParsed = JSON.parse(first.templateJson!) as { schemaVersion: number; selectionRules: string[] };
+    expect(firstParsed.schemaVersion).toBe(3);
+    expect(firstParsed.selectionRules).toEqual(DEFAULT_DAILY_REPORT_TEMPLATE.selectionRules);
+    const firstAudit = JSON.parse(first.templateMigrationAuditJson!) as { from: string; to: number; mode: string };
+    expect(firstAudit).toMatchObject({ from: "v2-default-wording", to: 3, mode: "silent" });
+
+    await ensureRuntimeConfigSeeded();
+    const second = await prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } });
+    expect(second.templateJson).toBe(first.templateJson);
+    expect(second.templateMigrationAuditJson).toBe(first.templateMigrationAuditJson);
+  });
+
+  it("keeps custom v2 template content through settings migration and preserves historical revisions (R5)", async () => {
+    await getIngestionRuntimeConfig();
+    const customV2Template = {
+      schemaVersion: 2,
+      headlineInstruction: "管理员自定义标题。",
+      recentTopicRules: ["重复不写。"],
+      blocks: [{
+        type: "section",
+        key: "custom-x",
+        title: "自定义栏目",
+        description: "自定义内容。",
+        required: true,
+        minItems: 1,
+        maxItems: 3,
+        item: { bodyInstruction: "写条目。", bodyRequired: true, notes: [] },
+      }],
+      globalRules: ["自定义规则。"],
+    };
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report", isDefault: true },
+      data: { templateJson: JSON.stringify(customV2Template), systemPrompt: "自定义提示词" },
+    });
+
+    await ensureRuntimeConfigSeeded();
+    const config = await prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } });
+    const parsed = JSON.parse(config.templateJson!) as { schemaVersion: number; selectionRules: string[]; headlineInstruction: string; blocks: Array<{ title: string; description: string }> };
+    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.selectionRules).toEqual([]);
+    expect(parsed.headlineInstruction).toBe("管理员自定义标题。");
+    expect(parsed.blocks[0]).toMatchObject({ title: "自定义栏目", description: "自定义内容。", key: "custom-x" });
+  });
+
+  it("admin read/preview must not persist a template migration; runtime activation upgrades once and is idempotent (SPEC compatibility_lifecycle)", async () => {
+    await getIngestionRuntimeConfig();
+    const officialV2Template = {
+      schemaVersion: 2,
+      headlineInstruction: DEFAULT_DAILY_REPORT_TEMPLATE.headlineInstruction,
+      recentTopicRules: DEFAULT_DAILY_REPORT_TEMPLATE.recentTopicRules,
+      blocks: DEFAULT_DAILY_REPORT_TEMPLATE.blocks,
+      globalRules: DEFAULT_DAILY_REPORT_TEMPLATE.globalRules,
+    };
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report", isDefault: true },
+      data: { templateJson: JSON.stringify(officialV2Template), systemPrompt: "旧 v2 提示词", templateMigrationAuditJson: null },
+    });
+
+    // Admin 读（设置页/预览）不持久化迁移：存储保持 v2、无审计。
+    await getAdminSettings();
+    const afterRead = await prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } });
+    expect(JSON.parse(afterRead.templateJson!)).toMatchObject({ schemaVersion: 2 });
+    expect(afterRead.templateMigrationAuditJson).toBeNull();
+
+    // 再次读取仍不变。
+    await getAdminSettings();
+    const afterSecondRead = await prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } });
+    expect(afterSecondRead.templateJson).toBe(afterRead.templateJson);
+    expect(afterSecondRead.templateMigrationAuditJson).toBeNull();
+
+    // 运行时激活路径升级为 v3 一次。
+    await getIngestionRuntimeConfig();
+    const afterActivation = await prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } });
+    expect(JSON.parse(afterActivation.templateJson!)).toMatchObject({ schemaVersion: 3 });
+    const activationAudit = JSON.parse(afterActivation.templateMigrationAuditJson!) as { from: string; to: number; mode: string };
+    expect(activationAudit).toMatchObject({ from: "v2-default-wording", to: 3, mode: "silent" });
+
+    // 重复读取/激活均幂等。
+    await getAdminSettings();
+    await getIngestionRuntimeConfig();
+    const finalConfig = await prisma.promptConfig.findFirstOrThrow({ where: { type: "daily_report", isDefault: true } });
+    expect(finalConfig.templateJson).toBe(afterActivation.templateJson);
+    expect(finalConfig.templateMigrationAuditJson).toBe(afterActivation.templateMigrationAuditJson);
   });
 
   it("preserves null daily_report systemPrompts when reseeding", async () => {

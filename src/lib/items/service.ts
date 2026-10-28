@@ -22,6 +22,7 @@ import { shouldTranslateTitle } from "@/lib/feed/presentation";
 import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
 import { evaluateStaleContent, STALE_CONTENT_MODERATION_REASON } from "@/lib/ingestion/staleness";
 import { normalizeStoredEventType } from "@/lib/clusters/normalization";
+import { getEventTypeRegistrySnapshot } from "@/lib/event-types/registry";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { getItemEntityNamesFromEvent, replaceItemEntities } from "@/lib/entities/service";
 import {
@@ -116,6 +117,7 @@ export async function resolveAiProvider(
   }, undefined, {
     aggregationSplitMaxEvents: runtimeConfig.ingestion.aggregationSplitMaxEvents,
     embedding: runtimeConfig.embedding,
+    eventTypeRegistry: await getEventTypeRegistrySnapshot(),
     ...(options?.onUsage ? { onUsage: options.onUsage } : {}),
   });
 }
@@ -1127,6 +1129,7 @@ async function reparseAggregationCandidate(
       publishedAtKnown: candidate.publishedAtKnown,
       events: parsedAggregation.events.map((event) => ({
         eventType: event.eventType,
+        eventTypeRaw: event.eventTypeRaw ?? null,
         eventSubject: event.eventSubject,
         eventAction: event.eventAction,
         eventObject: event.eventObject,

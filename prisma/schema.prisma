@@ -199,6 +199,9 @@ model Item {
   qualityScore             Int                        @default(50)
   qualityRationale         String                     @default("AI analysis unavailable")
   eventType                String?
+  // 模型原始 eventType 输出：仅当输出不在启用注册表内被映射为 other 时保留，
+  // 供诊断追溯；正常命中注册表时为空。
+  eventTypeRaw             String?
   eventSubject             String?
   eventAction              String?
   eventObject              String?
@@ -334,6 +337,21 @@ model ContentCluster {
   @@index([status, displayQualityScore])
   @@index([dominantGroupId, status, latestCreatedAt])
   @@map("content_clusters")
+}
+
+// 领域事件类型注册表：每实例一份；key 创建后不可变；other 受系统保护。
+model EventType {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  description String?
+  aliasesJson String   @default("[]")
+  enabled     Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("event_types")
 }
 
 model ClusterMergeCleanPairCandidate {

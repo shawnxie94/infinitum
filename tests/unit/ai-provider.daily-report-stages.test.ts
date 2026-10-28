@@ -135,7 +135,7 @@ describe("daily report staged provider", () => {
     expect(assessUserPrompt).toContain("historyTopicRules");
     expect(assessUserPrompt).toContain('"recentTopicLookbackDays":10');
     expect(assessUserPrompt).not.toContain('"sourceNumber"');
-    expect(assessUserPrompt).not.toContain('"required"');
+    expect(assessUserPrompt).toContain('"selectionRules"');
     expect(assessUserPrompt).not.toContain('"minItems"');
     expect(assessUserPrompt).not.toContain('"maxItems"');
 
@@ -151,7 +151,8 @@ describe("daily report staged provider", () => {
     expect(planUserPrompt).toContain("重新归纳最终日报主题");
     expect(planUserPrompt).toContain("一个独立事实命题");
     expect(planUserPrompt).toContain("不要把多个开源项目");
-    expect(planUserPrompt).toContain("先从全部通过评估的候选中按重要性挑选“热点事件”");
+    expect(planUserPrompt).toContain("先按 template.selectionRules 与各栏目 description");
+    expect(planUserPrompt).not.toContain("安全与风险、数据与洞察、开源与工具、变更与实践");
     expect(planUserPrompt).toContain("同一 topic 只能进入一个栏目");
     expect(planUserPrompt).toContain("数量是硬约束");
     expect(planUserPrompt).toContain("topics 不是候选池");

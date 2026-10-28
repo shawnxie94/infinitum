@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import type { RuntimeConfig } from "@/config/runtime";
 import { getAiTaskContract } from "@/lib/ai/contracts";
 import { getDailyReportSectionBlocks } from "@/lib/daily-report/content";
+import { getDailyReportEffectiveProtocolFingerprint } from "@/lib/daily-report/protocol-prompts";
 import { formatDailyReportTitle, normalizeDailyReportHeadline } from "@/lib/daily-report/title";
 import { type DailyReportCandidate, type DailyReportContent, type DailyReportItem, type RecentDailyReportTopic } from "@/lib/daily-report/types";
 
@@ -14,7 +15,12 @@ export const MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE = 5;
 export const MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE = 3;
 export const DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES = ["allowed", "restored"] as const;
 export const DAILY_REPORT_REVIEW_TOP_UNSELECTED_CANDIDATE_LIMIT = 20;
-export const DAILY_REPORT_PIPELINE_VERSION = "daily-report-topic-first-review-v1";
+export const DAILY_REPORT_PIPELINE_VERSION = "daily-report-domain-template-v2";
+
+/** 有效 pipeline 版本：常量 + 当前有效协议指纹；协议文本变化即失效旧 checkpoint。 */
+export function getDailyReportEffectivePipelineVersion() {
+  return `${DAILY_REPORT_PIPELINE_VERSION}:${getDailyReportEffectiveProtocolFingerprint().slice(0, 16)}`;
+}
 
 export function getFallbackDailyReportHeadline(content: DailyReportContent) {
   const sectionTitles = getDailyReportSectionBlocks(content)
@@ -68,6 +74,8 @@ export function buildDailyReportGenerationSignature(input: {
   templateSignature: string;
   planningBatchSize: number | null;
   recentTopicLookbackDays: number;
+  /** 事件类型注册表 fingerprint：注册表定义变化使旧 checkpoint/结果不兼容。 */
+  eventTypeRegistryFingerprint?: string | null;
 }) {
   const prompt = input.runtimeConfig.selectedPromptConfigs?.dailyReport;
   const modelApi = prompt?.modelApi ?? input.runtimeConfig.modelApi;
@@ -76,8 +84,10 @@ export function buildDailyReportGenerationSignature(input: {
   return createHash("sha256")
     .update(JSON.stringify({
       pipelineVersion: DAILY_REPORT_PIPELINE_VERSION,
+      protocolFingerprint: getDailyReportEffectiveProtocolFingerprint(),
       templateSignature: input.templateSignature,
       planningBatchSize: input.planningBatchSize,
+      eventTypeRegistryFingerprint: input.eventTypeRegistryFingerprint ?? null,
       recentTopicLookbackDays: input.recentTopicLookbackDays,
       modelApi: {
         baseURL: modelApi.baseURL,

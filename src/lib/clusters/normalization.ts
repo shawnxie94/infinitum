@@ -2,19 +2,6 @@ import type { AiEventSignature } from "@/lib/ai/provider-types";
 import { collapseWhitespace, trimBoundaryPunctuation } from "@/lib/utils/text";
 import { isValidCalendarDateParts } from "@/lib/utils/calendar-date";
 
-const EVENT_TYPES = new Set<NonNullable<AiEventSignature["eventType"]>>([
-  "release",
-  "launch",
-  "update",
-  "funding",
-  "acquisition",
-  "partnership",
-  "policy",
-  "research",
-  "security",
-  "other",
-]);
-
 const ACTION_ALIASES = new Map<string, string>([
   ["正式发布", "发布"],
   ["宣布发布", "发布"],
@@ -41,10 +28,13 @@ function normalizeOptionalText(value: string | null | undefined) {
   return normalized || null;
 }
 
+/**
+ * 存量事件类型读取规整：可配置注册表后不再用封闭枚举抹掉未知 key。
+ * 历史自定义/已停用 key 原样可读，指纹不因此自动改写。
+ */
 export function normalizeStoredEventType(value: string | null | undefined): AiEventSignature["eventType"] {
-  return value && EVENT_TYPES.has(value as NonNullable<AiEventSignature["eventType"]>)
-    ? (value as NonNullable<AiEventSignature["eventType"]>)
-    : null;
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed || null;
 }
 
 export function normalizeEventSubjectForStorage(value: string | null | undefined) {

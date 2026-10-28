@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 3,
+  "headlineInstruction": "基于“今日焦点”栏目全部条目生成标题主题，用“、”分隔，不要包含日期或引号。",
+  "selectionRules": [
+    "优先收录对从业者有明确事实增量的行业事件，独家信息优先于转述。"
+  ],
+  "recentTopicRules": [
+    "与历史主题重复的报道不再写入；确有新事实时写成后续进展。"
+  ],
+  "blocks": [
+    {
+      "type": "section",
+      "key": "focus",
+      "title": "今日焦点",
+      "description": "收录最重要的行业事件，一个条目只讲一个具体事件。",
+      "required": true,
+      "minItems": 1,
+      "maxItems": 4,
+      "item": {
+        "bodyInstruction": "每条正文约 100-200 字，说明主体、动作和影响。",
+        "bodyRequired": true,
+        "notes": []
+      }
+    },
+    {
+      "type": "section",
+      "key": "brief-updates",
+      "title": "简讯",
+      "description": "收录独立但体量较小的更新，每条一句话级别即可。",
+      "required": false,
+      "minItems": 0,
+      "maxItems": 8,
+      "item": {
+        "bodyInstruction": "",
+        "bodyRequired": false,
+        "notes": []
+      }
+    }
+  ],
+  "globalRules": [
+    "只使用输入候选内容，不编造事实。",
+    "条目之间不得重复同一事件。"
+  ]
+}

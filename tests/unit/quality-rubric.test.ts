@@ -116,7 +116,7 @@ describe("quality rubric prompt rendering", () => {
     expect(text).toContain("事实密度（满分 30 分");
     expect(text).toContain("30=≥5 处具体事实、数据或引语");
     expect(text).toContain("一手性");
-    expect(text).toContain("只评文章本身质量，题材是否属于 AI 领域不影响分数。");
+    expect(text).toContain("只评文章本身质量，不以题材是否符合日报选题范围加减分。");
     expect(text).toContain("qualityScore 为全部分维度选中档位分之和");
   });
 });
