@@ -36,6 +36,7 @@ async function createHistoryFixture(status: "draft" | "published" = "draft", wit
       summaryJson: JSON.stringify({ blocks: [{ type: "text", title: "摘要", body: "旧正文" }] }),
       renderedMarkdown: "# 旧版本日报\n",
       inputHash: "old-input",
+      pipelineVersion: "legacy-pipeline-v0",
       idempotencyKey: "history-fixture-old",
       actorType: "system",
       actorLabel: "测试",
@@ -96,6 +97,8 @@ describe("daily report history", () => {
     expect(current.title).toBe("旧版本日报");
     expect(current.currentRevisionId).toBe(restored.id);
     await expect(prisma.dailyReportSource.findMany({ where: { dailyReportId: report.id } })).resolves.toHaveLength(1);
+    expect(restored.pipelineVersion).toBe("legacy-pipeline-v0");
+    await expect(prisma.dailyReportRevision.findMany({ where: { dailyReportId: report.id } })).resolves.toHaveLength(3);
   });
 
   it("does not restore the current revision", async () => {

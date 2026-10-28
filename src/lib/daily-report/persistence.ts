@@ -2,6 +2,7 @@ import type { DailyReport } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { getDailyReportClosingThought, getDailyReportOpeningSummary } from "@/lib/daily-report/content";
+import { getDailyReportEffectivePipelineVersion } from "@/lib/daily-report/report-input";
 import { DailyReportCancellationError } from "@/lib/daily-report/errors";
 import type {
   DailyReportContent,
@@ -194,7 +195,7 @@ export async function persistDailyReport(input: {
         inputHash: saved.inputHash,
         modelName: saved.modelName,
         templateSignature: input.templateSignature,
-        pipelineVersion: "daily-report-topic-first-review-v1",
+        pipelineVersion: getDailyReportEffectivePipelineVersion(),
         taskRunId: saved.taskRunId,
         candidateSnapshot: saved.candidateSnapshot,
         idempotencyKey: input.idempotencyKey,

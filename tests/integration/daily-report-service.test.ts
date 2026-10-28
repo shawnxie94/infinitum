@@ -8,6 +8,7 @@ import {
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
 import { executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
 import { persistDailyReport } from "@/lib/daily-report/persistence";
+import { getDailyReportEffectivePipelineVersion } from "@/lib/daily-report/report-input";
 import { updateEventBriefingConfig } from "@/lib/settings/service";
 import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
@@ -808,6 +809,37 @@ describe("daily report service", () => {
 
     expect(revisions).toHaveLength(1);
     expect(report.currentRevisionId).toBe(revisions[0]?.id);
+  });
+
+  it("stores the effective pipeline version on new generated revisions and keeps it stable across retries", async () => {
+    const input = {
+      date: REPORT_DATE,
+      existing: null,
+      content: JSON.parse(buildDailyReportOutput(1)),
+      title: "版本日报",
+      renderedMarkdown: "# 版本日报",
+      inputHash: "pipeline-version-input-hash",
+      candidateSnapshot: "[]",
+      modelName: null,
+      templateSignature: "test-template-v1",
+      sourceRows: [],
+      expandedSourcesByNumber: new Map(),
+      shouldAutoPublish: false,
+      publishedAt: null,
+      idempotencyKey: "generated:test-task:pipeline-version-input-hash",
+      aiUsage: { actual: 0, estimated: 0, breakdown: [] },
+      buildCancellationCheckpoint: () => null,
+    };
+
+    await persistDailyReport(input);
+    await persistDailyReport(input);
+
+    const revisions = await prisma.dailyReportRevision.findMany({
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+    expect(revisions).toHaveLength(1);
+    expect(revisions[0]?.pipelineVersion).toBe(getDailyReportEffectivePipelineVersion());
+    expect(revisions[0]?.pipelineVersion).not.toBe("daily-report-topic-first-review-v1");
   });
 
   it("turns an existing published report into a clean draft when regenerated", async () => {
