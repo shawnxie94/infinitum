@@ -1,4 +1,5 @@
 import Parser from "rss-parser";
+import { ProxyAgent } from "undici";
 
 import { RSS_FETCH_RETRY_COUNT } from "@/config/constants";
 import type { ParsedFeed, ParsedFeedItem, RssParserLike } from "@/lib/ingestion/types";
@@ -130,6 +131,72 @@ function isHtmlDocument(xml: string): boolean {
   return /^<!doctype\s+html\b/i.test(leading) || /^<html\b/i.test(leading);
 }
 
+const proxyAgents = new Map<string, ProxyAgent>();
+
+function proxyForUrl(url: string): ProxyAgent | null {
+  const hosts = (process.env.RSS_PROXY_HOSTS ?? "")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  const target = new URL(url);
+  if (!hosts.includes(target.hostname.toLowerCase())) return null;
+
+  const configured = process.env.RSS_PROXY_URL?.trim();
+  if (!configured) throw new Error("RSS proxy is required for this host but RSS_PROXY_URL is not configured");
+  let proxy: URL;
+  try {
+    proxy = new URL(configured);
+  } catch {
+    throw new Error("Invalid RSS proxy configuration");
+  }
+  if (proxy.protocol !== "http:" || proxy.username || proxy.password || proxy.pathname !== "/" || proxy.search || proxy.hash) {
+    throw new Error("Invalid RSS proxy configuration");
+  }
+  let agent = proxyAgents.get(proxy.origin);
+  if (!agent) {
+    agent = new ProxyAgent(proxy.origin);
+    proxyAgents.set(proxy.origin, agent);
+  }
+  return agent;
+}
+
+async function fetchRss(url: string, headers: Record<string, string>): Promise<Response> {
+  const agent = proxyForUrl(url);
+  if (!agent) return fetch(url, { headers });
+
+  const initial = new URL(url);
+  let current = initial;
+  for (let redirects = 0; redirects <= 20; redirects += 1) {
+    let response: Response;
+    try {
+      response = await fetch(current.href, {
+        headers,
+        redirect: "manual",
+        dispatcher: agent,
+      } as RequestInit);
+    } catch {
+      // Do not expose proxy configuration or connection details in task errors.
+      throw new Error("RSS proxy request failed");
+    }
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get("location");
+    await response.body?.cancel();
+    if (!location || redirects === 20) throw new Error("RSS proxy redirect rejected");
+    let next: URL;
+    try {
+      next = new URL(location, current);
+    } catch {
+      throw new Error("RSS proxy redirect rejected");
+    }
+    if (next.hostname.toLowerCase() !== initial.hostname.toLowerCase() ||
+        !["http:", "https:"].includes(next.protocol) || next.username || next.password) {
+      throw new Error("RSS proxy redirect rejected");
+    }
+    current = next;
+  }
+  throw new Error("RSS proxy redirect rejected");
+}
+
 export function createRssParser(): RssParserLike {
   const parser = new Parser<Record<string, never>, ParsedFeedItem>({
     defaultRSS: 2,
@@ -153,12 +220,10 @@ export function createRssParser(): RssParserLike {
 
       for (let attempt = 0; attempt <= RSS_FETCH_RETRY_COUNT; attempt += 1) {
         try {
-          response = await fetch(url, {
-            headers: {
+          response = await fetchRss(url, {
               Accept: "application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7",
               "User-Agent": "infinitum-feed-bot/1.0",
               ...options?.headers,
-            },
           });
 
           if (response.ok || response.status === 304) {
