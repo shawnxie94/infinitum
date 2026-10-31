@@ -76,6 +76,8 @@ async function createMixedSampleCandidates() {
 }
 
 describe("domain-adaptable daily report generation (controlled)", () => {
+  const sourceCreateOriginal = prisma.source.create.bind(prisma.source);
+
   beforeEach(async () => {
     assessDailyReportCandidatesMock.mockReset();
     planDailyReportMock.mockReset();
@@ -99,7 +101,13 @@ describe("domain-adaptable daily report generation (controlled)", () => {
     await prisma.sourceGroup.deleteMany();
     await prisma.blacklistKeyword.deleteMany();
     await prisma.taskSchedule.deleteMany();
+    await prisma.sourceFollow.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
+    vi.spyOn(prisma.source, "create").mockImplementation((async (args) => {
+      const source = await sourceCreateOriginal(args);
+      await prisma.sourceFollow.create({ data: { sourceId: source.id } });
+      return source;
+    }) as typeof prisma.source.create);
     await ensureRuntimeConfigSeeded();
   });
 

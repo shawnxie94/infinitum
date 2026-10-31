@@ -186,3 +186,37 @@ describe("parseTaskWorkflowCheckpointJson", () => {
 function parseTaskCheckpointJsonSafe(value: unknown) {
   return parseTaskPipelineCheckpointJson(JSON.stringify(value));
 }
+
+describe("followed snapshot checkpoint fields", () => {
+  it("round-trips followed snapshot fields including empty arrays", () => {
+    const checkpoint = buildCheckpoint({
+      followedSourceIds: ["source-a", "source-b"],
+      followedSnapshotAt: "2026-04-24T00:00:00.000Z",
+    });
+    const serialized = serializeTaskPipelineCheckpoint(checkpoint as never);
+    const parsed = parseTaskPipelineCheckpointJson(serialized);
+
+    expect(parsed?.followedSourceIds).toEqual(["source-a", "source-b"]);
+    expect(parsed?.followedSnapshotAt).toBe("2026-04-24T00:00:00.000Z");
+  });
+
+  it("preserves empty followed snapshot arrays and drops non-string entries", () => {
+    const parsed = parseTaskPipelineCheckpointJson(JSON.stringify(buildCheckpoint({
+      followedSourceIds: [],
+      followedSnapshotAt: "2026-04-24T00:00:00.000Z",
+    })));
+    expect(parsed?.followedSourceIds).toEqual([]);
+
+    const withNoise = parseTaskPipelineCheckpointJson(JSON.stringify(buildCheckpoint({
+      followedSourceIds: ["source-a", 3, null, "source-b"],
+    })));
+    expect(withNoise?.followedSourceIds).toEqual(["source-a", "source-b"]);
+  });
+
+  it("stays compatible with legacy checkpoints without followed snapshot fields", () => {
+    const parsed = parseTaskPipelineCheckpointJson(JSON.stringify(buildCheckpoint()));
+    expect(parsed).not.toBeNull();
+    expect(parsed?.followedSourceIds).toBeUndefined();
+    expect(parsed?.followedSnapshotAt).toBeUndefined();
+  });
+});

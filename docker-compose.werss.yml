@@ -1,0 +1,20 @@
+services:
+  werss:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: scripts/werss/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      DB: sqlite:///data/we_mp_rss.db
+      WERSS_AUTH_WEB: "True"
+      WERSS_SEND_CODE: "False"
+      LOG_FILE: ""
+    volumes:
+      - werss_data:/app/data
+    logging:
+      driver: none
+volumes:
+  werss_data:

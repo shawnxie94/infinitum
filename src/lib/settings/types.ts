@@ -210,7 +210,7 @@ export type AdminSettingsSnapshot = {
   sources: Array<{
     id: string;
     name: string;
-    rssUrl: string;
+    rssUrl: string | null;
     siteUrl: string;
     enabled: boolean;
     aiParsingEnabled: boolean;
@@ -218,6 +218,7 @@ export type AdminSettingsSnapshot = {
     aggregationDetectionEnabled: boolean;
     groupId: string | null;
     groupName: string | null;
+    channel: string | null;
     lastItemCreatedAt: string | null;
   }>;
 };

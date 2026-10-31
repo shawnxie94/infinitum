@@ -13,7 +13,6 @@ import { getEventTypeRegistrySnapshot } from "@/lib/event-types/registry";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
 import { DEFAULT_FULL_TEXT_FETCH_THRESHOLD } from "@/lib/tasks/scheduler";
 import { DEFAULT_INGESTION_TASK_LABEL } from "@/lib/tasks/types";
-import { enqueueTaskRun } from "@/lib/tasks/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 
 export const DEFAULT_MAX_FEED_ITEMS_TO_SCAN = 500;
@@ -239,22 +238,9 @@ export function shouldEnqueueProcessingRecoveryFromIngestion(input: {
 }
 
 export async function startIngestionTask(input?: { triggerType?: "scheduled" | "manual" }) {
-  const activeTaskCount = await prisma.backgroundTaskRun.count({
-    where: {
-      kind: "ingestion",
-      status: {
-        in: ["queued", "running"],
-      },
-    },
-  });
-
-  if (activeTaskCount > 0) {
-    throw new Error("An ingestion run is already in progress.");
-  }
-
-  return enqueueTaskRun({
-    kind: "ingestion",
-    triggerType: input?.triggerType ?? "manual",
-    label: DEFAULT_INGESTION_TASK_LABEL,
+  return prisma.$transaction(async (tx) => {
+    const activeTaskCount = await tx.backgroundTaskRun.count({ where: { kind: "ingestion", status: { in: ["queued", "running"] } } });
+    if (activeTaskCount > 0) throw new Error("An ingestion run is already in progress.");
+    return tx.backgroundTaskRun.create({ data: { kind: "ingestion", triggerType: input?.triggerType ?? "manual", status: "queued", label: DEFAULT_INGESTION_TASK_LABEL } });
   });
 }

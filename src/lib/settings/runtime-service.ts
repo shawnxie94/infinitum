@@ -112,7 +112,7 @@ export async function getIngestionRuntimeConfig(): Promise<RuntimeConfig> {
   ) ?? null;
 
   return {
-    rssSources: sources.map((source) => toSourceConfig(source)),
+    rssSources: sources.flatMap((source) => source.transport === "rss" && source.rssUrl ? [toSourceConfig({ ...source, rssUrl: source.rssUrl })] : []),
     blacklistKeywords: blacklist.map((entry) => entry.keyword),
     ingestion: {
       itemConcurrency: defaultModelConfig.ingestionItemConcurrency,
@@ -245,6 +245,7 @@ export async function getAdminSettings(): Promise<AdminSettingsSnapshot> {
       aggregationDetectionEnabled: source.aggregationDetectionEnabled,
       groupId: source.groupId,
       groupName: source.group?.name ?? null,
+      channel: source.channel,
       lastItemCreatedAt: latestItemCreatedAtBySourceId.get(source.id)?.toISOString() ?? null,
     })),
   };

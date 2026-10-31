@@ -43,10 +43,12 @@ export function buildInputHash(
   channelIds: string[] = [],
   recentTopics: RecentDailyReportTopic[] = [],
   generationSignature = "legacy",
+  followedSourceIds: string[] = [],
 ) {
   const hash = createHash("sha256");
   hash.update(date);
   hash.update(JSON.stringify([...channelIds].sort()));
+  hash.update(JSON.stringify([...followedSourceIds].sort()));
   hash.update(JSON.stringify(recentTopics));
   hash.update(generationSignature);
   for (const candidate of candidates) {

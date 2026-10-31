@@ -82,6 +82,7 @@ export function buildDailyReportRecoveryCandidates(input: {
   snapshot: DailyReportCandidateSnapshotEntry[];
   planningCandidateBriefs: Awaited<ReturnType<typeof buildDailyReportCandidateBriefs>>;
   currentCandidates: DailyReportCandidate[];
+  allowCurrentFallback?: boolean;
   persistedSources: Array<{
     sourceNumber: number | null;
     sourceKey: string | null;
@@ -113,7 +114,7 @@ export function buildDailyReportRecoveryCandidates(input: {
   return input.snapshot.map((entry) => {
     const source = sourceByNumber.get(entry.id);
     const brief = briefById.get(entry.id);
-    const current = currentBySourceKey.get(entry.sourceKey) ?? currentById.get(entry.id);
+    const current = input.allowCurrentFallback === false ? undefined : currentBySourceKey.get(entry.sourceKey) ?? currentById.get(entry.id);
     const publishedAt = source?.sourcePublishedAt?.toISOString() ?? brief?.publishedAt ?? current?.publishedAt ?? "";
     return {
       id: entry.id,

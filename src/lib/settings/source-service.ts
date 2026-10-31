@@ -277,16 +277,17 @@ export async function createSource(input: SourceInput) {
       aggregationEnabled: input.aggregationEnabled ?? true,
       aggregationDetectionEnabled: input.aggregationDetectionEnabled ?? false,
       groupId: input.groupId ?? null,
+      channel: input.channel?.trim() || null,
     },
   });
   invalidateFeedCache();
   return source;
 }
 
-export async function updateSource(id: string, input: SourceInput) {
-  const existing = await prisma.source.findUnique({
-    where: { rssUrl: input.rssUrl },
-  });
+export async function updateSource(id: string, input: Omit<SourceInput, "rssUrl"> & { rssUrl: string | null }) {
+  const current = await prisma.source.findUniqueOrThrow({ where: { id } });
+  if (current.transport === "adapter" ? input.rssUrl !== null : !input.rssUrl || !input.siteUrl) throw new Error("信息源传输配置无效。");
+  const existing = input.rssUrl ? await prisma.source.findUnique({ where: { rssUrl: input.rssUrl } }) : null;
 
   if (existing && existing.id !== id) {
     throw new Error("该 RSS 地址已被其他源使用。");
@@ -304,6 +305,7 @@ export async function updateSource(id: string, input: SourceInput) {
       aggregationEnabled: input.aggregationEnabled ?? true,
       aggregationDetectionEnabled: input.aggregationDetectionEnabled ?? false,
       groupId: input.groupId ?? null,
+      channel: input.channel?.trim() || null,
     },
   });
   await refreshClusterFeedStatsSafely(affectedClusterIds, "update source");
@@ -328,7 +330,7 @@ export type AdminSourceGroupFilter =
 export type AdminSourceListItem = {
   id: string;
   name: string;
-  rssUrl: string;
+  rssUrl: string | null;
   siteUrl: string;
   enabled: boolean;
   aiParsingEnabled: boolean;
@@ -336,6 +338,7 @@ export type AdminSourceListItem = {
   aggregationDetectionEnabled: boolean;
   groupId: string | null;
   groupName: string | null;
+  channel: string | null;
   lastItemCreatedAt: string | null;
 };
 
@@ -405,6 +408,7 @@ export async function listSourcesForAdmin(params: {
       aggregationDetectionEnabled: source.aggregationDetectionEnabled,
       groupId: source.groupId,
       groupName: source.group?.name ?? null,
+      channel: source.channel,
       lastItemCreatedAt: latestItemCreatedAtBySourceId.get(source.id)?.toISOString() ?? null,
     })),
     total,

@@ -56,7 +56,8 @@ function isSourceMonitorSnapshot(value: unknown): value is SourceMonitorSnapshot
   );
 }
 
-function getSafeRssHref(value: string) {
+function getSafeRssHref(value: string | null) {
+  if (!value) return null;
   try {
     const parsed = new URL(value);
     return parsed.protocol === "http:" || parsed.protocol === "https:"

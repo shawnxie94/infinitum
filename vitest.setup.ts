@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
 
-process.env.DATABASE_URL = `file:${process.cwd()}/prisma/test.db`;
+process.env.DATABASE_URL = process.env.INFINITUM_TEST_DATABASE_URL ?? `file:${process.cwd()}/prisma/test.db`;
 
 // 少数测试（如聚类质量评测）声明 @vitest-environment node 运行在无 DOM 环境下，
 // 此时不应触碰 window/localStorage。

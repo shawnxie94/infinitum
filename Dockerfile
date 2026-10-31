@@ -13,7 +13,7 @@ FROM base AS builder
 ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 # Keep Next.js TypeScript/build workers within the default Docker Desktop
 # memory budget. Runtime stages do not inherit this builder-only setting.
-ENV NODE_OPTIONS=--max-old-space-size=1024
+ENV NODE_OPTIONS=--max-old-space-size=1536
 
 # lockfile 由本地 npm 11 生成（含 workspace 图谱），使用 Node 22 以满足 Mastra/AI SDK runtime engine 要求
 RUN npm i -g npm@11.19.0

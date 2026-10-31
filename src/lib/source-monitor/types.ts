@@ -11,7 +11,7 @@ export type SourceInactivityBucketKey =
 export type SourceMonitorEntry = {
   id: string;
   name: string;
-  rssUrl: string;
+  rssUrl: string | null;
   siteUrl: string;
   groupName: string | null;
   healthStatus: SourceMonitorHealthStatus;

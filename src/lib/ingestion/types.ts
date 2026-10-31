@@ -54,6 +54,7 @@ export type ArticleFetcher = (url: string, context?: ArticleFetchContext) => Pro
 
 export type ProcessedItemRecord = {
   id: string;
+  analysisFingerprint?: string;
   status: ItemStatus;
   isNew: boolean;
   errorMessage?: string | null;

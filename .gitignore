@@ -59,6 +59,7 @@ next-env.d.ts
 /docs/eval/snapshots/
 
 # local runtime / deployment files
+/private/
 /config/infinitum.config.json
 /docker-compose.yml
 /docker-compose.override.yml

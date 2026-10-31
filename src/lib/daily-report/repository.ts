@@ -94,15 +94,23 @@ export async function listDailyReportCandidates(
   date: string,
   limit = 120,
   groupIdsInput: string[] = [],
-  options: { returnPool?: boolean } = {},
+  options: { returnPool?: boolean; followedSourceIds?: string[] } = {},
 ) {
   const { start, end } = getDailyReportDateRange(date);
   const groupIds = [...new Set(groupIdsInput.filter(Boolean))];
+  // 关注快照在数据库选源阶段生效：只查询关注源的成员，聚合、统计、截断
+  // 全部建立在关注集之上；不会先取全量再事后过滤。
+  const followedSourceIds = [...new Set((options.followedSourceIds ?? []).filter(Boolean))];
+  const followScoped = followedSourceIds.length > 0 || options.followedSourceIds !== undefined;
+  if (followScoped && followedSourceIds.length === 0) {
+    return [];
+  }
   const poolLimit = getDailyReportCandidatePoolLimit(limit);
   const sourceFilter = {
     source: {
       is: {
         enabled: true,
+        ...(followedSourceIds.length > 0 ? { id: { in: followedSourceIds } } : {}),
         ...(groupIds.length > 0 ? { groupId: { in: groupIds } } : {}),
       },
     },
@@ -111,7 +119,8 @@ export async function listDailyReportCandidates(
   const itemRows = await prisma.item.findMany({
     take: options.returnPool ? DAILY_REPORT_CANDIDATE_POOL_MAX : poolLimit,
     where: {
-      createdAt: { gte: start, lt: end },
+      publishedAtKnown: true,
+      publishedAt: { gte: start, lt: end },
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
@@ -161,7 +170,7 @@ export async function listDailyReportCandidates(
         },
       },
     },
-    orderBy: [{ qualityScore: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ qualityScore: "desc" }, { publishedAt: "desc" }],
   });
 
   const rows = [
@@ -259,7 +268,9 @@ export async function listDailyReportCandidates(
   return ranked.map((entry, index): DailyReportCandidate => {
     const item = entry.representative;
     const cluster = item.cluster;
-    const shouldUseClusterDisplay = groupIds.length === 0;
+    // 关注快照模式下不使用聚类全局展示字段：cluster.title/summary/display*/event
+    // 可能由未关注源聚合而来，全部改用关注成员自身内容。
+    const shouldUseClusterDisplay = groupIds.length === 0 && !followScoped;
 
     return {
       id: index + 1,
@@ -279,11 +290,32 @@ export async function listDailyReportCandidates(
       itemCount: entry.itemCount,
       createdAt: item.createdAt.toISOString(),
       publishedAt: item.publishedAt.toISOString(),
-      eventType: shouldUseClusterDisplay ? cluster?.eventType ?? item.eventType : item.eventType ?? cluster?.eventType ?? null,
-      eventSubject: shouldUseClusterDisplay ? cluster?.eventSubject ?? item.eventSubject : item.eventSubject ?? cluster?.eventSubject ?? null,
-      eventAction: shouldUseClusterDisplay ? cluster?.eventAction ?? item.eventAction : item.eventAction ?? cluster?.eventAction ?? null,
-      eventObject: shouldUseClusterDisplay ? cluster?.eventObject ?? item.eventObject : item.eventObject ?? cluster?.eventObject ?? null,
-      eventDate: shouldUseClusterDisplay ? cluster?.eventDate ?? item.eventDate : item.eventDate ?? cluster?.eventDate ?? null,
+      // followScoped 时禁止回退聚类全局事件字段：可能来自未关注源。
+      eventType: shouldUseClusterDisplay
+        ? cluster?.eventType ?? item.eventType
+        : followScoped
+          ? item.eventType
+          : item.eventType ?? cluster?.eventType ?? null,
+      eventSubject: shouldUseClusterDisplay
+        ? cluster?.eventSubject ?? item.eventSubject
+        : followScoped
+          ? item.eventSubject
+          : item.eventSubject ?? cluster?.eventSubject ?? null,
+      eventAction: shouldUseClusterDisplay
+        ? cluster?.eventAction ?? item.eventAction
+        : followScoped
+          ? item.eventAction
+          : item.eventAction ?? cluster?.eventAction ?? null,
+      eventObject: shouldUseClusterDisplay
+        ? cluster?.eventObject ?? item.eventObject
+        : followScoped
+          ? item.eventObject
+          : item.eventObject ?? cluster?.eventObject ?? null,
+      eventDate: shouldUseClusterDisplay
+        ? cluster?.eventDate ?? item.eventDate
+        : followScoped
+          ? item.eventDate
+          : item.eventDate ?? cluster?.eventDate ?? null,
     };
   });
 }
@@ -503,6 +535,16 @@ function toListItem(report: {
     publishedAt: report.publishedAt?.toISOString() ?? null,
     errorMessage: report.errorMessage,
   };
+}
+
+export async function getLatestDailyReportDate() {
+  // 与 listDailyReports 的管理员可见口径一致：排除 failed，避免默认选中不可见失败日报。
+  const latest = await prisma.dailyReport.findFirst({
+    where: { status: { not: "failed" } },
+    orderBy: [{ date: "desc" }],
+    select: { date: true },
+  });
+  return latest?.date ?? "";
 }
 
 export async function listDailyReports(input: {

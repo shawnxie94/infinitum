@@ -136,7 +136,8 @@ describe("AI 请求审计（集成）", () => {
     // invalid 显式区分，绝不伪装为 unlimited；快照不回显原始非法值。
     const invalidSnapshot = await getDailyBudgetSnapshot();
     expect(invalidSnapshot).toMatchObject({ limit: null, state: "invalid" });
-    expect(JSON.stringify(invalidSnapshot)).not.toContain("-3");
+    // 快照任何数值字段都不回显原始非法值 -3（不能用字符串包含判断，日期串会误伤）。
+    expect(invalidSnapshot.limit).not.toBe(-3);
   });
 
   it("存量 DB 预算配置被忽略：env 未设置即不限，即使 DB 存了 0", async () => {

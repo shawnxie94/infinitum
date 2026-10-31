@@ -78,6 +78,7 @@ export function AdminSettingsPanel({
   const opmlFileInputRef = useRef<HTMLInputElement | null>(null);
   const [sourceModalMode, setSourceModalMode] = useState<"create" | "edit" | null>(null);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
+  const [editingAdapterSource, setEditingAdapterSource] = useState(false);
   const [sourceDeleteTarget, setSourceDeleteTarget] = useState<AdminSource | null>(null);
   const [sourceNameFilter, setSourceNameFilter] = useState(() => getInitialSourceFilterValue(sourceFilterQueryKeys.name));
   const [sourceGroupFilter, setSourceGroupFilter] = useState(() => getInitialSourceFilterValue(sourceFilterQueryKeys.group));
@@ -95,6 +96,7 @@ export function AdminSettingsPanel({
     aggregationEnabled: true,
     aggregationDetectionEnabled: false,
     groupId: "",
+    channel: "",
   });
   const [taskScheduleEnabled, setTaskScheduleEnabled] = useState(
     initialSettings.taskSchedule.enabled,
@@ -411,6 +413,7 @@ export function AdminSettingsPanel({
   const openCreateSourceModal = () => {
     setSourceModalMode("create");
     setEditingSourceId(null);
+    setEditingAdapterSource(false);
     setSourceForm({
       name: "",
       rssUrl: "",
@@ -420,6 +423,7 @@ export function AdminSettingsPanel({
       aggregationEnabled: true,
       aggregationDetectionEnabled: false,
       groupId: "",
+      channel: "",
     });
   };
 
@@ -488,15 +492,17 @@ export function AdminSettingsPanel({
   const openEditSourceModal = (source: AdminSource) => {
     setSourceModalMode("edit");
     setEditingSourceId(source.id);
+    setEditingAdapterSource(source.rssUrl === null);
     setSourceForm({
       name: source.name,
-      rssUrl: source.rssUrl,
+      rssUrl: source.rssUrl ?? "",
       siteUrl: source.siteUrl,
       enabled: source.enabled,
       aiParsingEnabled: source.aiParsingEnabled ?? true,
       aggregationEnabled: source.aggregationEnabled ?? true,
       aggregationDetectionEnabled: source.aggregationDetectionEnabled ?? false,
       groupId: source.groupId ?? "",
+      channel: source.channel ?? "",
     });
   };
 
@@ -564,7 +570,7 @@ export function AdminSettingsPanel({
     const groupedSources = new Map<string, AdminSource[]>();
     const ungroupedSources: AdminSource[] = [];
 
-    for (const source of allSources) {
+    for (const source of allSources.filter((entry) => entry.rssUrl !== null)) {
       if (source.groupId) {
         groupedSources.set(source.groupId, [...(groupedSources.get(source.groupId) ?? []), source]);
       } else {
@@ -573,7 +579,7 @@ export function AdminSettingsPanel({
     }
 
     const sourceOutline = (source: AdminSource, indent = "    ") =>
-      `${indent}<outline text="${escapeXml(source.name)}" title="${escapeXml(source.name)}" type="rss" xmlUrl="${escapeXml(source.rssUrl)}" htmlUrl="${escapeXml(source.siteUrl)}" infinitum:enabled="${source.enabled ? "true" : "false"}" infinitum:aiParsingEnabled="${source.aiParsingEnabled !== false ? "true" : "false"}" infinitum:aggregationEnabled="${source.aggregationEnabled !== false ? "true" : "false"}" infinitum:aggregationDetectionEnabled="${source.aggregationDetectionEnabled === true ? "true" : "false"}" />`;
+      `${indent}<outline text="${escapeXml(source.name)}" title="${escapeXml(source.name)}" type="rss" xmlUrl="${escapeXml(source.rssUrl ?? "")}" htmlUrl="${escapeXml(source.siteUrl)}" infinitum:enabled="${source.enabled ? "true" : "false"}" infinitum:aiParsingEnabled="${source.aiParsingEnabled !== false ? "true" : "false"}" infinitum:aggregationEnabled="${source.aggregationEnabled !== false ? "true" : "false"}" infinitum:aggregationDetectionEnabled="${source.aggregationDetectionEnabled === true ? "true" : "false"}" />`;
     const outlines = [
       ...orderedGroups.flatMap((group) => {
         const sources = groupedSources.get(group.id) ?? [];
@@ -793,6 +799,7 @@ export function AdminSettingsPanel({
   const handleSaveSource = () => {
     const payload = {
       ...sourceForm,
+      rssUrl: editingAdapterSource ? null : sourceForm.rssUrl,
       groupId: sourceForm.groupId || null,
     };
     const refreshCurrentSourceList = () => {
@@ -2036,6 +2043,7 @@ export function AdminSettingsPanel({
                     <tr>
                       <th className="whitespace-nowrap px-4 py-3 text-left">RSS 源名称</th>
                       <th className="whitespace-nowrap px-4 py-3 text-left">分组</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-left">渠道</th>
                       <th className="whitespace-nowrap px-4 py-3 text-left">状态</th>
                       <th className="whitespace-nowrap px-4 py-3 text-left">最近更新</th>
                       <th className="px-4 py-3 text-left">站点信息</th>
@@ -2055,6 +2063,9 @@ export function AdminSettingsPanel({
                         </td>
                         <td className="px-4 py-3 text-[var(--text-2)]">
                           {source.groupName ?? "未分组"}
+                        </td>
+                        <td className="px-4 py-3 text-[var(--text-2)]">
+                          {source.channel?.trim() || "其他"}
                         </td>
                         <td className="px-4 py-3 text-[var(--text-2)]">
                           <div>{source.enabled ? "已启用" : "已停用"}</div>
@@ -2155,7 +2166,7 @@ export function AdminSettingsPanel({
                   <Button
                     variant="secondary"
                     onClick={resolveSourceFromRss}
-                    disabled={isPending || !sourceForm.rssUrl.trim()}
+                    disabled={isPending || editingAdapterSource || !sourceForm.rssUrl.trim()}
                   >
                     自动填充
                   </Button>
@@ -2165,8 +2176,7 @@ export function AdminSettingsPanel({
                     disabled={
                       isPending ||
                       !sourceForm.name.trim() ||
-                      !sourceForm.rssUrl.trim() ||
-                      !sourceForm.siteUrl.trim()
+                      (!editingAdapterSource && (!sourceForm.rssUrl.trim() || !sourceForm.siteUrl.trim()))
                     }
                   >
                     {sourceModalMode === "edit" ? "保存" : "创建"}
@@ -2185,7 +2195,7 @@ export function AdminSettingsPanel({
                     setSourceForm((current) => ({ ...current, name: value }))
                   }
                 />
-                <FilterInput
+                {!editingAdapterSource ? <FilterInput
                   id="source-form-rss"
                   label="RSS URL"
                   ariaLabel="RSS URL"
@@ -2194,7 +2204,7 @@ export function AdminSettingsPanel({
                   onChange={(value) =>
                     setSourceForm((current) => ({ ...current, rssUrl: value }))
                   }
-                />
+                /> : null}
                 <FilterInput
                   id="source-form-site"
                   label="站点 URL"
@@ -2221,6 +2231,16 @@ export function AdminSettingsPanel({
                       label: group.name,
                     })),
                   ]}
+                />
+                <FilterInput
+                  id="source-form-channel"
+                  label="渠道"
+                  ariaLabel="渠道"
+                  value={sourceForm.channel}
+                  placeholder="如：雪球 / 东方财富 / 公众号 / 财联社，留空记为其他"
+                  onChange={(value) =>
+                    setSourceForm((current) => ({ ...current, channel: value }))
+                  }
                 />
               </div>
 

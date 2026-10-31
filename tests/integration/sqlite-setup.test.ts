@@ -51,6 +51,38 @@ afterEach(() => {
 });
 
 describe("sqlite setup", () => {
+  it("rebuilds legacy source URLs without losing source and follow references", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "source-adapter-migration-"));
+    tempDirs.push(dir);
+    const dbPath = path.join(dir, "legacy.db");
+    const legacySql = `
+      CREATE TABLE sources (
+        id TEXT NOT NULL PRIMARY KEY, groupId TEXT, channel TEXT, originKind TEXT NOT NULL DEFAULT 'preset',
+        name TEXT NOT NULL, rssUrl TEXT NOT NULL, siteUrl TEXT NOT NULL, enabled BOOLEAN NOT NULL DEFAULT 1,
+        aiParsingEnabled BOOLEAN NOT NULL DEFAULT 1, aggregationEnabled BOOLEAN NOT NULL DEFAULT 1,
+        aggregationDetectionEnabled BOOLEAN NOT NULL DEFAULT 0, feedEtag TEXT, feedLastModified TEXT,
+        feedContentHash TEXT, lastFetchedAt DATETIME, healthStatus TEXT NOT NULL DEFAULT 'unknown',
+        healthMessage TEXT, healthCheckedAt DATETIME, createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME NOT NULL
+      );
+      CREATE UNIQUE INDEX sources_rssUrl_key ON sources(rssUrl);
+      INSERT INTO sources(id,name,rssUrl,siteUrl,updatedAt) VALUES ('legacy','Legacy','https://example.com/feed','https://example.com',CURRENT_TIMESTAMP);
+      CREATE TABLE source_follows (id TEXT NOT NULL PRIMARY KEY, sourceId TEXT NOT NULL UNIQUE, followedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY(sourceId) REFERENCES sources(id) ON DELETE CASCADE ON UPDATE CASCADE);
+      INSERT INTO source_follows(id,sourceId) VALUES ('follow-legacy','legacy');
+    `;
+    runSqlite(dbPath, legacySql);
+    for (let i = 0; i < 2; i += 1) execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT id || '|' || rssUrl || '|' || transport FROM sources WHERE id='legacy'`)).toBe("legacy|https://example.com/feed|rss");
+    expect(runSqlite(dbPath, `SELECT "notnull" FROM pragma_table_info('sources') WHERE name='rssUrl'`)).toBe("0");
+    expect(runSqlite(dbPath, `SELECT id FROM source_follows WHERE sourceId='legacy'`)).toBe("follow-legacy");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_foreign_key_check`)).toBe("0");
+    const brokenPath = path.join(dir, "broken.db");
+    runSqlite(brokenPath, legacySql);
+    execFileSync("sqlite3", [brokenPath, "PRAGMA foreign_keys=OFF; INSERT INTO source_follows(id,sourceId) VALUES ('orphan','missing');"]);
+    expect(() => execFileSync("node", ["scripts/setup-sqlite.mjs", brokenPath], { cwd: process.cwd(), encoding: "utf8", stdio: "pipe" })).toThrow();
+    expect(runSqlite(brokenPath, `SELECT "notnull" FROM pragma_table_info('sources') WHERE name='rssUrl'`)).toBe("1");
+    expect(runSqlite(brokenPath, `SELECT rssUrl FROM sources WHERE id='legacy'`)).toBe("https://example.com/feed");
+  }, 30_000);
   it("initializes the current schema and runtime objects from the Prisma snapshot", () => {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-snapshot-"));
     const dbPath = path.join(tempDir, "fresh.db");
@@ -68,6 +100,26 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE type = 'table' AND name IN ('briefing_preference_configs', 'briefing_preference_suggestions', 'curator_behavior_events', 'curator_behavior_dimensions')`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('model_api_configs') WHERE "name" IN ('type', 'dimensions', 'batchSize', 'timeoutMs')`)).toBe("4");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('cluster_merge_clean_pair_candidates') WHERE "name" IN ('recallSource', 'bm25Score', 'vectorSimilarity')`)).toBe("3");
+  }, 30_000);
+
+  it("旧源默认预置，重复升级保留分类和关注关系", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-source-origin-"));
+    const dbPath = path.join(tempDir, "legacy.db");
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd() });
+    runSqlite(dbPath, `
+      ALTER TABLE "sources" DROP COLUMN "originKind";
+      INSERT INTO "sources" ("id", "name", "rssUrl", "siteUrl", "enabled", "createdAt", "updatedAt")
+      VALUES ('legacy', '旧源', 'https://example.com/feed', 'https://example.com', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+      INSERT INTO "source_follows" ("id", "sourceId", "followedAt") VALUES ('follow-legacy', 'legacy', CURRENT_TIMESTAMP);
+    `);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd() });
+    expect(runSqlite(dbPath, `SELECT "originKind" || '|' || "enabled" FROM "sources" WHERE "id"='legacy'`)).toBe("preset|0");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "source_follows" WHERE "sourceId"='legacy'`)).toBe("1");
+    runSqlite(dbPath, `UPDATE "sources" SET "originKind"='account' WHERE "id"='legacy'`);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd() });
+    expect(runSqlite(dbPath, `SELECT "originKind" FROM "sources" WHERE "id"='legacy'`)).toBe("account");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "source_follows" WHERE "sourceId"='legacy'`)).toBe("1");
   }, 30_000);
 
   it("migrates legacy ISO and Prisma epoch-millisecond dates once, preserving legacy values", () => {
@@ -105,6 +157,42 @@ describe("sqlite setup", () => {
     runSqlite(dbPath, `UPDATE "task_schedules" SET "processingWindowDays" = 30 WHERE "id" = 'window-iso';`);
     execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
     expect(runSqlite(dbPath, `SELECT "processingWindowDays" || '|' || "processingStartAt" FROM "task_schedules" WHERE "id"='window-iso'`)).toBe(`30|${isoPast}`);
+  }, 30_000);
+
+  it("initializes follows for existing enabled sources once and never re-follows cancelled ones", () => {
+    const tempDir = mkdtempSync(path.join(os.tmpdir(), "infinitum-sqlite-source-follows-"));
+    const dbPath = path.join(tempDir, "source-follows.db");
+    tempDirs.push(tempDir);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+
+    // 模拟升级前旧卷：无迁移标记、无关注，含启用/停用存量源。
+    runSqlite(dbPath, `
+      DELETE FROM "source_follows";
+      DELETE FROM "_runtime_schema_migrations" WHERE "key" = 'source_follows_initial_v1';
+      INSERT INTO "sources" ("id", "name", "rssUrl", "siteUrl", "enabled", "createdAt", "updatedAt")
+        VALUES ('source-follow-on', '启用源', 'https://f1.example.com/feed.xml', 'https://f1.example.com', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+               ('source-follow-off', '停用源', 'https://f2.example.com/feed.xml', 'https://f2.example.com', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT "sourceId" FROM "source_follows" ORDER BY "sourceId"`)).toBe("source-follow-on");
+    expect(runSqlite(dbPath, `SELECT "status" FROM "_runtime_schema_migrations" WHERE "key"='source_follows_initial_v1'`)).toBe("completed");
+
+    // 用户取消关注后重复升级，不重新关注。
+    runSqlite(dbPath, `DELETE FROM "source_follows" WHERE "sourceId" = 'source-follow-on';`);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "source_follows"`)).toBe("0");
+
+    // 旧版非事务实现遗留的 running 标记视为中途失败，重试补齐关注且不重复。
+    runSqlite(dbPath, `
+      UPDATE "_runtime_schema_migrations" SET "status" = 'running', "completedAt" = NULL WHERE "key" = 'source_follows_initial_v1';
+      INSERT INTO "sources" ("id", "name", "rssUrl", "siteUrl", "enabled", "createdAt", "updatedAt")
+        VALUES ('source-follow-new', '新增启用源', 'https://f3.example.com/feed.xml', 'https://f3.example.com', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+    `);
+    execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    const follows = runSqlite(dbPath, `SELECT "sourceId" FROM "source_follows" ORDER BY "sourceId"`);
+    expect(follows.split("\n")).toEqual(["source-follow-new", "source-follow-on"]);
+    expect(runSqlite(dbPath, `SELECT "status" FROM "_runtime_schema_migrations" WHERE "key"='source_follows_initial_v1'`)).toBe("completed");
   }, 30_000);
 
   it("upgrades an old volume without event_types twice, preserving records and the registry", () => {

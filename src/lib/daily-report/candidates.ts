@@ -62,15 +62,15 @@ export function getDailyReportEntryItems(entry: EventBriefingEntryDTO, date: str
   const { start, end } = getDailyReportDateRange(date);
   const dailyItems = entry.items
     .filter((item) => {
-      const createdAt = new Date(item.createdAt);
-      return !Number.isNaN(createdAt.getTime()) && createdAt >= start && createdAt < end;
+      const publishedAt = new Date(item.publishedAt);
+      return item.publishedAtKnown === true && !Number.isNaN(publishedAt.getTime()) && publishedAt >= start && publishedAt < end;
     })
-    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  const evidenceItems = (dailyItems.length > 0 ? dailyItems : entry.items)
+    .sort((left, right) => new Date(right.publishedAt).getTime() - new Date(left.publishedAt).getTime());
+  const evidenceItems = dailyItems
     .slice(0, MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE);
 
   return {
-    representativeItem: evidenceItems[0] ?? entry.items[0],
+    representativeItem: evidenceItems[0],
     evidenceItems,
   };
 }
@@ -115,10 +115,11 @@ export function eventBriefingEntryToDailyReportCandidate(
   };
 }
 
-export async function listDailyReportEventBriefingCandidates(date: string, channelIds: string[] = []) {
+export async function listDailyReportEventBriefingCandidates(date: string, channelIds: string[] = [], followedSourceIds?: string[]) {
   const entries = await listEventBriefingEntriesForDailyReport({
     date,
     channelIds,
+    followedSourceIds,
   });
 
   return entries
@@ -284,17 +285,34 @@ export async function listDailyReportGenerationCandidates(
   limit: number,
   channelIds: string[] = [],
   fallbackGroupIds: string[] = [],
+  followedSourceIds?: string[],
 ) {
+  // 关注快照在生成开始时固化；显式空集合表示无输入，严禁回退全量。
+  const followed = followedSourceIds
+    ? [...new Set(followedSourceIds.filter(Boolean))]
+    : undefined;
+
+  if (followed && followed.length === 0) {
+    return {
+      source: "follow_empty" as const,
+      candidates: [] as DailyReportCandidate[],
+    };
+  }
+
   try {
     return {
       source: "event_briefing" as const,
-      candidates: await listDailyReportEventBriefingCandidates(date, channelIds),
+      candidates: await listDailyReportEventBriefingCandidates(date, channelIds, followed),
     };
   } catch (error) {
     console.warn("[daily-report] falling back to legacy candidate query", error);
+    // legacy 回退同样在数据库选源阶段应用关注快照，聚合与截断前完成过滤。
     return {
       source: "legacy_daily_report" as const,
-      candidates: await listDailyReportCandidates(date, limit, fallbackGroupIds, { returnPool: true }),
+      candidates: await listDailyReportCandidates(date, limit, fallbackGroupIds, {
+        returnPool: true,
+        followedSourceIds: followed,
+      }),
     };
   }
 }

@@ -10,6 +10,7 @@ services:
       # 首页页签标题后缀，默认“资讯聚合平台”；如需自定义，在 .env 或 shell 中设置 SITE_HOME_TITLE
       SITE_HOME_TITLE: "${SITE_HOME_TITLE:-资讯聚合平台}"
       DATABASE_URL: file:/app/data/dev.db
+      # ADAPTER_CONFIG_FILE: /run/secrets/adapter.json
       # Canonical public origin for RSS links, e.g. https://your-domain.example
       # SITE_URL: ""
       ADMIN_PASSWORD: change-me
@@ -37,6 +38,7 @@ services:
         max-file: "5"
     volumes:
       - infinitum-data:/app/data
+      # - ./private/adapter.json:/run/secrets/adapter.json:ro
   worker:
     image: docker.io/xiexiao064/infinitum-worker:latest
     restart: unless-stopped
@@ -44,6 +46,7 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: file:/app/data/dev.db
+      # ADAPTER_CONFIG_FILE: /run/secrets/adapter.json
       # 与 app 保持同一预算口径；为空表示不限。
       AI_DAILY_CHAT_REQUEST_LIMIT: "${AI_DAILY_CHAT_REQUEST_LIMIT:-}"
     healthcheck:
@@ -63,6 +66,7 @@ services:
         max-file: "5"
     volumes:
       - infinitum-data:/app/data
+      # - ./private/adapter.json:/run/secrets/adapter.json:ro
 
 volumes:
   infinitum-data:

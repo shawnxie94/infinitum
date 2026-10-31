@@ -6,13 +6,14 @@ import { deleteSource, updateSource } from "@/lib/settings/service";
 
 const sourceSchema = z.object({
   name: z.string().min(1),
-  rssUrl: z.url(),
-  siteUrl: z.url(),
+  rssUrl: z.url().nullable(),
+  siteUrl: z.union([z.url(), z.literal("")]),
   enabled: z.boolean(),
   aiParsingEnabled: z.boolean().default(true),
   aggregationEnabled: z.boolean().default(true),
   aggregationDetectionEnabled: z.boolean().default(false),
   groupId: z.string().nullable().optional(),
+  channel: z.string().nullable().optional(),
 });
 
 export async function PATCH(request: Request, context: RouteContext<"/api/admin/settings/sources/[id]">) {

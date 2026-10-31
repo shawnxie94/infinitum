@@ -148,8 +148,11 @@ enum DailyReportRevisionAction {
 model Source {
   id                          String       @id @default(cuid())
   groupId                     String?
+  channel                     String?
+  originKind                  String       @default("preset")
+  transport                   String       @default("rss")
   name                        String
-  rssUrl                      String       @unique
+  rssUrl                      String?      @unique
   siteUrl                     String
   enabled                     Boolean      @default(true)
   aiParsingEnabled            Boolean      @default(true)
@@ -165,11 +168,53 @@ model Source {
   createdAt                   DateTime     @default(now())
   updatedAt                   DateTime     @updatedAt
   items                       Item[]
+  follow                      SourceFollow?
+  adapterBinding              AdapterSourceBinding?
   group                       SourceGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@index([groupId, name])
   @@index([enabled, healthStatus])
   @@map("sources")
+}
+
+model AdapterSourceBinding {
+  id                String @id @default(cuid())
+  sourceId          String @unique
+  adapterInstanceId String
+  providerId        String
+  subscriptionId    String
+  accountId         String
+  previousRssUrl    String?
+  source            Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([adapterInstanceId, providerId, accountId])
+  @@unique([adapterInstanceId, subscriptionId])
+  @@map("adapter_source_bindings")
+}
+
+model AdapterItemIdentity {
+  id                String @id @default(cuid())
+  adapterInstanceId String
+  providerId        String
+  externalId        String
+  contentHash       String
+  processedFingerprint String?
+  needsManualReview Boolean @default(false)
+  itemId            String
+  item              Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([adapterInstanceId, providerId, externalId])
+  @@index([itemId])
+  @@map("adapter_item_identities")
+}
+
+model SourceFollow {
+  id         String   @id @default(cuid())
+  sourceId   String   @unique
+  followedAt DateTime @default(now())
+  source     Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@map("source_follows")
 }
 
 model Item {
@@ -188,6 +233,7 @@ model Item {
   rssContent               String?
   fullText                 String?
   summaryText              String?
+  analysisBaselineHash     String?
   language                 String?
   status                   ItemStatus                 @default(new)
   summaryStatus            ProcessingCheckpointStatus @default(pending)
@@ -227,6 +273,7 @@ model Item {
   aggregationSplitChildren AggregationSplitLink[]     @relation("AggregationSplitParent")
   dailyReportSources       DailyReportSource[]
   entities                     ItemEntity[]
+  adapterIdentities            AdapterItemIdentity[]
 
   @@index([sourceId, publishedAt])
   @@index([sourceId, status, moderationStatus, isAggregation, createdAt])

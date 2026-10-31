@@ -8,6 +8,7 @@ prisma/*.db
 prisma/*.db-journal
 .env
 .env.docker
+private/
 .env.*.example
 *.md
 docs/

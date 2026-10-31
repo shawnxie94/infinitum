@@ -2,6 +2,7 @@ import type { BackgroundTaskRun } from "@prisma/client";
 
 import { DEFAULT_POLL_INTERVAL_MS, DEFAULT_TASK_STALE_MS, MINUTE_MS } from "@/config/constants";
 import { prisma } from "@/lib/db";
+import { reconcileManualDailyGeneration } from "@/lib/daily-report/manual-generation";
 import { restartActiveAiWorkflowRuns } from "@/lib/ai-orchestration/runtime";
 import { enqueueItemProcessingRecoveryTask } from "@/lib/items/processing-recovery";
 import { dispatchTaskRun } from "@/lib/tasks/routing";
@@ -329,6 +330,7 @@ export async function runWorkerWatchdogTick(now = new Date()) {
   await enqueueScheduledDailyReportIfDue(now);
   await enqueueScheduledItemCleanupIfDue(now);
   await enqueueItemProcessingRecoveryTask({ now, triggerType: "scheduled" }).catch(() => null);
+  await reconcileManualDailyGeneration();
 
   return recovered;
 }
@@ -347,6 +349,7 @@ export async function runWorkerCycle(options?: {
   const enqueuedScheduledRun = await enqueueScheduledIngestionIfDue(now);
   const enqueuedScheduledDailyReport = await enqueueScheduledDailyReportIfDue(now);
   const enqueuedScheduledCleanup = await enqueueScheduledItemCleanupIfDue(now);
+  await reconcileManualDailyGeneration();
   const claimedTaskRun = await claimNextQueuedTaskRun();
 
   if (claimedTaskRun) {

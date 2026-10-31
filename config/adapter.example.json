@@ -1,0 +1,5 @@
+{
+  "baseUrl": "http://adapter:8080",
+  "instanceId": "local-adapter",
+  "token": "REPLACE_WITH_PRIVATE_SERVICE_TOKEN"
+}

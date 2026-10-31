@@ -52,6 +52,13 @@ export function parseTaskPipelineCheckpointJson(value: string | null | undefined
         ? { stageAttempts: Object.fromEntries(Object.entries(parsed.stageAttempts).filter(([, attempt]) => typeof attempt === "number" && Number.isFinite(attempt))) as Record<string, number> }
         : {}),
       ...(parsed.candidateSnapshot !== undefined ? { candidateSnapshot: parsed.candidateSnapshot } : {}),
+      // 关注快照：保留空数组语义（空关注也是有效快照），字段非法时丢弃不猜测。
+      ...(Array.isArray(parsed.followedSourceIds)
+        ? { followedSourceIds: parsed.followedSourceIds.filter((id): id is string => typeof id === "string") }
+        : {}),
+      ...(typeof parsed.followedSnapshotAt === "string" && parsed.followedSnapshotAt.length > 0
+        ? { followedSnapshotAt: parsed.followedSnapshotAt }
+        : {}),
       ...(parsed.planningAudit !== undefined ? { planningAudit: parsed.planningAudit } : {}),
       ...(Array.isArray(parsed.assessmentBatches) ? { assessmentBatches: parsed.assessmentBatches as TaskPipelineCheckpoint["assessmentBatches"] } : {}),
       ...(parsed.ledger !== undefined ? { ledger: parsed.ledger } : {}),

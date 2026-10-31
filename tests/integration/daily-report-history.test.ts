@@ -7,6 +7,7 @@ import {
   restoreDailyReportRevision,
   withDailyReportLock,
 } from "@/lib/daily-report/history";
+import { getLatestDailyReportDate } from "@/lib/daily-report/repository";
 
 const DATE = "2026-08-13";
 
@@ -126,5 +127,37 @@ describe("daily report history", () => {
       .rejects.toMatchObject({ status: 409, code: "daily_report_operation_in_progress" });
     release();
     await expect(first).resolves.toBe("first");
+  });
+it("latest daily report date skips failed reports to match the admin visibility filter", async () => {
+    await prisma.dailyReport.create({
+      data: {
+        date: DATE,
+        timezone: "Asia/Shanghai",
+        status: "failed",
+        title: "失败日报",
+        openingSummary: "",
+        closingThought: "",
+        summaryJson: "{}",
+        renderedMarkdown: "",
+        inputHash: "failed-input",
+      },
+    });
+    // 只有 failed 时返回空，不会默认选中不可见失败日报。
+    await expect(getLatestDailyReportDate()).resolves.toBe("");
+
+    const visible = await prisma.dailyReport.create({
+      data: {
+        date: "2026-08-12",
+        timezone: "Asia/Shanghai",
+        status: "published",
+        title: "可见日报",
+        openingSummary: "",
+        closingThought: "",
+        summaryJson: "{}",
+        renderedMarkdown: "",
+        inputHash: "visible-input",
+      },
+    });
+    await expect(getLatestDailyReportDate()).resolves.toBe(visible.date);
   });
 });

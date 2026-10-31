@@ -102,6 +102,7 @@ export function createItemReanalyzeWorkflowDefinition(): DomainTaskDefinition {
           const result = await reanalyzeItem(payload.itemId, {
             aiProvider,
             precomputedUnderstanding: payload.understanding,
+            confirmAdapterReview: true,
           });
           await context.projectAiUsage?.(aiUsage.snapshot());
           // 写回与清理已在 reanalyzeItem 内完成；此处只依据诊断结果收敛任务终态，

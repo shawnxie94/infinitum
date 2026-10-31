@@ -88,6 +88,42 @@ function tableExists(tableName) {
   return result === "1";
 }
 
+function migrateSourcesForAdapter() {
+  if (!tableExists("sources")) return;
+  const query = (sql) => JSON.parse(execFileSync("sqlite3", ["-json", dbPath, sql], { encoding: "utf8" }) || "[]");
+  const columns = query('PRAGMA table_info("sources")');
+  const rss = columns.find((column) => column.name === "rssUrl");
+  const hasTransport = columns.some((column) => column.name === "transport");
+  if (!rss) throw new Error("Source migration: rssUrl missing");
+  if (!rss.notnull) {
+    if (!hasTransport) addColumnIfMissing("sources", "transport", "TEXT NOT NULL DEFAULT 'rss'");
+    return;
+  }
+  if (tableExists("_sources_adapter_rebuild")) throw new Error("Source migration: rebuild table already exists");
+  const table = query("SELECT sql FROM sqlite_master WHERE type='table' AND name='sources'")[0]?.sql;
+  if (typeof table !== "string") throw new Error("Source migration: missing table definition");
+  const renamed = table.replace(/^CREATE TABLE\s+"?sources"?/i, 'CREATE TABLE "_sources_adapter_rebuild"');
+  const replaced = renamed.replace(/("?rssUrl"?\s+TEXT)\s+NOT NULL/i, "$1");
+  if (renamed === table || replaced === renamed) throw new Error("Source migration: unexpected table definition");
+  const ddl = hasTransport ? replaced : replaced.replace(/("?rssUrl"?\s+TEXT)/i, '$1, "transport" TEXT NOT NULL DEFAULT \'rss\'');
+  const names = columns.map(({ name }) => `"${name.replaceAll('"', '""')}"`).join(", ");
+  const objects = query("SELECT sql FROM sqlite_master WHERE tbl_name='sources' AND type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name").map(({ sql }) => `${sql};`).join("\n");
+  runSqlite([dbPath], { input: `.bail on
+PRAGMA foreign_keys=OFF;
+BEGIN IMMEDIATE;
+${ddl};
+INSERT INTO "_sources_adapter_rebuild" (${names}) SELECT ${names} FROM "sources";
+DROP TABLE "sources";
+ALTER TABLE "_sources_adapter_rebuild" RENAME TO "sources";
+${objects}
+CREATE TEMP TABLE "_adapter_fk_check" (violations INTEGER CHECK (violations = 0));
+INSERT INTO "_adapter_fk_check" SELECT COUNT(*) FROM pragma_foreign_key_check;
+DROP TABLE "_adapter_fk_check";
+COMMIT;
+PRAGMA foreign_keys=ON;
+` });
+}
+
 function indexStatsExist(indexName) {
   if (!tableExists("sqlite_stat1")) {
     return false;
@@ -213,6 +249,7 @@ function querySqliteNumber(sql) {
 }
 
 const processingWindowMigrationKey = "task_schedules_processing_window_days_v1";
+const sourceFollowsInitialMigrationKey = "source_follows_initial_v1";
 const runtimeMigrationTable = "_runtime_schema_migrations";
 
 function ensureRuntimeMigrationTable() {
@@ -726,6 +763,13 @@ function applyAdditiveSchemaUpgrades() {
   addColumnIfMissing("cluster_merge_clean_pair_candidates", "vectorSimilarity", "REAL");
   // 可配置事件类型：模型原始 eventType 输出留存（未命中启用注册表映射为 other 时）。
   addColumnIfMissing("items", "eventTypeRaw", "TEXT");
+  addColumnIfMissing("items", "analysisBaselineHash", "TEXT");
+  // 财经个性化版：信息源渠道标注（人工维护，未识别为 NULL/other）。
+  addColumnIfMissing("sources", "channel", "TEXT");
+  // 旧记录没有可证明创建来源的元数据，保守保留在预置目录。
+  addColumnIfMissing("sources", "originKind", "TEXT NOT NULL DEFAULT 'preset'");
+  addColumnIfMissing("adapter_item_identities", "processedFingerprint", "TEXT");
+  addColumnIfMissing("adapter_item_identities", "needsManualReview", "BOOLEAN NOT NULL DEFAULT 0");
   runSqlite([dbPath], {
     input: 'CREATE INDEX IF NOT EXISTS "daily_reports_currentRevisionId_idx" ON "daily_reports"("currentRevisionId");\n',
   });
@@ -917,6 +961,45 @@ function applyAdditiveSchemaUpgrades() {
   }
 }
 
+function applySourceFollowsInitialMigration() {
+  // 一次性迁移：存量启用源初始化为已关注。重复运行不得重新关注用户取消的源。
+  // 原子事务保证：标记行、回填、完成标记同提交，中途失败（含进程被杀）整体
+  // 回滚，下次启动重试；并发启动由 setup 锁串行化，INSERT OR IGNORE 兜底。
+  if (!tableExists("sources")) {
+    return;
+  }
+
+  ensureRuntimeMigrationTable();
+  const escapedKey = sourceFollowsInitialMigrationKey.replace(/'/g, "''");
+  const existing = execFileSync(
+    "sqlite3",
+    [dbPath, `SELECT "status" FROM "${runtimeMigrationTable}" WHERE "key"='${escapedKey}'`],
+    { encoding: "utf8" },
+  ).trim();
+
+  // 只有 completed 才跳过；事务回滚不会留下行，历史遗留的 running 行视为
+  // 旧版本非事务实现的中途失败，允许重试。
+  if (existing === "completed") {
+    return;
+  }
+
+  runSqlite([dbPath], {
+    input: `
+      BEGIN IMMEDIATE;
+      INSERT OR IGNORE INTO "_runtime_schema_migrations" ("key", "status", "startedAt", "completedAt")
+      VALUES ('${escapedKey}', 'running', datetime('now'), NULL);
+      INSERT INTO "source_follows" ("id", "sourceId", "followedAt")
+      SELECT 'sf_' || hex(randomblob(12)), "id", datetime('now')
+      FROM "sources"
+      WHERE "enabled" = 1
+        AND "id" NOT IN (SELECT "sourceId" FROM "source_follows");
+      UPDATE "_runtime_schema_migrations" SET "status" = 'completed', "completedAt" = datetime('now') WHERE "key" = '${escapedKey}';
+      COMMIT;
+    `,
+  });
+  console.log("Source follows initialized for existing enabled sources (one-time).");
+}
+
 function sleep(ms) {
   if (ms <= 0) {
     return;
@@ -1001,6 +1084,8 @@ try {
   dropLegacyCuratorPreferenceTables();
   dropClusterDecisionPromptHashColumn();
   applyAdditiveSchemaUpgrades();
+  migrateSourcesForAdapter();
+  applySourceFollowsInitialMigration();
   migrateProcessingWindowDays();
   if (shouldBackfillEntities) {
     applyEntityItemBackfill();

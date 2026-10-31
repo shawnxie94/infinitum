@@ -62,6 +62,43 @@ afterEach(() => {
 });
 
 describe("DailyReportDetail", () => {
+  it("hides regeneration during an embedded generation and restores it afterwards", () => {
+    const report = buildReport();
+    const { rerender } = render(<DailyReportDetail report={report} date="2026-04-29" isAdmin layout="embedded" hideRegenerate />);
+    expect(screen.queryByTitle("重新生成日报")).not.toBeInTheDocument();
+    rerender(<DailyReportDetail report={report} date="2026-04-29" isAdmin layout="embedded" />);
+    expect(screen.getByTitle("重新生成日报")).toBeInTheDocument();
+    rerender(<DailyReportDetail report={report} date="2026-04-29" isAdmin />);
+    expect(screen.getByTitle("重新生成日报")).toBeInTheDocument();
+  });
+  it("embedded 布局去除页面级 max-w-7xl 居中、xl 才双栏且使用窄目录列", () => {
+    const report = buildReport({ renderedMarkdown: "# 财经日报" });
+
+    const { container } = render(
+      <DailyReportDetail report={report} date="2026-04-29" isAdmin={false} layout="embedded" />,
+    );
+
+    expect(container.innerHTML).not.toContain("max-w-7xl");
+    // 1024px（lg）下保持单栏，xl（1280px）才启用双栏，保证窄桌面正文可读宽度
+    expect(container.innerHTML).not.toContain("lg:flex-row");
+    expect(container.innerHTML).toContain("xl:flex-row");
+    const aside = container.querySelector("aside");
+    expect(aside).not.toBeNull();
+    expect(aside?.className).toContain("xl:w-64");
+    expect(aside?.className).not.toContain("lg:");
+    // 标题与元信息左对齐（无 justify-center）
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading.parentElement?.className).not.toContain("justify-center");
+  });
+
+  it("默认布局保持 /daily 页面 max-w-7xl 居中不变", () => {
+    const report = buildReport({ renderedMarkdown: "# 普通日报" });
+
+    const { container } = render(<DailyReportDetail report={report} date="2026-04-29" isAdmin={false} />);
+
+    expect(container.innerHTML).toContain("max-w-7xl");
+  });
+
   it("hydrates admin draft detail when the public report is unavailable", async () => {
     const adminReport = buildReport({
       status: "draft",

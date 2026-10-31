@@ -1,4 +1,4 @@
-import type { Item } from "@prisma/client";
+import type { Item, Prisma } from "@prisma/client";
 
 import { AGGREGATION_PARSE_STATUS, RETRIABLE_AGGREGATION_PARSE_STATUSES } from "@/lib/aggregation/status";
 import { persistAggregationChildItems } from "@/lib/aggregation/persist";
@@ -9,6 +9,8 @@ import type { AiEventSignature } from "@/lib/ai/provider-types";
 import type { ClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
+import { analysisFingerprint, guardedAdapterWrite } from "@/lib/adapter/items";
+import type { AdapterItem } from "@/lib/adapter/client";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import {
@@ -47,6 +49,7 @@ export type PreparedFeedItem = {
   aiParsingEnabled: boolean;
   aggregationEnabled: boolean;
   aggregationDetectionEnabled: boolean;
+  adapter?: { instanceId: string; providerId: string; item: AdapterItem };
 };
 
 export type PreparedFeedItemLookup = {
@@ -318,6 +321,7 @@ export async function processFeedItem({
   processingStartAt,
   now,
   signal,
+  guardAnalysis = false,
 }: {
   item: ParsedFeedItem;
   sourceId: string;
@@ -336,6 +340,7 @@ export async function processFeedItem({
   processingStartAt?: Date | null;
   now: Date;
   signal?: AbortSignal;
+  guardAnalysis?: boolean;
 }): Promise<ProcessedItemRecord | null> {
   const lookup = providedLookup ?? buildPreparedFeedItemLookup({
     item,
@@ -363,6 +368,13 @@ export async function processFeedItem({
     existingItem === undefined
       ? await findExistingItem(dedupeKeys.urlHash)
       : existingItem;
+  let protectedVersion = guardAnalysis ? existing : null;
+  const persistItem = async (where: { id?: string; urlHash: string }, data: Prisma.ItemUncheckedCreateInput) => {
+    if (!protectedVersion || !where.id) return upsertItem(where, data);
+    const updated = await guardedAdapterWrite(protectedVersion, data);
+    protectedVersion = updated;
+    return updated;
+  };
   const author = getFeedItemAuthor(item);
   const isNew = !existing;
   const hasActiveSplitChildren =
@@ -460,7 +472,7 @@ export async function processFeedItem({
   if (initialRuleFilter.filtered) {
     signal?.throwIfAborted();
     const dbWriteStartedAt = Date.now();
-    const stored = await upsertItem(
+    const stored = await persistItem(
       {
         id: existing?.id,
         urlHash: dedupeKeys.urlHash,
@@ -690,7 +702,7 @@ export async function processFeedItem({
         signal?.throwIfAborted();
         const events = understanding.aggregation.events;
         const preUpsertStartedAt = Date.now();
-        const preUpsert = await upsertItem(
+        const preUpsert = await persistItem(
           { id: existing?.id, urlHash: dedupeKeys.urlHash },
           {
             sourceId,
@@ -815,7 +827,7 @@ export async function processFeedItem({
 
   signal?.throwIfAborted();
   const dbWriteStartedAt = Date.now();
-  const stored = await upsertItem(
+  const stored = await persistItem(
     {
       id: storedItemId ?? undefined,
       urlHash: dedupeKeys.urlHash,
@@ -992,6 +1004,7 @@ export async function processFeedItem({
 
   return {
     id: stored.id,
+    ...(stored.status === "processed" && stored.summaryStatus === "succeeded" && stored.analysisStatus === "succeeded" ? { analysisFingerprint: analysisFingerprint(stored) } : {}),
     status: stored.status,
     isNew,
     errorMessage: stored.errorMessage,

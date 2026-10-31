@@ -16,6 +16,7 @@ import {
 } from "@/lib/aggregation/persist";
 import { filterStaleAggregationChildren } from "@/lib/aggregation/staleness";
 import { prisma } from "@/lib/db";
+import { analysisFingerprint, recordItemAnalysisBaseline } from "@/lib/adapter/items";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import { archiveItemDedupeHistories } from "@/lib/feed/repository";
 import { shouldTranslateTitle } from "@/lib/feed/presentation";
@@ -41,6 +42,7 @@ export type RegenerationTarget = "translation" | "summary";
 export type RegenerationOptions = {
   aiProvider?: AiProvider;
   precomputedUnderstanding?: ItemUnderstandingResult;
+  confirmAdapterReview?: boolean;
 };
 
 type AggregationReparseCandidate = {
@@ -673,7 +675,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     : AGGREGATION_PARSE_STATUS.failed;
 
   if (isAggregation) {
-    await prisma.item.update({
+    const aggregationWritten = await prisma.item.update({
       where: { id: item.id },
       data: {
         translatedTitle:
@@ -727,6 +729,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
         include: { source: true },
       });
       await syncItemProcessingRetryState(item.id);
+      if (options?.confirmAdapterReview && failedFields.length === 0) await recordItemAnalysisBaseline(updated.id, analysisFingerprint(aggregationWritten), true);
       return { item: updated, failedFields };
     }
 
@@ -795,6 +798,8 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     invalidateFeedCache();
     if (staleChildren.filteredCount > 0) invalidateDailyReportCache();
     await syncItemProcessingRetryState(item.id);
+
+    if (options?.confirmAdapterReview && failedFields.length === 0) await recordItemAnalysisBaseline(updated.id, analysisFingerprint(updated), true);
 
     return { item: updated, failedFields };
   }
@@ -880,6 +885,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     include: { source: true },
   });
   await syncItemProcessingRetryState(result.id);
+  if (options?.confirmAdapterReview && failedFields.length === 0) await recordItemAnalysisBaseline(result.id, analysisFingerprint(updated), true);
   return { item: result, failedFields };
 }
 

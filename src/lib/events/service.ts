@@ -372,10 +372,14 @@ async function loadEntriesForChannel(input: {
   range: ReturnType<typeof getEventBriefingDateRange>;
   minRankScore: number;
   tag: EventBriefingOptions["tag"];
+  followedSourceIds?: string[];
+  dateBasis?: "published";
 }) {
   const candidateResult = await listEventBriefingCandidates(input.range, {
     groupIds: input.channel.sourceGroupIds,
     tag: normalizeEventBriefingTag(input.tag),
+    followedSourceIds: input.followedSourceIds,
+    dateBasis: input.dateBasis,
   });
   const rankContext = createEventBriefingRankContext(candidateResult.candidates);
 
@@ -477,13 +481,20 @@ export async function getEventBriefing(options: EventBriefingOptions = {}) {
 export async function listEventBriefingEntriesForDailyReport(options: {
   date: string;
   channelIds?: string[];
+  followedSourceIds?: string[];
 }) {
+  const followedSourceIds = [...new Set((options.followedSourceIds ?? []).filter(Boolean))].sort();
   const ranked = await withEventBriefingCache(
     `event-briefing-daily:${JSON.stringify({
       date: options.date,
       channelIds: [...new Set((options.channelIds ?? []).filter(Boolean))].sort(),
+      followedSourceIds,
     })}`,
-    () => loadDailyReportRankedEntries(options),
+    () => loadDailyReportRankedEntries({
+      date: options.date,
+      channelIds: options.channelIds,
+      followedSourceIds,
+    }),
   );
 
   // Daily reports apply duplicate filtering after the shared ranking. Return
@@ -510,6 +521,7 @@ function resolveSelectedChannelIds(
 async function loadDailyReportRankedEntries(options: {
   date: string;
   channelIds?: string[];
+  followedSourceIds?: string[];
 }) {
   const range = getEventBriefingDateRange(options.date);
   const { config, activeChannels } = await loadEventBriefingRuntime();
@@ -522,6 +534,8 @@ async function loadDailyReportRankedEntries(options: {
       range,
       minRankScore: config.minRankScore,
       tag: "all",
+      followedSourceIds: options.followedSourceIds,
+      dateBasis: "published",
     })),
   );
 

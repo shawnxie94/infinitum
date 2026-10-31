@@ -8,6 +8,7 @@ import { createAiProvider } from "@/lib/ai/provider-next";
 import { type DailyReportStageContext } from "@/lib/ai/provider-types";
 import { prisma } from "@/lib/db";
 import { getDailyReportDateRange, normalizeDailyReportDate, resolveDailyReportTaskDate } from "@/lib/daily-report/date";
+import { getSourceFollowSnapshot } from "@/lib/sources/follows";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { withDailyReportLock } from "@/lib/daily-report/history";
 import { DailyReportCancellationError, DailyReportGenerationError, DailyReportStagePauseError } from "@/lib/daily-report/errors";
@@ -60,11 +61,48 @@ export async function generateDailyReportInternal(input: {
   const recentTopicLookbackDays = schedule.dailyReportRecentTopicLookbackDays ?? DEFAULT_DAILY_REPORT_RECENT_TOPIC_LOOKBACK_DAYS;
   const recentSources = await listRecentDailyReportSourceSnapshots(date, recentTopicLookbackDays);
   const recentTopics = buildRecentDailyReportTopics(recentSources);
+  // 关注快照：同一次生成（含多阶段 stopAfterStage/resume 与审核恢复）内固定，
+  // 运行中改关注只影响下次生成。恢复时优先沿用 checkpoint 内的首次快照。
+  const resumeFollowedSourceIds = Array.isArray(input.resumeCheckpoint?.followedSourceIds)
+    ? input.resumeCheckpoint.followedSourceIds.filter(Boolean)
+    : null;
+  let followSnapshot = resumeFollowedSourceIds
+    ? {
+        sourceIds: resumeFollowedSourceIds,
+        snapshotAt: input.resumeCheckpoint?.followedSnapshotAt ?? new Date().toISOString(),
+      }
+    : null;
+  if (!followSnapshot && input.resumeCheckpoint?.resumeFrom === "review") {
+    // 审核恢复路径：从已持久化的候选快照中取回首次关注快照。
+    let persistedCandidateSnapshot: unknown = null;
+    try {
+      const existingForFollow = await prisma.dailyReport.findUnique({
+        where: { date_timezone: { date, timezone: DAILY_REPORT_TIMEZONE } },
+        select: { candidateSnapshot: true },
+      });
+      persistedCandidateSnapshot = existingForFollow?.candidateSnapshot
+        ? JSON.parse(existingForFollow.candidateSnapshot)
+        : null;
+    } catch {
+      persistedCandidateSnapshot = null;
+    }
+    const persistedFollowed = (persistedCandidateSnapshot as { followedSourceIds?: unknown } | null)?.followedSourceIds;
+    if (Array.isArray(persistedFollowed)) {
+      followSnapshot = {
+        sourceIds: persistedFollowed.filter((id): id is string => typeof id === "string" && Boolean(id)),
+        snapshotAt: new Date().toISOString(),
+      };
+    }
+  }
+  if (!followSnapshot) {
+    followSnapshot = await getSourceFollowSnapshot();
+  }
   const candidateResult = await listDailyReportGenerationCandidates(
     date,
     schedule.dailyReportCandidateLimit,
     dailyReportChannelIds,
     dailyReportSourceGroupIds,
+    followSnapshot.sourceIds,
   );
   const deduplicated = deduplicateDailyReportCandidates(candidateResult.candidates);
   let rawCandidates = deduplicated.candidates;
@@ -103,7 +141,33 @@ export async function generateDailyReportInternal(input: {
     recentTopicLookbackDays,
     eventTypeRegistryFingerprint: (await getEventTypeRegistrySnapshot()).fingerprint,
   });
-  const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics, generationSignature);
+  if (candidateResult.source === "follow_empty") {
+    return {
+      report: null,
+      skipped: true,
+      reason: "未关注任何信息源，无生成输入；请先在关注列表选择信息源。",
+      candidateCount: 0,
+      selectedCount: 0,
+      planningCandidateCount: 0,
+      mergedTopicCount: 0,
+      planSectionCount: 0,
+      planTopicCount: 0,
+      planSelectedCount: 0,
+      planViolationCount: 0,
+      repairCount: 0,
+      writeRetryCount: 0,
+      partial: false,
+      omittedTopicIds: [],
+      historyFilteredCount: 0,
+      batchCount: 0,
+      batchSize: schedule.dailyReportPlanningBatchSize ?? null,
+      reviewStatus: "disabled" as const,
+      reviewAttempts: 0,
+      aiUsage: { actual: 0, estimated: 0, breakdown: [] },
+    };
+  }
+
+  const inputHash = buildInputHash(date, candidates, dailyReportChannelIds, recentTopics, generationSignature, followSnapshot.sourceIds);
   const existing = await prisma.dailyReport.findUnique({
     where: {
       date_timezone: {
@@ -163,6 +227,7 @@ export async function generateDailyReportInternal(input: {
         snapshot,
         planningCandidateBriefs,
         currentCandidates: candidates,
+        allowCurrentFallback: existing.status !== "published",
         persistedSources,
       });
       const recoveryPlan = buildDailyReportRecoveryPlan(persistedContent, template);
@@ -506,6 +571,8 @@ export async function generateDailyReportInternal(input: {
       templateSignature,
       candidateSnapshotHash,
       candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+      followedSourceIds: followSnapshot.sourceIds,
+      followedSnapshotAt: followSnapshot.snapshotAt,
       resumeEligible: true,
       data: { batchCount: batches.length, batchSize },
       ...(canResume && checkpoint?.assessmentBatches
@@ -575,6 +642,8 @@ export async function generateDailyReportInternal(input: {
         templateSignature: getDailyReportTemplateSignature(template),
         candidateSnapshotHash,
         candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+        followedSourceIds: followSnapshot.sourceIds,
+        followedSnapshotAt: followSnapshot.snapshotAt,
         resumeEligible: true,
         assessmentBatches: batches.map((currentBatch, index) => ({
           index,
@@ -633,6 +702,8 @@ export async function generateDailyReportInternal(input: {
       templateSignature: getDailyReportTemplateSignature(template),
       candidateSnapshotHash,
       candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+      followedSourceIds: followSnapshot.sourceIds,
+      followedSnapshotAt: followSnapshot.snapshotAt,
       resumeEligible: true,
       assessmentBatches: batches.map((batch, index) => ({
         index,
@@ -727,6 +798,8 @@ export async function generateDailyReportInternal(input: {
       templateSignature: getDailyReportTemplateSignature(template),
       candidateSnapshotHash,
       candidateSnapshot: candidates.map(toCandidateSnapshotEntry),
+      followedSourceIds: followSnapshot.sourceIds,
+      followedSnapshotAt: followSnapshot.snapshotAt,
       resumeEligible: true,
       data: {
         batchCount: batches.length,
@@ -1321,7 +1394,9 @@ export async function generateDailyReportInternal(input: {
   const expandedSourcesByNumber = await buildExpandedDailyReportSourceRegistry({
     candidatesById,
     sourceRows,
+    date,
     groupIds: dailyReportSourceGroupIds,
+    followedSourceIds: followSnapshot.sourceIds,
   });
   const title = buildDailyReportTitle(date, content);
   const renderedMarkdown = renderDailyReportMarkdown(
@@ -1332,6 +1407,8 @@ export async function generateDailyReportInternal(input: {
   );
   const candidateSnapshot = JSON.stringify({
     candidateSource: candidateResult.source,
+    followedSourceIds: followSnapshot.sourceIds,
+    followedSnapshotAt: followSnapshot.snapshotAt,
     candidates: candidates.map(toCandidateSnapshotEntry),
     excludedCurrentDuplicates: deduplicated.duplicates.map((candidate) => ({
       ...toCandidateSnapshotEntry(candidate),

@@ -1,0 +1,10 @@
+services:
+  xueqiu-search:
+    build:
+      context: .
+      dockerfile: docker/xueqiu-search/Dockerfile
+    restart: unless-stopped
+    # Bind only to loopback; set XUEQIU_SEARCH_URL to this address on the host,
+    # or use http://xueqiu-search:3100 from a container on the same network.
+    ports:
+      - "127.0.0.1:13100:3100"

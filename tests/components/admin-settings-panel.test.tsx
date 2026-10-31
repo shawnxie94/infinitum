@@ -174,6 +174,7 @@ function buildInitialSettings(): AdminSettingsSnapshot {
         aggregationEnabled: true, aggregationDetectionEnabled: false,
         groupId: "group-1",
         groupName: "Core",
+        channel: null,
         lastItemCreatedAt: "2026-04-20T10:00:00.000Z",
       },
     ],
@@ -226,7 +227,7 @@ function filterSourceFixtures(sources: AdminSourceFixture[], searchParams: URLSe
       search &&
       ![
         source.name,
-        source.rssUrl,
+        source.rssUrl ?? "",
         source.siteUrl,
         source.groupName ?? "未分组",
       ].some((value) => value.toLowerCase().includes(search))
@@ -1210,6 +1211,7 @@ describe("AdminSettingsPanel", () => {
           aiParsingEnabled: false,
           aggregationEnabled: true, aggregationDetectionEnabled: false,
           groupId: "group-1",
+          channel: "",
         }),
       });
     });
@@ -1234,6 +1236,7 @@ describe("AdminSettingsPanel", () => {
         aggregationEnabled: false, aggregationDetectionEnabled: false,
         groupId: null,
         groupName: null,
+        channel: null,
         lastItemCreatedAt: null,
       },
     ];
@@ -1295,6 +1298,7 @@ describe("AdminSettingsPanel", () => {
         aggregationEnabled: false, aggregationDetectionEnabled: false,
         groupId: null,
         groupName: null,
+        channel: null,
         lastItemCreatedAt: null,
       },
     ];
@@ -1341,6 +1345,7 @@ describe("AdminSettingsPanel", () => {
           aiParsingEnabled: false,
           aggregationEnabled: false, aggregationDetectionEnabled: false,
           groupId: null,
+          channel: "",
         }),
       });
     });
@@ -1518,6 +1523,7 @@ describe("AdminSettingsPanel", () => {
       aggregationEnabled: false, aggregationDetectionEnabled: false,
       groupId: null,
       groupName: null,
+      channel: null,
       lastItemCreatedAt: null,
     };
     const fetchMock = createSourceSettingsFetchMock([...initialSettings.sources, targetSource]);

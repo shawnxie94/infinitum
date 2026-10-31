@@ -167,6 +167,9 @@ export type TaskPipelineCheckpoint = {
   reviewViolations?: unknown[];
   reviewAudit?: unknown;
   data?: Record<string, unknown>;
+  /** 生成首次启动时固化的关注快照；恢复时沿用，不重新读取。 */
+  followedSourceIds?: string[];
+  followedSnapshotAt?: string;
 };
 
 export type TaskAiCallBreakdownKey =

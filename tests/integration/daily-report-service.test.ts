@@ -6,11 +6,14 @@ import {
   generateDailyReport,
 } from "@/lib/daily-report/service";
 import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-report/repository";
+import { listEventBriefingCandidates } from "@/lib/events/repository";
+import { getEventBriefingDateRange } from "@/lib/events/date";
 import { executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
 import { persistDailyReport } from "@/lib/daily-report/persistence";
 import { getDailyReportEffectivePipelineVersion } from "@/lib/daily-report/report-input";
 import { updateEventBriefingConfig } from "@/lib/settings/service";
 import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
+import { parseTaskPipelineCheckpointJson, serializeTaskPipelineCheckpoint } from "@/lib/tasks/checkpoint";
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
 
 const {
@@ -404,7 +407,7 @@ async function createClusteredReportCandidates() {
     ],
   });
 
-  return { cluster };
+  return { cluster, sources: [sourceA, sourceB, sourceC, sourceD] };
 }
 
 async function createLargeClusteredReportCandidates() {
@@ -694,6 +697,8 @@ async function createDailyReportSchedule(input: { autoPublish: boolean; planning
 }
 
 describe("daily report service", () => {
+  const sourceCreateOriginal = prisma.source.create.bind(prisma.source);
+
   beforeEach(async () => {
     assessDailyReportCandidatesMock.mockReset();
     planDailyReportMock.mockReset();
@@ -731,6 +736,7 @@ describe("daily report service", () => {
       return buildDailyReportOutput(selectedTopics);
     });
     await prisma.dailyReportSource.deleteMany();
+    await prisma.sourceFollow.deleteMany();
     await prisma.dailyReport.deleteMany();
     await prisma.item.deleteMany();
     await prisma.contentCluster.deleteMany();
@@ -743,6 +749,15 @@ describe("daily report service", () => {
     await prisma.blacklistKeyword.deleteMany();
     await prisma.taskSchedule.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
+
+    // 关注快照是生成入口的一部分；本文件只关心既有生成语义，因此让测试中
+    // 创建的每个源都自动成为已关注源（等价于旧行为）。
+    const sourceCreate = sourceCreateOriginal;
+    vi.spyOn(prisma.source, "create").mockImplementation((async (args) => {
+      const source = await sourceCreate(args);
+      await prisma.sourceFollow.create({ data: { sourceId: source.id } });
+      return source;
+    }) as typeof prisma.source.create);
 
     // These service tests focus on candidate/source/persistence behavior. Use a
     // deliberately permissive v2 template fixture so small synthetic pools do
@@ -1333,16 +1348,39 @@ describe("daily report service", () => {
     expect(result.report?.renderedMarkdown).not.toContain("[大型模型发布 来源 6](https://large-6.example.com/model-launch)");
   });
 
-  it("uses created date for daily report candidate boundaries", async () => {
+  it("uses publication date for daily report candidate boundaries", async () => {
     await createCreatedAtBoundaryCandidates();
 
     const candidates = await listDailyReportCandidates(REPORT_DATE, 10);
     const titles = candidates.map((candidate) => candidate.title);
 
-    expect(titles).toContain("入库日期命中日报日期");
+    expect(titles).not.toContain("入库日期命中日报日期");
     expect(titles).toContain("入库日期再次命中日报日期");
-    expect(titles).not.toContain("仅事件日期命中日报日期");
-    expect(titles).not.toContain("仅发布时间命中日报日期");
+    expect(titles).toContain("仅事件日期命中日报日期");
+    expect(titles).toContain("仅发布时间命中日报日期");
+  });
+
+  it("excludes unknown publication dates and uses Shanghai day boundaries", async () => {
+    const source = await prisma.source.create({ data: { name: "Publication bounds", rssUrl: "https://pub-bounds.example/feed", siteUrl: "https://pub-bounds.example" } });
+    const dates = [
+      { key: "start", publishedAt: "2026-04-23T16:00:00.000Z", known: true },
+      { key: "before", publishedAt: "2026-04-23T15:59:59.999Z", known: true },
+      { key: "end", publishedAt: "2026-04-24T16:00:00.000Z", known: true },
+      { key: "unknown", publishedAt: "2026-04-24T01:00:00.000Z", known: false },
+    ];
+    await prisma.item.createMany({ data: dates.map(({ key, publishedAt, known }) => ({
+      sourceId: source.id, originalUrl: `https://pub-bounds.example/${key}`, canonicalUrl: `https://pub-bounds.example/${key}`,
+      urlHash: `pub-bound-${key}`, originalTitle: `pub-bound-${key}`, publishedAt: new Date(publishedAt), publishedAtKnown: known,
+      createdAt: new Date("2026-04-25T00:00:00Z"), status: "processed" as const, moderationStatus: "allowed" as const, qualityScore: 90,
+    })) });
+    const rows = await listDailyReportCandidates(REPORT_DATE, 30);
+    expect(rows.map((row) => row.title)).toContain("pub-bound-start");
+    for (const key of ["before", "end", "unknown"]) expect(rows.map((row) => row.title)).not.toContain(`pub-bound-${key}`);
+    const range = getEventBriefingDateRange(REPORT_DATE);
+    const daily = await listEventBriefingCandidates(range, { dateBasis: "published", followedSourceIds: [source.id] });
+    expect(daily.candidates.map((row) => row.title)).toEqual(["pub-bound-start"]);
+    const regular = await listEventBriefingCandidates(range, { followedSourceIds: [source.id] });
+    expect(regular.candidates).toHaveLength(0);
   });
 
   it("limits scheduled daily report candidates and expanded cluster sources to selected channels", async () => {
@@ -2125,5 +2163,178 @@ describe("daily report service", () => {
         expect.objectContaining({ blockKey: "hot-topics", truncatedTopicCount: 1 }),
       ]),
     });
+  });
+it("resume reuses the first follow snapshot instead of re-reading follows", async () => {
+    await createDailyReportSchedule({ autoPublish: false });
+    const { sources } = await createClusteredReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockResolvedValue({
+      verdict: "reject",
+      violations: [{
+        code: "factual_inconsistency",
+        severity: "error",
+        message: "事实需要重新核对",
+        evidence: "草稿中的数字与候选摘要不一致。",
+        guidance: "WRITE 重试时重新核对该主题的数字。",
+      }],
+      summary: "未通过",
+    });
+
+    let checkpoint: TaskPipelineCheckpoint | null = null;
+    await generateDailyReport({
+      date: REPORT_DATE,
+      force: true,
+      onCheckpoint: async (nextCheckpoint) => {
+        checkpoint = nextCheckpoint;
+      },
+    });
+    if (!checkpoint) throw new Error("日报生成未保存 checkpoint。");
+    const recoveryCheckpoint = checkpoint as TaskPipelineCheckpoint;
+    expect(Array.isArray(recoveryCheckpoint.followedSourceIds)).toBe(true);
+    expect(recoveryCheckpoint.followedSourceIds?.length).toBeGreaterThan(0);
+
+    // 生成中途取消关注 Source B、新增一个此前未关注的源及其条目。
+    const sourceB = sources.find((source) => source.name === "Source B");
+    if (!sourceB) throw new Error("未找到 Source B。");
+    await prisma.sourceFollow.delete({ where: { sourceId: sourceB.id } });
+    const newSource = await prisma.source.create({
+      data: {
+        name: "Late Source",
+        rssUrl: "https://late.example.com/feed.xml",
+        siteUrl: "https://late.example.com",
+      },
+    });
+    // beforeEach 的 create spy 已自动关注新源。
+    await prisma.item.create({
+      data: {
+        sourceId: newSource.id,
+        originalUrl: "https://late.example.com/fresh",
+        canonicalUrl: "https://late.example.com/fresh",
+        urlHash: "late-fresh-item",
+        originalTitle: "恢复前新增源条目",
+        publishedAt: new Date("2026-04-24T07:00:00.000Z"),
+        createdAt: new Date("2026-04-24T07:00:00.000Z"),
+        status: "processed",
+        moderationStatus: "allowed",
+        summaryText: "恢复前新增源条目摘要",
+        qualityScore: 99,
+      },
+    });
+
+    planDailyReportMock.mockClear();
+    reviewDailyReportMock.mockResolvedValue({ verdict: "pass", violations: [], summary: "通过" });
+
+    const recoveryResult = await generateDailyReport({
+      date: REPORT_DATE,
+      force: true,
+      resumeCheckpoint: {
+        ...recoveryCheckpoint,
+        resumeFrom: "review",
+        resumeEligible: true,
+      },
+    });
+    expect(recoveryResult.reviewStatus).toBe("passed");
+
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+    const snapshot = JSON.parse(report.candidateSnapshot ?? "{}") as {
+      followedSourceIds: string[];
+      candidates: Array<{ title: string; sourceCount: number }>;
+    };
+    // 恢复沿用首次快照：快照关注集合等于首次生成的集合，而不是当前关注状态。
+    const currentFollows = (await prisma.sourceFollow.findMany({ select: { sourceId: true } })).map((row) => row.sourceId).sort();
+    expect(snapshot.followedSourceIds).toContain(sourceB.id);
+    expect(snapshot.followedSourceIds).not.toContain(newSource.id);
+    expect(snapshot.followedSourceIds.sort()).not.toEqual(currentFollows);
+    // 首次快照下聚类仍计入 A/B/C 三个来源；若按当前关注重取则会变成更少。
+    const snapshotTitles = snapshot.candidates.map((candidate) => candidate.title);
+    expect(snapshotTitles).not.toContain("恢复前新增源条目");
+    expect(snapshot.candidates.map((candidate) => candidate.sourceCount)).toContain(3);
+  });
+it("recovery via the production checkpoint parse path keeps the original follow snapshot", async () => {
+    await createDailyReportSchedule({ autoPublish: false });
+    const { sources } = await createClusteredReportCandidates();
+    await prisma.promptConfig.updateMany({
+      where: { type: "daily_report_review", isDefault: true },
+      data: { isEnabled: true },
+    });
+    reviewDailyReportMock.mockResolvedValue({
+      verdict: "reject",
+      violations: [{
+        code: "factual_inconsistency",
+        severity: "error",
+        message: "事实需要重新核对",
+        evidence: "草稿中的数字与候选摘要不一致。",
+        guidance: "WRITE 重试时重新核对该主题的数字。",
+      }],
+      summary: "未通过",
+    });
+
+    let checkpoint: TaskPipelineCheckpoint | null = null;
+    await generateDailyReport({
+      date: REPORT_DATE,
+      force: true,
+      onCheckpoint: async (nextCheckpoint) => {
+        checkpoint = nextCheckpoint;
+      },
+    });
+    if (!checkpoint) throw new Error("日报生成未保存 checkpoint。");
+
+    // 走生产路径：序列化到任务行，再用 parseTaskPipelineCheckpointJson 读回。
+    const taskRun = await prisma.backgroundTaskRun.create({
+      data: {
+        kind: "daily_report_generate",
+        triggerType: "manual",
+        status: "queued",
+        label: "日报生成",
+        entityId: REPORT_DATE,
+        pipelineCheckpointJson: serializeTaskPipelineCheckpoint(checkpoint),
+      },
+    });
+    const resumedCheckpoint = parseTaskPipelineCheckpointJson(taskRun.pipelineCheckpointJson);
+    if (!resumedCheckpoint?.followedSourceIds?.length) {
+      throw new Error("生产解析路径丢失了关注快照字段。");
+    }
+
+    // 恢复前把关注改为只剩 Source D：恢复必须仍使用快照 A（A/B/C + D）。
+    const sourceA = sources.find((source) => source.name === "Source A");
+    const sourceD = sources.find((source) => source.name === "Source D");
+    if (!sourceA || !sourceD) throw new Error("缺少种子源。");
+    await prisma.sourceFollow.deleteMany({
+      where: { sourceId: { not: sourceD.id } },
+    });
+
+    planDailyReportMock.mockClear();
+    reviewDailyReportMock.mockResolvedValue({ verdict: "pass", violations: [], summary: "通过" });
+
+    const result = await generateDailyReport({
+      date: REPORT_DATE,
+      force: true,
+      resumeCheckpoint: {
+        ...resumedCheckpoint,
+        resumeFrom: "review",
+        resumeEligible: true,
+      },
+    });
+    expect(result.reviewStatus).toBe("passed");
+
+    const report = await prisma.dailyReport.findFirstOrThrow({
+      where: { date: REPORT_DATE, timezone: "Asia/Shanghai" },
+    });
+    const snapshot = JSON.parse(report.candidateSnapshot ?? "{}") as {
+      followedSourceIds: string[];
+      candidates: Array<{ sourceCount: number }>;
+    };
+    // 恢复沿用快照 A：包含 A/B/C，不含"只剩 D"的当前关注状态。
+    expect(snapshot.followedSourceIds.sort()).toEqual(
+      [sourceA.id, sources[1]!.id, sources[2]!.id, sourceD.id].sort(),
+    );
+    expect(snapshot.followedSourceIds).not.toEqual([sourceD.id]);
+    // 聚类仍计入快照中的 3 个关注来源。
+    expect(snapshot.candidates.map((candidate) => candidate.sourceCount)).toContain(3);
   });
 });

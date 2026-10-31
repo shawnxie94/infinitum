@@ -16,6 +16,9 @@ type PublicItemRow = Awaited<ReturnType<typeof listDailyPublicItems>>[number];
 type ListEventBriefingCandidateOptions = {
   groupIds?: string[];
   tag?: EventBriefingTag;
+  /** 关注快照：非空时只在关注源内取候选/聚类成员；空集合表示无输入而非全量。 */
+  followedSourceIds?: string[];
+  dateBasis?: "published";
 };
 
 function uniqueBy<T>(values: T[], getKey: (value: T) => string) {
@@ -114,11 +117,21 @@ function normalizeGroupIds(groupIds: string[] | undefined) {
   return [...new Set((groupIds ?? []).filter(Boolean))];
 }
 
-function buildSourceFilter(groupIds: string[] = []) {
+function normalizeFollowedSourceIds(followedSourceIds: string[] | undefined) {
+  return [...new Set((followedSourceIds ?? []).filter(Boolean))];
+}
+
+function buildSourceFilter(groupIds: string[] = [], followedSourceIds?: string[]) {
+  const followed = normalizeFollowedSourceIds(followedSourceIds);
+  if (followed.length === 0 && followedSourceIds !== undefined) {
+    // 显式空关注快照：无任何输入，不回退全量。
+    return { sourceId: { in: [] as string[] } };
+  }
   return {
     source: {
       is: {
         enabled: true,
+        ...(followed.length > 0 ? { id: { in: followed } } : {}),
         ...(groupIds.length > 0 ? { groupId: { in: groupIds } } : {}),
       },
     },
@@ -127,6 +140,7 @@ function buildSourceFilter(groupIds: string[] = []) {
 
 async function listDailyPublicItems(range: EventBriefingDateRange, options: ListEventBriefingCandidateOptions = {}) {
   const groupIds = normalizeGroupIds(options.groupIds);
+  const sourceFilter = buildSourceFilter(groupIds, options.followedSourceIds);
   const tagWhere = options.tag === "follow_up"
     ? {
         cluster: {
@@ -160,11 +174,13 @@ async function listDailyPublicItems(range: EventBriefingDateRange, options: List
 
   return prisma.item.findMany({
     where: {
-      createdAt: { gte: range.start, lt: range.end },
+      ...(options.dateBasis === "published"
+        ? { publishedAtKnown: true, publishedAt: { gte: range.start, lt: range.end } }
+        : { createdAt: { gte: range.start, lt: range.end } }),
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
-      ...buildSourceFilter(groupIds),
+      ...sourceFilter,
       AND: [
         {
           OR: [
@@ -258,6 +274,7 @@ async function listClusterPublicMembers(clusterIds: string[], options: ListEvent
   }
 
   const groupIds = normalizeGroupIds(options.groupIds);
+  const memberSourceFilter = buildSourceFilter(groupIds, options.followedSourceIds);
 
   return prisma.item.findMany({
     where: {
@@ -265,7 +282,7 @@ async function listClusterPublicMembers(clusterIds: string[], options: ListEvent
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
-      ...buildSourceFilter(groupIds),
+      ...memberSourceFilter,
     },
     select: {
       id: true,
@@ -358,8 +375,10 @@ function buildClusterCandidate(
   dailyItems: PublicItemRow[],
   allMembers: PublicItemRow[],
   range: EventBriefingDateRange,
+  followScoped = false,
+  publicationDateBasis = false,
 ): EventBriefingCandidate | null {
-  const representative = pickRepresentative(allMembers.length ? allMembers : dailyItems);
+  const representative = pickRepresentative(publicationDateBasis ? dailyItems : (allMembers.length ? allMembers : dailyItems));
   const cluster = representative.cluster;
 
   if (!cluster) {
@@ -370,6 +389,8 @@ function buildClusterCandidate(
     return buildSingleCandidate(representative);
   }
 
+  // 关注快照模式下，聚类全局字段（title/summary/score/display*/event/feedEntitiesJson）
+  // 可能由未关注源聚合而来，一律改用关注成员自身内容构造与评分。
   const sources = uniqueBy(
     allMembers.map((item) => ({
       id: item.source.id,
@@ -388,28 +409,37 @@ function buildClusterCandidate(
   );
   const entities = uniqueBy(
     [
-      ...parseClusterEntities(cluster.feedEntitiesJson),
+      ...(followScoped ? [] : parseClusterEntities(cluster.feedEntitiesJson)),
       ...allMembers.flatMap(entitiesFromItem),
     ],
     (entity) => entity.normalized.toLowerCase(),
   );
-  const latestCreatedAt = allMembers.reduce(
+  const memberLatestCreatedAt = allMembers.reduce(
     (latest, item) => item.createdAt.getTime() > latest.getTime() ? item.createdAt : latest,
     representative.createdAt,
   );
-  const latestPublishedAt = allMembers.reduce(
+  const memberLatestPublishedAt = allMembers.reduce(
     (latest, item) => item.publishedAt.getTime() > latest.getTime() ? item.publishedAt : latest,
     representative.publishedAt,
   );
-  const earliestCreatedAt = allMembers.reduce(
+  const memberEarliestCreatedAt = allMembers.reduce(
     (earliest, item) => item.createdAt.getTime() < earliest.getTime() ? item.createdAt : earliest,
     representative.createdAt,
   );
-  const title = cluster.title.trim() || getDisplayTitle(representative.originalTitle, representative.translatedTitle);
-  const summary = getDisplaySummary(cluster.summary, representative.summaryText, representative.rssExcerpt ?? representative.fullText);
-  const qualityScore = cluster.displayAverageScore || cluster.score || representative.qualityScore;
-  const sourceCount = Math.max(cluster.displaySourceCount, sources.length);
-  const itemCount = Math.max(cluster.displayItemCount, allMembers.length);
+  const earliestKnownPublication = allMembers
+    .filter((item) => item.publishedAtKnown)
+    .reduce<Date | null>((earliest, item) => !earliest || item.publishedAt < earliest ? item.publishedAt : earliest, null);
+  const title = followScoped
+    ? getDisplayTitle(representative.originalTitle, representative.translatedTitle)
+    : cluster.title.trim() || getDisplayTitle(representative.originalTitle, representative.translatedTitle);
+  const summary = followScoped
+    ? getItemSummary(representative)
+    : getDisplaySummary(cluster.summary, representative.summaryText, representative.rssExcerpt ?? representative.fullText);
+  const qualityScore = followScoped
+    ? Math.max(...allMembers.map((item) => item.qualityScore))
+    : cluster.displayAverageScore || cluster.score || representative.qualityScore;
+  const sourceCount = followScoped ? sources.length : Math.max(cluster.displaySourceCount, sources.length);
+  const itemCount = followScoped ? allMembers.length : Math.max(cluster.displayItemCount, allMembers.length);
   const items = [...allMembers].sort((left, right) => {
     if (right.publishedAtKnown !== left.publishedAtKnown) {
       return right.publishedAtKnown ? 1 : -1;
@@ -430,26 +460,28 @@ function buildClusterCandidate(
     itemCount,
     newItemCountOnDate: dailyItems.length,
     newSourceCountOnDate: dailySources.length,
-    latestCreatedAt: cluster.latestCreatedAt ?? latestCreatedAt,
-    latestPublishedAt: cluster.latestPublishedAt ?? latestPublishedAt,
-    earliestCreatedAt: cluster.earliestCreatedAt ?? earliestCreatedAt,
+    latestCreatedAt: followScoped ? memberLatestCreatedAt : cluster.latestCreatedAt ?? memberLatestCreatedAt,
+    latestPublishedAt: followScoped ? memberLatestPublishedAt : cluster.latestPublishedAt ?? memberLatestPublishedAt,
+    earliestCreatedAt: followScoped ? memberEarliestCreatedAt : cluster.earliestCreatedAt ?? memberEarliestCreatedAt,
     representativeUrl: representative.originalUrl,
-    eventType: cluster.eventType ?? representative.eventType,
-    eventSubject: cluster.eventSubject ?? representative.eventSubject,
-    eventAction: cluster.eventAction ?? representative.eventAction,
-    eventObject: cluster.eventObject ?? representative.eventObject,
-    eventDate: cluster.eventDate ?? representative.eventDate,
-    isFollowUp: (cluster.earliestCreatedAt ?? earliestCreatedAt).getTime() < range.start.getTime(),
+    eventType: followScoped ? representative.eventType : cluster.eventType ?? representative.eventType,
+    eventSubject: followScoped ? representative.eventSubject : cluster.eventSubject ?? representative.eventSubject,
+    eventAction: followScoped ? representative.eventAction : cluster.eventAction ?? representative.eventAction,
+    eventObject: followScoped ? representative.eventObject : cluster.eventObject ?? representative.eventObject,
+    eventDate: followScoped ? representative.eventDate : cluster.eventDate ?? representative.eventDate,
+    isFollowUp: publicationDateBasis
+      ? Boolean(earliestKnownPublication && earliestKnownPublication.getTime() < range.start.getTime())
+      : (followScoped ? memberEarliestCreatedAt : cluster.earliestCreatedAt ?? memberEarliestCreatedAt).getTime() < range.start.getTime(),
     entities,
     sources,
     items,
     searchText: buildSearchText({
       title,
       summary,
-      eventType: cluster.eventType ?? representative.eventType,
-      eventSubject: cluster.eventSubject ?? representative.eventSubject,
-      eventAction: cluster.eventAction ?? representative.eventAction,
-      eventObject: cluster.eventObject ?? representative.eventObject,
+      eventType: followScoped ? representative.eventType : cluster.eventType ?? representative.eventType,
+      eventSubject: followScoped ? representative.eventSubject : cluster.eventSubject ?? representative.eventSubject,
+      eventAction: followScoped ? representative.eventAction : cluster.eventAction ?? representative.eventAction,
+      eventObject: followScoped ? representative.eventObject : cluster.eventObject ?? representative.eventObject,
       sources,
       entities,
     }),
@@ -552,6 +584,8 @@ export async function listEventBriefingCandidates(
       dailyItemsByClusterId.get(clusterId) ?? [],
       clusterMembersByClusterId.get(clusterId) ?? [],
       range,
+      options.followedSourceIds !== undefined,
+      options.dateBasis === "published",
     ))
     .filter((candidate): candidate is EventBriefingCandidate => Boolean(candidate))
     .filter((candidate) => matchesEventBriefingTag(candidate, options.tag));

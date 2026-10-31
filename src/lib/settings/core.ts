@@ -51,6 +51,7 @@ const LEGACY_DAILY_REPORT_PROMPT_MARKER = '"openingSummary":"...","sections":{"ä
 
 export type SourceInput = SourceConfig & {
   groupId?: string | null;
+  channel?: string | null;
 };
 
 export type SourceMetadataOptions = {

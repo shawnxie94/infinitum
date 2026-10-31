@@ -17,6 +17,7 @@ const sourceSchema = z.object({
   aggregationEnabled: z.boolean().default(true),
   aggregationDetectionEnabled: z.boolean().default(false),
   groupId: z.string().nullable().optional(),
+  channel: z.string().nullable().optional(),
 });
 
 function parseOptionalInt(value: string | null, fallback: number) {

@@ -41,11 +41,19 @@ type DailyReportDetailProps = {
   date: string;
   isAdmin: boolean;
   hydrateAdminClient?: boolean;
+  hideRegenerate?: boolean;
+  /**
+   * "page"：独立 /daily 页面（默认，max-w-7xl 居中）。
+   * "embedded"：嵌入财经版外壳（占满宿主内容宽度，正文优先）。
+   */
+  layout?: "page" | "embedded";
 };
 
 type DailyReportDetailContentProps = {
   report: DailyReportDetailDTO;
   isAdmin: boolean;
+  layout: "page" | "embedded";
+  hideRegenerate: boolean;
 };
 
 type AdminReportState = {
@@ -448,6 +456,8 @@ export function DailyReportDetail({
   date,
   isAdmin: initialIsAdmin,
   hydrateAdminClient = false,
+  layout = "page",
+  hideRegenerate = false,
 }: DailyReportDetailProps) {
   const { isAdmin, isResolving: isResolvingAdminSession } = useClientAdminSessionState(
     initialIsAdmin,
@@ -497,10 +507,11 @@ export function DailyReportDetail({
     );
   }
 
-  return <DailyReportDetailContent report={report} isAdmin={isAdmin} />;
+  return <DailyReportDetailContent report={report} isAdmin={isAdmin} layout={layout} hideRegenerate={hideRegenerate} />;
 }
 
-function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentProps) {
+function DailyReportDetailContent({ report, isAdmin, layout, hideRegenerate }: DailyReportDetailContentProps) {
+  const embedded = layout === "embedded";
   const router = useRouter();
   const contentRef = useRef<HTMLDivElement | null>(null);
   const sourceListOpenStateRef = useRef(new Map<string, boolean>());
@@ -690,20 +701,30 @@ function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentP
 
   return (
     <>
-      <section className="border-b border-[color:var(--line)] bg-[var(--surface)]">
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 text-center sm:px-6 sm:py-6 lg:px-8">
-          <div className="flex flex-wrap items-center justify-center gap-2">
+      <section className={cx("bg-[var(--surface)]", embedded ? "border-b border-[#e5e9df]" : "border-b border-[color:var(--line)]")}>
+        <div
+          className={cx(
+            "w-full py-5",
+            embedded ? "px-0 pt-1 text-left sm:py-6" : "mx-auto max-w-7xl px-4 text-center sm:px-6 sm:py-6 lg:px-8",
+          )}
+        >
+          <div className={cx("flex flex-wrap items-center gap-2", !embedded && "justify-center")}>
             <h1 className="text-2xl font-semibold text-[var(--foreground)]">{report.title}</h1>
             {isAdmin ? <span className="rounded-sm bg-[var(--bg-muted)] px-2 py-0.5 text-xs text-[var(--text-2)]">{statusLabel(report.status)}</span> : null}
           </div>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-sm text-[var(--text-2)]">
+          <div className={cx("mt-3 flex flex-wrap items-center gap-3 text-sm text-[var(--text-2)]", !embedded && "justify-center")}>
             <span>来源：{report.sourceCount} 个引用</span>
             <span>生成：{formatDailyReportDateTime(report.generatedAt)}</span>
           </div>
         </div>
       </section>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:flex-row lg:px-8">
+      <div
+        className={cx(
+          "flex w-full flex-col gap-6 py-6",
+          embedded ? "px-0 py-4 xl:flex-row xl:gap-6" : "mx-auto max-w-7xl px-4 sm:px-6 sm:py-8 lg:flex-row lg:gap-5 lg:px-8",
+        )}
+      >
         <article className="panel-raised min-w-0 flex-1 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow-sm)] sm:p-7">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-2">
@@ -740,7 +761,7 @@ function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentP
               </IconButton>
               {isAdmin ? (
                 <>
-                  <IconButton
+                  {!hideRegenerate ? <IconButton
                     onClick={() => runAction("regenerate")}
                     variant="ghost"
                     size="md"
@@ -749,7 +770,7 @@ function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentP
                     className="rounded-sm"
                   >
                     <IconRefresh className={cx("h-4 w-4", isPending && "animate-spin")} />
-                  </IconButton>
+                  </IconButton> : null}
                   <IconButton
                     onClick={() => runAction(report.status === "published" ? "unpublish" : "publish")}
                     variant="ghost"
@@ -823,8 +844,8 @@ function DailyReportDetailContent({ report, isAdmin }: DailyReportDetailContentP
           </div>
         </article>
 
-        <aside className="w-full flex-shrink-0 lg:w-80">
-          <div className="panel-raised rounded-sm border border-[color:var(--line)] p-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+        <aside className={cx("w-full flex-shrink-0", embedded ? "xl:w-64" : "lg:w-80")}>
+          <div className={cx("panel-raised rounded-sm border p-4", embedded ? "border-[color:var(--line)] xl:sticky xl:top-4 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto" : "border-[color:var(--line)] lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto")}>
             <div className="mb-3 flex items-center gap-2">
               <IconList className="h-4 w-4 text-[var(--text-2)]" />
               <h2 className="text-base font-semibold text-[var(--foreground)]">目录</h2>

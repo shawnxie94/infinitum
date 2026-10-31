@@ -1,9 +1,12 @@
+import { reconcileManualDailyGeneration } from "@/lib/daily-report/manual-generation";
 import type { BackgroundTaskRun, FetchRunStatus } from "@prisma/client";
 import type { DomainTaskContext } from "@infinitum/ai/orchestration/task-definition";
 import { createClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { executeClusterMerge, recomputeCluster } from "@/lib/clusters/service";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { prisma } from "@/lib/db";
+import { AdapterClient, readAdapterConfig } from "@/lib/adapter/client";
+import { prepareAdapterItem, recordAdapterProcessing, recordItemAnalysisBaseline } from "@/lib/adapter/items";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import { DEFAULT_PROCESSING_WINDOW_DAYS } from "@/lib/tasks/scheduler";
 import { scheduleDefaultFeedCacheWarm } from "@/lib/feed/warmup";
@@ -306,6 +309,29 @@ async function runSourceSyncStage(
     sources.map((source) => async () => {
       await context.checkCancellation();
       try {
+        if (source.transport === "adapter") {
+          const [binding, config] = await Promise.all([prisma.adapterSourceBinding.findUnique({ where: { sourceId: source.id } }), readAdapterConfig()]);
+          if (!binding || binding.adapterInstanceId !== config.instanceId) throw new Error("Adapter 信息源绑定无效。");
+          const result = await new AdapterClient(config).items(binding.subscriptionId, Math.min(100, options.perSourceItemLimit));
+          if (result.upstreamStatus.state !== "ok") {
+            sourceFailureCount += 1;
+            const message = result.upstreamStatus.state === "rate_limited" ? "上游限流，请稍后重试。" : result.upstreamStatus.state === "auth_required" ? "上游授权失效。" : result.upstreamStatus.code === "AUTH_UNCONFIRMED" ? "无法确认上游授权状态。" : result.upstreamStatus.state === "pending" ? "等待首次采集。" : "上游采集失败。";
+            errors.push(`${source.name}: ${message}`);
+            await updateSourceHealthStatus(source.id, { healthStatus: "failed", healthMessage: message, healthCheckedAt: now });
+          } else {
+            await updateSourceFetchMetadata(source.id, { lastFetchedAt: now, healthStatus: "healthy", healthMessage: null, healthCheckedAt: now });
+          }
+          for (const adapterItem of result.items) {
+            preparedItems.push({
+              item: { title: adapterItem.title, link: adapterItem.url, isoDate: adapterItem.publishedAt, author: adapterItem.author, content: adapterItem.content.html ?? adapterItem.content.text, contentSnippet: adapterItem.summary },
+              sourceId: source.id, sourceName: source.name, aiParsingEnabled: source.aiParsingEnabled,
+              aggregationEnabled: source.aggregationEnabled, aggregationDetectionEnabled: source.aggregationDetectionEnabled,
+              adapter: { instanceId: binding.adapterInstanceId, providerId: binding.providerId, item: adapterItem },
+            });
+          }
+          return;
+        }
+        if (source.transport !== "rss" || !source.rssUrl) throw new Error("信息源传输配置无效。");
         const feed = await options.parser.parseURL(source.rssUrl, {
           headers: buildFeedRequestHeaders(source),
         });
@@ -448,11 +474,11 @@ async function runItemProcessingStage(
     processingStartAt,
     signal: context.signal,
   });
-  const preparedLookupEntries = dedupePreparedLookupsByDedupeKey(
-    payload.preparedItems
-      .map((preparedItem) => ({ preparedItem, lookup: buildPreparedFeedItemLookup(preparedItem, new Date(payload.now)) }))
-      .filter((entry) => !entry.lookup || !options.processingStartAt || !entry.lookup.publishedAtKnown || entry.lookup.publishedAt >= options.processingStartAt),
-  );
+  const entries = payload.preparedItems.map((preparedItem) => ({ preparedItem, lookup: buildPreparedFeedItemLookup(preparedItem, new Date(payload.now)) }));
+  const preparedLookupEntries = [
+    ...dedupePreparedLookupsByDedupeKey(entries.filter((entry) => !entry.preparedItem.adapter && (!entry.lookup || !options.processingStartAt || !entry.lookup.publishedAtKnown || entry.lookup.publishedAt >= options.processingStartAt))),
+    ...entries.filter((entry) => Boolean(entry.preparedItem.adapter)),
+  ];
   const dedupeKeyInputs = preparedLookupEntries
     .map((entry) => entry.lookup)
     .filter((lookup): lookup is PreparedFeedItemLookup => Boolean(lookup))
@@ -462,6 +488,7 @@ async function runItemProcessingStage(
   const histories = await findDedupeHistoriesForUrlHashes(dedupeKeyInputs);
   const historyByUrlHash = new Map(histories.map((history) => [history.urlHash, history]));
   const preparedLookups = preparedLookupEntries.filter((entry) => {
+    if (entry.preparedItem.adapter) return true;
     const existing = getExistingItemForLookup(entry.lookup, existingByUrlHash);
     const lookupKnown = entry.lookup?.publishedAtKnown ?? false;
     const effectivePublishedAt = lookupKnown ? entry.lookup!.publishedAt : existing?.publishedAt;
@@ -496,11 +523,26 @@ async function runItemProcessingStage(
         if (context.signal.aborted) return;
         throw error;
       }
+      let adapterPrepared: Awaited<ReturnType<typeof prepareAdapterItem>> | undefined;
       try {
-        const existingItem = getExistingItemForLookup(lookup, existingByUrlHash);
+        if (preparedItem.adapter) {
+          adapterPrepared = await prepareAdapterItem({ sourceId: preparedItem.sourceId, instanceId: preparedItem.adapter.instanceId, providerId: preparedItem.adapter.providerId, item: preparedItem.adapter.item, now: new Date(payload.now) });
+          if (!adapterPrepared.shouldProcess) {
+            if (adapterPrepared.needsManualReview) {
+              failureCount += 1;
+              errors.push(`Item ${adapterPrepared.item.id}: 内容已更新，请手动重分析。`);
+              await updateSourceHealthStatus(preparedItem.sourceId, { healthStatus: "failed", healthMessage: "内容已更新，请手动重分析。", healthCheckedAt: new Date(payload.now) });
+            } else successCount += 1;
+            return;
+          }
+        }
+        const existingItem = adapterPrepared?.item ?? getExistingItemForLookup(lookup, existingByUrlHash);
+        const owner = adapterPrepared && adapterPrepared.item.sourceId !== preparedItem.sourceId
+          ? await prisma.source.findUniqueOrThrow({ where: { id: adapterPrepared.item.sourceId } }) : null;
         const result = await processFeedItem({
           ...preparedItem,
-          lookup,
+          ...(owner ? { sourceId: owner.id, sourceName: owner.name, aiParsingEnabled: owner.aiParsingEnabled, aggregationEnabled: owner.aggregationEnabled, aggregationDetectionEnabled: owner.aggregationDetectionEnabled } : {}),
+          lookup: owner && lookup ? { ...lookup, originalUrl: adapterPrepared!.item.originalUrl } : lookup,
           existingItem,
           blacklist: options.blacklist,
           articleFetcher: options.articleFetcher,
@@ -508,18 +550,22 @@ async function runItemProcessingStage(
           clusterAssignmentCoordinator: coordinator,
           fullTextFetchThreshold: options.fullTextFetchThreshold ?? DEFAULT_FULL_TEXT_FETCH_THRESHOLD,
           contentExtraction: options.contentExtraction,
-          processingStartAt: options.processingStartAt,
+          processingStartAt: preparedItem.adapter ? null : options.processingStartAt,
+          guardAnalysis: Boolean(adapterPrepared),
           now: new Date(payload.now),
           signal: options.signal,
         });
         if (!result) return;
+        if (adapterPrepared && result.analysisFingerprint) await recordAdapterProcessing(adapterPrepared.identityId, result.id, result.analysisFingerprint);
+        if (!adapterPrepared && result.analysisFingerprint) await recordItemAnalysisBaseline(result.id, result.analysisFingerprint);
         accumulateItemTimelineMetrics(timelineCounters, result);
         if (result.status === "failed" || hasItemProcessingFailure(result)) {
           failureCount += 1;
           if (hasItemProcessingFailure(result)) errors.push(buildItemProcessingFailureMessage(result));
+          if (preparedItem.adapter) await updateSourceHealthStatus(preparedItem.sourceId, { healthStatus: "failed", healthMessage: "文章处理失败，请重试。", healthCheckedAt: new Date(payload.now) });
         } else if (result.status !== "filtered") {
           successCount += 1;
-          if (result.isNew) itemsAdded += 1;
+          if (result.isNew || adapterPrepared?.isNew) itemsAdded += 1;
         }
         if (result.fullTextFetched) {
           fullTextFetchedCount += 1;
@@ -528,11 +574,17 @@ async function runItemProcessingStage(
         if (result.affectedClusterId) affectedClusterIds.add(result.affectedClusterId);
         for (const clusterId of result.affectedClusterIds ?? []) affectedClusterIds.add(clusterId);
       } catch (error) {
+        if (adapterPrepared && error && typeof error === "object" && "code" in error && error.code === "MANUAL_CHANGED") {
+          await prisma.adapterItemIdentity.update({ where: { id: adapterPrepared.identityId }, data: { needsManualReview: true } });
+          await updateSourceHealthStatus(preparedItem.sourceId, { healthStatus: "failed", healthMessage: "内容已更新，请手动重分析。", healthCheckedAt: new Date(payload.now) });
+        } else if (preparedItem.adapter) {
+          await updateSourceHealthStatus(preparedItem.sourceId, { healthStatus: "failed", healthMessage: "文章处理失败，请查看任务。", healthCheckedAt: new Date(payload.now) });
+        }
         failureCount += 1;
         errors.push(error instanceof Error ? error.message : "Unknown item processing error");
       }
     }),
-    options.itemConcurrency,
+    preparedLookups.some(({ preparedItem }) => Boolean(preparedItem.adapter)) ? 1 : options.itemConcurrency,
     { shouldStop: async () => context.signal.aborted },
   );
   const snapshot = aiUsage.snapshot();
@@ -715,6 +767,10 @@ async function runClusterFinalizeStage(
     errorSummary: completedRun.errorSummary,
     finishedAt: completedRun.finishedAt,
   });
+  if (taskStatus === "succeeded" || taskStatus === "partial") {
+    // Worker reconciliation remains the durable recovery path if this handoff fails.
+    await reconcileManualDailyGeneration().catch((error) => console.error("[ingestion] Daily report handoff failed:", error));
+  }
   invalidateFeedCache();
   scheduleDefaultFeedCacheWarm({ reason: `ingestion:${taskStatus}` });
   if (status !== "failed") {

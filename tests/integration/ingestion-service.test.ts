@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { recomputeCluster } from "@/lib/clusters/service";
 import { findRecentActiveClusterCandidates } from "@/lib/clusters/repository";
 import { prisma } from "@/lib/db";
+import { startManualDailyGeneration } from "@/lib/daily-report/manual-generation";
 import { countDisplayItemsCreatedDuringFetchRun, toFetchRunSnapshot } from "@/lib/feed/repository";
 import {
   shouldEnqueueProcessingRecoveryFromIngestion,
@@ -331,6 +332,34 @@ describe("ingestion workflow stages", () => {
     ]);
 
     expect(merged).toEqual(tokenEntries);
+  });
+
+  it("hands off successful synchronous ingestion stages to daily generation", async () => {
+    const task = await startManualDailyGeneration("2020-04-24");
+    const result = await runIngestionWorkflowStagesForTest(task, {
+      parser: { parseURL: vi.fn().mockResolvedValue({ items: [] }) },
+      articleFetcher: vi.fn(), aiProvider: buildAiProviderMock(), sourceConfigs: [], blacklist: [],
+    });
+    expect(result.status).toBe("succeeded");
+    const report = await prisma.backgroundTaskRun.findFirst({ where: { kind: "daily_report_generate", label: `手动日报生成 ${task.id}` } });
+    expect(report).toMatchObject({ status: "queued", entityId: "2020-04-24" });
+  });
+
+  it("hands off partial synchronous ingestion with its warning", async () => {
+    const task = await startManualDailyGeneration("2020-04-24");
+    const result = await runIngestionWorkflowStagesForTest(task, {
+      parser: { parseURL: vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes("failed.example")) throw new Error("source failed");
+        return { items: [{ title: "Available article", link: "https://ok.example/article", isoDate: "2026-04-10T09:00:00.000Z", contentSnippet: "Available content" }] };
+      }) },
+      articleFetcher: vi.fn(), aiProvider: buildAiProviderMock(), blacklist: [], now: new Date("2026-04-10T10:30:00.000Z"),
+      sourceConfigs: [
+        { name: "OK", rssUrl: "https://ok.example/feed", siteUrl: "https://ok.example", enabled: true, aiParsingEnabled: true },
+        { name: "Failed", rssUrl: "https://failed.example/feed", siteUrl: "https://failed.example", enabled: true, aiParsingEnabled: true },
+      ],
+    });
+    expect(result.status).toBe("partial");
+    expect(await prisma.backgroundTaskRun.findFirst({ where: { label: `手动日报生成 ${task.id}`, status: "queued" } })).not.toBeNull();
   });
 
   it("creates a queued ingestion background task", async () => {
@@ -3139,7 +3168,7 @@ describe("ingestion workflow stages", () => {
       sourceConfigs: [
         {
           name: source.name,
-          rssUrl: source.rssUrl,
+          rssUrl: source.rssUrl!,
           siteUrl: source.siteUrl,
           enabled: true,
           aiParsingEnabled: false,
