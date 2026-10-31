@@ -32,9 +32,9 @@ export async function readAdapterConfig(path = process.env.ADAPTER_CONFIG_FILE):
 
 export class AdapterClient {
   constructor(private config: Config, private fetcher: typeof fetch = fetch) {}
-  private async request<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, schema: z.ZodType<T>, init: RequestInit = {}, timeoutMs = 20_000): Promise<T> {
     let response: Response;
-    try { response = await this.fetcher(`${this.config.baseUrl}${path}`, { ...init, headers: { authorization: `Bearer ${this.config.token}`, ...(init.body ? { "content-type": "application/json" } : {}) }, redirect: "error", signal: AbortSignal.timeout(20_000) }); }
+    try { response = await this.fetcher(`${this.config.baseUrl}${path}`, { ...init, headers: { authorization: `Bearer ${this.config.token}`, ...(init.body ? { "content-type": "application/json" } : {}) }, redirect: "error", signal: AbortSignal.timeout(timeoutMs) }); }
     catch { throw new AdapterError("UNAVAILABLE", "Adapter 服务不可用，操作结果请先查询后重试。", true); }
     const length = Number(response.headers.get("content-length"));
     if (length > 4_000_000) throw new AdapterError("INVALID_RESPONSE", "Adapter 响应过大。", false);
@@ -70,7 +70,7 @@ export class AdapterClient {
   resolve(providerId: string, input: string) { return this.request(`/v1/providers/${encodeURIComponent(providerId)}/resolve`, z.object({ account: accountSchema }), { method: "POST", body: JSON.stringify({ input }) }); }
   ensure(providerId: string, account: AdapterAccount) { return this.request("/v1/subscriptions/ensure", z.object({ subscription: subscriptionSchema }), { method: "POST", body: JSON.stringify({ providerId, account }) }); }
   lookup(providerId: string, accountId: string) { return this.request(`/v1/subscriptions?providerId=${encodeURIComponent(providerId)}&accountId=${encodeURIComponent(accountId)}`, z.object({ subscription: subscriptionSchema.nullable() })); }
-  subscription(id: string) { return this.request(`/v1/subscriptions/${encodeURIComponent(id)}`, z.object({ subscription: subscriptionSchema })); }
+  subscription(id: string) { return this.request(`/v1/subscriptions/${encodeURIComponent(id)}`, z.object({ subscription: subscriptionSchema }), {}, 5_000); }
   items(id: string, limit = 100) { return this.request(`/v1/subscriptions/${encodeURIComponent(id)}/items?limit=${Math.min(100, Math.max(1, Math.trunc(limit)))}`, z.object({ items: z.array(itemSchema).max(100), latestFetchedAt: z.string().nullable(), upstreamStatus: statusSchema })); }
 }
 

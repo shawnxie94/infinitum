@@ -15,6 +15,7 @@ export async function GET(request: Request) {
     const originKind = searchParams.get("originKind") === "preset" ? "preset" : null;
     const catalog = await listSourceCatalog({
       originKind,
+      liveAdapterStatus: searchParams.get("liveAdapterStatus") === "1",
       channel: searchParams.get("channel"),
       search: searchParams.get("search"),
     });

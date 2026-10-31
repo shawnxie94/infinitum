@@ -173,6 +173,7 @@ export function OutsideApp() {
   const [error, setError] = useState("");
   // 防过期响应：只有最新一次请求允许写入状态。
   const followsRequestIdRef = useRef(0);
+  const followsInFlightRef = useRef(0);
 
   const [dailyDate, setDailyDate] = useState("");
   const [dailyReport, setDailyReport] = useState<DailyReportDetailDTO | null>(null);
@@ -192,7 +193,9 @@ export function OutsideApp() {
     const requestId = ++followsRequestIdRef.current;
     const params = new URLSearchParams();
     if (tab === "sources") params.set("originKind", "preset");
+    if (tab === "follows") params.set("liveAdapterStatus", "1");
     if (tab !== "sources" && search.trim()) params.set("search", search.trim());
+    followsInFlightRef.current++;
     try {
       const response = await fetch(`/api/outside/follows?${params.toString()}`);
       if (!response.ok) {
@@ -205,6 +208,8 @@ export function OutsideApp() {
     } catch {
       if (requestId !== followsRequestIdRef.current) return;
       setError("加载信息源目录失败。");
+    } finally {
+      followsInFlightRef.current--;
     }
   }, [search, tab]);
 
@@ -218,6 +223,12 @@ export function OutsideApp() {
       clearTimeout(timer);
     };
   }, [load]);
+
+  useEffect(() => {
+    if (tab !== "follows") return;
+    const timer = setInterval(() => { if (!followsInFlightRef.current) void load(); }, 30_000);
+    return () => clearInterval(timer);
+  }, [load, tab]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -612,8 +623,10 @@ export function OutsideApp() {
                         <td className="whitespace-nowrap px-3 py-4 align-middle">
                           {source.enabled && source.healthStatus === "failed" ? (
                             <span className="rounded bg-[#f5efdf] px-1.5 py-1 text-[10px] text-[#977a43]">{source.healthMessage || "采集异常"}</span>
-                          ) : source.enabled && source.transport === "adapter" && source.healthStatus === "unknown" ? (
+                          ) : source.enabled && source.transport === "adapter" && source.healthStatus === "pending" ? (
                             <span className="rounded bg-[#f5efdf] px-1.5 py-1 text-[10px] text-[#977a43]">待采集</span>
+                          ) : source.enabled && source.transport === "adapter" && source.healthStatus === "unknown" ? (
+                            <span className="rounded bg-[#f5efdf] px-1.5 py-1 text-[10px] text-[#977a43]">状态未知</span>
                           ) : source.enabled ? (
                             <span className="rounded bg-[#eef4e3] px-1.5 py-1 text-[10px] text-[#6b8455]">可用</span>
                           ) : (

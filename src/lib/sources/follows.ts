@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { AdapterClient, readAdapterConfig } from "@/lib/adapter/client";
 
 export type SourceFollowSnapshot = {
   sourceIds: string[];
@@ -60,6 +61,7 @@ export async function listSourceCatalog(params: {
   channel?: string | null;
   search?: string | null;
   originKind?: "preset" | null;
+  liveAdapterStatus?: boolean;
 } = {}) {
   const sources = await prisma.source.findMany({
     where: params.originKind ? { originKind: params.originKind } : undefined,
@@ -76,11 +78,40 @@ export async function listSourceCatalog(params: {
       healthMessage: true,
       group: { select: { name: true } },
       follow: { select: { followedAt: true } },
+      adapterBinding: { select: { adapterInstanceId: true, subscriptionId: true, providerId: true, accountId: true } },
     },
   });
 
   const search = params.search?.trim().toLowerCase() ?? "";
   const channelFilter = params.channel?.trim() ?? "";
+
+  const statuses = new Map<string, { healthStatus: string; healthMessage: string | null }>();
+  if (params.liveAdapterStatus) {
+    const candidates = sources.filter((source) => source.transport === "adapter" && source.follow && source.enabled && (!channelFilter || normalizeSourceChannel(source.channel) === channelFilter) && (!search || source.name.toLowerCase().includes(search)));
+    for (const source of candidates) statuses.set(source.id, { healthStatus: "unknown", healthMessage: "状态未知" });
+    if (candidates.length) {
+      try {
+        const config = await readAdapterConfig();
+        const client = new AdapterClient(config);
+        let index = 0;
+        await Promise.all(Array.from({ length: Math.min(5, candidates.length) }, async () => {
+          while (index < candidates.length) {
+            const source = candidates[index++];
+            const binding = source.adapterBinding;
+            if (!binding || binding.adapterInstanceId !== config.instanceId) continue;
+            try {
+              const { subscription } = await client.subscription(binding.subscriptionId);
+              if (subscription.id !== binding.subscriptionId || subscription.providerId !== binding.providerId || subscription.accountId !== binding.accountId) continue;
+              const { state, code } = subscription.status;
+              statuses.set(source.id, state === "ok" ? { healthStatus: "healthy", healthMessage: null }
+                : state === "pending" ? { healthStatus: "pending", healthMessage: null }
+                : { healthStatus: "failed", healthMessage: state === "rate_limited" ? "上游限流，请稍后重试。" : state === "auth_required" ? "上游授权失效。" : code === "AUTH_UNCONFIRMED" ? "无法确认上游授权状态。" : "上游采集失败。" });
+            } catch { /* A failed lookup must not reuse persisted health. */ }
+          }
+        }));
+      } catch { /* Missing or unavailable adapter configuration leaves status unknown. */ }
+    }
+  }
 
   return sources
     .map((source) => ({
@@ -93,8 +124,8 @@ export async function listSourceCatalog(params: {
       originKind: source.originKind,
       transport: source.transport,
       groupName: source.group?.name ?? null,
-      healthStatus: source.healthStatus,
-      healthMessage: source.healthMessage,
+      healthStatus: statuses.get(source.id)?.healthStatus ?? source.healthStatus,
+      healthMessage: statuses.get(source.id)?.healthMessage ?? (statuses.has(source.id) ? null : source.healthMessage),
       followed: Boolean(source.follow),
       followedAt: source.follow?.followedAt.toISOString() ?? null,
     }))

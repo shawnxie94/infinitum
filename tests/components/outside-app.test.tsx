@@ -133,6 +133,17 @@ describe("OutsideApp", () => {
     expect(await screen.findByText("无法确认上游授权状态。")).toBeTruthy();
   });
 
+  it("关注的 Adapter 源分别显示待采集、可用和状态未知", async () => {
+    const base = { ...followsPayload.sources[0], originKind: "account", transport: "adapter", followed: true, healthMessage: null };
+    const sources = ["pending", "healthy", "unknown"].map((healthStatus) => ({ ...base, id: healthStatus, name: healthStatus, healthStatus }));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/api/outside/adapter" ? jsonResponse({ providers }) : jsonResponse({ sources, channels: ["公众号"], followedSourceIds: sources.map((source) => source.id) })));
+    render(<OutsideApp />);
+    fireEvent.click(screen.getByRole("button", { name: /我的关注/ }));
+    expect(await screen.findByText("待采集")).toBeTruthy();
+    expect(screen.getByText("状态未知")).toBeTruthy();
+    expect(screen.getByText("可用")).toBeTruthy();
+  });
+
   it("展示雪球候选并仅关注用户选择的 UID", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === "/api/outside/adapter" && !init?.body) return jsonResponse({ providers });
