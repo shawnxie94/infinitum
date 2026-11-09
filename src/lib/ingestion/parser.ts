@@ -144,7 +144,8 @@ function hasValidCalendarDate(raw: string) {
 }
 
 function sanitizeInvalidXmlDates(xml: string) {
-  return xml.replace(/<((?:[\w.-]+:)?(?:published|updated))\b([^>]*)>([\s\S]*?)<\/\1>/gi, (whole, tag: string, attrs: string, value: string) => {
+  return xml.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<((?:[\w.-]+:)?(?:published|updated))\b([^<>]*)>((?:<!\[CDATA\[[\s\S]*?\]\]>|[^<])*)<\/\1\s*>/gi, (whole, tag: string | undefined, attrs: string, value: string) => {
+    if (!tag) return whole;
     const normalized = value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
     return hasValidCalendarDate(normalized) ? whole : `<${tag}${attrs}></${tag}>`;
   });

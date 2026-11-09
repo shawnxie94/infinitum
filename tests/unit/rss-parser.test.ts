@@ -8,6 +8,24 @@ afterEach(() => {
 });
 
 describe("rss parser", () => {
+  it("handles whitespace in Atom closing tags without altering content or losing invalid-date fallback", async () => {
+    const xml = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+      <title>Newsletter</title><updated>2026-11-06T13:20:34Z</updated\n >
+      <entry><title>First</title><id>1</id><published>2026-11-06T13:20:34Z</published\n >
+        <updated>2026-11-06T13:20:34Z</updated><content type="html"><![CDATA[<updated>not a date</updated>]]></content></entry>
+      <entry><title>Second</title><id>2</id><published>not-a-date</published\n >
+        <updated>2026-11-06T13:20:34Z</updated></entry>
+    </feed>`;
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(xml, { status: 200 })));
+    const feed = await createRssParser().parseURL("https://newsletter.example/feed");
+    expect(feed.items).toHaveLength(2);
+    expect(feed.items![0].content).toContain("<updated>not a date</updated>");
+    expect(feed.items![0].originalPublishedDate).toBe("2026-11-06T13:20:34Z");
+    expect(parsePublishedAt(feed.items![1], new Date("2026-11-09T00:00:00Z"))).toEqual({
+      value: new Date("2026-11-09T00:00:00Z"), known: false,
+    });
+  });
+
   it("preserves Atom publication text and applies timezone rules deterministically", async () => {
     const xml = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Dates</title>
       <entry><title>offset</title><published>2026-11-07T01:00:00-05:00</published></entry>
