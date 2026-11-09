@@ -25,46 +25,28 @@ function escapeMarkdownLinkLabel(value: string) {
   return escapeMarkdown(value).replace(/([\\`*_\[\]()])/g, "\\$1");
 }
 
-function formatShanghaiDate(value: string) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "Asia/Shanghai",
-  }).formatToParts(new Date(value));
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "";
-  return `${part("year")}-${part("month")}-${part("day")}`;
-}
-
 function formatSources(sourceIds: number[], sourcesByNumber: Map<number, DailyReportMarkdownSource[]>) {
   return sourceIds
     .flatMap((id) => sourcesByNumber.get(id) ?? [])
-    .map((source) => {
-      const isKnownPublishedAt = source.publishedAtKnown === true;
-      const dateValue = isKnownPublishedAt ? source.publishedAt : source.capturedAt;
-      const dateLabel = dateValue ? `${isKnownPublishedAt ? "发表" : "收录"} ${formatShanghaiDate(dateValue)}` : null;
-      return `- [${escapeMarkdownLinkLabel(source.title)}](${escapeMarkdown(source.url)})（${escapeMarkdown(source.sourceName)}${dateLabel ? ` · ${dateLabel}` : ""}）`;
-    });
+    .map((source) => `- [${escapeMarkdownLinkLabel(source.title)}](${escapeMarkdown(source.url)})（${escapeMarkdown(source.sourceName)}）`);
 }
 
 export function normalizeDailyReportSourceDateCitations(
   markdown: string,
   sources: Array<Pick<DailyReportMarkdownSource, "url" | "sourceName" | "publishedAt" | "capturedAt" | "publishedAtKnown">> = [],
 ) {
-  if (sources.length === 0) return markdown;
-
+  let inSources = false;
   return markdown.split("\n").map((line) => {
-    const source = sources.find((entry) =>
+    if (/^(?:\*\*)?来源[：:](?:\*\*)?\s*$/.test(line.trim())) {
+      inSources = true;
+      return line;
+    }
+    if (!/^\s*[-*]\s+\[/.test(line)) inSources = false;
+    const matchesSource = sources.some((entry) =>
       line.includes(`](${entry.url})`) && line.includes(`（${entry.sourceName}`),
     );
-    if (!source) return line;
-
-    const knownPublication = source.publishedAtKnown === true;
-    const timestamp = knownPublication ? source.publishedAt : source.capturedAt;
-    const dateSuffix = timestamp
-      ? ` · ${knownPublication ? "发表" : "收录"} ${formatShanghaiDate(timestamp)}`
-      : "";
-    return line.replace(/ · (?:发表|收录) \d{4}-\d{2}-\d{2}(?=）)/, dateSuffix);
+    if (!inSources && !matchesSource) return line;
+    return line.replace(/ · (?:发表|收录) \d{4}-\d{2}-\d{2}(?=）\s*$)/, "");
   }).join("\n");
 }
 

@@ -373,7 +373,7 @@ describe("daily report utilities", () => {
     expect(markdown).not.toContain("深挖");
   });
 
-  it("marks unknown publication dates as collection dates in citations", () => {
+  it("omits source dates from newly generated citations", () => {
     const markdown = renderDailyReportMarkdown(content, candidates, "2026-04-24 AI 日报", [{
       sourceNumber: 1,
       title: "补抓报道",
@@ -383,11 +383,12 @@ describe("daily report utilities", () => {
       capturedAt: "2026-04-24T03:00:00.000Z",
       publishedAtKnown: false,
     }]);
-    expect(markdown).toContain("Late source · 收录 2026-04-24");
+    expect(markdown).toContain("（Late source）");
+    expect(markdown).not.toContain("Late source · 收录");
     expect(markdown).not.toContain("Late source · 发表 2026-04-20");
   });
 
-  it("formats cross-midnight publication and collection dates in Shanghai in page and export Markdown", () => {
+  it("omits all source dates in page and export Markdown", () => {
     const markdown = renderDailyReportMarkdown(content, candidates, "跨日来源日报", [
       {
         sourceNumber: 1,
@@ -418,22 +419,24 @@ describe("daily report utilities", () => {
       },
     ]);
 
-    expect(markdown).toContain("Known · 发表 2026-11-07");
-    expect(markdown).toContain("Unknown · 收录 2026-11-07");
-    expect(markdown).toContain("Legacy · 收录 2026-11-07");
+    expect(markdown).toContain("（Known）");
+    expect(markdown).toContain("（Unknown）");
+    expect(markdown).toContain("（Legacy）");
     expect(markdown).not.toContain("Legacy · 发表 2026-11-06");
     const report = { title: "跨日来源日报", renderedMarkdown: markdown, content } as DailyReportDetailDTO;
-    expect(buildDailyReportDetailMarkdown(report)).toContain("Known · 发表 2026-11-07");
-    expect(buildDailyReportExportMarkdown(report)).toContain("Unknown · 收录 2026-11-07");
+    expect(buildDailyReportDetailMarkdown(report)).toContain("（Known）");
+    expect(buildDailyReportExportMarkdown(report)).toContain("（Unknown）");
   });
 
-  it("normalizes old stored and revision citations using their captured provenance", () => {
+  it("removes dates from old stored and revision citations without changing ordinary text", () => {
     const staleMarkdown = [
       "# 历史日报",
       "## 热点事件",
       "### 补抓报道",
       "**来源：**",
       "- [补抓报道](https://example.com/legacy-citation)（Legacy · 发表 2026-11-06）",
+      "",
+      "正文记录：发表 2026-11-06。",
     ].join("\n");
     const sources = [{
       id: "legacy-source",
@@ -455,9 +458,11 @@ describe("daily report utilities", () => {
     const page = buildDailyReportDetailMarkdown(report);
     const revision = normalizeDailyReportSourceDateCitations(staleMarkdown, sources);
 
-    expect(page).toContain("Legacy · 收录 2026-11-07");
-    expect(buildDailyReportExportMarkdown(report)).toContain("Legacy · 收录 2026-11-07");
-    expect(revision).toContain("Legacy · 收录 2026-11-07");
+    expect(page).toContain("（Legacy）");
+    expect(buildDailyReportExportMarkdown(report)).toContain("（Legacy）");
+    expect(revision).toContain("（Legacy）");
+    expect(page).toContain("正文记录：发表 2026-11-06。");
+    expect(normalizeDailyReportSourceDateCitations(staleMarkdown)).toContain("（Legacy）");
     expect(page).not.toContain("Legacy · 发表 2026-11-06");
   });
 

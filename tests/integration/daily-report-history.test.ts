@@ -154,8 +154,8 @@ describe("daily report history", () => {
       }),
     ]));
     const previewMarkdown = normalizeDailyReportSourceDateCitations(originalMarkdown, preview!.sources);
-    expect(previewMarkdown).toContain("Known source · 发表 2026-11-07");
-    expect(previewMarkdown).toContain("Unknown source · 收录 2026-11-07");
+    expect(previewMarkdown).toContain("Known source）");
+    expect(previewMarkdown).toContain("Unknown source）");
     expect(previewMarkdown).toContain("Legacy source）");
     expect(previewMarkdown).not.toContain("Legacy source · 发表");
 
