@@ -130,19 +130,54 @@ function isHtmlDocument(xml: string): boolean {
   return /^<!doctype\s+html\b/i.test(leading) || /^<html\b/i.test(leading);
 }
 
+function hasValidCalendarDate(raw: string) {
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ]|$)/);
+  if (match) {
+    const [, yearText, monthText, dayText] = match;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const normalized = new Date(Date.UTC(year, month - 1, day));
+    if (normalized.getUTCFullYear() !== year || normalized.getUTCMonth() !== month - 1 || normalized.getUTCDate() !== day) return false;
+  }
+  return Number.isFinite(Date.parse(raw));
+}
+
+function sanitizeInvalidXmlDates(xml: string) {
+  return xml.replace(/<((?:[\w.-]+:)?(?:published|updated))\b([^>]*)>([\s\S]*?)<\/\1>/gi, (whole, tag: string, attrs: string, value: string) => {
+    const normalized = value.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
+    return hasValidCalendarDate(normalized) ? whole : `<${tag}${attrs}></${tag}>`;
+  });
+}
+
+function isAtomDocument(xml: string) {
+  const leading = getLeadingDocumentMarkup(xml)
+    .replace(/^<!DOCTYPE[\s\S]*?>\s*/i, "")
+    .trimStart();
+  const rootName = leading.match(/^<([\w:.-]+)/)?.[1];
+  return rootName?.split(":").at(-1)?.toLowerCase() === "feed";
+}
+
 export function createRssParser(): RssParserLike {
   const parser = new Parser<Record<string, never>, ParsedFeedItem>({
     defaultRSS: 2,
+    customFields: { item: ["pubDate", "published", "updated", "dc:date"] },
   });
 
   const parseXml = async (xml: string): Promise<ParsedFeed> => {
-    const feed = await parser.parseString(xml);
+    const feed = await parser.parseString(sanitizeInvalidXmlDates(xml));
+    const isAtom = isAtomDocument(xml);
 
     return {
       title: typeof feed.title === "string" ? feed.title : null,
       link: typeof feed.link === "string" ? feed.link : null,
       feedUrl: typeof feed.feedUrl === "string" ? feed.feedUrl : null,
-      items: feed.items,
+      items: feed.items?.map((item) => ({
+        ...item,
+        originalPublishedDate: isAtom
+          ? item.published ?? null
+          : item.pubDate ?? item["dc:date"] ?? item.published ?? null,
+      })),
     };
   };
 

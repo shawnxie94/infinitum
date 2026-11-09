@@ -15,7 +15,7 @@ export const MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE = 5;
 export const MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE = 3;
 export const DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES = ["allowed", "restored"] as const;
 export const DAILY_REPORT_REVIEW_TOP_UNSELECTED_CANDIDATE_LIMIT = 20;
-export const DAILY_REPORT_PIPELINE_VERSION = "daily-report-domain-template-v2";
+export const DAILY_REPORT_PIPELINE_VERSION = "daily-report-effective-publication-date-v1";
 
 /** 有效 pipeline 版本：常量 + 当前有效协议指纹；协议文本变化即失效旧 checkpoint。 */
 export function getDailyReportEffectivePipelineVersion() {

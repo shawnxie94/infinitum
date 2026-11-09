@@ -24,6 +24,7 @@ import {
 } from "@/lib/ingestion/task-timeline";
 import type { RunIngestionOptions } from "@/lib/ingestion/types";
 import { buildDedupeKeys } from "@/lib/ingestion/dedupe";
+import { createRssParser } from "@/lib/ingestion/parser";
 import { buildAiProviderMock, buildEventSignature } from "../helpers/ai-provider";
 
 async function runIngestionWorkflowStagesForTest(
@@ -96,6 +97,52 @@ async function runIngestionWorkflowStagesForTest(
 }
 
 describe("ingestion workflow stages", () => {
+  it("persists effective publication reliability from real XML into item rows", async () => {
+    const xml = `<?xml version="1.0"?><rss version="2.0"><channel><title>XML dates</title><link>https://xml-dates.example/</link>
+      <item><title>No zone plus updated</title><link>https://xml-dates.example/no-zone</link><pubDate>2026-04-24T10:00:00</pubDate><updated>2026-04-24T11:00:00Z</updated></item>
+      <item><title>Invalid calendar</title><link>https://xml-dates.example/invalid</link><pubDate>2026-02-31T10:00:00</pubDate></item>
+      <item><title>Ambiguous CST</title><link>https://xml-dates.example/cst</link><pubDate>Sat, 07 Nov 2026 10:00:00 CST</pubDate></item>
+    </channel></rss>`;
+    const atomXml = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Atom dates</title>
+      <entry><title>Atom published and updated</title><link href="https://atom-dates.example/published"/><published>2026-04-24T10:00:00+08:00</published><updated>2026-04-24T11:00:00Z</updated></entry>
+      <entry><title>Atom updated only</title><link href="https://atom-dates.example/updated"/><updated>2026-04-24T11:00:00Z</updated></entry>
+    </feed>`;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => new Response(
+      String(input).includes("atom-dates") ? atomXml : xml,
+      { status: 200 },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+    const now = new Date("2026-04-24T12:00:00.000Z");
+    try {
+      await runIngestionWorkflowStagesForTest({
+        parser: createRssParser(),
+        articleFetcher: vi.fn(),
+        aiProvider: buildAiProviderMock(),
+        sourceConfigs: [
+          { name: "XML date source", rssUrl: "https://xml-dates.example/feed", siteUrl: "https://xml-dates.example", enabled: true, aiParsingEnabled: false },
+          { name: "Atom date source", rssUrl: "https://atom-dates.example/feed", siteUrl: "https://atom-dates.example", enabled: true, aiParsingEnabled: false },
+        ],
+        blacklist: [],
+        itemConcurrency: 1,
+        sourceConcurrency: 1,
+        perSourceItemLimit: 10,
+        fullTextFetchThreshold: 0,
+        now,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    const rows = await prisma.item.findMany({ where: { source: { name: { in: ["XML date source", "Atom date source"] } } }, orderBy: { originalUrl: "asc" } });
+    expect(rows).toHaveLength(5);
+    const noZone = rows.find((item) => item.originalTitle === "No zone plus updated");
+    expect(noZone).toMatchObject({ publishedAtKnown: true, publishedAt: new Date("2026-04-24T02:00:00.000Z") });
+    const atomPublished = rows.find((item) => item.originalTitle === "Atom published and updated");
+    expect(atomPublished).toMatchObject({ publishedAtKnown: true, publishedAt: new Date("2026-04-24T02:00:00.000Z") });
+    for (const title of ["Invalid calendar", "Ambiguous CST", "Atom updated only"]) {
+      expect(rows.find((item) => item.originalTitle === title)).toMatchObject({ publishedAtKnown: false, publishedAt: now });
+    }
+  });
+
   it("recovers missing or invalid processing cutoffs from the persisted run time", () => {
     const referenceAt = new Date("2026-10-08T12:00:00.000Z");
     const expected = new Date("2026-09-28T12:00:00.000Z");

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
+import { invalidateEventBriefingCache } from "@/lib/events/cache";
 import { getEventBriefing } from "@/lib/events/service";
 import { updateEventBriefingConfig } from "@/lib/settings/service";
 
@@ -13,6 +14,51 @@ describe("event briefing service", () => {
     await prisma.source.deleteMany();
     await prisma.sourceGroup.deleteMany();
     await prisma.eventBriefingConfig.deleteMany();
+  });
+
+  it("isolates a historical cluster to visible effective-time members and ranks delayed reports by publication time", async () => {
+    const sourceOld = await prisma.source.create({ data: { id: "hist-old-source", name: "Old", rssUrl: "https://old.example/feed", siteUrl: "https://old.example" } });
+    const sourceToday = await prisma.source.create({ data: { id: "hist-today-source", name: "Today", rssUrl: "https://today.example/feed", siteUrl: "https://today.example" } });
+    const sourceFuture = await prisma.source.create({ data: { id: "hist-future-source", name: "Future", rssUrl: "https://future.example/feed", siteUrl: "https://future.example" } });
+    await prisma.contentCluster.create({ data: {
+      id: "hist-cluster", title: "未來聚類標題", summary: "未來聚類摘要", score: 100, itemCount: 3,
+      latestPublishedAt: new Date("2026-07-01T08:00:00.000Z"), fingerprint: "hist-cluster",
+      eventType: "future-type", eventSubject: "未来主体", eventAction: "未来动作",
+    } });
+    await prisma.item.createMany({ data: [
+      { id: "hist-old-item", sourceId: sourceOld.id, clusterId: "hist-cluster", originalUrl: "https://old.example/a", canonicalUrl: "https://old.example/a", urlHash: "hist-old-hash", originalTitle: "旧条目", publishedAt: new Date("2026-06-29T08:00:00.000Z"), createdAt: new Date("2026-06-29T08:00:00.000Z"), summaryText: "旧摘要", qualityScore: 70, status: "processed", moderationStatus: "allowed" },
+      { id: "hist-today-item", sourceId: sourceToday.id, clusterId: "hist-cluster", originalUrl: "https://today.example/a", canonicalUrl: "https://today.example/a", urlHash: "hist-today-hash", originalTitle: "当天代表标题", publishedAt: new Date("2026-06-30T08:00:00.000Z"), createdAt: new Date("2026-07-02T08:00:00.000Z"), summaryText: "当天代表摘要", qualityScore: 80, eventType: "today-type", eventSubject: "当天主体", eventAction: "当天动作", status: "processed", moderationStatus: "allowed" },
+      { id: "hist-future-item", sourceId: sourceFuture.id, clusterId: "hist-cluster", originalUrl: "https://future.example/a", canonicalUrl: "https://future.example/a", urlHash: "hist-future-hash", originalTitle: "未来条目", publishedAt: new Date("2026-07-01T08:00:00.000Z"), createdAt: new Date("2026-07-01T08:00:00.000Z"), summaryText: "未来摘要", qualityScore: 99, status: "processed", moderationStatus: "allowed" },
+    ] });
+
+    const all = await getEventBriefing({ date: "2026-06-30" });
+    const followUps = await getEventBriefing({ date: "2026-06-30", tag: "follow_up" });
+    const cluster = all.entries.find((entry) => entry.id === "hist-cluster");
+    expect(cluster).toMatchObject({ title: "当天代表标题", summary: "当天代表摘要", itemCount: 2, sourceCount: 2, newItemCountOnDate: 1, newSourceCountOnDate: 1, isFollowUp: true, eventType: "today-type", eventSubject: "当天主体" });
+    expect(cluster?.items.map((item) => item.id)).toEqual(["hist-today-item", "hist-old-item"]);
+    expect(cluster?.latestEffectiveAt).toBe("2026-06-30T08:00:00.000Z");
+    expect(followUps.entries.some((entry) => entry.id === "hist-cluster")).toBe(true);
+  });
+
+  it("keeps a quality-tied representative stable when capture times change", async () => {
+    const source = await prisma.source.create({ data: {
+      id: "rep-tie-source", name: "Tie source", rssUrl: "https://rep-tie.example/feed", siteUrl: "https://rep-tie.example",
+    } });
+    await prisma.contentCluster.create({ data: {
+      id: "rep-tie-cluster", title: "Cluster title", summary: "Cluster summary", score: 80, itemCount: 2,
+      latestPublishedAt: new Date("2026-06-30T08:00:00.000Z"), fingerprint: "rep-tie-cluster",
+    } });
+    await prisma.item.createMany({ data: [
+      { id: "rep-tie-a", sourceId: source.id, clusterId: "rep-tie-cluster", originalUrl: "https://rep-tie.example/a", canonicalUrl: "https://rep-tie.example/a", urlHash: "rep-tie-a", originalTitle: "Stable representative", publishedAt: new Date("2026-06-30T08:00:00.000Z"), createdAt: new Date("2026-06-30T09:00:00.000Z"), summaryText: "Stable summary", qualityScore: 80, status: "processed", moderationStatus: "allowed" },
+      { id: "rep-tie-z", sourceId: source.id, clusterId: "rep-tie-cluster", originalUrl: "https://rep-tie.example/z", canonicalUrl: "https://rep-tie.example/z", urlHash: "rep-tie-z", originalTitle: "Capture-time winner", publishedAt: new Date("2026-06-30T08:00:00.000Z"), createdAt: new Date("2026-07-02T09:00:00.000Z"), summaryText: "Unstable summary", qualityScore: 80, status: "processed", moderationStatus: "allowed" },
+    ] });
+
+    const first = await getEventBriefing({ date: "2026-06-30" });
+    expect(first.entries.find((entry) => entry.id === "rep-tie-cluster")?.title).toBe("Stable representative");
+    await prisma.item.update({ where: { id: "rep-tie-z" }, data: { createdAt: new Date("2026-06-30T07:00:00.000Z") } });
+    invalidateEventBriefingCache();
+    const afterCaptureTimeChange = await getEventBriefing({ date: "2026-06-30" });
+    expect(afterCaptureTimeChange.entries.find((entry) => entry.id === "rep-tie-cluster")?.title).toBe("Stable representative");
   });
 
   it("ranks public daily clusters and singles on the universal score regardless of stale preference config", async () => {

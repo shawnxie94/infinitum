@@ -31,6 +31,7 @@ import { ModalShell } from "@/components/ui/modal-shell";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { formatDailyReportDateTime } from "@/lib/daily-report/date";
 import { buildDailyReportDetailMarkdown } from "@/lib/daily-report/export";
+import { normalizeDailyReportSourceDateCitations } from "@/lib/daily-report/renderer";
 import type { DailyReportDetailDTO } from "@/lib/daily-report/types";
 import type { DailyReportRevisionDetailDTO, DailyReportRevisionListItemDTO } from "@/lib/daily-report/types";
 import { renderSafeMarkdown } from "@/lib/markdown/safe-html";
@@ -186,7 +187,10 @@ function DailyReportHistoryModal({
                 </div>
                 <div
                   className="article-prose prose prose-sm mt-4 max-h-[32rem] max-w-none overflow-y-auto border-t border-[color:var(--line)] pt-4"
-                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(stripRevisionTitle(selected.renderedMarkdown, selected.title), { headingIdPrefix: `revision-${selected.id}` }) }}
+                  dangerouslySetInnerHTML={{ __html: renderSafeMarkdown(normalizeDailyReportSourceDateCitations(
+                    stripRevisionTitle(selected.renderedMarkdown, selected.title),
+                    selected.sources,
+                  ), { headingIdPrefix: `revision-${selected.id}` }) }}
                 />
               </>
             ) : <p className="text-sm text-[var(--text-2)]">选择左侧版本查看正文和恢复资格。</p>}

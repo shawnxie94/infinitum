@@ -68,7 +68,7 @@ function EventSourceItem({ item }: { item: EventBriefingItemDTO }) {
         <div className={metaRowClassName}>
           <span className={neutralBadgeClassName}>{item.qualityScore}</span>
           <span className={metaTextClassName}>{formatMetaLabel("来源", item.sourceName)}</span>
-          <span className={metaTextClassName}>{formatMetaLabel("发表", formatDateTime(item.publishedAt))}</span>
+          <span className={metaTextClassName}>{formatMetaLabel(item.publishedAtKnown === false ? "收录" : "发表", formatDateTime(item.publishedAtKnown === false ? item.createdAt : item.publishedAt))}</span>
         </div>
         <div className={summaryClassName}>
           {renderInlineMarkdown(item.summary)}
@@ -107,7 +107,18 @@ export function EventBriefingDetailModal({ entry, isAdmin = false, onClose }: Ev
     }
   };
   const statusLabel = entry.isFollowUp ? "新进展" : "新内容";
-  const primaryOriginalUrl = !isCluster ? entry.items[0]?.originalUrl : null;
+  const primaryItem = !isCluster ? entry.items[0] : null;
+  const primaryOriginalUrl = primaryItem?.originalUrl ?? null;
+  const primaryTimeLabel = primaryItem?.publishedAtKnown === false
+    ? "收录"
+    : primaryItem
+      ? "发表"
+      : "更新";
+  const primaryTime = primaryItem
+    ? primaryItem.publishedAtKnown === false
+      ? primaryItem.createdAt
+      : primaryItem.publishedAt
+    : entry.latestEffectiveAt ?? entry.latestCreatedAt;
   const sourceLabel = entry.sourceCount === 1
     ? entry.items.find((item) => item.sourceName.trim())?.sourceName ?? "1 个"
     : `${entry.sourceCount} 个`;
@@ -200,7 +211,7 @@ export function EventBriefingDetailModal({ entry, isAdmin = false, onClose }: Ev
                 {entry.itemCount > 1 ? (
                   <span className={metaTextClassName}>{formatMetaLabel("条目", `${entry.itemCount} 条`)}</span>
                 ) : null}
-                <span className={metaTextClassName}>{formatMetaLabel("更新", formatDateTime(entry.latestCreatedAt))}</span>
+                <span className={metaTextClassName}>{formatMetaLabel(primaryTimeLabel, formatDateTime(primaryTime))}</span>
               </div>
               <div className={summaryClassName}>
                 {renderInlineMarkdown(entry.summary)}

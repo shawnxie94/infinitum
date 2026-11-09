@@ -160,7 +160,7 @@ describe("event briefing helpers", () => {
     ]);
   });
 
-  it("penalizes delayed publication without changing the createdAt inclusion boundary", () => {
+  it("does not penalize delayed publication and ranks only the selected day effective time", () => {
     const range = getEventBriefingDateRange("2026-06-30");
     const baseItem = buildCandidate().items[0]!;
     const onTime = buildCandidate({
@@ -170,8 +170,8 @@ describe("event briefing helpers", () => {
     });
     const delayed = buildCandidate({
       latestCreatedAt: new Date("2026-06-30T08:00:00.000Z"),
-      latestPublishedAt: new Date("2026-06-28T08:00:00.000Z"),
-      items: [{ ...baseItem, createdAt: new Date("2026-06-30T08:00:00.000Z"), publishedAt: new Date("2026-06-28T08:00:00.000Z") }],
+      latestPublishedAt: new Date("2026-06-30T00:00:00.000Z"),
+      items: [{ ...baseItem, createdAt: new Date("2026-06-30T15:00:00.000Z"), publishedAt: new Date("2026-06-30T00:00:00.000Z") }],
     });
     const futurePublished = buildCandidate({
       latestCreatedAt: new Date("2026-06-30T08:00:00.000Z"),
@@ -179,15 +179,15 @@ describe("event briefing helpers", () => {
       items: [{ ...baseItem, createdAt: new Date("2026-06-30T08:00:00.000Z"), publishedAt: new Date("2026-06-30T12:00:00.000Z") }],
     });
 
-    expect(calculateEventBriefingBaseRankScore(delayed, range)).toBeLessThan(
+    expect(calculateEventBriefingBaseRankScore(delayed, range)).toBe(
       calculateEventBriefingBaseRankScore(onTime, range),
     );
-    expect(calculateEventBriefingBaseRankScore(futurePublished, range)).toBe(
+    expect(calculateEventBriefingBaseRankScore(futurePublished, range)).toBeGreaterThan(
       calculateEventBriefingBaseRankScore(onTime, range),
     );
   });
 
-  it("does not grant unknown publication timestamps a freshness bonus", () => {
+  it("uses captured time as freshness when publication time is unknown", () => {
     const range = getEventBriefingDateRange("2026-06-30");
     const known = buildCandidate({
       latestCreatedAt: new Date("2026-06-30T15:30:00.000Z"),
@@ -206,7 +206,7 @@ describe("event briefing helpers", () => {
       }],
     });
 
-    expect(calculateEventBriefingBaseRankScore(unknown, range)).toBeLessThan(
+    expect(calculateEventBriefingBaseRankScore(unknown, range)).toBeGreaterThan(
       calculateEventBriefingBaseRankScore(known, range),
     );
   });

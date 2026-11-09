@@ -56,6 +56,7 @@ export type EventBriefingEntryDTO = {
   newSourceCountOnDate: number;
   latestCreatedAt: string;
   latestPublishedAt: string;
+  latestEffectiveAt?: string;
   eventType: string | null;
   eventSubject: string | null;
   eventAction: string | null;

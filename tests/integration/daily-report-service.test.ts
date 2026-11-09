@@ -9,6 +9,8 @@ import { getDailyReportByDate, listDailyReportCandidates } from "@/lib/daily-rep
 import { executeDailyReportWorkflowStage } from "@/lib/daily-report/generation";
 import { persistDailyReport } from "@/lib/daily-report/persistence";
 import { getDailyReportEffectivePipelineVersion } from "@/lib/daily-report/report-input";
+import { listDailyReportGenerationCandidates } from "@/lib/daily-report/candidates";
+import * as eventBriefingService from "@/lib/events/service";
 import { updateEventBriefingConfig } from "@/lib/settings/service";
 import { ensureRuntimeConfigSeeded } from "@/lib/settings/core";
 import type { TaskPipelineCheckpoint } from "@/lib/tasks/types";
@@ -1017,9 +1019,9 @@ describe("daily report service", () => {
     expect(candidates).toHaveLength(2);
     expect(candidates[0]).toMatchObject({
       clusterId: cluster.id,
-      title: "多来源确认的模型发布",
-      summary: "多家来源确认同一个模型发布事件，具备更高日报价值。",
-      eventType: "launch",
+      title: "模型发布 来源 A",
+      summary: "来源 A 模型发布摘要",
+      eventType: null,
       sourceCount: 3,
       itemCount: 3,
     });
@@ -1333,16 +1335,64 @@ describe("daily report service", () => {
     expect(result.report?.renderedMarkdown).not.toContain("[大型模型发布 来源 6](https://large-6.example.com/model-launch)");
   });
 
-  it("uses created date for daily report candidate boundaries", async () => {
+  it("uses effective publication date for daily report candidate boundaries", async () => {
     await createCreatedAtBoundaryCandidates();
 
     const candidates = await listDailyReportCandidates(REPORT_DATE, 10);
     const titles = candidates.map((candidate) => candidate.title);
 
-    expect(titles).toContain("入库日期命中日报日期");
+    expect(titles).not.toContain("入库日期命中日报日期");
     expect(titles).toContain("入库日期再次命中日报日期");
-    expect(titles).not.toContain("仅事件日期命中日报日期");
-    expect(titles).not.toContain("仅发布时间命中日报日期");
+    expect(titles).toContain("仅事件日期命中日报日期");
+    expect(titles).toContain("仅发布时间命中日报日期");
+  });
+
+  it("keeps forced legacy fallback cluster text within the report-day evidence", async () => {
+    const source = await prisma.source.create({
+      data: { name: "Fallback Source", rssUrl: "https://fallback.example/feed", siteUrl: "https://fallback.example" },
+    });
+    const cluster = await prisma.contentCluster.create({
+      data: {
+        title: "未来聚类标题",
+        summary: "未来摘要不可泄漏",
+        score: 99,
+        itemCount: 2,
+        latestPublishedAt: new Date("2026-04-25T06:00:00.000Z"),
+        fingerprint: "legacy-fallback-future-cluster",
+        eventType: "future-event",
+        eventSubject: "未来主体",
+      },
+    });
+    await prisma.item.createMany({
+      data: [
+        {
+          sourceId: source.id, clusterId: cluster.id,
+          originalUrl: "https://fallback.example/today", canonicalUrl: "https://fallback.example/today",
+          urlHash: "legacy-fallback-today", originalTitle: "日报当日标题", publishedAt: new Date("2026-04-24T03:00:00.000Z"),
+          createdAt: new Date("2026-04-24T04:00:00.000Z"), summaryText: "日报当日摘要", qualityScore: 80,
+          eventType: "today-event", eventSubject: "当日主体", status: "processed", moderationStatus: "allowed",
+        },
+        {
+          sourceId: source.id, clusterId: cluster.id,
+          originalUrl: "https://fallback.example/tomorrow", canonicalUrl: "https://fallback.example/tomorrow",
+          urlHash: "legacy-fallback-tomorrow", originalTitle: "未来条目标题", publishedAt: new Date("2026-04-25T06:00:00.000Z"),
+          createdAt: new Date("2026-04-25T07:00:00.000Z"), summaryText: "未来条目摘要", qualityScore: 99,
+          eventType: "future-event", eventSubject: "未来主体", status: "processed", moderationStatus: "allowed",
+        },
+      ],
+    });
+    vi.spyOn(eventBriefingService, "listEventBriefingEntriesForDailyReport")
+      .mockRejectedValueOnce(new Error("force legacy fallback"));
+
+    const result = await listDailyReportGenerationCandidates(REPORT_DATE, 20);
+    expect(result.source).toBe("legacy_daily_report");
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      title: "日报当日标题",
+      summary: "日报当日摘要",
+      eventType: "today-event",
+      eventSubject: "当日主体",
+    });
   });
 
   it("limits scheduled daily report candidates and expanded cluster sources to selected channels", async () => {

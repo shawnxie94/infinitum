@@ -8,6 +8,8 @@ type EventBriefingCardProps = {
 
 function formatUpdateTime(value: string) {
   return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "Asia/Shanghai",
@@ -24,10 +26,11 @@ export function EventBriefingCard({
   onOpen,
 }: EventBriefingCardProps) {
   const statusLabel = entry.isFollowUp ? "新进展" : "新内容";
+  const latestEffectiveAt = entry.latestEffectiveAt ?? entry.latestCreatedAt;
   const meta = [
     `${entry.sourceCount} 来源`,
     `${entry.itemCount} 条`,
-    `${formatUpdateTime(entry.latestCreatedAt)} 更新`,
+    `${formatUpdateTime(latestEffectiveAt)} 更新`,
   ];
 
   return (

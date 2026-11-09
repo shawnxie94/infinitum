@@ -34,32 +34,6 @@ function uniqueBy<T>(values: T[], getKey: (value: T) => string) {
   return result;
 }
 
-function parseClusterEntities(raw: string | null | undefined): EventCandidateEntity[] {
-  try {
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed
-      .map((entry): EventCandidateEntity | null => {
-        if (!entry || typeof entry !== "object") {
-          return null;
-        }
-
-        const name = "name" in entry && typeof entry.name === "string" ? entry.name.trim() : "";
-        const normalized = "normalized" in entry && typeof entry.normalized === "string"
-          ? entry.normalized.trim()
-          : name.toLowerCase();
-
-        return name && normalized ? { name, normalized } : null;
-      })
-      .filter((entry): entry is EventCandidateEntity => Boolean(entry));
-  } catch {
-    return [];
-  }
-}
-
 function entitiesFromItem(item: PublicItemRow): EventCandidateEntity[] {
   return item.entities.map(({ entity }) => ({
     name: entity.name,
@@ -127,40 +101,12 @@ function buildSourceFilter(groupIds: string[] = []) {
 
 async function listDailyPublicItems(range: EventBriefingDateRange, options: ListEventBriefingCandidateOptions = {}) {
   const groupIds = normalizeGroupIds(options.groupIds);
-  const tagWhere = options.tag === "follow_up"
-    ? {
-        cluster: {
-          is: {
-            status: "active" as const,
-            OR: [
-              { earliestCreatedAt: null },
-              { earliestCreatedAt: { lt: range.start } },
-            ],
-          },
-        },
-      }
-    : options.tag === "new_content"
-      ? {
-          OR: [
-            { clusterId: null },
-            {
-              cluster: {
-                is: {
-                  status: "active" as const,
-                  OR: [
-                    { earliestCreatedAt: null },
-                    { earliestCreatedAt: { gte: range.start } },
-                  ],
-                },
-              },
-            },
-          ],
-        }
-      : null;
-
   return prisma.item.findMany({
     where: {
-      createdAt: { gte: range.start, lt: range.end },
+      OR: [
+        { publishedAtKnown: true, publishedAt: { gte: range.start, lt: range.end } },
+        { publishedAtKnown: false, createdAt: { gte: range.start, lt: range.end } },
+      ],
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
@@ -172,7 +118,6 @@ async function listDailyPublicItems(range: EventBriefingDateRange, options: List
             { cluster: { is: { status: "active" } } },
           ],
         },
-        ...(tagWhere ? [tagWhere] : []),
       ],
     },
     select: {
@@ -252,7 +197,7 @@ async function listDailyPublicItems(range: EventBriefingDateRange, options: List
   });
 }
 
-async function listClusterPublicMembers(clusterIds: string[], options: ListEventBriefingCandidateOptions = {}) {
+async function listClusterPublicMembers(clusterIds: string[], range: EventBriefingDateRange, options: ListEventBriefingCandidateOptions = {}) {
   if (clusterIds.length === 0) {
     return [];
   }
@@ -262,6 +207,10 @@ async function listClusterPublicMembers(clusterIds: string[], options: ListEvent
   return prisma.item.findMany({
     where: {
       clusterId: { in: clusterIds },
+      OR: [
+        { publishedAtKnown: true, publishedAt: { lt: range.end } },
+        { publishedAtKnown: false, createdAt: { lt: range.end } },
+      ],
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
@@ -349,8 +298,18 @@ function pickRepresentative(items: PublicItemRow[]) {
     if (right.qualityScore !== left.qualityScore) {
       return right.qualityScore - left.qualityScore;
     }
-    return right.createdAt.getTime() - left.createdAt.getTime();
+    return effectiveTime(right).getTime() - effectiveTime(left).getTime()
+      || left.id.localeCompare(right.id);
   })[0]!;
+}
+
+function effectiveTime(item: PublicItemRow) {
+  return item.publishedAtKnown ? item.publishedAt : item.createdAt;
+}
+
+function isInRange(item: PublicItemRow, range: EventBriefingDateRange) {
+  const time = effectiveTime(item).getTime();
+  return time >= range.start.getTime() && time < range.end.getTime();
 }
 
 function buildClusterCandidate(
@@ -359,7 +318,10 @@ function buildClusterCandidate(
   allMembers: PublicItemRow[],
   range: EventBriefingDateRange,
 ): EventBriefingCandidate | null {
-  const representative = pickRepresentative(allMembers.length ? allMembers : dailyItems);
+  allMembers = allMembers.filter((item) => effectiveTime(item) < range.end);
+  dailyItems = dailyItems.filter((item) => isInRange(item, range));
+  if (!dailyItems.length) return null;
+  const representative = pickRepresentative(dailyItems);
   const cluster = representative.cluster;
 
   if (!cluster) {
@@ -387,10 +349,7 @@ function buildClusterCandidate(
     (source) => source.id,
   );
   const entities = uniqueBy(
-    [
-      ...parseClusterEntities(cluster.feedEntitiesJson),
-      ...allMembers.flatMap(entitiesFromItem),
-    ],
+    allMembers.flatMap(entitiesFromItem),
     (entity) => entity.normalized.toLowerCase(),
   );
   const latestCreatedAt = allMembers.reduce(
@@ -405,20 +364,14 @@ function buildClusterCandidate(
     (earliest, item) => item.createdAt.getTime() < earliest.getTime() ? item.createdAt : earliest,
     representative.createdAt,
   );
-  const title = cluster.title.trim() || getDisplayTitle(representative.originalTitle, representative.translatedTitle);
-  const summary = getDisplaySummary(cluster.summary, representative.summaryText, representative.rssExcerpt ?? representative.fullText);
-  const qualityScore = cluster.displayAverageScore || cluster.score || representative.qualityScore;
-  const sourceCount = Math.max(cluster.displaySourceCount, sources.length);
-  const itemCount = Math.max(cluster.displayItemCount, allMembers.length);
-  const items = [...allMembers].sort((left, right) => {
-    if (right.publishedAtKnown !== left.publishedAtKnown) {
-      return right.publishedAtKnown ? 1 : -1;
-    }
-    if (right.publishedAt.getTime() !== left.publishedAt.getTime()) {
-      return right.publishedAt.getTime() - left.publishedAt.getTime();
-    }
-    return right.createdAt.getTime() - left.createdAt.getTime();
-  }).map(toCandidateItem);
+  const title = getDisplayTitle(representative.originalTitle, representative.translatedTitle);
+  const summary = getItemSummary(representative);
+  const qualityScore = Math.round(allMembers.reduce((sum, item) => sum + item.qualityScore, 0) / allMembers.length);
+  const sourceCount = sources.length;
+  const itemCount = allMembers.length;
+  const items = [...allMembers].sort((left, right) =>
+    effectiveTime(right).getTime() - effectiveTime(left).getTime() || right.id.localeCompare(left.id),
+  ).map(toCandidateItem);
 
   return {
     id: clusterId,
@@ -430,26 +383,26 @@ function buildClusterCandidate(
     itemCount,
     newItemCountOnDate: dailyItems.length,
     newSourceCountOnDate: dailySources.length,
-    latestCreatedAt: cluster.latestCreatedAt ?? latestCreatedAt,
-    latestPublishedAt: cluster.latestPublishedAt ?? latestPublishedAt,
-    earliestCreatedAt: cluster.earliestCreatedAt ?? earliestCreatedAt,
+    latestCreatedAt,
+    latestPublishedAt,
+    earliestCreatedAt,
     representativeUrl: representative.originalUrl,
-    eventType: cluster.eventType ?? representative.eventType,
-    eventSubject: cluster.eventSubject ?? representative.eventSubject,
-    eventAction: cluster.eventAction ?? representative.eventAction,
-    eventObject: cluster.eventObject ?? representative.eventObject,
-    eventDate: cluster.eventDate ?? representative.eventDate,
-    isFollowUp: (cluster.earliestCreatedAt ?? earliestCreatedAt).getTime() < range.start.getTime(),
+    eventType: representative.eventType,
+    eventSubject: representative.eventSubject,
+    eventAction: representative.eventAction,
+    eventObject: representative.eventObject,
+    eventDate: representative.eventDate,
+    isFollowUp: allMembers.some((item) => effectiveTime(item) < range.start),
     entities,
     sources,
     items,
     searchText: buildSearchText({
       title,
       summary,
-      eventType: cluster.eventType ?? representative.eventType,
-      eventSubject: cluster.eventSubject ?? representative.eventSubject,
-      eventAction: cluster.eventAction ?? representative.eventAction,
-      eventObject: cluster.eventObject ?? representative.eventObject,
+      eventType: representative.eventType,
+      eventSubject: representative.eventSubject,
+      eventAction: representative.eventAction,
+      eventObject: representative.eventObject,
       sources,
       entities,
     }),
@@ -528,7 +481,7 @@ export async function listEventBriefingCandidates(
       .filter((clusterId): clusterId is string => Boolean(clusterId)),
     (clusterId) => clusterId,
   );
-  const clusterMembers = await listClusterPublicMembers(clusterIds, options);
+  const clusterMembers = await listClusterPublicMembers(clusterIds, range, options);
   const dailyItemsByClusterId = new Map<string, PublicItemRow[]>();
   const clusterMembersByClusterId = new Map<string, PublicItemRow[]>();
 

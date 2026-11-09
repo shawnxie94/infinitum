@@ -10,6 +10,9 @@ import { buildDailyReportDetailMarkdown, buildDailyReportExportMarkdown } from "
 import { normalizeDailyReportContent } from "@/lib/daily-report/content";
 import { renderDailyReportItemBody } from "@/lib/daily-report/item-renderer";
 import { renderDailyReportMarkdown } from "@/lib/daily-report/renderer";
+import { normalizeDailyReportSourceDateCitations } from "@/lib/daily-report/renderer";
+import { buildDailyReportRecoveryCandidates, toCandidateSnapshotEntry } from "@/lib/daily-report/recovery-snapshot";
+import { eventBriefingEntryToDailyReportCandidate } from "@/lib/daily-report/candidates";
 import {
   buildDailyReportCandidateCoverage,
   deduplicateDailyReportContentByCandidate,
@@ -368,6 +371,177 @@ describe("daily report utilities", () => {
     expect(markdown).toContain("[OpenAI 发布新模型](https://example.com/a)");
     expect(markdown).toContain("## 趋势观察");
     expect(markdown).not.toContain("深挖");
+  });
+
+  it("marks unknown publication dates as collection dates in citations", () => {
+    const markdown = renderDailyReportMarkdown(content, candidates, "2026-04-24 AI 日报", [{
+      sourceNumber: 1,
+      title: "补抓报道",
+      url: "https://example.com/late",
+      sourceName: "Late source",
+      publishedAt: "2026-04-20T12:00:00.000Z",
+      capturedAt: "2026-04-24T03:00:00.000Z",
+      publishedAtKnown: false,
+    }]);
+    expect(markdown).toContain("Late source · 收录 2026-04-24");
+    expect(markdown).not.toContain("Late source · 发表 2026-04-20");
+  });
+
+  it("formats cross-midnight publication and collection dates in Shanghai in page and export Markdown", () => {
+    const markdown = renderDailyReportMarkdown(content, candidates, "跨日来源日报", [
+      {
+        sourceNumber: 1,
+        title: "已知发表时间",
+        url: "https://example.com/known-cross-midnight",
+        sourceName: "Known",
+        publishedAt: "2026-11-06T20:00:00.000Z",
+        capturedAt: "2026-11-09T04:00:00.000Z",
+        publishedAtKnown: true,
+      },
+      {
+        sourceNumber: 1,
+        title: "未知发表时间",
+        url: "https://example.com/unknown-cross-midnight",
+        sourceName: "Unknown",
+        publishedAt: "2026-11-06T20:00:00.000Z",
+        capturedAt: "2026-11-06T20:00:00.000Z",
+        publishedAtKnown: false,
+      },
+      {
+        sourceNumber: 1,
+        title: "旧报告缺少可靠标记",
+        url: "https://example.com/legacy-cross-midnight",
+        sourceName: "Legacy",
+        publishedAt: "2026-11-06T20:00:00.000Z",
+        capturedAt: "2026-11-06T20:00:00.000Z",
+        publishedAtKnown: null,
+      },
+    ]);
+
+    expect(markdown).toContain("Known · 发表 2026-11-07");
+    expect(markdown).toContain("Unknown · 收录 2026-11-07");
+    expect(markdown).toContain("Legacy · 收录 2026-11-07");
+    expect(markdown).not.toContain("Legacy · 发表 2026-11-06");
+    const report = { title: "跨日来源日报", renderedMarkdown: markdown, content } as DailyReportDetailDTO;
+    expect(buildDailyReportDetailMarkdown(report)).toContain("Known · 发表 2026-11-07");
+    expect(buildDailyReportExportMarkdown(report)).toContain("Unknown · 收录 2026-11-07");
+  });
+
+  it("normalizes old stored and revision citations using their captured provenance", () => {
+    const staleMarkdown = [
+      "# 历史日报",
+      "## 热点事件",
+      "### 补抓报道",
+      "**来源：**",
+      "- [补抓报道](https://example.com/legacy-citation)（Legacy · 发表 2026-11-06）",
+    ].join("\n");
+    const sources = [{
+      id: "legacy-source",
+      sourceNumber: 1,
+      sourceSummary: null,
+      sourceQualityScore: null,
+      itemId: null,
+      clusterId: null,
+      sourceName: "Legacy",
+      title: "补抓报道",
+      url: "https://example.com/legacy-citation",
+      sectionName: "热点事件",
+      topic: null,
+      publishedAt: "2026-11-06T20:00:00.000Z",
+      capturedAt: "2026-11-06T20:00:00.000Z",
+      publishedAtKnown: null,
+    }];
+    const report = { title: "历史日报", renderedMarkdown: staleMarkdown, content, sources } as DailyReportDetailDTO;
+    const page = buildDailyReportDetailMarkdown(report);
+    const revision = normalizeDailyReportSourceDateCitations(staleMarkdown, sources);
+
+    expect(page).toContain("Legacy · 收录 2026-11-07");
+    expect(buildDailyReportExportMarkdown(report)).toContain("Legacy · 收录 2026-11-07");
+    expect(revision).toContain("Legacy · 收录 2026-11-07");
+    expect(page).not.toContain("Legacy · 发表 2026-11-06");
+  });
+
+  it("keeps legacy null publication provenance unknown through recovery", () => {
+    const snapshot = [toCandidateSnapshotEntry({ ...candidates[0]!, publishedAtKnown: undefined })];
+    expect(snapshot[0]?.publishedAtKnown).toBe(false);
+    const [restored] = buildDailyReportRecoveryCandidates({
+      snapshot,
+      planningCandidateBriefs: [],
+      currentCandidates: [],
+      persistedSources: [{
+        sourceNumber: 1,
+        sourceKey: "item:item-1",
+        itemId: "item-1",
+        clusterId: null,
+        sourceName: "Legacy source",
+        title: "Old report source",
+        url: "https://example.com/legacy-report",
+        sourceSummary: null,
+        sourcePublishedAt: new Date("2026-11-06T20:00:00.000Z"),
+        sourceCapturedAt: null,
+        sourcePublishedAtKnown: null,
+        sourceQualityScore: 80,
+        eventType: null,
+        eventSubject: null,
+        eventAction: null,
+        eventObject: null,
+        eventDate: null,
+      }],
+    });
+    expect(restored).toMatchObject({ publishedAtKnown: false, createdAt: "" });
+    const markdown = renderDailyReportMarkdown(content, [restored!], "旧日报恢复", [{
+      sourceNumber: 1,
+      title: restored!.title,
+      url: restored!.url,
+      sourceName: restored!.sourceName,
+      publishedAt: restored!.publishedAt,
+      capturedAt: restored!.createdAt,
+      publishedAtKnown: restored!.publishedAtKnown,
+    }]);
+    expect(markdown).not.toContain("Legacy source · 发表");
+    expect(markdown).not.toContain("Legacy source · 收录");
+  });
+
+  it("omits entries without evidence for the report day and keeps total day counts beyond evidence truncation", () => {
+    const items = Array.from({ length: 4 }, (_, index) => ({
+      id: `item-${index}`,
+      title: `新闻 ${index}`,
+      summary: "摘要",
+      sourceName: `来源 ${index}`,
+      originalUrl: `https://example.com/${index}`,
+      publishedAt: `2026-04-24T0${index + 1}:00:00.000Z`,
+      publishedAtKnown: true,
+      createdAt: `2026-04-24T0${index + 1}:00:00.000Z`,
+      qualityScore: 80,
+    }));
+    const entry = {
+      id: "cluster",
+      type: "cluster",
+      title: "同簇事件",
+      summary: "代表摘要",
+      qualityScore: 80,
+      rankScore: 80,
+      isFollowUp: true,
+      sourceCount: 10,
+      itemCount: 10,
+      newItemCountOnDate: 4,
+      newSourceCountOnDate: 4,
+      latestCreatedAt: "2026-04-24T04:00:00.000Z",
+      latestPublishedAt: "2026-04-24T04:00:00.000Z",
+      eventType: null,
+      eventSubject: null,
+      eventAction: null,
+      eventObject: null,
+      eventDate: null,
+      detailHref: "/",
+      items,
+    } as unknown as import("@/lib/events/types").EventBriefingEntryDTO;
+    const candidate = eventBriefingEntryToDailyReportCandidate(entry, 0, "2026-04-24");
+    expect(candidate?.itemCount).toBe(4);
+    expect(candidate?.sourceCount).toBe(4);
+    expect(candidate?.evidenceItems).toHaveLength(3);
+    const noDayEvidence = { ...entry, items: [{ ...items[0]!, publishedAt: "2026-04-20T01:00:00.000Z", createdAt: "2026-04-20T01:00:00.000Z" }] };
+    expect(eventBriefingEntryToDailyReportCandidate(noDayEvidence, 0, "2026-04-24")).toBeNull();
   });
 
   it("renders multiple links for one selected clustered source number", () => {

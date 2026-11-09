@@ -550,6 +550,10 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'summaryStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'analysisStatus'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'publishedAtKnown'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_report_sources') WHERE "name" = 'sourceCapturedAt'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_report_sources') WHERE "name" = 'sourcePublishedAtKnown'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_report_revision_sources') WHERE "name" = 'sourceCapturedAt'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('daily_report_revision_sources') WHERE "name" = 'sourcePublishedAtKnown'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'manualClusterAssignedAt'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingInputHash'`)).toBe("0");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('items') WHERE "name" = 'understandingVersion'`)).toBe("0");
@@ -578,6 +582,8 @@ describe("sqlite setup", () => {
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM pragma_table_info('content_clusters') WHERE "name" = 'eventBucket'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'sources_enabled_healthStatus_idx'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'items_status_moderationStatus_updatedAt_idx'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'items_publishedAtKnown_publishedAt_idx'`)).toBe("1");
+    expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'items_publishedAtKnown_createdAt_idx'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'content_clusters_status_latestCreatedAt_idx'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'content_clusters_status_earliestCreatedAt_idx'`)).toBe("1");
     expect(runSqlite(dbPath, `SELECT COUNT(*) FROM "sqlite_master" WHERE "type" = 'index' AND "name" = 'content_clusters_status_displayQualityScore_idx'`)).toBe("1");
@@ -649,6 +655,8 @@ describe("sqlite setup", () => {
       dbPath,
       `
       PRAGMA trusted_schema = ON;
+      DROP INDEX "items_publishedAtKnown_publishedAt_idx";
+      DROP INDEX "items_publishedAtKnown_createdAt_idx";
       ALTER TABLE "items" DROP COLUMN "publishedAtKnown";
       INSERT INTO "sources" (
         "id", "name", "rssUrl", "siteUrl", "updatedAt"

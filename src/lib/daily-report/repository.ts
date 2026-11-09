@@ -111,7 +111,10 @@ export async function listDailyReportCandidates(
   const itemRows = await prisma.item.findMany({
     take: options.returnPool ? DAILY_REPORT_CANDIDATE_POOL_MAX : poolLimit,
     where: {
-      createdAt: { gte: start, lt: end },
+      OR: [
+        { publishedAtKnown: true, publishedAt: { gte: start, lt: end } },
+        { publishedAtKnown: false, createdAt: { gte: start, lt: end } },
+      ],
       status: "processed",
       moderationStatus: { in: [...DISPLAYABLE_MODERATION_STATUSES] },
       isAggregation: false,
@@ -142,6 +145,7 @@ export async function listDailyReportCandidates(
       qualityScore: true,
       createdAt: true,
       publishedAt: true,
+      publishedAtKnown: true,
       eventType: true,
       eventSubject: true,
       eventAction: true,
@@ -149,16 +153,7 @@ export async function listDailyReportCandidates(
       eventDate: true,
       source: { select: { id: true, name: true } },
       cluster: {
-        select: {
-          id: true,
-          title: true,
-          summary: true,
-          eventType: true,
-          eventSubject: true,
-          eventAction: true,
-          eventObject: true,
-          eventDate: true,
-        },
+        select: { id: true },
       },
     },
     orderBy: [{ qualityScore: "desc" }, { createdAt: "desc" }],
@@ -181,6 +176,7 @@ export async function listDailyReportCandidates(
       qualityScore: item.qualityScore,
       createdAt: item.createdAt,
       publishedAt: item.publishedAt,
+      publishedAtKnown: item.publishedAtKnown,
       eventType: item.eventType,
       eventSubject: item.eventSubject,
       eventAction: item.eventAction,
@@ -225,11 +221,13 @@ export async function listDailyReportCandidates(
     if (item.publishedAt.getTime() > existing.latestPublishedAt.getTime()) {
       existing.latestPublishedAt = item.publishedAt;
     }
-    if (
-      item.qualityScore > existing.representative.qualityScore ||
-      (item.qualityScore === existing.representative.qualityScore &&
-        item.createdAt.getTime() > existing.representative.createdAt.getTime())
-    ) {
+    const itemEffectiveAt = item.publishedAtKnown ? item.publishedAt : item.createdAt;
+    const representativeEffectiveAt = existing.representative.publishedAtKnown
+      ? existing.representative.publishedAt
+      : existing.representative.createdAt;
+    if (item.qualityScore > existing.representative.qualityScore ||
+      (item.qualityScore === existing.representative.qualityScore && itemEffectiveAt.getTime() > representativeEffectiveAt.getTime()) ||
+      (item.qualityScore === existing.representative.qualityScore && itemEffectiveAt.getTime() === representativeEffectiveAt.getTime() && item.id.localeCompare(existing.representative.id) < 0)) {
       existing.representative = item;
     }
   }
@@ -246,44 +244,37 @@ export async function listDailyReportCandidates(
     .sort((left, right) => {
       if (right.score !== left.score) return right.score - left.score;
       if (right.qualityScore !== left.qualityScore) return right.qualityScore - left.qualityScore;
-      if (right.latestPublishedAt.getTime() !== left.latestPublishedAt.getTime()) {
-        return right.latestPublishedAt.getTime() - left.latestPublishedAt.getTime();
-      }
-      if (right.latestCreatedAt.getTime() !== left.latestCreatedAt.getTime()) {
-        return right.latestCreatedAt.getTime() - left.latestCreatedAt.getTime();
-      }
-      return right.representative.id.localeCompare(left.representative.id);
+      const leftEffectiveAt = left.representative.publishedAtKnown ? left.representative.publishedAt : left.representative.createdAt;
+      const rightEffectiveAt = right.representative.publishedAtKnown ? right.representative.publishedAt : right.representative.createdAt;
+      return rightEffectiveAt.getTime() - leftEffectiveAt.getTime() || left.representative.id.localeCompare(right.representative.id);
     })
     .slice(0, options.returnPool ? poolLimit : limit);
 
   return ranked.map((entry, index): DailyReportCandidate => {
     const item = entry.representative;
-    const cluster = item.cluster;
-    const shouldUseClusterDisplay = groupIds.length === 0;
 
     return {
       id: index + 1,
       sourceKey: item.sourceKey,
       itemId: item.itemId,
       clusterId: item.clusterId,
-      title: shouldUseClusterDisplay && cluster ? cluster.title : getDisplayTitle(item.originalTitle, item.translatedTitle),
+      title: getDisplayTitle(item.originalTitle, item.translatedTitle),
       itemTitle: getDisplayTitle(item.originalTitle, item.translatedTitle),
       sourceName: item.source.name,
       url: item.originalUrl,
-      summary: shouldUseClusterDisplay && cluster
-        ? cluster.summary
-        : getDisplaySummary(item.summaryText, item.rssExcerpt, item.fullText ?? item.rssContent),
+      summary: getDisplaySummary(item.summaryText, item.rssExcerpt, item.fullText ?? item.rssContent),
       qualityScore: item.qualityScore,
       candidateScore: entry.score,
       sourceCount: entry.sourceIds.size,
       itemCount: entry.itemCount,
       createdAt: item.createdAt.toISOString(),
       publishedAt: item.publishedAt.toISOString(),
-      eventType: shouldUseClusterDisplay ? cluster?.eventType ?? item.eventType : item.eventType ?? cluster?.eventType ?? null,
-      eventSubject: shouldUseClusterDisplay ? cluster?.eventSubject ?? item.eventSubject : item.eventSubject ?? cluster?.eventSubject ?? null,
-      eventAction: shouldUseClusterDisplay ? cluster?.eventAction ?? item.eventAction : item.eventAction ?? cluster?.eventAction ?? null,
-      eventObject: shouldUseClusterDisplay ? cluster?.eventObject ?? item.eventObject : item.eventObject ?? cluster?.eventObject ?? null,
-      eventDate: shouldUseClusterDisplay ? cluster?.eventDate ?? item.eventDate : item.eventDate ?? cluster?.eventDate ?? null,
+      publishedAtKnown: item.publishedAtKnown,
+      eventType: item.eventType,
+      eventSubject: item.eventSubject,
+      eventAction: item.eventAction,
+      eventObject: item.eventObject,
+      eventDate: item.eventDate,
     };
   });
 }
@@ -788,6 +779,9 @@ async function getDailyReportByDateUncached(date: string, isAdmin: boolean): Pro
       url: source.url,
       sectionName: source.sectionName,
       topic: source.topic,
+      publishedAt: source.sourcePublishedAt?.toISOString() ?? null,
+      capturedAt: source.sourceCapturedAt?.toISOString() ?? null,
+      publishedAtKnown: source.sourcePublishedAtKnown,
     })),
     previous,
     next,

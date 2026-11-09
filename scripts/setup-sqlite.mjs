@@ -51,6 +51,8 @@ function makeSqliteSchemaIdempotent(sql) {
     // applyAdditiveSchemaUpgrades() ensures the columns exist on older volumes.
     .replace(/^CREATE INDEX "items_nextProcessingRetryAt_status_moderationStatus_idx".*;\n?/gm, "")
     .replace(/^CREATE INDEX "items_aggregationParseStatus_nextProcessingRetryAt_idx".*;\n?/gm, "")
+    .replace(/^CREATE INDEX "items_publishedAtKnown_publishedAt_idx".*;\n?/gm, "")
+    .replace(/^CREATE INDEX "items_publishedAtKnown_createdAt_idx".*;\n?/gm, "")
     // currentRevisionId is additive for existing daily_reports tables. Create
     // its index after applyAdditiveSchemaUpgrades() so legacy volumes do not
     // fail before the column can be added.
@@ -882,10 +884,16 @@ function applyAdditiveSchemaUpgrades() {
     input: `
       CREATE INDEX IF NOT EXISTS "items_nextProcessingRetryAt_status_moderationStatus_idx" ON "items"("nextProcessingRetryAt", "status", "moderationStatus");
       CREATE INDEX IF NOT EXISTS "items_aggregationParseStatus_nextProcessingRetryAt_idx" ON "items"("aggregationParseStatus", "nextProcessingRetryAt");
+      CREATE INDEX IF NOT EXISTS "items_publishedAtKnown_publishedAt_idx" ON "items"("publishedAtKnown", "publishedAt");
+      CREATE INDEX IF NOT EXISTS "items_publishedAtKnown_createdAt_idx" ON "items"("publishedAtKnown", "createdAt");
     `,
   });
 
   addColumnIfMissing("event_briefing_configs", "briefingChannelsJson", "TEXT NOT NULL DEFAULT '[]'");
+  addColumnIfMissing("daily_report_sources", "sourceCapturedAt", "DATETIME");
+  addColumnIfMissing("daily_report_sources", "sourcePublishedAtKnown", "BOOLEAN");
+  addColumnIfMissing("daily_report_revision_sources", "sourceCapturedAt", "DATETIME");
+  addColumnIfMissing("daily_report_revision_sources", "sourcePublishedAtKnown", "BOOLEAN");
 
   const clusterFeedStatsColumnsAdded = [
     addColumnIfMissing("content_clusters", "eventFingerprint", "TEXT"),

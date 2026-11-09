@@ -235,6 +235,8 @@ model Item {
   @@index([moderationStatus, publishedAt])
   @@index([status, moderationStatus, createdAt])
   @@index([status, moderationStatus, isAggregation, createdAt])
+  @@index([publishedAtKnown, publishedAt])
+  @@index([publishedAtKnown, createdAt])
   @@index([status, moderationStatus, updatedAt])
   @@index([clusterId, publishedAt])
   @@index([clusterId, status, moderationStatus, updatedAt])
@@ -709,6 +711,8 @@ model DailyReportRevisionSource {
   url                String
   sourceSummary      String?
   sourcePublishedAt  DateTime?
+  sourceCapturedAt   DateTime?
+  sourcePublishedAtKnown Boolean?
   sourceQualityScore Int?
   eventType          String?
   eventSubject       String?
@@ -751,6 +755,8 @@ model DailyReportSource {
   url                String
   sourceSummary      String?
   sourcePublishedAt  DateTime?
+  sourceCapturedAt   DateTime?
+  sourcePublishedAtKnown Boolean?
   sourceQualityScore Int?
   eventType          String?
   eventSubject       String?

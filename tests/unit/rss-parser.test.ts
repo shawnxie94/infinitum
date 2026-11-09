@@ -1,12 +1,64 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createRssParser } from "@/lib/ingestion/parser";
+import { parsePublishedAt } from "@/lib/ingestion/item-processor";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("rss parser", () => {
+  it("preserves Atom publication text and applies timezone rules deterministically", async () => {
+    const xml = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Dates</title>
+      <entry><title>offset</title><published>2026-11-07T01:00:00-05:00</published></entry>
+      <entry><title>z</title><published>2026-11-06T20:00:00Z</published></entry>
+      <entry><title>local</title><published>2026-11-07T10:00:00</published></entry>
+      <entry><title>published and updated</title><published>2026-11-07T10:00:00Z</published><updated>2026-11-09T08:01:00Z</updated></entry>
+      <entry><title>updated only</title><updated>2026-11-07T10:00:00Z</updated></entry>
+    </feed>`;
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(xml, { status: 200 })));
+    const feed = await createRssParser().parseURL("https://dates.example/feed");
+    const fallback = new Date("2026-11-08T00:00:00.000Z");
+    const byTitle = (title: string) => feed.items!.find((item) => item.title === title)!;
+    expect(parsePublishedAt(byTitle("offset"), fallback)).toEqual({ value: new Date("2026-11-07T06:00:00.000Z"), known: true });
+    expect(parsePublishedAt(byTitle("z"), fallback)).toEqual({ value: new Date("2026-11-06T20:00:00.000Z"), known: true });
+    expect(parsePublishedAt(byTitle("local"), fallback)).toEqual({ value: new Date("2026-11-07T02:00:00.000Z"), known: true });
+    expect(parsePublishedAt(byTitle("published and updated"), fallback)).toEqual({ value: new Date("2026-11-07T10:00:00.000Z"), known: true });
+    expect(parsePublishedAt(byTitle("updated only"), fallback)).toEqual({ value: fallback, known: false });
+    expect(parsePublishedAt({ pubDate: "2026-11-07T10:00:00 CST" }, fallback).known).toBe(false);
+    expect(parsePublishedAt({ pubDate: "invalid" }, fallback).known).toBe(false);
+    expect(parsePublishedAt({}, fallback).known).toBe(false);
+  });
+
+  it("prefers RSS pubDate when updated also exists on an RSS item", async () => {
+    const xml = `<?xml version="1.0"?><rss version="2.0"><channel><title>RSS dates</title><link>https://rss.example/</link>
+      <item><title>both dates</title><link>https://rss.example/both</link><pubDate>Mon, 09 Nov 2026 16:00:00 +0800</pubDate><updated>2026-11-09T08:01:00Z</updated></item>
+    </channel></rss>`;
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(xml, { status: 200 })));
+    const feed = await createRssParser().parseURL("https://rss.example/feed");
+    const item = feed.items![0]!;
+    expect(item.originalPublishedDate).toBe("Mon, 09 Nov 2026 16:00:00 +0800");
+    expect(parsePublishedAt(item, new Date("2026-11-10T00:00:00.000Z"))).toEqual({
+      value: new Date("2026-11-09T08:00:00.000Z"),
+      known: true,
+    });
+  });
+
+  it("matches namespace dates to RSS items and rejects normalized invalid calendar dates", async () => {
+    const xml = `<?xml version="1.0"?>
+      <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/">
+        <channel><title>RDF</title><link>https://rdf.example/</link></channel>
+        <item rdf:about="https://rdf.example/a"><title>GMT</title><link>https://rdf.example/a</link><dc:date>Sat, 07 Nov 2026 10:00:00 GMT</dc:date></item>
+        <item rdf:about="https://rdf.example/b"><title>invalid</title><link>https://rdf.example/b</link><dc:date>2026-02-31T10:00:00</dc:date></item>
+        <item rdf:about="https://rdf.example/c"><title>missing</title><link>https://rdf.example/c</link></item>
+      </rdf:RDF>`;
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(xml, { status: 200 })));
+    const feed = await createRssParser().parseURL("https://rdf.example/feed");
+    const fallback = new Date("2026-11-08T00:00:00.000Z");
+    expect(parsePublishedAt(feed.items!.find((item) => item.title === "GMT")!, fallback)).toEqual({ value: new Date("2026-11-07T10:00:00.000Z"), known: true });
+    expect(parsePublishedAt(feed.items!.find((item) => item.title === "invalid")!, fallback)).toEqual({ value: fallback, known: false });
+    expect(parsePublishedAt(feed.items!.find((item) => item.title === "missing")!, fallback)).toEqual({ value: fallback, known: false });
+  });
   it("retries once after an RSS fetch failure", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

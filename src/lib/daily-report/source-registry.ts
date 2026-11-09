@@ -5,6 +5,7 @@ import { type DailyReportCandidate, type DailyReportContent, type DailyReportSou
 import { getDisplaySummary, getDisplayTitle } from "@/lib/feed/presentation";
 import { DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES, getSectionSourceIds, MAX_DAILY_REPORT_EXPANDED_SOURCES_PER_CANDIDATE } from "@/lib/daily-report/report-input";
 import { buildDailyReportSourceKey, normalizeLegacyParsedSourceKey } from "@/lib/daily-report/candidates";
+import { getDailyReportDateRange } from "@/lib/daily-report/date";
 
 
 export function candidateToDailyReportSourceRegistryEntry(
@@ -21,6 +22,8 @@ export function candidateToDailyReportSourceRegistryEntry(
     url: candidate.url,
     summary: candidate.summary,
     publishedAt: candidate.publishedAt,
+    capturedAt: candidate.createdAt,
+    publishedAtKnown: candidate.publishedAtKnown ?? null,
     qualityScore: candidate.qualityScore,
     eventType: candidate.eventType,
     eventSubject: candidate.eventSubject,
@@ -30,7 +33,7 @@ export function candidateToDailyReportSourceRegistryEntry(
   };
 }
 
-export async function listExpandedClusterSourceRegistryEntries(candidates: DailyReportCandidate[], groupIds: string[] = []) {
+export async function listExpandedClusterSourceRegistryEntries(candidates: DailyReportCandidate[], date: string, groupIds: string[] = []) {
   const clusterCandidates = candidates.filter((candidate) => candidate.clusterId);
   const clusterIds = Array.from(new Set(clusterCandidates.map((candidate) => candidate.clusterId!)));
 
@@ -39,9 +42,14 @@ export async function listExpandedClusterSourceRegistryEntries(candidates: Daily
   }
 
   const candidateByClusterId = new Map(clusterCandidates.map((candidate) => [candidate.clusterId!, candidate]));
+  const range = getDailyReportDateRange(date);
   const rows = await prisma.item.findMany({
     where: {
       clusterId: { in: clusterIds },
+      OR: [
+        { publishedAtKnown: true, publishedAt: { gte: range.start, lt: range.end } },
+        { publishedAtKnown: false, createdAt: { gte: range.start, lt: range.end } },
+      ],
       status: "processed",
       moderationStatus: {
         in: [...DISPLAYABLE_DAILY_REPORT_SOURCE_STATUSES],
@@ -65,6 +73,8 @@ export async function listExpandedClusterSourceRegistryEntries(candidates: Daily
       rssContent: true,
       qualityScore: true,
       publishedAt: true,
+      publishedAtKnown: true,
+      createdAt: true,
       eventType: true,
       eventSubject: true,
       eventAction: true,
@@ -76,7 +86,7 @@ export async function listExpandedClusterSourceRegistryEntries(candidates: Daily
         },
       },
     },
-    orderBy: [{ qualityScore: "desc" }, { publishedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ qualityScore: "desc" }, { createdAt: "desc" }],
   });
   const entriesByClusterId = new Map<string, DailyReportSourceRegistryEntry[]>();
 
@@ -95,6 +105,8 @@ export async function listExpandedClusterSourceRegistryEntries(candidates: Daily
       url: row.originalUrl,
       summary: getDisplaySummary(row.summaryText, row.rssExcerpt, row.fullText ?? row.rssContent),
       publishedAt: row.publishedAt.toISOString(),
+      capturedAt: row.createdAt.toISOString(),
+      publishedAtKnown: row.publishedAtKnown,
       qualityScore: row.qualityScore,
       eventType: candidate.eventType ?? row.eventType,
       eventSubject: candidate.eventSubject ?? row.eventSubject,
@@ -115,12 +127,13 @@ export async function listExpandedClusterSourceRegistryEntries(candidates: Daily
 export async function buildExpandedDailyReportSourceRegistry(input: {
   candidatesById: Map<number, DailyReportCandidate>;
   sourceRows: Array<{ sourceId: number }>;
+  date: string;
   groupIds?: string[];
 }) {
   const selectedCandidates = Array.from(new Set(input.sourceRows.map((row) => row.sourceId)))
     .map((sourceId) => input.candidatesById.get(sourceId))
     .filter((candidate): candidate is DailyReportCandidate => Boolean(candidate));
-  const expandedClusterEntries = await listExpandedClusterSourceRegistryEntries(selectedCandidates, input.groupIds ?? []);
+  const expandedClusterEntries = await listExpandedClusterSourceRegistryEntries(selectedCandidates, input.date, input.groupIds ?? []);
   const entriesByNumber = new Map<number, DailyReportSourceRegistryEntry[]>();
 
   for (const candidate of selectedCandidates) {
@@ -169,6 +182,8 @@ export function buildDailyReportSourceRegistryFromRows(rows: Array<{
   url: string;
   sourceSummary: string | null;
   sourcePublishedAt: Date | null;
+  sourceCapturedAt: Date | null;
+  sourcePublishedAtKnown?: boolean | null;
   sourceQualityScore: number | null;
   eventType: string | null;
   eventSubject: string | null;
@@ -201,6 +216,8 @@ export function buildDailyReportSourceRegistryFromRows(rows: Array<{
       url: row.url,
       summary: row.sourceSummary,
       publishedAt: row.sourcePublishedAt?.toISOString() ?? null,
+      capturedAt: row.sourceCapturedAt?.toISOString() ?? null,
+      publishedAtKnown: row.sourcePublishedAtKnown,
       qualityScore: row.sourceQualityScore,
       eventType: row.eventType,
       eventSubject: row.eventSubject,

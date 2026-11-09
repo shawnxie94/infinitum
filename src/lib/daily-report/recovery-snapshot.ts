@@ -28,7 +28,7 @@ export function toCandidateSnapshotEntry(candidate: DailyReportCandidate): Daily
     eventAction: candidate.eventAction,
     eventObject: candidate.eventObject,
     eventDate: candidate.eventDate,
-    publishedAtKnown: candidate.publishedAtKnown ?? true,
+    publishedAtKnown: candidate.publishedAtKnown ?? false,
     isFollowUp: candidate.isFollowUp ?? false,
     newItemCountOnDate: candidate.newItemCountOnDate ?? 0,
     newSourceCountOnDate: candidate.newSourceCountOnDate ?? 0,
@@ -92,6 +92,8 @@ export function buildDailyReportRecoveryCandidates(input: {
     url: string;
     sourceSummary: string | null;
     sourcePublishedAt: Date | null;
+    sourceCapturedAt: Date | null;
+    sourcePublishedAtKnown: boolean | null;
     sourceQualityScore: number | null;
     eventType: string | null;
     eventSubject: string | null;
@@ -129,9 +131,9 @@ export function buildDailyReportRecoveryCandidates(input: {
       candidateScore: entry.candidateScore,
       sourceCount: entry.sourceCount,
       itemCount: entry.itemCount,
-      createdAt: current?.createdAt ?? publishedAt,
+      createdAt: source?.sourceCapturedAt?.toISOString() ?? current?.createdAt ?? "",
       publishedAt,
-      publishedAtKnown: entry.publishedAtKnown,
+      publishedAtKnown: source?.sourcePublishedAtKnown ?? entry.publishedAtKnown,
       eventType: source?.eventType ?? entry.eventType ?? current?.eventType ?? brief?.eventType ?? null,
       eventSubject: source?.eventSubject ?? entry.eventSubject ?? current?.eventSubject ?? brief?.eventSubject ?? null,
       eventAction: source?.eventAction ?? entry.eventAction ?? current?.eventAction ?? brief?.eventAction ?? null,

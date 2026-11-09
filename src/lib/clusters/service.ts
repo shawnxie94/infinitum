@@ -112,6 +112,7 @@ import {
 } from "@/lib/clusters/normalization";
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { invalidateEventBriefingCache } from "@/lib/events/cache";
 import { getDisplayTitle } from "@/lib/feed/presentation";
 import { getEventTypeRegistrySnapshot } from "@/lib/event-types/registry";
 import { getIngestionRuntimeConfig } from "@/lib/settings/service";
@@ -808,6 +809,7 @@ export async function detachItemFromCluster(itemId: string, aiProvider?: AiProvi
   );
 
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return previousClusterId;
 }
@@ -878,6 +880,7 @@ export async function splitClusterIntoSingletons(
   await recomputeCluster(clusterId, aiProvider);
   await refreshClusterFeedStatsSafely([clusterId, ...singletonClusterIds], "split cluster into singletons");
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return {
     clusterId,
@@ -922,6 +925,7 @@ export async function moveItemToCluster(itemId: string, clusterId: string, aiPro
         data: { manualClusterAssignedAt: new Date() },
       });
       invalidateFeedCache();
+      invalidateEventBriefingCache();
     }
 
     return clusterId;
@@ -949,6 +953,7 @@ export async function moveItemToCluster(itemId: string, clusterId: string, aiPro
   );
 
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return clusterId;
 }
@@ -1057,6 +1062,7 @@ export async function mergeSelectedItemsToLargestCluster(
   await refreshClusterFeedStatsSafely(affectedClusterIds, "merge selected items to largest cluster");
 
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return {
     targetClusterId: targetCluster.id,
@@ -1071,6 +1077,7 @@ export async function setClusterVisibility(clusterId: string, visible: boolean) 
   const cluster = await updateClusterStatus(clusterId, visible ? "active" : "hidden");
   await refreshClusterFeedStatsSafely([clusterId], "set cluster visibility");
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   return cluster;
 }
 
@@ -2540,6 +2547,7 @@ export async function mergeClusters(
 
   // 清除缓存
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   // 创建异步任务重新生成目标聚合组摘要
   const task = await enqueueClusterSummaryTask(

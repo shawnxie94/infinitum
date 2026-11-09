@@ -292,6 +292,7 @@ export type RecentDailyReportTopic = {
   sourceNumber: number | null;
   sectionName: string | null;
   topic: string | null;
+  publishedAt?: string | null;
   title: string;
   eventType: string | null;
   eventSubject: string | null;
@@ -352,6 +353,9 @@ export type DailyReportSourceDTO = {
   url: string;
   sectionName: string | null;
   topic: string | null;
+  publishedAt?: string | null;
+  capturedAt?: string | null;
+  publishedAtKnown?: boolean | null;
 };
 
 export type DailyReportSourceRegistryEntry = {
@@ -364,6 +368,8 @@ export type DailyReportSourceRegistryEntry = {
   url: string;
   summary: string | null;
   publishedAt: string | null;
+  capturedAt?: string | null;
+  publishedAtKnown?: boolean | null;
   qualityScore: number | null;
   eventType: string | null;
   eventSubject: string | null;

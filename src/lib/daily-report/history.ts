@@ -37,6 +37,9 @@ function sourceToDTO(source: {
   url: string;
   sectionName: string | null;
   topic: string | null;
+  sourcePublishedAt: Date | null;
+  sourceCapturedAt: Date | null;
+  sourcePublishedAtKnown: boolean | null;
 }): DailyReportSourceDTO {
   return {
     id: source.id,
@@ -50,6 +53,9 @@ function sourceToDTO(source: {
     url: source.url,
     sectionName: source.sectionName,
     topic: source.topic,
+    publishedAt: source.sourcePublishedAt?.toISOString() ?? null,
+    capturedAt: source.sourceCapturedAt?.toISOString() ?? null,
+    publishedAtKnown: source.sourcePublishedAtKnown,
   };
 }
 

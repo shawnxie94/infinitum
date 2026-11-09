@@ -9,7 +9,8 @@ declare global {
 }
 
 const MAX_EVENT_BRIEFING_CACHE_ENTRIES = 120;
-const DEFAULT_EVENT_BRIEFING_CACHE_TTL_MS = 120_000;
+// Cross-process writes cannot clear this in-memory cache; keep stale data bounded.
+const DEFAULT_EVENT_BRIEFING_CACHE_TTL_MS = 15_000;
 
 function getEventBriefingCacheStore() {
   globalThis.__infinitumEventBriefingCache__ ??= new Map<string, EventBriefingCacheEntry>();

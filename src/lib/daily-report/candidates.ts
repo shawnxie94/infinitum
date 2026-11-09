@@ -62,15 +62,15 @@ export function getDailyReportEntryItems(entry: EventBriefingEntryDTO, date: str
   const { start, end } = getDailyReportDateRange(date);
   const dailyItems = entry.items
     .filter((item) => {
-      const createdAt = new Date(item.createdAt);
-      return !Number.isNaN(createdAt.getTime()) && createdAt >= start && createdAt < end;
+      const effectiveAt = new Date(item.publishedAtKnown ? item.publishedAt : item.createdAt);
+      return !Number.isNaN(effectiveAt.getTime()) && effectiveAt >= start && effectiveAt < end;
     })
-    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  const evidenceItems = (dailyItems.length > 0 ? dailyItems : entry.items)
+    .sort((left, right) => new Date(right.publishedAtKnown ? right.publishedAt : right.createdAt).getTime() - new Date(left.publishedAtKnown ? left.publishedAt : left.createdAt).getTime());
+  const evidenceItems = dailyItems
     .slice(0, MAX_DAILY_REPORT_EVIDENCE_ITEMS_PER_CANDIDATE);
 
   return {
-    representativeItem: evidenceItems[0] ?? entry.items[0],
+    representativeItem: evidenceItems[0] ?? null,
     evidenceItems,
   };
 }
@@ -82,7 +82,7 @@ export function eventBriefingEntryToDailyReportCandidate(
 ): DailyReportCandidate | null {
   const { representativeItem, evidenceItems } = getDailyReportEntryItems(entry, date);
 
-  if (!representativeItem) {
+  if (!representativeItem || evidenceItems.length === 0) {
     return null;
   }
 
@@ -98,8 +98,8 @@ export function eventBriefingEntryToDailyReportCandidate(
     summary: entry.summary,
     qualityScore: entry.qualityScore,
     candidateScore: entry.rankScore,
-    sourceCount: entry.sourceCount,
-    itemCount: entry.itemCount,
+    sourceCount: entry.newSourceCountOnDate,
+    itemCount: entry.newItemCountOnDate,
     createdAt: representativeItem.createdAt,
     publishedAt: representativeItem.publishedAt,
     publishedAtKnown: representativeItem.publishedAtKnown,

@@ -30,6 +30,8 @@ function toPersistedSource(source: DailyReportSourceRegistryEntry, extra: { dail
     url: source.url,
     sourceSummary: source.summary,
     sourcePublishedAt: source.publishedAt ? new Date(source.publishedAt) : null,
+    sourceCapturedAt: source.capturedAt ? new Date(source.capturedAt) : null,
+    sourcePublishedAtKnown: source.publishedAtKnown,
     sourceQualityScore: source.qualityScore,
     eventType: source.eventType,
     eventSubject: source.eventSubject,

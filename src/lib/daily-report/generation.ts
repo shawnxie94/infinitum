@@ -151,6 +151,8 @@ export async function generateDailyReportInternal(input: {
           url: true,
           sourceSummary: true,
           sourcePublishedAt: true,
+          sourceCapturedAt: true,
+          sourcePublishedAtKnown: true,
           sourceQualityScore: true,
           eventType: true,
           eventSubject: true,
@@ -997,6 +999,8 @@ export async function generateDailyReportInternal(input: {
     url: candidate.url,
     summary: candidate.summary,
     publishedAt: candidate.publishedAt,
+    capturedAt: candidate.createdAt,
+    publishedAtKnown: candidate.publishedAtKnown ?? null,
     qualityScore: candidate.qualityScore,
     eventType: candidate.eventType,
     eventSubject: candidate.eventSubject,
@@ -1321,6 +1325,7 @@ export async function generateDailyReportInternal(input: {
   const expandedSourcesByNumber = await buildExpandedDailyReportSourceRegistry({
     candidatesById,
     sourceRows,
+    date,
     groupIds: dailyReportSourceGroupIds,
   });
   const title = buildDailyReportTitle(date, content);

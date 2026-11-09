@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { invalidateEventBriefingCache } from "@/lib/events/cache";
 import { generateUniqueGroupColor } from "@/lib/groups/badge";
 import { createRssParser } from "@/lib/ingestion/parser";
 import {
@@ -153,6 +154,7 @@ export async function importSourcesFromOpml(
   const affectedClusterIds = await collectClusterIdsForSources([...changedSourceIds]);
   await refreshClusterFeedStatsSafely(affectedClusterIds, "import sources from OPML");
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return {
     totalCount: parsedSources.length,
@@ -194,6 +196,7 @@ export async function createSourceGroup(name: string) {
     },
   });
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   return group;
 }
 
@@ -214,6 +217,7 @@ export async function renameSourceGroup(id: string, name: string) {
     },
   });
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   return group;
 }
 
@@ -230,6 +234,7 @@ export async function deleteSourceGroup(id: string) {
     where: { id },
   });
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 }
 
 export async function reorderSourceGroups(groupIds: string[]) {
@@ -252,6 +257,7 @@ export async function reorderSourceGroups(groupIds: string[]) {
     ),
   );
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return prisma.sourceGroup.findMany({
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
@@ -280,6 +286,7 @@ export async function createSource(input: SourceInput) {
     },
   });
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   return source;
 }
 
@@ -308,6 +315,7 @@ export async function updateSource(id: string, input: SourceInput) {
   });
   await refreshClusterFeedStatsSafely(affectedClusterIds, "update source");
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   return source;
 }
 
@@ -318,6 +326,7 @@ export async function deleteSource(id: string) {
   });
   await refreshClusterFeedStatsSafely(affectedClusterIds, "delete source");
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 }
 
 export type AdminSourceGroupFilter =

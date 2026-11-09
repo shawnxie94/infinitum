@@ -8,6 +8,7 @@ import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
 import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { invalidateEventBriefingCache } from "@/lib/events/cache";
 import {
   buildEventSignatureFromItemFields,
   classifyItemProcessingRecoveryReasons,
@@ -198,6 +199,7 @@ export async function executeRecoveryWorkflowStage(
     }
     if (previous.feedInvalidated || previous.recoveredCount > 0 || previous.degradedCount > 0 || previous.reassignedCount > 0) {
       invalidateFeedCache();
+      invalidateEventBriefingCache();
       invalidateDailyReportCache();
     }
     await context.projectProgress?.(

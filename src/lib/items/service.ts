@@ -17,6 +17,7 @@ import {
 import { filterStaleAggregationChildren } from "@/lib/aggregation/staleness";
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { invalidateEventBriefingCache } from "@/lib/events/cache";
 import { archiveItemDedupeHistories } from "@/lib/feed/repository";
 import { shouldTranslateTitle } from "@/lib/feed/presentation";
 import { buildItemUnderstandingInput } from "@/lib/ingestion/content-input";
@@ -190,6 +191,7 @@ export async function persistItemRegeneration(
     });
   }
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   return prisma.item.findUniqueOrThrow({ where: { id: item.id }, include: { source: true } });
 }
 
@@ -234,6 +236,7 @@ export async function regenerateItemContent(
     }
 
     invalidateFeedCache();
+    invalidateEventBriefingCache();
   } catch (error) {
     await prisma.item.update({
       where: { id: item.id },
@@ -284,6 +287,7 @@ export async function restoreFilteredItem(itemId: string, options?: Regeneration
     await recomputeCluster(assignment.clusterId, options?.aiProvider);
   }
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return prisma.item.findUniqueOrThrow({
     where: { id: restored.id },
@@ -322,6 +326,7 @@ export async function manuallyFilterItem(itemId: string, options?: RegenerationO
   }
 
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return prisma.item.findUniqueOrThrow({
     where: { id: filtered.id },
@@ -451,6 +456,7 @@ export async function cancelAggregationSplit(parentItemId: string, options?: Reg
   }
 
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   invalidateDailyReportCache();
 
   return prisma.item.findUniqueOrThrow({
@@ -480,6 +486,7 @@ export async function deleteItem(itemId: string, options?: RegenerationOptions) 
   }
 
   invalidateFeedCache();
+  invalidateEventBriefingCache();
 
   return {
     id: item.id,
@@ -658,6 +665,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
       await recomputeCluster(previousClusterId, aiProvider);
     }
     invalidateFeedCache();
+    invalidateEventBriefingCache();
     await syncItemProcessingRetryState(item.id);
 
     return { item: updated, failedFields };
@@ -720,6 +728,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
       }
 
       invalidateFeedCache();
+      invalidateEventBriefingCache();
       invalidateDailyReportCache();
 
       const updated = await prisma.item.findUniqueOrThrow({
@@ -745,6 +754,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
         for (const clusterId of staleChildren.clusterIds) await recomputeCluster(clusterId, aiProvider);
       }
       invalidateFeedCache();
+      invalidateEventBriefingCache();
       invalidateDailyReportCache();
       const updated = await prisma.item.findUniqueOrThrow({
         where: { id: item.id },
@@ -793,6 +803,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
     const staleChildren = await filterStaleAggregationChildren({ parentItemId: item.id });
     for (const clusterId of staleChildren.clusterIds) await recomputeCluster(clusterId, aiProvider);
     invalidateFeedCache();
+    invalidateEventBriefingCache();
     if (staleChildren.filteredCount > 0) invalidateDailyReportCache();
     await syncItemProcessingRetryState(item.id);
 
@@ -871,6 +882,7 @@ export async function reanalyzeItem(itemId: string, options?: RegenerationOption
   }
 
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   if (aggregationDetectionEnabled || item.isAggregation) {
     invalidateDailyReportCache();
   }
@@ -961,6 +973,7 @@ export async function finalizeItemCleanup(
     await recomputeCluster(clusterId);
   }
   invalidateFeedCache();
+  invalidateEventBriefingCache();
   return { totalDeleted, affectedClusterCount: plan.affectedClusterIds.length, prunedSnapshots };
 }
 
@@ -1286,6 +1299,7 @@ export async function executeItemReparseWorkflowStage(
   if (stage === "cluster_finalize") {
     for (const clusterId of currentPayload.affectedClusterIds) await recomputeCluster(clusterId);
     invalidateFeedCache();
+    invalidateEventBriefingCache();
     return currentPayload;
   }
   const runtimeConfig = await getIngestionRuntimeConfig();

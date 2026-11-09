@@ -5,6 +5,8 @@ import { executeClusterMerge, recomputeCluster } from "@/lib/clusters/service";
 import { refreshClusterFeedStatsSafely } from "@/lib/clusters/feed-stats";
 import { prisma } from "@/lib/db";
 import { invalidateFeedCache } from "@/lib/feed/cache";
+import { invalidateEventBriefingCache } from "@/lib/events/cache";
+import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { DEFAULT_PROCESSING_WINDOW_DAYS } from "@/lib/tasks/scheduler";
 import { scheduleDefaultFeedCacheWarm } from "@/lib/feed/warmup";
 import {
@@ -300,6 +302,9 @@ async function runSourceSyncStage(
   const options = await resolveRunOptions({ ...overrides, processingStartAt, trigger, now });
   const run = await findOrCreateIngestionFetchRun(taskRun.id, trigger, now);
   const sources = await syncSources(options.sourceConfigs);
+  if (sources.length > 0) {
+    invalidateEventBriefingCache();
+  }
   const preparedItems: PreparedFeedItem[] = [];
   const errors: string[] = [];
   let sourceFailureCount = 0;
@@ -623,6 +628,11 @@ async function runItemProcessingStage(
     options.itemConcurrency,
     { shouldStop: async () => context.signal.aborted },
   );
+  if (preparedLookups.length > 0) {
+    invalidateFeedCache();
+    invalidateEventBriefingCache();
+    invalidateDailyReportCache();
+  }
   const snapshot = aiUsage.snapshot();
   const next = finishTimelineStage({
     ...payload,

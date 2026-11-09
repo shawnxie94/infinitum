@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { prisma } from "@/lib/db";
+import { normalizeDailyReportSourceDateCitations } from "@/lib/daily-report/renderer";
 import {
   getDailyReportRevision,
   listDailyReportRevisions,
@@ -86,6 +87,110 @@ describe("daily report history", () => {
     expect(revisions).toHaveLength(1);
     expect(revisions[0]).toMatchObject({ id: old.id, revisionNo: 1, isCurrent: true, canRestore: false });
     await expect(getDailyReportRevision(DATE, old.id)).resolves.toMatchObject({ title: "旧版本日报", sources: [{ sourceNumber: 1 }] });
+  });
+
+  it("maps source provenance through revision preview and restore without inventing legacy dates", async () => {
+    const { report, old } = await createHistoryFixture("draft", true);
+    const originalMarkdown = [
+      "# 旧版本日报",
+      "- [已知发表](https://example.com/known)（Known source · 发表 2026-11-06）",
+      "- [未知发表](https://example.com/unknown)（Unknown source · 收录 2026-11-06）",
+      "- [旧数据](https://example.com/legacy-null)（Legacy source · 发表 2026-11-06）",
+    ].join("\n");
+    await prisma.dailyReportRevisionSource.deleteMany({ where: { revisionId: old.id } });
+    await prisma.dailyReportRevisionSource.createMany({ data: [
+      {
+        revisionId: old.id,
+        sourceNumber: 1,
+        sourceName: "Known source",
+        title: "已知发表",
+        url: "https://example.com/known",
+        sourcePublishedAt: new Date("2026-11-06T20:00:00.000Z"),
+        sourceCapturedAt: new Date("2026-11-09T04:00:00.000Z"),
+        sourcePublishedAtKnown: true,
+      },
+      {
+        revisionId: old.id,
+        sourceNumber: 2,
+        sourceName: "Unknown source",
+        title: "未知发表",
+        url: "https://example.com/unknown",
+        sourcePublishedAt: new Date("2026-11-06T20:00:00.000Z"),
+        sourceCapturedAt: new Date("2026-11-06T20:00:00.000Z"),
+        sourcePublishedAtKnown: false,
+      },
+      {
+        revisionId: old.id,
+        sourceNumber: 3,
+        sourceName: "Legacy source",
+        title: "旧数据",
+        url: "https://example.com/legacy-null",
+        sourcePublishedAt: new Date("2026-11-06T20:00:00.000Z"),
+        sourceCapturedAt: null,
+        sourcePublishedAtKnown: null,
+      },
+    ] });
+    await prisma.dailyReportRevision.update({ where: { id: old.id }, data: { renderedMarkdown: originalMarkdown } });
+
+    const preview = await getDailyReportRevision(DATE, old.id);
+    expect(preview?.sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceNumber: 1,
+        publishedAt: "2026-11-06T20:00:00.000Z",
+        capturedAt: "2026-11-09T04:00:00.000Z",
+        publishedAtKnown: true,
+      }),
+      expect.objectContaining({
+        sourceNumber: 2,
+        publishedAt: "2026-11-06T20:00:00.000Z",
+        capturedAt: "2026-11-06T20:00:00.000Z",
+        publishedAtKnown: false,
+      }),
+      expect.objectContaining({
+        sourceNumber: 3,
+        publishedAt: "2026-11-06T20:00:00.000Z",
+        capturedAt: null,
+        publishedAtKnown: null,
+      }),
+    ]));
+    const previewMarkdown = normalizeDailyReportSourceDateCitations(originalMarkdown, preview!.sources);
+    expect(previewMarkdown).toContain("Known source · 发表 2026-11-07");
+    expect(previewMarkdown).toContain("Unknown source · 收录 2026-11-07");
+    expect(previewMarkdown).toContain("Legacy source）");
+    expect(previewMarkdown).not.toContain("Legacy source · 发表");
+
+    const restored = await restoreDailyReportRevision(DATE, old.id);
+    const restoredDetail = await getDailyReportRevision(DATE, restored.id);
+    expect(restoredDetail?.action).toBe("restored");
+    const sourceProvenance = (sources: NonNullable<typeof preview>["sources"]) => sources
+      .map(({ sourceNumber, publishedAt, capturedAt, publishedAtKnown }) => ({ sourceNumber, publishedAt, capturedAt, publishedAtKnown }))
+      .sort((left, right) => (left.sourceNumber ?? 0) - (right.sourceNumber ?? 0));
+    expect(sourceProvenance(restoredDetail!.sources)).toEqual(sourceProvenance(preview!.sources));
+    const persistedRestoredSources = await prisma.dailyReportRevisionSource.findMany({ where: { revisionId: restored.id }, orderBy: { sourceNumber: "asc" } });
+    expect(persistedRestoredSources.map((source) => [source.sourcePublishedAtKnown, source.sourcePublishedAt?.toISOString(), source.sourceCapturedAt?.toISOString() ?? null])).toEqual([
+      [true, "2026-11-06T20:00:00.000Z", "2026-11-09T04:00:00.000Z"],
+      [false, "2026-11-06T20:00:00.000Z", "2026-11-06T20:00:00.000Z"],
+      [null, "2026-11-06T20:00:00.000Z", null],
+    ]);
+    const persistedCurrentSources = await prisma.dailyReportSource.findMany({ where: { dailyReportId: report.id }, orderBy: { sourceNumber: "asc" } });
+    expect(persistedCurrentSources.map((source) => [source.sourcePublishedAtKnown, source.sourcePublishedAt?.toISOString(), source.sourceCapturedAt?.toISOString() ?? null])).toEqual([
+      [true, "2026-11-06T20:00:00.000Z", "2026-11-09T04:00:00.000Z"],
+      [false, "2026-11-06T20:00:00.000Z", "2026-11-06T20:00:00.000Z"],
+      [null, "2026-11-06T20:00:00.000Z", null],
+    ]);
+    expect(report.status).toBe("draft");
+  });
+
+  it("keeps published report content unchanged while reading provenance for preview", async () => {
+    const { report, old } = await createHistoryFixture("published");
+    const storedBefore = await prisma.dailyReport.findUniqueOrThrow({ where: { id: report.id } });
+    const revision = await getDailyReportRevision(DATE, old.id);
+    normalizeDailyReportSourceDateCitations(revision!.renderedMarkdown, revision!.sources);
+    const storedAfter = await prisma.dailyReport.findUniqueOrThrow({ where: { id: report.id } });
+
+    expect(storedAfter.status).toBe("published");
+    expect(storedAfter.renderedMarkdown).toBe(storedBefore.renderedMarkdown);
+    await expect(restoreDailyReportRevision(DATE, old.id)).rejects.toThrow("只有草稿状态");
   });
 
   it("restores only draft current reports and writes a new restored revision", async () => {

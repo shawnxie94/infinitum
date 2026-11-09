@@ -167,56 +167,25 @@ function calculateSameDayEvidenceScore(
   );
 }
 
-function getLatestCreatedItem(candidate: EventBriefingCandidate) {
-  return candidate.items.reduce<(typeof candidate.items)[number] | null>(
-    (latest, item) => (!latest || item.createdAt.getTime() > latest.createdAt.getTime() ? item : latest),
-    null,
-  );
-}
-
 function calculateFreshnessScore(
   candidate: EventBriefingCandidate,
   range: ReturnType<typeof getEventBriefingDateRange>,
 ) {
   const rangeDuration = range.end.getTime() - range.start.getTime();
   if (rangeDuration <= 0) return 0;
-
-  const latestCreatedItem = getLatestCreatedItem(candidate);
-  if (latestCreatedItem && !latestCreatedItem.publishedAtKnown) {
-    return 0;
-  }
+  const latestEffectiveTime = candidate.items.reduce<number | null>((latest, item) => {
+    const effective = item.publishedAtKnown ? item.publishedAt.getTime() : item.createdAt.getTime();
+    if (effective < range.start.getTime() || effective >= range.end.getTime()) return latest;
+    return latest === null ? effective : Math.max(latest, effective);
+  }, null);
+  if (latestEffectiveTime === null) return 0;
 
   const progress = clamp(
-    (candidate.latestCreatedAt.getTime() - range.start.getTime()) / rangeDuration,
+    (latestEffectiveTime - range.start.getTime()) / rangeDuration,
     0,
     1,
   );
   return Math.round(progress * 2);
-}
-
-const PUBLISHED_AT_DELAY_GRACE_HOURS = 12;
-const PUBLISHED_AT_DELAY_STEP_HOURS = 12;
-const MAX_PUBLISHED_AT_DELAY_PENALTY = 8;
-
-function calculatePublishedAtDelayPenalty(candidate: EventBriefingCandidate) {
-  const latestCreatedItem = getLatestCreatedItem(candidate);
-  const createdAt = latestCreatedItem?.createdAt ?? candidate.latestCreatedAt;
-  const publishedAt = latestCreatedItem?.publishedAt ?? candidate.latestPublishedAt;
-  if (latestCreatedItem && !latestCreatedItem.publishedAtKnown) {
-    return 0;
-  }
-  const delayHours = Math.max(
-    0,
-    (createdAt.getTime() - publishedAt.getTime()) / (60 * 60 * 1000),
-  );
-  if (delayHours <= PUBLISHED_AT_DELAY_GRACE_HOURS) {
-    return 0;
-  }
-
-  return Math.min(
-    MAX_PUBLISHED_AT_DELAY_PENALTY,
-    Math.ceil((delayHours - PUBLISHED_AT_DELAY_GRACE_HOURS) / PUBLISHED_AT_DELAY_STEP_HOURS),
-  );
 }
 
 export function calculateEventBriefingBaseRankScore(
@@ -228,7 +197,6 @@ export function calculateEventBriefingBaseRankScore(
   const historicalEvidenceScore = calculateHistoricalEvidenceScore(candidate, context);
   const sameDayEvidenceScore = calculateSameDayEvidenceScore(candidate, context);
   const freshnessScore = calculateFreshnessScore(candidate, range);
-  const publishedAtDelayPenalty = calculatePublishedAtDelayPenalty(candidate);
   const hasNewFacts = candidate.newItemCountOnDate > 0 || candidate.newSourceCountOnDate > 0;
   const momentumScore = candidate.isFollowUp ? (hasNewFacts ? 6 : 0) : 3;
 
@@ -237,8 +205,7 @@ export function calculateEventBriefingBaseRankScore(
       historicalEvidenceScore +
       sameDayEvidenceScore +
       freshnessScore +
-      momentumScore -
-      publishedAtDelayPenalty,
+      momentumScore,
     0,
     100,
   );
@@ -277,6 +244,7 @@ function toEntryDTO(input: {
     newSourceCountOnDate: input.candidate.newSourceCountOnDate,
     latestCreatedAt: input.candidate.latestCreatedAt.toISOString(),
     latestPublishedAt: input.candidate.latestPublishedAt.toISOString(),
+    latestEffectiveAt: getLatestBriefingEffectiveTime(input.candidate.items, input.range).toISOString(),
     eventType: input.candidate.eventType,
     eventSubject: input.candidate.eventSubject,
     eventAction: input.candidate.eventAction,
@@ -297,14 +265,21 @@ function toEntryDTO(input: {
   };
 }
 
+function getLatestBriefingEffectiveTime(items: EventBriefingCandidate["items"], range: ReturnType<typeof getEventBriefingDateRange>) {
+  const times = items.map((item) => item.publishedAtKnown ? item.publishedAt : item.createdAt)
+    .filter((time) => time >= range.start && time < range.end)
+    .map((time) => time.getTime());
+  return new Date(times.length ? Math.max(...times) : range.start.getTime());
+}
+
 export function sortEventBriefingEntries(left: EventBriefingEntryDTO, right: EventBriefingEntryDTO) {
   if (right.rankScore !== left.rankScore) {
     return right.rankScore - left.rankScore;
   }
 
-  const createdAtOrder = new Date(right.latestCreatedAt).getTime() - new Date(left.latestCreatedAt).getTime();
-  if (createdAtOrder !== 0) {
-    return createdAtOrder;
+  const effectiveAtOrder = new Date(right.latestEffectiveAt ?? right.latestCreatedAt).getTime() - new Date(left.latestEffectiveAt ?? left.latestCreatedAt).getTime();
+  if (effectiveAtOrder !== 0) {
+    return effectiveAtOrder;
   }
 
   return `${left.type}:${left.id}`.localeCompare(`${right.type}:${right.id}`);
@@ -479,7 +454,7 @@ export async function listEventBriefingEntriesForDailyReport(options: {
   channelIds?: string[];
 }) {
   const ranked = await withEventBriefingCache(
-    `event-briefing-daily:${JSON.stringify({
+    `event-briefing-daily:v2:${JSON.stringify({
       date: options.date,
       channelIds: [...new Set((options.channelIds ?? []).filter(Boolean))].sort(),
     })}`,

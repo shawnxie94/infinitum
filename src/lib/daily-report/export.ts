@@ -1,7 +1,7 @@
 import type { DailyReportDetailDTO } from "@/lib/daily-report/types";
 import { normalizeDailyReportContent } from "@/lib/daily-report/content";
 import { renderDailyReportItemBody } from "@/lib/daily-report/item-renderer";
-import { DAILY_REPORT_AI_NOTICE } from "@/lib/daily-report/renderer";
+import { DAILY_REPORT_AI_NOTICE, normalizeDailyReportSourceDateCitations } from "@/lib/daily-report/renderer";
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -36,7 +36,7 @@ function buildFallbackMarkdown(report: DailyReportDetailDTO) {
 }
 
 export function buildDailyReportDetailMarkdown(report: DailyReportDetailDTO) {
-  const markdown = report.renderedMarkdown.trim();
+  const markdown = normalizeDailyReportSourceDateCitations(report.renderedMarkdown, report.sources).trim();
   if (!markdown) {
     return buildFallbackMarkdown(report);
   }

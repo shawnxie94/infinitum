@@ -9,7 +9,6 @@ import type { AiEventSignature } from "@/lib/ai/provider-types";
 import type { ClusterAssignmentCoordinator } from "@/lib/clusters/helpers";
 import { assignItemToCluster, recomputeCluster } from "@/lib/clusters/service";
 import { prisma } from "@/lib/db";
-import { invalidateDailyReportCache } from "@/lib/daily-report/cache";
 import { invalidateFeedCache } from "@/lib/feed/cache";
 import {
   findExistingItem,
@@ -99,14 +98,44 @@ function getFeedItemAuthor(item: ParsedFeedItem): string | null {
 }
 
 export function parsePublishedAt(item: ParsedFeedItem, fallback: Date): { value: Date; known: boolean } {
-  const raw = item.isoDate || item.pubDate;
-  const parsed = raw ? new Date(raw) : null;
+  // Atom updated is not a publication date. Prefer source text preserved by
+  // rss-parser over its normalized isoDate (which loses timezone provenance).
+  const raw = Object.prototype.hasOwnProperty.call(item, "originalPublishedDate")
+    ? item.originalPublishedDate
+    : item.pubDate ?? item.published ?? item["dc:date"] ?? item.isoDate;
+  const text = typeof raw === "string" ? raw.trim() : "";
+  if (!text || /\b(?:CST|EST|PST|MST|IST|BST)\b/i.test(text)) return { value: fallback, known: false };
+  const explicitZone = /(?:Z|[+-]\d{2}:?\d{2}|\b(?:GMT|UT)\b)$/i.test(text);
+  const hasTime = /\d[T ]\d{1,2}:\d{2}/.test(text);
+  if (!hasTime) return { value: fallback, known: false };
+  if (!hasValidPublicationCalendarDate(text)) return { value: fallback, known: false };
+  if (!explicitZone && /\b[A-Z]{2,5}$/i.test(text)) return { value: fallback, known: false };
+  const normalized = explicitZone ? text.replace(/\b(?:GMT|UT)\b/i, "GMT") : `${text}+08:00`;
+  const parsed = new Date(normalized);
 
   if (!parsed || Number.isNaN(parsed.getTime())) {
     return { value: fallback, known: false };
   }
 
   return { value: parsed, known: true };
+}
+
+function hasValidPublicationCalendarDate(value: string) {
+  const isoMatch = value.match(/^(?:\w{3},\s+)?(\d{4})-(\d{2})-(\d{2})(?:[T ]|$)/);
+  const rfcMatch = value.match(/^(?:\w{3},\s+)?(\d{1,2})\s+(\w{3})\s+(\d{4})/);
+  const match = isoMatch ?? rfcMatch;
+  if (!match) return true;
+  if (rfcMatch && match === rfcMatch) {
+    const day = Number(match[1]);
+    const month = new Date(`${match[2]} 1, 2000`).getMonth();
+    const year = Number(match[3]);
+    return month >= 0 && day >= 1 && day <= new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  return normalized.getUTCFullYear() === year && normalized.getUTCMonth() === month - 1 && normalized.getUTCDate() === day;
 }
 
 function resolvePublishedAt(input: {
@@ -441,7 +470,6 @@ export async function processFeedItem({
     }
     if (staleChildren.filteredCount > 0) {
       invalidateFeedCache();
-      invalidateDailyReportCache();
     }
   };
   const contentForFullTextDecision = fullText || rssContent || rssExcerpt || "";
