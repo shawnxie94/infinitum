@@ -19,11 +19,13 @@ import {
 } from "@/lib/feed/repository";
 import {
   buildPreparedFeedItemLookup,
+  canReuseExistingByUrl,
   parsePublishedAt,
   processFeedItem,
   type PreparedFeedItem,
   type PreparedFeedItemLookup,
 } from "@/lib/ingestion/item-processor";
+import { evaluateRuleFilter } from "@/lib/ingestion/filtering";
 import {
   buildFeedContentHash,
   buildFeedRequestHeaders,
@@ -289,8 +291,8 @@ async function runSourceSyncStage(
   const trigger = taskRun.triggerType === "scheduled" ? "scheduled" : "manual";
   const now = overrides?.now ?? new Date();
   const startedAt = now;
-  const configuredSchedule = overrides?.processingStartAt ? null : await prisma.taskSchedule.findUnique({
-    where: { key: "ingestion_default" }, select: { processingWindowDays: true },
+  const configuredSchedule = await prisma.taskSchedule.findUnique({
+    where: { key: "ingestion_default" }, select: { processingWindowDays: true, ingestionBatchLimit: true },
   });
   const processingStartAt = overrides?.processingStartAt ?? new Date(
     now.getTime() - (configuredSchedule?.processingWindowDays ?? 14) * 24 * 60 * 60 * 1000,
@@ -334,6 +336,39 @@ async function runSourceSyncStage(
           });
           return;
         }
+        const items = allItems
+          .map((item) => ({ item, publishedAt: parsePublishedAt(item, now) }))
+          .sort((left, right) => {
+            if (left.publishedAt.known !== right.publishedAt.known) return left.publishedAt.known ? -1 : 1;
+            return right.publishedAt.value.getTime() - left.publishedAt.value.getTime();
+          })
+          .filter(({ publishedAt }) => !options.processingStartAt || !publishedAt.known || publishedAt.value >= options.processingStartAt)
+          .slice(0, options.maxFeedItemsToScan ?? allItems.length)
+          .map(({ item }) => item);
+        const backlogWrites = [];
+        for (const item of items) {
+          const prepared = {
+            item,
+            sourceId: source.id,
+            sourceName: source.name,
+            aiParsingEnabled: source.aiParsingEnabled,
+            aggregationEnabled: source.aggregationEnabled,
+            aggregationDetectionEnabled: source.aggregationDetectionEnabled,
+          };
+          const lookup = buildPreparedFeedItemLookup(prepared, now);
+          if (!lookup) continue;
+          backlogWrites.push(prisma.ingestionBacklog.upsert({
+            where: { urlHash: lookup.dedupeKeys.urlHash },
+            create: { urlHash: lookup.dedupeKeys.urlHash, sourceId: source.id, payload: JSON.stringify(prepared) },
+            update: { payload: JSON.stringify(prepared), sourceId: source.id },
+          }));
+          if (backlogWrites.length === 50) {
+            await prisma.$transaction(backlogWrites);
+            backlogWrites.length = 0;
+          }
+        }
+        if (backlogWrites.length) await prisma.$transaction(backlogWrites);
+        // Only advance the source validator after every candidate is durable.
         await updateSourceFetchMetadata(source.id, {
           feedEtag: feed.etag ?? source.feedEtag,
           feedLastModified: feed.lastModified ?? source.feedLastModified,
@@ -343,26 +378,6 @@ async function runSourceSyncStage(
           healthMessage: null,
           healthCheckedAt: now,
         });
-        const items = allItems
-          .map((item) => ({ item, publishedAt: parsePublishedAt(item, now) }))
-          .sort((left, right) => {
-            if (left.publishedAt.known !== right.publishedAt.known) return left.publishedAt.known ? -1 : 1;
-            return right.publishedAt.value.getTime() - left.publishedAt.value.getTime();
-          })
-          .filter(({ publishedAt }) => !options.processingStartAt || !publishedAt.known || publishedAt.value >= options.processingStartAt)
-          .slice(0, options.maxFeedItemsToScan ?? 500)
-          .slice(0, options.perSourceItemLimit)
-          .map(({ item }) => item);
-        for (const item of items) {
-          preparedItems.push({
-            item,
-            sourceId: source.id,
-            sourceName: source.name,
-            aiParsingEnabled: source.aiParsingEnabled,
-            aggregationEnabled: source.aggregationEnabled,
-            aggregationDetectionEnabled: source.aggregationDetectionEnabled,
-          });
-        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown feed error";
         sourceFailureCount += 1;
@@ -378,7 +393,68 @@ async function runSourceSyncStage(
     { shouldStop: async () => context.signal.aborted },
   );
 
-  const timelineCounters = createIngestionTimelineCounters();
+  const sourceCandidates: Array<{ urlHash: string; createdAt: Date }> = [];
+  const prefilterCounters = createIngestionTimelineCounters();
+  const prefilterProvider = options.aiUsage.wrapProvider(options.aiProvider, { understandItemEstimated: false });
+  const prefilterCoordinator = createClusterAssignmentCoordinator();
+  for (const source of sources) {
+    let cursor: { urlHash: string; createdAt: Date } | undefined;
+    let eligible = 0;
+    while (true) {
+      await context.checkCancellation();
+      const page = await prisma.ingestionBacklog.findMany({
+        where: { sourceId: source.id, ...(cursor ? { OR: [
+          { createdAt: { gt: cursor.createdAt } },
+          { createdAt: cursor.createdAt, urlHash: { gt: cursor.urlHash } },
+        ] } : {}) }, orderBy: [{ createdAt: "asc" }, { urlHash: "asc" }], take: 10,
+      });
+      if (!page.length) break;
+      const ids = page.map((entry) => entry.urlHash);
+      const existing = new Map((await findExistingItemsForUrlHashes(ids)).map((item) => [item.urlHash, item]));
+      const histories = new Set((await findDedupeHistoriesForUrlHashes(ids)).map((item) => item.urlHash));
+      const completedIds: string[] = [];
+      for (const entry of page) {
+        cursor = { urlHash: entry.urlHash, createdAt: entry.createdAt };
+        const prepared = JSON.parse(entry.payload) as PreparedFeedItem;
+        const lookup = buildPreparedFeedItemLookup(prepared, now);
+        if (!lookup) continue;
+        const prior = existing.get(entry.urlHash);
+        if (!prior && histories.has(entry.urlHash)) {
+          completedIds.push(entry.urlHash);
+          continue;
+        }
+        const filtered = evaluateRuleFilter({ title: lookup.originalTitle,
+          content: [lookup.rssContent, lookup.rssExcerpt].filter(Boolean).join("\n"),
+          url: lookup.originalUrl, sourceName: prepared.sourceName, blacklist: options.blacklist }).filtered;
+        if (filtered || canReuseExistingByUrl(prior, lookup)) {
+          const result = await processFeedItem({ ...prepared, lookup, existingItem: prior ?? null,
+            blacklist: options.blacklist, articleFetcher: options.articleFetcher, aiProvider: prefilterProvider,
+            clusterAssignmentCoordinator: prefilterCoordinator, fullTextFetchThreshold: options.fullTextFetchThreshold,
+            contentExtraction: options.contentExtraction, processingStartAt, now, signal: context.signal });
+          if (result) accumulateItemTimelineMetrics(prefilterCounters, result);
+          completedIds.push(entry.urlHash);
+          continue;
+        }
+        if (eligible < options.perSourceItemLimit) {
+          sourceCandidates.push({ urlHash: entry.urlHash, createdAt: entry.createdAt });
+          eligible += 1;
+        }
+      }
+      if (completedIds.length) {
+        await prisma.ingestionBacklog.deleteMany({ where: { urlHash: { in: completedIds } } });
+      }
+      if (page.length < 10) break;
+    }
+  }
+  const selectedIds = sourceCandidates.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.urlHash.localeCompare(b.urlHash))
+    .slice(0, configuredSchedule?.ingestionBatchLimit ?? 100).map((entry) => entry.urlHash);
+  const selected = await prisma.ingestionBacklog.findMany({ where: { urlHash: { in: selectedIds } },
+    orderBy: [{ createdAt: "asc" }, { urlHash: "asc" }] });
+  for (const entry of selected) {
+    preparedItems.push({ ...(JSON.parse(entry.payload) as PreparedFeedItem), backlogId: entry.urlHash });
+  }
+
+  const timelineCounters = prefilterCounters;
   timelineCounters.sourceFetch.sourcesFetched = sources.length;
   timelineCounters.sourceFetch.sourcesFailed = sourceFailureCount;
   timelineCounters.sourceFetch.itemsFetched = preparedItems.length;
@@ -397,9 +473,9 @@ async function runSourceSyncStage(
     fullTextFetchedCount: 0,
     errors,
     affectedClusterIds: [],
-    aiCallCountActual: 0,
-    aiCallCountEstimated: 0,
-    aiCallBreakdown: [],
+    aiCallCountActual: options.aiUsage.snapshot().actual,
+    aiCallCountEstimated: options.aiUsage.snapshot().estimated,
+    aiCallBreakdown: options.aiUsage.snapshot().breakdown,
     timelineCounters,
     timelineStages: { sourceSync: null, itemProcessing: null, clusterMerge: null, clusterFinalize: null },
     timelineModelNames: options.taskTimelineModelNames ?? createIngestionTimelineModelNames(),
@@ -451,7 +527,7 @@ async function runItemProcessingStage(
   const preparedLookupEntries = dedupePreparedLookupsByDedupeKey(
     payload.preparedItems
       .map((preparedItem) => ({ preparedItem, lookup: buildPreparedFeedItemLookup(preparedItem, new Date(payload.now)) }))
-      .filter((entry) => !entry.lookup || !options.processingStartAt || !entry.lookup.publishedAtKnown || entry.lookup.publishedAt >= options.processingStartAt),
+      .filter((entry) => entry.preparedItem.backlogId || !entry.lookup || !options.processingStartAt || !entry.lookup.publishedAtKnown || entry.lookup.publishedAt >= options.processingStartAt),
   );
   const dedupeKeyInputs = preparedLookupEntries
     .map((entry) => entry.lookup)
@@ -461,12 +537,18 @@ async function runItemProcessingStage(
   const existingByUrlHash = new Map(existingItems.map((item) => [item.urlHash, item]));
   const histories = await findDedupeHistoriesForUrlHashes(dedupeKeyInputs);
   const historyByUrlHash = new Map(histories.map((history) => [history.urlHash, history]));
+  const archivedBacklogIds = preparedLookupEntries
+    .filter((entry) => entry.preparedItem.backlogId && entry.lookup && !getExistingItemForLookup(entry.lookup, existingByUrlHash) && historyByUrlHash.has(entry.lookup.dedupeKeys.urlHash))
+    .map((entry) => entry.preparedItem.backlogId!);
+  if (archivedBacklogIds.length) {
+    await prisma.ingestionBacklog.deleteMany({ where: { urlHash: { in: archivedBacklogIds } } });
+  }
   const preparedLookups = preparedLookupEntries.filter((entry) => {
     const existing = getExistingItemForLookup(entry.lookup, existingByUrlHash);
     const lookupKnown = entry.lookup?.publishedAtKnown ?? false;
     const effectivePublishedAt = lookupKnown ? entry.lookup!.publishedAt : existing?.publishedAt;
     const effectivePublishedAtKnown = lookupKnown || Boolean(existing?.publishedAtKnown);
-    if (options.processingStartAt && effectivePublishedAtKnown && effectivePublishedAt && effectivePublishedAt < options.processingStartAt) {
+    if (!entry.preparedItem.backlogId && options.processingStartAt && effectivePublishedAtKnown && effectivePublishedAt && effectivePublishedAt < options.processingStartAt) {
       return false;
     }
     return Boolean(existing) || !entry.lookup || !historyByUrlHash.has(entry.lookup.dedupeKeys.urlHash);
@@ -512,7 +594,13 @@ async function runItemProcessingStage(
           now: new Date(payload.now),
           signal: options.signal,
         });
-        if (!result) return;
+        if (!result) {
+          if (preparedItem.backlogId) await prisma.ingestionBacklog.deleteMany({ where: { urlHash: preparedItem.backlogId } });
+          return;
+        }
+        if (preparedItem.backlogId && result.status !== "failed") {
+          await prisma.ingestionBacklog.deleteMany({ where: { urlHash: preparedItem.backlogId } });
+        }
         accumulateItemTimelineMetrics(timelineCounters, result);
         if (result.status === "failed" || hasItemProcessingFailure(result)) {
           failureCount += 1;

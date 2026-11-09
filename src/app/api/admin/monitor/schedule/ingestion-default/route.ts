@@ -26,6 +26,7 @@ const scheduleUpdateSchema = z.object({
     .min(MIN_FULL_TEXT_FETCH_THRESHOLD)
     .max(MAX_FULL_TEXT_FETCH_THRESHOLD),
   perSourceItemLimit: z.number().int().min(MIN_PER_SOURCE_ITEM_LIMIT).max(MAX_PER_SOURCE_ITEM_LIMIT),
+  ingestionBatchLimit: z.number().int().min(1).max(1000).optional(),
   aggregationSplitMaxEvents: z
     .number()
     .int()

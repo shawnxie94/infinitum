@@ -83,6 +83,7 @@ describe("sqlite setup", () => {
     const ancient = new Date(Date.now() - 4000 * dayMs).toISOString();
     runSqlite(dbPath, `
       ALTER TABLE "task_schedules" DROP COLUMN "processingWindowDays";
+      ALTER TABLE "task_schedules" DROP COLUMN "ingestionBatchLimit";
       INSERT INTO "task_schedules" ("id", "key", "enabled", "cronExpression", "sourceConcurrency", "fullTextFetchThreshold", "perSourceItemLimit", "processingStartAt", "timezone", "nextRunAt", "updatedAt")
       VALUES ('window-iso', 'window-iso', 0, '0 * * * *', 2, 80, 20, '${isoPast}', 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
              ('window-epoch', 'window-epoch', 0, '0 * * * *', 2, 80, 20, ${epochPast}, 'UTC', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
@@ -93,6 +94,7 @@ describe("sqlite setup", () => {
     `);
 
     execFileSync("node", ["scripts/setup-sqlite.mjs", dbPath], { cwd: process.cwd(), encoding: "utf8" });
+    expect(runSqlite(dbPath, `SELECT "ingestionBatchLimit" FROM "task_schedules" WHERE "id"='window-iso'`)).toBe("100");
     const migrated = runSqlite(dbPath, `SELECT "id" || '|' || "processingWindowDays" || '|' || COALESCE(CAST("processingStartAt" AS TEXT), 'NULL') FROM "task_schedules" WHERE "id" LIKE 'window-%' ORDER BY "id"`);
     expect(migrated).toContain(`window-iso|3|${isoPast}`);
     expect(migrated).toContain(`window-epoch|6|${epochPast}`);

@@ -374,9 +374,14 @@ export async function runWorkerCycle(options?: {
 export async function recoverWorkerStartupTasks(
   now = new Date(),
   restartActiveRuns: () => Promise<void> = restartActiveAiWorkflowRuns,
+  options: { skipWorkflowResume?: boolean } = {},
 ) {
   // Honor cross-process cancellation before resuming any persisted workflow.
   await recoverStaleTaskRuns(now, { cancellationRequestsOnly: true });
+  if (options.skipWorkflowResume ?? process.env.INFINITUM_SKIP_WORKFLOW_RESUME === "1") {
+    console.warn("[Worker] Startup workflow resume disabled; existing workflow snapshots remain stored.");
+    return recoverStaleTaskRuns(now);
+  }
   // Mastra restart awaits each active workflow. Keep its BackgroundTaskRun in
   // running while it resumes; otherwise the lifecycle sink correctly preserves
   // the prematurely projected failed state and business work can disagree with

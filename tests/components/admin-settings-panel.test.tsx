@@ -1740,6 +1740,7 @@ describe("AdminSettingsPanel", () => {
           sourceConcurrency: 4,
           fullTextFetchThreshold: 120,
           perSourceItemLimit: 20,
+          ingestionBatchLimit: 100,
           aggregationSplitMaxEvents: 12,
           processingWindowDays: 30,
         }),

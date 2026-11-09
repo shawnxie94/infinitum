@@ -147,6 +147,7 @@ export type AdminSettingsSnapshot = {
     sourceConcurrency: number;
     fullTextFetchThreshold: number;
     perSourceItemLimit: number;
+    ingestionBatchLimit?: number;
     aggregationSplitMaxEvents: number;
     dailyReportCandidateLimit: number;
     dailyReportPlanningBatchSize?: number | null;

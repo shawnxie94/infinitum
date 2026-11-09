@@ -292,6 +292,7 @@ describe("ingestion workflow stages", () => {
   });
 
   beforeEach(async () => {
+    await prisma.ingestionBacklog.deleteMany();
     await prisma.itemDedupeHistory.deleteMany();
     await prisma.item.deleteMany();
     await prisma.entity.deleteMany();
@@ -461,6 +462,119 @@ describe("ingestion workflow stages", () => {
     expect(articleFetcher).toHaveBeenCalledOnce();
     expect(aiProvider.understandItem).not.toHaveBeenCalled();
     await expect(prisma.item.count()).resolves.toBe(0);
+    expect(await prisma.ingestionBacklog.count()).toBe(1);
+    parser.parseURL.mockResolvedValueOnce({ notModified: true, items: [] });
+    const retryFetcher = vi.fn().mockResolvedValue("Recovered article text.");
+    await runIngestionWorkflowStagesForTest({
+      parser, articleFetcher: retryFetcher, aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{ name: "Cancel Feed", rssUrl: "https://example.com/feed.xml", siteUrl: "https://example.com", enabled: true, aiParsingEnabled: true }],
+      blacklist: [], fullTextFetchThreshold: 1_000, now: new Date("2026-04-10T10:30:00.000Z"),
+    });
+    expect(retryFetcher).toHaveBeenCalledOnce();
+    expect(await prisma.ingestionBacklog.count()).toBe(0);
+  });
+
+  it("persists fetched text before an interrupted analysis and reuses it on retry", async () => {
+    const controller = new AbortController();
+    const url = "https://example.com/posts/text-checkpoint";
+    const parser = { parseURL: vi.fn().mockResolvedValue({ items: [{
+      title: "Checkpoint article", link: url, isoDate: "2026-04-10T09:00:00.000Z",
+      contentSnippet: "short excerpt",
+    }] }) };
+    const articleFetcher = vi.fn().mockResolvedValue("Fetched full text saved before AI processing.");
+    const abortingProvider = buildAiProviderMock({ understandItem: vi.fn(async () => {
+      controller.abort(new DOMException("cancelled", "AbortError"));
+      throw controller.signal.reason;
+    }) });
+    const options = {
+      parser, articleFetcher, aiProvider: abortingProvider,
+      sourceConfigs: [{ name: "Checkpoint Feed", rssUrl: "https://example.com/checkpoint.xml", siteUrl: "https://example.com", enabled: true, aiParsingEnabled: true }],
+      blacklist: [], fullTextFetchThreshold: 1_000, now: new Date("2026-04-10T10:30:00.000Z"),
+    };
+    await expect(runIngestionWorkflowStagesForTest(options, undefined, controller)).rejects.toMatchObject({ name: "AbortError" });
+    const checkpoint = await prisma.item.findFirstOrThrow({ where: { originalUrl: url } });
+    expect(checkpoint.fullText).toBe("Fetched full text saved before AI processing.");
+    expect(checkpoint.status).toBe("fetched");
+
+    // Simulate a fresh source response on the next run.
+    await prisma.source.update({ where: { id: checkpoint.sourceId }, data: { feedContentHash: null, feedEtag: null, feedLastModified: null } });
+    await runIngestionWorkflowStagesForTest({ ...options, aiProvider: buildAiProviderMock() });
+    expect(articleFetcher).toHaveBeenCalledOnce();
+    expect((await prisma.item.findUniqueOrThrow({ where: { id: checkpoint.id } })).status).toBe("processed");
+  });
+
+  it("drains a persisted batch across runs even when the source returns not modified", async () => {
+    await prisma.taskSchedule.create({ data: {
+      key: "ingestion_default", timezone: "Asia/Shanghai", nextRunAt: new Date("2026-04-11T00:00:00Z"), ingestionBatchLimit: 1,
+    } });
+    const parser = { parseURL: vi.fn()
+      .mockResolvedValueOnce({ items: [1, 2, 3].map((n) => ({ title: `Article ${n}`, link: `https://example.com/batch/${n}`, isoDate: "2026-04-10T09:00:00.000Z", contentSnippet: `Body ${n}` })) })
+      .mockResolvedValue({ notModified: true, items: [] }) };
+    const options = {
+      parser, articleFetcher: vi.fn(), aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{ name: "Batch Feed", rssUrl: "https://example.com/batch.xml", siteUrl: "https://example.com", enabled: true, aiParsingEnabled: false }],
+      blacklist: [], perSourceItemLimit: 1, fullTextFetchThreshold: 0, now: new Date("2026-04-10T10:30:00.000Z"),
+    };
+    await runIngestionWorkflowStagesForTest(options);
+    expect(await prisma.item.count()).toBe(1);
+    expect(await prisma.ingestionBacklog.count()).toBe(2);
+    await runIngestionWorkflowStagesForTest(options);
+    expect(await prisma.item.count()).toBe(2);
+    expect(await prisma.ingestionBacklog.count()).toBe(1);
+    await runIngestionWorkflowStagesForTest(options);
+    expect(await prisma.item.count()).toBe(3);
+    expect(await prisma.ingestionBacklog.count()).toBe(0);
+  });
+
+  it("applies per-source and total limits after completed duplicates and rule filtering", async () => {
+    await prisma.taskSchedule.create({ data: { key: "ingestion_default", timezone: "Asia/Shanghai", nextRunAt: new Date("2026-04-11T00:00:00Z"), ingestionBatchLimit: 2 } });
+    const source = await prisma.source.create({ data: { name: "Eligibility Feed", rssUrl: "https://example.com/eligibility.xml", siteUrl: "https://example.com", enabled: true, aiParsingEnabled: true } });
+    const duplicateUrl = "https://example.com/eligibility/existing";
+    const keys = buildDedupeKeys({ canonicalUrl: duplicateUrl });
+    await prisma.item.create({ data: { sourceId: source.id, originalUrl: duplicateUrl, ...keys, originalTitle: "Existing item", publishedAt: new Date("2026-04-10T09:00:00Z"), status: "processed", summaryStatus: "succeeded", analysisStatus: "succeeded", summaryText: "An existing valid summary with sufficient information." } });
+    const entries = [
+      { title: "Existing item", link: duplicateUrl },
+      { title: "reject-me filtered item", link: "https://example.com/eligibility/filtered" },
+      ...[1, 2, 3].map((n) => ({ title: `Eligible item ${n}`, link: `https://example.com/eligibility/${n}` })),
+    ].map((item) => ({ ...item, isoDate: "2026-04-10T09:00:00Z", contentSnippet: "RSS body for processing." }));
+    const parser = { parseURL: vi.fn().mockResolvedValueOnce({ items: entries }).mockResolvedValue({ notModified: true, items: [] }) };
+    const options = { parser, articleFetcher: vi.fn(), aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{ name: source.name, rssUrl: source.rssUrl, siteUrl: source.siteUrl, enabled: true, aiParsingEnabled: true }],
+      blacklist: ["reject-me"], perSourceItemLimit: 2, fullTextFetchThreshold: 0, now: new Date("2026-04-10T10:30:00Z") };
+    await runIngestionWorkflowStagesForTest(options);
+    expect(await prisma.item.count({ where: { status: "filtered" } })).toBe(1);
+    expect(await prisma.item.count({ where: { originalUrl: { startsWith: "https://example.com/eligibility/" }, status: "processed" } })).toBe(3);
+    expect(await prisma.ingestionBacklog.count()).toBe(1);
+    await runIngestionWorkflowStagesForTest(options);
+    expect(await prisma.ingestionBacklog.count()).toBe(0);
+    expect(await prisma.item.count({ where: { status: "processed" } })).toBe(4);
+  });
+
+  it("persists more than 500 feed candidates for later batches", async () => {
+    await prisma.taskSchedule.create({ data: { key: "ingestion_default", timezone: "Asia/Shanghai", nextRunAt: new Date("2026-04-11T00:00:00Z"), ingestionBatchLimit: 1 } });
+    const parser = { parseURL: vi.fn().mockResolvedValueOnce({ items: Array.from({ length: 501 }, (_, n) => ({
+      title: `Entry ${n}`, link: `https://example.com/large-feed/${n}`, isoDate: "2026-04-10T09:00:00Z", contentSnippet: "RSS content",
+    })) }).mockResolvedValue({ notModified: true, items: [] }) };
+    const options = { parser, articleFetcher: vi.fn(), aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{ name: "Large Feed", rssUrl: "https://example.com/large-feed.xml", siteUrl: "https://example.com", enabled: true, aiParsingEnabled: false }],
+      blacklist: [], perSourceItemLimit: 1, fullTextFetchThreshold: 0, now: new Date("2026-04-10T10:30:00Z") };
+    await runIngestionWorkflowStagesForTest(options);
+    expect(await prisma.ingestionBacklog.count()).toBe(500);
+    await runIngestionWorkflowStagesForTest(options);
+    expect(await prisma.ingestionBacklog.count()).toBe(499);
+  }, 30_000);
+
+  it("continues prefilter pagination after deleting filtered queue entries", async () => {
+    await prisma.taskSchedule.create({ data: { key: "ingestion_default", timezone: "Asia/Shanghai", nextRunAt: new Date("2026-04-11T00:00:00Z"), ingestionBatchLimit: 1 } });
+    const items = Array.from({ length: 12 }, (_, n) => ({ title: `reject-me ${n}`, link: `https://example.com/page/${n}`, isoDate: "2026-04-10T09:00:00Z" }));
+    items.push({ title: "Eligible item", link: "https://example.com/page/eligible", isoDate: "2026-04-10T09:00:00Z" });
+    await runIngestionWorkflowStagesForTest({ parser: { parseURL: vi.fn().mockResolvedValue({ items }) },
+      articleFetcher: vi.fn(), aiProvider: buildAiProviderMock(),
+      sourceConfigs: [{ name: "Paged Feed", rssUrl: "https://example.com/paged.xml", siteUrl: "https://example.com", enabled: true, aiParsingEnabled: false }],
+      blacklist: ["reject-me"], perSourceItemLimit: 1, fullTextFetchThreshold: 0, now: new Date("2026-04-10T10:30:00Z") });
+    expect(await prisma.item.count({ where: { status: "filtered" } })).toBe(12);
+    expect(await prisma.item.count({ where: { status: "processed" } })).toBe(1);
+    expect(await prisma.ingestionBacklog.count()).toBe(0);
   });
 
   it("records source fetch failures in the ingestion task timeline", async () => {

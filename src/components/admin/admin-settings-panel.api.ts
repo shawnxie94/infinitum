@@ -192,6 +192,7 @@ export async function saveDefaultIngestionSchedule(input: {
   sourceConcurrency: number;
   fullTextFetchThreshold: number;
   perSourceItemLimit: number;
+  ingestionBatchLimit?: number;
   aggregationSplitMaxEvents: number;
   processingWindowDays: number;
 }) {

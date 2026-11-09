@@ -325,6 +325,18 @@ describe("background task persistence", () => {
     expect(updatedFetchRun.errorSummary).toContain("Worker exited");
   });
 
+  it("can skip workflow snapshot recovery without invoking the snapshot scanner", async () => {
+    const restart = vi.fn(async () => { throw new Error("snapshot scanner must not run"); });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await recoverWorkerStartupTasks(new Date(), restart, { skipWorkflowResume: true });
+      expect(restart).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("resume disabled"));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("resumes Mastra runs before failing orphaned task rows during startup", async () => {
     const activeRun = await prisma.backgroundTaskRun.create({
       data: {

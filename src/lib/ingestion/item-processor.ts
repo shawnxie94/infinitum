@@ -41,6 +41,7 @@ import type {
 type ItemProcessingTimings = NonNullable<NonNullable<ProcessedItemRecord["metrics"]>["timings"]>;
 
 export type PreparedFeedItem = {
+  backlogId?: string;
   item: ParsedFeedItem;
   sourceId: string;
   sourceName: string;
@@ -260,7 +261,7 @@ function isCompletedExistingItem(existing?: {
   return existing.status === "processed" && hasSucceededSummary(existing) && hasSucceededAnalysis(existing);
 }
 
-function canReuseExistingByUrl(
+export function canReuseExistingByUrl(
   existing: Item | null | undefined,
   lookup: PreparedFeedItemLookup | null,
 ) {
@@ -574,6 +575,30 @@ export async function processFeedItem({
       addElapsed(timings, "fullTextFetchMs", fetchStartedAt);
       if (signal?.aborted) throw error;
       appendIssue(issues, error, "Unknown article fetch error");
+    }
+    if (fullTextFetched && fullText) {
+        // Persist before invoking AI: a later cancellation or worker crash must
+        // not force another network fetch for text already retrieved.
+        const checkpoint = await prisma.item.upsert({
+          where: { urlHash: dedupeKeys.urlHash },
+          create: {
+            sourceId,
+            originalUrl,
+            canonicalUrl: dedupeKeys.canonicalUrl,
+            urlHash: dedupeKeys.urlHash,
+            originalTitle,
+            author,
+            publishedAt: resolvedPublishedAt.value,
+            publishedAtKnown: resolvedPublishedAt.known,
+            rssExcerpt,
+            rssContent,
+            fullText,
+            status: "fetched",
+          },
+          update: { fullText },
+          select: { id: true },
+        });
+        storedItemId = checkpoint.id;
     }
   }
 

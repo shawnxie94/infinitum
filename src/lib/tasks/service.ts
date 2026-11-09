@@ -369,6 +369,7 @@ export function toTaskScheduleSnapshot(schedule: {
   sourceConcurrency: number;
   fullTextFetchThreshold: number;
   perSourceItemLimit: number | null;
+  ingestionBatchLimit?: number | null;
   aggregationSplitMaxEvents?: number | null;
   dailyReportCandidateLimit: number | null;
   dailyReportPlanningBatchSize?: number | null;
@@ -393,6 +394,7 @@ export function toTaskScheduleSnapshot(schedule: {
     sourceConcurrency: schedule.sourceConcurrency,
     fullTextFetchThreshold: schedule.fullTextFetchThreshold,
     perSourceItemLimit: schedule.perSourceItemLimit ?? 20,
+    ingestionBatchLimit: schedule.ingestionBatchLimit ?? 100,
     aggregationSplitMaxEvents: schedule.aggregationSplitMaxEvents ?? DEFAULT_AGGREGATION_SPLIT_MAX_EVENTS,
     dailyReportCandidateLimit: schedule.dailyReportCandidateLimit ?? DEFAULT_DAILY_REPORT_CANDIDATE_LIMIT,
     dailyReportPlanningBatchSize: schedule.dailyReportPlanningBatchSize ?? null,
@@ -423,12 +425,13 @@ export async function updateDefaultIngestionSchedule(input: {
   sourceConcurrency: number;
   fullTextFetchThreshold: number;
   perSourceItemLimit: number;
+  ingestionBatchLimit?: number;
   aggregationSplitMaxEvents?: number;
   processingStartAt?: string | null;
   processingWindowDays?: number;
 }) {
-  const normalizedInput = normalizeScheduleInput(input);
   const currentSchedule = await ensureDefaultIngestionSchedule();
+  const normalizedInput = normalizeScheduleInput({ ...input, ingestionBatchLimit: input.ingestionBatchLimit ?? currentSchedule.ingestionBatchLimit });
   const now = new Date();
   const nextRunAt = computeNextRunAt({
     cronExpression: normalizedInput.cronExpression,
@@ -445,6 +448,7 @@ export async function updateDefaultIngestionSchedule(input: {
       sourceConcurrency: normalizedInput.sourceConcurrency,
       fullTextFetchThreshold: normalizedInput.fullTextFetchThreshold,
       perSourceItemLimit: normalizedInput.perSourceItemLimit,
+      ingestionBatchLimit: normalizedInput.ingestionBatchLimit,
       aggregationSplitMaxEvents: normalizedInput.aggregationSplitMaxEvents,
       processingStartAt: new Date(now.getTime() - normalizedInput.processingWindowDays! * 24 * 60 * 60 * 1000),
       processingWindowDays: normalizedInput.processingWindowDays!,

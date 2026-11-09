@@ -7,6 +7,8 @@ export const DEFAULT_SCHEDULE_CRON_EXPRESSION = "0 * * * *";
 export const DEFAULT_SOURCE_CONCURRENCY = 2;
 export const DEFAULT_FULL_TEXT_FETCH_THRESHOLD = 80;
 export const DEFAULT_PER_SOURCE_ITEM_LIMIT = 20;
+export const DEFAULT_INGESTION_BATCH_LIMIT = 100;
+export const MAX_INGESTION_BATCH_LIMIT = 1000;
 export const DEFAULT_PROCESSING_WINDOW_DAYS = 14;
 export const MIN_PROCESSING_WINDOW_DAYS = 1;
 export const MAX_PROCESSING_WINDOW_DAYS = 3650;
@@ -89,6 +91,10 @@ export function normalizeScheduleInput(input: ScheduleUpdateInput): ScheduleUpda
   }
 
   const processingWindowDays = input.processingWindowDays ?? DEFAULT_PROCESSING_WINDOW_DAYS;
+  const ingestionBatchLimit = input.ingestionBatchLimit ?? DEFAULT_INGESTION_BATCH_LIMIT;
+  if (!Number.isInteger(ingestionBatchLimit) || ingestionBatchLimit < 1 || ingestionBatchLimit > MAX_INGESTION_BATCH_LIMIT) {
+    throw new Error(`Ingestion batch limit must be an integer between 1 and ${MAX_INGESTION_BATCH_LIMIT}.`);
+  }
   if (!Number.isInteger(processingWindowDays) || processingWindowDays < MIN_PROCESSING_WINDOW_DAYS || processingWindowDays > MAX_PROCESSING_WINDOW_DAYS) {
     throw new Error(`Processing window days must be an integer between ${MIN_PROCESSING_WINDOW_DAYS} and ${MAX_PROCESSING_WINDOW_DAYS}.`);
   }
@@ -112,6 +118,7 @@ export function normalizeScheduleInput(input: ScheduleUpdateInput): ScheduleUpda
     sourceConcurrency: input.sourceConcurrency,
     fullTextFetchThreshold: input.fullTextFetchThreshold,
     perSourceItemLimit: input.perSourceItemLimit,
+    ingestionBatchLimit,
     aggregationSplitMaxEvents,
     processingStartAt: normalizeProcessingStartAt(input.processingStartAt ?? null),
     processingWindowDays,

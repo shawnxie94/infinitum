@@ -709,6 +709,7 @@ function applyAdditiveSchemaUpgrades() {
   }
 
   addColumnIfMissing("task_schedules", "processingWindowDays", "INTEGER NOT NULL DEFAULT 14");
+  addColumnIfMissing("task_schedules", "ingestionBatchLimit", "INTEGER NOT NULL DEFAULT 100");
   addColumnIfMissing("task_schedules", "dailyReportChannelIdsJson", "TEXT NOT NULL DEFAULT '[\"important\"]'");
   addColumnIfMissing("task_schedules", "dailyReportPlanningBatchSize", "INTEGER");
   addColumnIfMissing("task_schedules", "dailyReportRecentTopicLookbackDays", "INTEGER NOT NULL DEFAULT 7");

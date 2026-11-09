@@ -165,6 +165,7 @@ model Source {
   createdAt                   DateTime     @default(now())
   updatedAt                   DateTime     @updatedAt
   items                       Item[]
+  ingestionBacklog            IngestionBacklog[]
   group                       SourceGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   @@index([groupId, name])
@@ -456,6 +457,7 @@ model TaskSchedule {
   sourceConcurrency         Int                   @default(2)
   fullTextFetchThreshold    Int                   @default(80)
   perSourceItemLimit        Int                   @default(20)
+  ingestionBatchLimit       Int                   @default(100)
   aggregationSplitMaxEvents Int                   @default(20)
   dailyReportCandidateLimit Int                   @default(120)
   dailyReportPlanningBatchSize Int?
@@ -476,6 +478,18 @@ model TaskSchedule {
   updatedAt                 DateTime              @updatedAt
 
   @@map("task_schedules")
+}
+
+model IngestionBacklog {
+  urlHash   String   @id
+  sourceId  String
+  payload   String
+  createdAt DateTime @default(now())
+  source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([sourceId, createdAt])
+  @@map("ingestion_backlog")
 }
 
 model ContentExtractionConfig {

@@ -108,6 +108,7 @@ export function AdminSettingsPanel({
     useState(String(initialSettings.taskSchedule.fullTextFetchThreshold));
   const [taskSchedulePerSourceItemLimit, setTaskSchedulePerSourceItemLimit] =
     useState(String(initialSettings.taskSchedule.perSourceItemLimit));
+  const [ingestionBatchLimit, setIngestionBatchLimit] = useState(String(initialSettings.taskSchedule.ingestionBatchLimit ?? 100));
   const [taskScheduleAggregationSplitMaxEvents, setTaskScheduleAggregationSplitMaxEvents] =
     useState(String(initialSettings.taskSchedule.aggregationSplitMaxEvents));
   const [taskScheduleProcessingWindowDays, setTaskScheduleProcessingWindowDays] = useState(
@@ -842,6 +843,11 @@ export function AdminSettingsPanel({
   };
 
   const saveTaskSchedule = () => {
+    const parsedBatchLimit = Number(ingestionBatchLimit.trim());
+    if (!Number.isInteger(parsedBatchLimit) || parsedBatchLimit < 1 || parsedBatchLimit > 1000) {
+      showToast("单次处理上限需为 1-1000 的整数。", "error");
+      return;
+    }
     const parsedSourceConcurrency = Number.parseInt(
       taskScheduleSourceConcurrency.trim(),
       10,
@@ -928,6 +934,7 @@ export function AdminSettingsPanel({
           sourceConcurrency: parsedSourceConcurrency,
           fullTextFetchThreshold: parsedFullTextFetchThreshold,
           perSourceItemLimit: parsedPerSourceItemLimit,
+          ingestionBatchLimit: parsedBatchLimit,
           aggregationSplitMaxEvents: parsedAggregationSplitMaxEvents,
           processingWindowDays: parsedProcessingWindowDays,
         });
@@ -938,6 +945,7 @@ export function AdminSettingsPanel({
         setTaskScheduleSourceConcurrency(String(schedule.sourceConcurrency));
         setTaskScheduleFullTextFetchThreshold(String(schedule.fullTextFetchThreshold));
         setTaskSchedulePerSourceItemLimit(String(schedule.perSourceItemLimit));
+        setIngestionBatchLimit(String(schedule.ingestionBatchLimit ?? 100));
         setTaskScheduleAggregationSplitMaxEvents(String(schedule.aggregationSplitMaxEvents));
         setTaskScheduleProcessingWindowDays(String(schedule.processingWindowDays ?? 14));
         showToast("任务配置已保存。", "success");
@@ -1189,6 +1197,7 @@ export function AdminSettingsPanel({
     taskScheduleSourceConcurrency.trim() !== String(taskScheduleSnapshot.sourceConcurrency) ||
     taskScheduleFullTextFetchThreshold.trim() !== String(taskScheduleSnapshot.fullTextFetchThreshold) ||
     taskSchedulePerSourceItemLimit.trim() !== String(taskScheduleSnapshot.perSourceItemLimit) ||
+    ingestionBatchLimit.trim() !== String(taskScheduleSnapshot.ingestionBatchLimit ?? 100) ||
     taskScheduleAggregationSplitMaxEvents.trim() !== String(taskScheduleSnapshot.aggregationSplitMaxEvents) ||
     taskScheduleProcessingWindowDays.trim() !== String(taskScheduleSnapshot.processingWindowDays ?? 14);
   const contentExtractionIsDirty =
@@ -2542,8 +2551,8 @@ export function AdminSettingsPanel({
               "space-y-6",
               activeSection !== "task-ingestion" ? "hidden" : "",
             )}>
-              {/* Row 1: 任务开关 + Cron 表达式 + 处理时间窗 */}
-              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {/* Row 1: 任务开关 + Cron 表达式 + 处理时间窗 + 单次处理总上限 */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
                 <div className="space-y-1.5">
                   <div className="block text-sm text-[var(--muted)]">任务开关</div>
                   <label className="flex min-h-10 w-full items-center gap-2 rounded-sm border border-[color:var(--line)] bg-[var(--surface)] px-3 text-sm text-[var(--text-2)]">
@@ -2591,6 +2600,10 @@ export function AdminSettingsPanel({
                     onChange={(event) => setTaskScheduleProcessingWindowDays(event.target.value)}
                   />
                 </div>
+                <FormField label="单次处理总上限" htmlFor="ingestion-batch-limit">
+                  <TextInput id="ingestion-batch-limit" type="number" min={1} max={1000} step={1}
+                    value={ingestionBatchLimit} onChange={(event) => setIngestionBatchLimit(event.target.value)} />
+                </FormField>
               </div>
 
               {/* Row 2: 源抓取并发 + 正文补抓阈值 + 每源处理上限 + 聚合拆分上限 */}

@@ -16,8 +16,6 @@ import { DEFAULT_INGESTION_TASK_LABEL } from "@/lib/tasks/types";
 import { enqueueTaskRun } from "@/lib/tasks/service";
 import { createTaskAiUsageTracker } from "@/lib/tasks/ai-usage";
 
-export const DEFAULT_MAX_FEED_ITEMS_TO_SCAN = 500;
-
 export type ResolvedRunOptions = RunIngestionOptions & {
   now: Date;
   taskTimelineModelNames: IngestionTimelineModelNames;
@@ -108,7 +106,7 @@ export async function resolveRunOptions(options?: Partial<RunIngestionOptions>):
       },
     perSourceItemLimit:
       options?.perSourceItemLimit ?? runtimeConfig?.ingestion.perSourceItemLimit ?? 20,
-    maxFeedItemsToScan: options?.maxFeedItemsToScan ?? DEFAULT_MAX_FEED_ITEMS_TO_SCAN,
+    maxFeedItemsToScan: options?.maxFeedItemsToScan,
     processingStartAt:
       options?.processingStartAt ?? runtimeConfig?.ingestion.processingStartAt ?? null,
     now,
